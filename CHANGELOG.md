@@ -41,21 +41,21 @@
 #### tokenization
 ##### Changed 🔄
 - `get_core` and `get_modification` can now better deal with cases such as `Neu5,9Ac2` (0967d8a)
-- `map_to_basic` is now cached, making functions that call it repeatedly (e.g., `structure_to_basic`) about 2x faster ()
+- `map_to_basic` is now cached, making functions that call it repeatedly (e.g., `structure_to_basic`) about 2x faster (e1c807a)
 - `mz_to_composition` and related functions are now faster (eac80ee)
 
 #### processing
 ##### Added ✨
-- The LINUCS nomenclature is now also supported in Universal Input/`canonicalize_iupac` via the new `linucs_to_iupac` parser ()
-- Universal Input/`canonicalize_composition` now also supports composition nomenclatures from Byonic, FragPipe, GlycoMod, and GlycReSoft ()
+- The LINUCS nomenclature is now also supported in Universal Input/`canonicalize_iupac` via the new `linucs_to_iupac` parser (e1c807a)
+- Universal Input/`canonicalize_composition` now also supports composition nomenclatures from Byonic, FragPipe, GlycoMod, and GlycReSoft (e1c807a)
 
 ##### Changed 🔄
 - `canonicalize_composition` now also accepts dictionary compositions as inputs (0967d8a)
-- `canoncalize_iupac` is more robust to nomenclature variations ()
+- `canoncalize_iupac` is more robust to nomenclature variations (e1c807a)
 
 ##### Fixed 🐛
-- `sanitize_iupac` no longer flags phosphodiesters ()
-- Fixed handling of variantly capitalized monosaccharides in KCF ()
+- `sanitize_iupac` no longer flags phosphodiesters (e1c807a)
+- Fixed handling of variantly capitalized monosaccharides in KCF (e1c807a)
 
 #### annotate
 ##### Changed 🔄

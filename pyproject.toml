@@ -6,12 +6,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "glycowork"
 version = "1.10.2"
-description = "Package for processing and analyzing glycans"
+description = "The Python package for glycan data science: reads any glycan notation, motif search, SNFG drawing, glycomics statistics, curated glycan data"
 readme = "README.md"
 authors = [
     {name = "Daniel Bojar", email = "daniel.bojar@gu.se"}
 ]
-keywords = ["glycans", "glycomics", "glycobiology", "bioinformatics", "machine learning"]
+keywords = ["glycans", "glycomics", "glycobiology", "glycoinformatics", "glycoproteomics", "carbohydrates", "oligosaccharides", "SNFG", "IUPAC", "WURCS", "GlycoCT", "GlyTouCan", "mass spectrometry", "bioinformatics", "machine learning"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
@@ -73,4 +73,4 @@ custom_sidebar = false
 doc_host = "https://BojarLab.github.io"
 doc_baseurl = "/glycowork/"
 title = "glycowork"
-description = "Package for processing and analyzing glycans"
+description = "The Python package for glycan data science: reads any glycan notation, motif search, SNFG drawing, glycomics statistics, curated glycan data"

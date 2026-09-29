@@ -1,0 +1,7 @@
+{
+  "name": "bojarlab",
+  "owner": {"name": "Bojar Lab", "email": "daniel.bojar@gu.se"},
+  "plugins": [
+    {"name": "glycowork", "source": "./", "description": "Use glycowork for any glycan-related coding task"}
+  ]
+}
