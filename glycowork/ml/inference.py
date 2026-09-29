@@ -1,8 +1,10 @@
 import pandas as pd
 import numpy as np
 from importlib import resources
+import networkx as nx
 import math
 import warnings
+from functools import lru_cache
 try:
     import torch
     # Choosing the right computing architecture
@@ -12,7 +14,7 @@ try:
 except ImportError:
     raise ImportError("<torch missing; did you do 'pip install glycowork[ml]'?>")
 from glycowork.glycan_data.loader import lib, unwrap
-from glycowork.motif.graph import compare_glycans
+from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, build_wildcard_cache, PTM_REGEX
 from glycowork.motif.tokenization import prot_to_coded
 from glycowork.ml.processing import dataset_to_dataloader
 
@@ -40,6 +42,19 @@ def sigmoid(x: float  # input value
     if hasattr(x, 'item') or hasattr(x, 'dtype'):
         x = x.item()
     return 1 / (1 + math.exp(-x))
+
+
+@lru_cache(maxsize = 50_000)
+def _background_key(glycan: str,  # glycan in IUPAC-condensed
+                    sub: bool  # whether compare_glycans PTM-wildcards this pair
+                    ) -> tuple[str, tuple[str, ...], tuple[str, ...]]:  # (topology code, sorted labels, sorted labels no wildcard can stand in for)
+    "Isomorphism invariants of the graph compare_glycans builds for glycan, used to skip correction-table rows it would reject"
+    g = glycan_to_nxGraph(PTM_REGEX.sub('O', glycan) if sub else glycan)
+    code = {}
+    for n in reversed(list(nx.topological_sort(g))):
+        code[n] = '(' + ''.join(sorted(code[c] for c in g.successors(n))) + ')'
+    labels = sorted(d['string_labels'] for _, d in g.nodes(data = True))
+    return ''.join(sorted(code[n] for n, d in g.in_degree() if not d)), tuple(labels), tuple(l for l in labels if not build_wildcard_cache({l}))
 
 
 def glycans_to_emb(glycans: str | list[str],  # glycan(s) in IUPAC-condensed
@@ -117,8 +132,19 @@ def get_multi_pred(prot: str,  # protein amino acid sequence
         for j in glycans:
             if j in correction_df:
                 bg_res.append(correction_df[j])
-            elif (hit := next((k for k in buckets.get((j.count('('), j.count('[')), ()) if compare_glycans(k, j)),
-                              None)) is not None:
+                continue
+            hit = None
+            # a match maps nodes one to one onto the same topology, and a label no wildcard covers can only land on itself unless the other side has a wildcard label, so rows failing either are skipped without building both graphs again; '^' goes through get_possible_topologies instead
+            for k in buckets.get((j.count('('), j.count('[')), ()):
+                if '^' not in j and '^' not in k:
+                    sub = 'O' in j or 'O' in k
+                    (tk, lk, ck), (tj, lj, cj) = _background_key(k, sub), _background_key(j, sub)
+                    if tk != tj or (lk == ck and not all(x in it for it in (iter(lk),) for x in cj)) or (lj == cj and not all(x in it for it in (iter(lj),) for x in ck)):
+                        continue
+                if compare_glycans(k, j):
+                    hit = k
+                    break
+            if hit is not None:
                 bg_res.append(correction_df[hit])
             else:
                 bg_res.append(0)

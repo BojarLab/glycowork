@@ -65,7 +65,15 @@ def _roots(
         g):  # cached in-degree-0 nodes if g is a forest of out-trees (as glycan_to_nxGraph always builds), else None, keyed on graph identity
     v = _ROOT_CACHE.get(g, 0)
     if v == 0:
-        v = _ROOT_CACHE[g] = [n for n, d in g.in_degree() if not d] if len(g) and nx.is_branching(g) else None
+        # With every in-degree at most 1, an undirected cycle is a directed one, and a directed cycle is exactly what the roots cannot reach, so this is nx.is_branching without its generic forest check
+        v = [n for n, d in g.in_degree() if not d] if len(g) and all(d <= 1 for _, d in g.in_degree()) else None
+        seen, stack = set(v or ()), list(v or ())
+        while stack:
+            for c in g._succ[stack.pop()]:
+                if c not in seen:
+                    seen.add(c)
+                    stack.append(c)
+        v = _ROOT_CACHE[g] = v if v is not None and len(seen) == len(g) else None
     return v
 
 
@@ -199,17 +207,20 @@ def glycan_to_nxGraph(glycan: str, # Glycan in IUPAC-condensed format
         chunks, anchor_specs = zip(
             *[(k, {}) if i == len(chunks) - 1 else parse_floating_bit(k) for i, k in enumerate(chunks)])
         # the string writes floating bits first but the graph numbers them last, and an anchored bit spells out more linkages than it keeps, so expand over the parsed chunks and slice per chunk
-        sizes = [len(min_process_glycans([k])[0]) for k in chunks]
+        sizes = [len(min_process_glycans([k])[0]) for k in chunks] if termini_list else None
         termini_list = expand_termini_list(''.join(chunks), termini_list) if termini_list else None
         parts = [glycan_to_nxGraph_int(k, libr = libr, termini = termini,
                                        termini_list = None if termini_list is None else termini_list[sum(sizes[:i]):sum(sizes[:i + 1])]) for i, k in enumerate(chunks)]
-        len_org = len(parts[-1])
+        # floating bits are numbered after the main part but inserted first, building the same graph relabel_nodes + compose_all would, without the intermediate copies
+        g1, len_org = nx.DiGraph(), len(parts[-1])
         for i, p in enumerate(parts[:-1]):
-            parts[i] = nx.relabel_nodes(p, {pn: pn + len_org for pn in p.nodes()})
-            len_org += len(p)
+            g1.add_nodes_from((n + len_org, d) for n, d in p.nodes(data = True))
+            g1.add_edges_from((u + len_org, v + len_org) for u, v in p.edges())
             if anchor_specs[i]:
-                parts[i].nodes[max(parts[i].nodes())]['anchors'] = anchor_specs[i]
-        g1 = nx.compose_all(parts)
+                g1.nodes[max(p.nodes()) + len_org]['anchors'] = anchor_specs[i]
+            len_org += len(p)
+        g1.add_nodes_from(parts[-1].nodes(data = True))
+        g1.add_edges_from(parts[-1].edges())
     else:
         g1 = glycan_to_nxGraph_int(glycan, libr = libr, termini = termini,
                                    termini_list = expand_termini_list(glycan, termini_list) if termini_list else None)
@@ -654,69 +665,68 @@ def graph_to_string_int(graph: nx.DiGraph, # Glycan graph
         return f"{node_labels[nodes[0]]}({node_labels[nodes[1]]}){node_labels[nodes[2]]}"
     # Get the root node (highest index)
     root_idx = max(graph.nodes())
+    # Successor lists and labels are read into plain dicts once, as every step below would otherwise go through networkx views
+    succ, labels = {n: list(nbrs) for n, nbrs in graph.adjacency()}, dict(graph.nodes(data = "string_labels", default = ""))
     # Build depths with a single traversal
     depths, leaf_labels, subtree_keys = {}, {}, {}
 
     def compute_metrics(node):
         if node in depths:
-            return depths[node], leaf_labels[node]
-        successors = list(graph.successors(node))
-        label = graph.nodes[node].get("string_labels", "")
-        if not successors:
-            depths[node] = 0
-            leaf_labels[node] = label
-            subtree_keys[node] = label
+            return
+        successors, label = succ[node], labels[node]
+        for child in successors:
+            compute_metrics(child)
+        if len(successors) == 1:  # linkages and chain residues, the vast majority of nodes
+            child = successors[0]
+            depths[node], leaf_labels[node], subtree_keys[node] = depths[child] + 1, leaf_labels[child], label + subtree_keys[child]
+        elif successors:
+            depths[node] = 1 + max(map(depths.__getitem__, successors))
+            leaf_labels[node] = min(map(leaf_labels.__getitem__, successors))
+            subtree_keys[node] = label + ''.join(sorted(map(subtree_keys.__getitem__, successors)))
         else:
-            for child in successors:
-                compute_metrics(child)
-            depths[node] = 1 + max(depths[child] for child in successors)
-            leaf_labels[node] = min(leaf_labels[child] for child in successors)
-            subtree_keys[node] = label + ''.join(sorted(subtree_keys[child] for child in successors))
-        return depths[node], leaf_labels[node]
+            depths[node], leaf_labels[node], subtree_keys[node] = 0, label, label
 
     compute_metrics(root_idx)
 
     def is_special_branch(node):
         """Check if a 1-mono branch starting at node contains Gal/Man."""
-        descendants = list(graph.successors(node))
-        if len(descendants) != 1 or graph.out_degree(descendants[0]):
+        descendants = succ[node]
+        if len(descendants) != 1 or succ[descendants[0]]:
             return False
-        tip_string = graph.nodes[descendants[0]].get("string_labels", "")
+        tip_string = labels[descendants[0]]
         if tip_string in {"Gal", "Man"}:
             return False
-        if "GlcNAc" in tip_string and graph.nodes[node].get("string_labels", "") == 'b1-3':
+        if "GlcNAc" in tip_string and labels[node] == 'b1-3':
             return False
         return True
 
     # Convert to string with a single traversal
     def node_to_string(node):
-        output = graph.nodes[node].get("string_labels", "")
+        output = labels[node]
         # Handle formatting for linkage descriptions
         if (output[0] in "?ab" or output[0].isdigit()) and (output[-1] == "?" or output[-1].isdigit()):
             output = f"({output})"
-        # Sort children by depth (shallow to deep)
-        children = list(graph.successors(node))
+        children = succ[node]
         if not children:
             return output
-        if canonicalize:
-            # Combining the stable sorts: length-based and special branches use the same canonical tie-breakers
-            if order_by == "length" or any(is_special_branch(child) for child in children):
-                children.sort(key = lambda x: (-depths[x], get_linkage_number(x, graph), leaf_labels[x], subtree_keys[x]), reverse = True)
-            else:
-                # Standard linkage canonicalization relies on positive depth rather than negative
-                children.sort(key = lambda x: (get_linkage_number(x, graph), depths[x], leaf_labels[x], subtree_keys[x]), reverse = True)
-        else:
-            # Sort children based on ordering mode
-            if order_by == "length":
-                # Sort by depth (shallow to deep)
-                children.sort(key = lambda x: depths[x])
-            else:  # order_by == "linkage"
-                if any(is_special_branch(child) for child in children):
-                    # Use length-based sorting if special single mono branches exist
-                    children.sort(key = lambda x: (depths[x], -get_linkage_number(x, graph)))
+        # Sort children by depth (shallow to deep); a single child needs no sorting
+        if len(children) > 1:
+            if canonicalize:
+                # Combining the stable sorts: length-based and special branches use the same canonical tie-breakers
+                if order_by == "length" or any(is_special_branch(child) for child in children):
+                    children = sorted(children, key = lambda x: (-depths[x], get_linkage_number(x, graph), leaf_labels[x], subtree_keys[x]), reverse = True)
                 else:
-                    # Use linkage-based sorting in all other cases
-                    children.sort(key = lambda x: -get_linkage_number(x, graph))
+                    # Standard linkage canonicalization relies on positive depth rather than negative
+                    children = sorted(children, key = lambda x: (get_linkage_number(x, graph), depths[x], leaf_labels[x], subtree_keys[x]), reverse = True)
+            elif order_by == "length":
+                # Sort by depth (shallow to deep)
+                children = sorted(children, key = lambda x: depths[x])
+            elif any(is_special_branch(child) for child in children):
+                # Use length-based sorting if special single mono branches exist
+                children = sorted(children, key = lambda x: (depths[x], -get_linkage_number(x, graph)))
+            else:
+                # Use linkage-based sorting in all other cases
+                children = sorted(children, key = lambda x: -get_linkage_number(x, graph))
         # Process all but the deepest child
         for child in children[:-1]:
             output = f"[{node_to_string(child)}]{output}"
@@ -737,8 +747,13 @@ def graph_to_string(graph: nx.DiGraph, # Glycan graph (assumes root node is the 
     components = sorted(nx.weakly_connected_components(graph), key = min)
     if len(components) > 1:
         # glycan_to_nxGraph numbers the main part first and each floating bit after it, so the parts are emitted in that same order and each is put back on its own 0-based range
-        parts = [graph.subgraph(sorted(c)) for c in components[1:] + components[:1]]
-        parts = [nx.relabel_nodes(p.copy(), {pn: pn - min(p.nodes()) for pn in p.nodes()}) for p in parts]
+        parts = []
+        for c in components[1:] + components[:1]:
+            # copying each part out of graph directly, shifted onto 0, avoids iterating filtered subgraph views and a second relabeling copy
+            off, p = min(c), nx.DiGraph()
+            p.add_nodes_from((n - off, graph.nodes[n]) for n in sorted(c))
+            p.add_edges_from((u - off, v - off) for u in sorted(c) for v in graph.successors(u))
+            parts.append(p)
         out = []
         for p in parts:
             anchors = p.nodes[max(p.nodes())].get('anchors')

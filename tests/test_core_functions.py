@@ -329,6 +329,8 @@ def test_canonicalize_iupac():
     # Test basic cleanup
     assert canonicalize_iupac("Galb4GlcNAc") == "Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("'Galb4GlcNAc'") == "Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("Neu5Ac(α2‐3)Gal(β1‐4)[Fuc(α1‐3)]GlcNAc") == "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc"  # U+2010 hyphen from PDF copy-paste
+    assert canonicalize_iupac("Galβ1‑4GlcNAcβ1−3Galβ1—4Glc") == "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc"  # non-breaking hyphen, minus sign, em dash
     assert canonicalize_iupac("{Gal(b1-4)}{Neu5Ac(a2-3)}Gal(b1-4)GlcNAc") == "{Neu5Ac(a2-3)}{Gal(b1-4)}Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("{Gal(b1-4)}{Neu5Ac(a2-3)}Gal(b1-4)[Fuc(a1-3)]GlcNAc") == "{Neu5Ac(a2-3)}{Gal(b1-4)}Fuc(a1-3)[Gal(b1-4)]GlcNAc"
     assert canonicalize_iupac("Fucα2Galβ1-4GlcNAcβ1-3(NeuAcα2-3Galβ1-4GlcNAcβ1-6)Galβ1-4GlcNAcol") == "Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Gal(b1-4)GlcNAc"
@@ -371,6 +373,46 @@ def test_canonicalize_iupac():
     # Test modification handling
     assert canonicalize_iupac("Neu5,9Ac2a2-6Galb1-4GlcNAcb-Sp8") == "Neu5Ac9Ac(a2-6)Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("Neu4,5Ac2a2-6Galb1-4GlcNAcb-Sp8") == "Neu4Ac5Ac(a2-6)Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("Rhaa1-3Rhab1-4Glcb-Sp8") == "Rha(a1-3)Rha(b1-4)Glc"
+    assert canonicalize_iupac("Ribb1-4Glc") == "Rib(b1-4)Glc"
+    assert canonicalize_iupac("Rha?1-?Rha?1-?Gal") == "Rha(?1-?)Rha(?1-?)Gal"
+    assert canonicalize_iupac(
+        "Rhaaa1-3Galaa1-3GlcNAcbb1-4GlcNAc") == "Rha(a1-3)Gal(a1-3)GlcNAc(b1-4)GlcNAc"  # doubled anomers still collapse, also after a residue ending in its anomer letter
+    assert canonicalize_iupac("Neu5Acα2-3/6Galβ1-4GlcNAcβ-Sp8") == "Neu5Ac(a2-3/6)Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("Neu5Aca2-3/6Gal(b1-4)Glc") == "Neu5Ac(a2-3/6)Gal(b1-4)Glc"
+    assert canonicalize_iupac("GlcAb1,3GalNAcb1,4GlcAb1,3GalNAc") == "GlcA(b1-3)GalNAc(b1-4)GlcA(b1-3)GalNAc"
+    assert canonicalize_iupac("IdoAa1,4GlcNS") == "IdoA(a1-4)GlcNS"
+    assert canonicalize_iupac("Kdnα2,?Kdn") == "Kdn(a2-?)Kdn"
+    assert canonicalize_iupac("Gala1-2[Cola1-3]Manb-Sp8") == "Gal(a1-2)[Col(a1-3)]Man"
+    assert canonicalize_iupac("Bac2Ac(a1-4)ManA2NAc3NAc(b1-4)Glc2NAc3NAc-aric") == "Bac2Ac(a1-4)ManA2NAc3NAc(b1-4)Glc2NAc3NAc-aric"
+    assert canonicalize_iupac("Neu5Acα2-3Galβ1-3GalNAcα1-O-Ser/Thr") == "Neu5Ac(a2-3)Gal(b1-3)GalNAc"
+    assert canonicalize_iupac("Galβ1-4Glcβ1-1'Cer") == "Gal(b1-4)Glc1Cer"
+    assert canonicalize_iupac("Galβ1-4GlcβCer") == "Gal(b1-4)Glc1Cer"
+    assert canonicalize_iupac("GlcNAcβ1-7LDManHepα1-6Glc") == "GlcNAc(b1-7)LDManHep(a1-6)Glc"
+    assert canonicalize_iupac("GlcNAc(b1-6)Man6P(a1-2)Man") == "GlcNAc(b1-6)Man6P(a1-2)Man"
+    assert canonicalize_iupac("[Glc(b1-2)]Rib5P-ol(1-5)Rib5P-ol") == "[Glc(b1-2)]Rib5P-ol(1-5)Rib5P-ol"
+    assert canonicalize_iupac("Araf2Ac3Ac5Ac(a1-6)Glc") == "Araf2Ac3Ac5Ac(a1-6)Glc"
+    assert canonicalize_iupac("Glc(b1-5)[L-6dGalHep(a1-2)L-6dGalHep(a1-2)]L-6dGalHepOP(a1-4)Glc") == "L-6dGalHep(a1-2)L-6dGalHep(a1-2)[Glc(b1-5)]L-6dGalHepOP(a1-4)Glc"
+    assert canonicalize_iupac(canonicalize_iupac("Neu5Ac(a2-8)Neu5Ac(a2-3)Gal(b1-4)[Neu5Ac(a2-3)[Gal(b1-3)]GalNAc(b1-4)]Glc1Cer")) == canonicalize_iupac("Neu5Ac(a2-8)Neu5Ac(a2-3)Gal(b1-4)[Neu5Ac(a2-3)[Gal(b1-3)]GalNAc(b1-4)]Glc1Cer")
+    assert canonicalize_iupac("Galβ1-3GalNAcα1-O-Ser") == canonicalize_iupac("Gal(b1-3)GalNAc(a1-O)Ser") == "Gal(b1-3)GalNAc1Ser"  # glycosidic atom notation
+    assert canonicalize_iupac("Neu5Ac(α2→3)Gal(β1→3)GalNAcα1-O-Thr") == "Neu5Ac(a2-3)Gal(b1-3)GalNAc1Thr"
+    assert canonicalize_iupac("Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc(b1-N)Asn") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc1Asn"
+    assert canonicalize_iupac("Galβ1-3GalNAcα1-Ser/Thr") == "Gal(b1-3)GalNAc"
+    assert canonicalize_iupac("Neu5Acα2-3Galβ1-4Glcβ1-1'Cer") == canonicalize_iupac("Neu5Ac(a2-3)Gal(b1-4)Glc(b1-1')Cer") == "Neu5Ac(a2-3)Gal(b1-4)Glc1Cer"
+    assert canonicalize_iupac("Neu5Ac-α2,6-Gal-β1,4-GlcNAc") == "Neu5Ac(a2-6)Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("Gal(b1-4)[Fuc(a1-3)]GlcNAc-OH") == "Fuc(a1-3)[Gal(b1-4)]GlcNAc"  # not GLYCAM, and GlcNAc keeps its Ac
+    assert canonicalize_iupac("Galb1-4GlcNAc-OH") == "Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("Neu5Acα2-3Galβ1-4GlcNAcβ1-") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-?)"  # crashed with IndexError
+    assert canonicalize_iupac("3-O-Sulfo-Galβ1-4GlcNAc") == canonicalize_iupac("3-O-SO3-Galβ1-4GlcNAc") == "Gal3S(b1-4)GlcNAc"
+    assert canonicalize_iupac("Neu5Acα2-3Galβ1-4(Fucα1-3)(6-sulfo)GlcNAc") == "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc6S"
+    assert canonicalize_iupac("6-phospho-Manα1-2Man") == "Man6P(a1-2)Man"
+    assert canonicalize_iupac("6-H2PO3Mana-Sp6") == "Man6P"  # CFG array names
+    assert canonicalize_iupac("Neu5Aca2-3(6-O-Su)Galb1-4GlcNAcb-Sp8") == "Neu5Ac(a2-3)Gal6S(b1-4)GlcNAc"
+    assert canonicalize_iupac("[][b-D-GlcpNAc]{[(4+1)][b-D-GlcpNAc]{[(4+1)][b-D-Manp]{[(3+1)][a-D-Manp]{[(2+1)][b-D-GlcpNAc]{[(4+1)][b-D-Galp]{[(6+2)][a-D-Neup5Ac]{}}}}[(6+1)][a-D-Manp]{[(2+1)][b-D-GlcpNAc]{[(4+1)][b-D-Galp]{}}}}}[(6+1)][a-L-Fucp]{}}") == "Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"  # LINUCS
+    assert canonicalize_iupac("[][a-D-Glcp]{[(1+1)][a-D-Glcp]{}}") == "Glc(a1-1)Glc"
+    assert canonicalize_iupac("[][b-D-GlcpNAc]{[(-1+1)][b-D-Galp]{}}") == "Gal(b1-?)GlcNAc"
+    with pytest.raises(ValueError, match = "LINUCS"):
+        canonicalize_iupac("[][b-D-GlcpNAc]{[(4+1)][b-D-GlcpNAc]{")
     assert canonicalize_iupac("6SGal(b1-4)GlcNAc") == "Gal6S(b1-4)GlcNAc"
     assert canonicalize_iupac("(6S)Galb1-4GlcNAcb-Sp0") == "Gal6S(b1-4)GlcNAc"
     assert canonicalize_iupac("(6S)(4S)Galb1-4GlcNAcb-Sp0") == "Gal4S6S(b1-4)GlcNAc"
@@ -382,6 +424,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Rha(a1-2)Ara4S") == "Rha(a1-2)Ara4S"
     assert canonicalize_iupac("GalNAc(a1-3)GalNAc(b1-3)[D-Fuc3NAc(a1-4)]Gal(a1-4)Glc") == "GalNAc(a1-3)GalNAc(b1-3)[D-Fuc3NAc(a1-4)]Gal(a1-4)Glc"
     assert canonicalize_iupac("Gal4,6Pyr") == "Gal4Pyr6Pyr"
+    assert canonicalize_iupac("Rha(a1-P-4)Man(b1-4)GlcNAc") == "Rha1P(a1-4)Man(b1-4)GlcNAc"  # linkage-phosphate outside a repeat unit
     assert canonicalize_iupac("Neu5Acα2-3(6-O-sulfo)Galβ1-4Glc") == "Neu5Ac(a2-3)Gal6S(b1-4)Glc"
     assert canonicalize_iupac("D-Fuc(a1-2)[S-6]Glc(b1-4)GlcNAc(b1-4)Glc(b1-2)Glc") == "D-Fuc(a1-2)Glc6S(b1-4)GlcNAc(b1-4)Glc(b1-2)Glc"
     assert canonicalize_iupac("Fuc(a1-3)[Gal3/6S(b1-4)]GlcNAc(b1-2)Man") == "Fuc(a1-3)[Gal3/6S(b1-4)]GlcNAc(b1-2)Man"
@@ -394,6 +437,14 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("LacNAc") == "Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("LEWISX") == "Fuc(a1-3)[Gal(b1-4)]GlcNAc"
     assert canonicalize_iupac("3'-FL") == "Fuc(a1-3)[Gal(b1-4)]Glc-ol"
+    assert canonicalize_iupac("LNFP VI") == canonicalize_iupac("lnfp-vi") == "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)[Fuc(a1-3)]Glc-ol"  # separators do not matter
+    assert canonicalize_iupac("sialyl Lewis A") == "Neu5Ac(a2-3)Gal(b1-3)[Fuc(a1-4)]GlcNAc"
+    assert canonicalize_iupac("HNK-1") == "GlcA3S(b1-3)Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("Globo H") == "Fuc(a1-2)Gal(b1-3)GalNAc(b1-3)Gal(a1-4)Gal(b1-4)Glc1Cer"
+    assert canonicalize_iupac("Gb3Cer") == "Gal(a1-4)Gal(b1-4)Glc1Cer"
+    assert canonicalize_iupac("nLc4Cer") == "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc1Cer"
+    assert canonicalize_iupac("cellobiose") == "Glc(b1-4)Glc"
+    assert canonicalize_iupac("Gal-a") == "Gal"  # still Gal with an a-anomer, not the alpha-Gal epitope
     assert canonicalize_iupac("GalA") == "GalA"
     # Test branch ordering
     assert canonicalize_iupac("GalNAcβ1-4(NeuAcα2-3)GlcNAcβ1-3(NeuAcα2-3Galβ1-4GlcNAcβ1-6)Galβ1-4Glcol") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Neu5Ac(a2-3)[GalNAc(b1-4)]GlcNAc(b1-3)]Gal(b1-4)Glc-ol"
@@ -459,7 +510,10 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("DGlcpNAcb1-2[DGlcpa1-3]LRhapa1-2LRhapa1-3LRhap[2A]a1-OH") == "GlcNAc(b1-2)[Glc(a1-3)]Rha(a1-2)Rha(a1-3)Rha2Ac"
     assert canonicalize_iupac("S-2)[S-4)]aLFucp(1-4)[S-2)]aLFucp") == "Fuc2S4S(a1-4)Fuc2S"
     assert canonicalize_iupac("LDmanpHepa1-OME") == "LDManHep1Me"
+    assert canonicalize_iupac("LDmanpHepa1-3LDmanpHepa1-OH") == "LDManHep(a1-3)LDManHep"
+    assert canonicalize_iupac("DGlcpa1-4[LDmanpHepa1-6]DGlcpb1-OH") == "Glc(a1-4)[LDManHep(a1-6)]Glc"
     assert canonicalize_iupac("NNb3Ab;") == "Neu5Ac(b2-3)Gal"
+    assert canonicalize_iupac("NJa6Ab4GNb;") == "Neu5Gc(a2-6)Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("Ma3(M[6P]a6)Ma6(Ma3)Mb4GNb4GN") == "Man(a1-3)[Man6P(a1-6)]Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("Ab4(GNb4GNb3)(Ab4(Fa3)GNb6)Ab4Gb") == "GlcNAc(b1-4)GlcNAc(b1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-6)][Gal(b1-4)]Gal(b1-4)Glc"
     assert canonicalize_iupac("Ab3ANb4(NNa3)Ab4Gb") == "Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)Glc"
@@ -469,6 +523,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("GNb2Ma3(Ab4GNb2Ma6)Mb4GNb4(Fa6)GNb;") == "Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("01Y41Y41M(31M21M21M)61M(31M21M)61M21M") == "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("01Y41Y41M(31M21M21M31G)61M(31M21M)61M") == "Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("0dHex(?1-?)[Hex(?1-?)]HexNAc(?1-?)Hex(?1-?)HexNAc") == "0dHex(?1-?)[Hex(?1-?)]HexNAc(?1-?)Hex(?1-?)HexNAc"
     assert canonicalize_iupac("a-D-Manp-(1-2)-a-D-Glcp1OMe") == "Man(a1-2)Glc1Me"
     assert canonicalize_iupac("b-L-Fucp-(1-2)-b-L-Galp1OMe") == "Fuc(b1-2)L-Gal1Me"
     assert canonicalize_iupac("a-D-Kdop-(2-8)-a-D-Kdop-(2-4)-a-D-Kdop-(2-6)-b-D-GlcpN-(1-6)-a-D-GlcpN1PO4") == "Kdo(a2-8)Kdo(a2-4)Kdo(a2-6)GlcN(b1-6)GlcN1P"
@@ -477,6 +532,9 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("β-L-Galp-(1→4)-β-D-GlcpNAc-(1→") == "L-Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("α-D-Neup5Ac-(2→3)-β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("α-D-Manp-(1→3)[α-D-Manp-(1→6)]-β-D-Manp-(1→4)-β-D-GlcpNAc-(1→4)-β-D-GlcpNAc-(1→") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("α-Neup5Ac-(2→3)-β-D-Galp-(1→4)-β-D-Glcp") == "Neu5Ac(a2-3)Gal(b1-4)Glc"
+    assert canonicalize_iupac("α-Neup5Ac-(2→8)-α-Neup5Ac-(2→3)-β-D-Galp-(1→4)-β-D-Glcp") == "Neu5Ac(a2-8)Neu5Ac(a2-3)Gal(b1-4)Glc"
+    assert canonicalize_iupac("α-D-Galp-(1→6)-α-D-Glcp-(1↔2)-β-D-Fruf") == "Gal(a1-6)Glc(a1-2)Fruf"
     assert canonicalize_iupac("M3") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("Bi") == "Man(a1-3)[GlcNAc(b1-4)][Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("FA4G3F2") == "Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-?)[Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-?)]Man(a1-3/6)[Gal(b1-3/4)GlcNAc(b1-?)[GlcNAc(b1-?)]Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
@@ -486,7 +544,10 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("F(3)XA2") == "GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc"
     assert canonicalize_iupac("F(6)A2G(4)1Sg(6)1") == "Neu5Gc(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("FA3F1G3S[3,3]2") == "Neu5Ac(a2-3)Gal(b1-3/4)[Fuc(a1-3/4)]GlcNAc(b1-?)[Gal(b1-3/4)GlcNAc(b1-?)]Man(a1-3/6)[Neu5Ac(a2-3)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
-    assert canonicalize_iupac("A2G2S2(2,3)") == "Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Neu5Ac(a2-3)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("A2G2S2(2,3)") == "Neu5Ac(a2-3)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("F(6)A2G(4)2S(6)2") == "Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("FA2G2Ga2") == "Gal(a1-?)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3)[Gal(a1-?)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("FA2G(4)2S(3)2") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("FA4G3S1B") == "Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-?)[Gal(b1-3/4)GlcNAc(b1-?)]Man(a1-3/6)[Gal(b1-3/4)GlcNAc(b1-?)[GlcNAc(b1-?)]Man(a1-3/6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("A2G1G[SO4-2]1S1") == "Neu5Ac(a2-3/6)GalOS(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac('A2[6]G1') == 'Gal(b1-3/4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
@@ -811,6 +872,21 @@ EDGE        7
             6     7:a1    5:6
             7     8:a1    5:3
 ///""") == "Man(a1-3)[Man(a1-6)]Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc1Asn"
+    assert canonicalize_iupac("""ENTRY       G99999        Glycan
+NODE        6
+            1   GlcNAc      0     0
+            2   Gal        -8     2
+            3   LFuc       -8    -2
+            4   GlcA      -16     2
+            5   S         -16    -2
+            6   Neu5Gc    -24     2
+EDGE        5
+            1     2:b1    1:4
+            2     3:a1    1:3
+            3     4:b1    2:3
+            4     5       2:6
+            5     6:a2    4:4
+///""") == "Neu5Gc(a2-4)GlcA(b1-3)Gal6S(b1-4)[Fuc(a1-3)]GlcNAc"
     assert canonicalize_iupac("""<?xml version="1.0" encoding="UTF-8"?>
 <sugar version="1.0">
   <residues>
@@ -923,6 +999,10 @@ LIN
         canonicalize_iupac("Fuc(a1-3)[Gal(b1-4)Glc-ol")
     with pytest.raises(ValueError):  # empty cells/NaN have to be filtered out first
         canonicalize_iupac("")
+    for comp in ["HexNAc(4)Hex(5)Fuc(1)NeuAc(2)", "Hex(5)HexNAc(4)dHex(1)NeuAc(2)", "{Hex:5; HexNAc:4; NeuAc:2}"]:  # Byonic/MSFragger and GlycReSoft compositions crashed or became '{Hex5}HexNAc4'
+        with pytest.raises(ValueError, match = "canonicalize_composition"):
+            canonicalize_iupac(comp)
+    assert canonicalize_iupac("A2G2S(6)") == "Neu5Ac(a2-6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"  # Oxford, not a Byonic composition
     with pytest.raises(ValueError):
         canonicalize_iupac(float('nan'))
 
@@ -1921,9 +2001,27 @@ def test_canonicalize_composition():
     # Sulfate stays S, sialic acid becomes A, and residues without a single-letter code keep their name
     assert canonicalize_composition("H2N2S1Sulf1", as_string = True) == "H2N2A1S1"
     assert canonicalize_composition("Hex3HexNAc2Pent1", as_string = True) == "H3N2Pen1"
+    # Named residues count as their base residue, and MS software substituent names map onto the keys used downstream
+    assert canonicalize_composition("Glc3Man9GlcNAc2") == {'Hex': 12, 'HexNAc': 2}
+    assert canonicalize_composition("HexNAc(4)Hex(5)NeuAc(2)Sulfo(1)Phospho(1)KDN(1)", as_string = True) == "H5N4A2S1P1Kdn1"
+    assert canonicalize_composition("H2N2S1Sulfo1", as_string = True) == "H2N2A1S1"
     # Zero counts are dropped and the string parses back to the same dictionary
     assert canonicalize_composition("Hex5HexNAc4Fuc0", as_string = True) == "H5N4"
     assert canonicalize_composition(canonicalize_composition("Hex5HexNAc4Fuc1Neu5Ac2", as_string = True)) == canonicalize_composition("Hex5HexNAc4Fuc1Neu5Ac2")
+    # MS software formats: MSFragger-Glyco mass suffix, FragPipe Residue-Count, GlycReSoft braces with a glypy substituent
+    assert canonicalize_composition("HexNAc(4)Hex(5)NeuAc(2) % 2204.7724") == {'HexNAc': 4, 'Hex': 5, 'Neu5Ac': 2}
+    assert canonicalize_composition("HexNAc-4_Hex-5_NeuAc-2_Fuc-1", as_string = True) == "H5N4F1A2"
+    assert canonicalize_composition("{Fuc:1; Hex:5; HexNAc:4; Neu5Ac:2}", as_string = True) == "H5N4F1A2"
+    assert canonicalize_composition("{Hex:5; HexNAc:4; @sulfate:1}", as_string = True) == "H5N4S1"
+    assert canonicalize_composition("5,4,2,1", as_string = True) == "H5N4F1A2"
+    # Zero counts never become keys, and a residue without a count occurs once
+    assert canonicalize_composition("HexNAc(2)Hex(3)Fuc(0)NeuAc(0)") == {'HexNAc': 2, 'Hex': 3}
+    assert canonicalize_composition("Hex5HexNAc4Fuc") == {'Hex': 5, 'HexNAc': 4, 'dHex': 1}
+    # Formula keys of a glycan_to_composition dict stay whole instead of being re-read as residues
+    assert canonicalize_composition({'Hex': 1, 'HexNAc': 1, '+N3': 1, '-OH': 1}) == {'Hex': 1, 'HexNAc': 1, '+N3': 1, '-OH': 1}
+    # A whole glycoproteomics label is rejected instead of being read as 533352 phosphates
+    with pytest.raises(ValueError, match = "composition part"):
+        canonicalize_composition("P00533_352_H5N2")
 
 
 def test_parse_glycoform():
@@ -1967,10 +2065,17 @@ def test_process_for_glycoshift():
     assert 'HexNAc' in features
     assert 'Hex' in features
     df = pd.DataFrame(
-        index=['PROT1_123_[H5N4A2F1]', 'PROT1_124_[H3N3A1F1]'],
-        data={'abundance': [1.0, 2.0]}
+        index = ['PROT1_123_[H5N4A2F1]', 'PROT1_124_[H3N3A1F1]'],
+        data = {'abundance': [1.0, 2.0]}
     )
     result, features = process_for_glycoshift(df)
+    # Byonic compositions in the index are compositions, not sequences
+    df = pd.DataFrame(index = ['PROT1_123_HexNAc(4)Hex(5)Fuc(1)NeuAc(2)', 'PROT1_124_HexNAc(3)Hex(3)Fuc(1)'],
+                      data = {'abundance': [1.0, 2.0]})
+    result, features = process_for_glycoshift(df)
+    assert result.Glycoform.tolist() == [{'HexNAc': 4, 'Hex': 5, 'dHex': 1, 'Neu5Ac': 2},
+                                         {'HexNAc': 3, 'Hex': 3, 'dHex': 1}]
+    assert result.complex.tolist() == [1, 0]
 
 
 def test_linearcode_to_iupac():
@@ -2048,6 +2153,14 @@ def test_get_matching_indices2():
 
 def test_is_composition():
     assert is_composition("NeuGc1Hex4HexNAc4deHex1")
+    # Byonic, MSFragger-Glyco, pGlyco, and GlycReSoft compositions
+    assert is_composition("HexNAc(4)Hex(5)Fuc(1)NeuAc(2)")
+    assert is_composition("HexNAc(4)Hex(5)NeuAc(2) % 2204.7724")
+    assert is_composition("H(5)N(4)A(2)F(1)")
+    assert is_composition("{Fuc:1; Hex:5; HexNAc:4; Neu5Ac:2}")
+    # Oxford names and GlycoMod topologies still go to canonicalize_iupac
+    assert not is_composition("F(6)A2G(4)2")
+    assert not is_composition("(Hex)3 (HexNAc)1 (NeuAc)1 + (Man)3(GlcNAc)2")
     assert not is_composition("Neu5Gc(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc")
 
 def test_bracket_removal():
@@ -9214,6 +9327,7 @@ def test_tokenization_edge_cases():
 def test_looks_like_linearcode():
     assert not looks_like_linearcode('Ma3#Mb4GN')  # illegal character
     assert not looks_like_linearcode('Ma3(Mb4GN')  # unbalanced parenthesis
+    assert not looks_like_linearcode('FA2G2Ga2')  # a residue letter directly followed by a count is Oxford
 
 
 def test_get_insight_fallbacks(capsys):

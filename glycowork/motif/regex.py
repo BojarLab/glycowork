@@ -5,7 +5,8 @@ import networkx as nx
 from itertools import chain
 from glycowork.glycan_data.loader import lib, unwrap
 from glycowork.motif.processing import canonicalize_iupac, min_process_glycans
-from glycowork.motif.graph import graph_to_string, subgraph_isomorphism, glycan_to_nxGraph, LINKAGE_LABEL
+from weakref import WeakKeyDictionary
+from glycowork.motif.graph import graph_to_string, subgraph_isomorphism, glycan_to_nxGraph, LINKAGE_LABEL, _tree_embeddings, _sl, _has_o, _ptm_wildcarded, build_wildcard_cache, categorical_node_match_wildcard
 
 PREPROCESS_SPLIT = re.compile(r'(-?\s*(?:\((?:\?<=|\?<!)[^()]*\))?\s*\(?\[.*?\]\)?\s*(?:\{,?\d*,?\d*\}\?|\{,?\d*,?\d*\}|\*\?|\+\?|\?|\*|\+)\s*(?:\((?:\?=|\?!)[^()]*\))?\s*-?)')
 LINKAGE_SHORTHAND = re.compile(r'[\d\?]\(|\d$')
@@ -16,6 +17,8 @@ COMPONENT_DASH = re.compile(r'(?<![DL])-(?![^(]*\))')
 LOOKAROUND = re.compile(r'\((\?<=|\?<!|\?=|\?!)([^()]*)\)')
 QUANTIFIER = re.compile(r'\{([^}]*)\}')
 ALTERNATIVES = re.compile(r'\[([^\]]*)\]')
+_COMPONENT_CACHE = {}  # pre-compiled pattern -> its compiled chunks, which get_match would otherwise rebuild for every glycan
+_HITS_CACHE = WeakKeyDictionary()  # glycan graph -> {chunk motif: its subgraph matches}, as the known motifs' glyco-regexes search the same chunks in the same glycan
 
 
 def preprocess_pattern(pattern: str # Glyco-regular expression like "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
@@ -46,7 +49,7 @@ def preprocess_pattern(pattern: str # Glyco-regular expression like "Hex-HexNAc-
     components = PREPROCESS_SPLIT.split(pattern)
     # Remove any empty strings and trim whitespace
     components = [x.strip('-').strip() for x in components if x]
-    unknown = {t for c in components for m in compile_component(c)['motifs'] + [k for _, ms in compile_component(c)['looks'] for k in ms]
+    unknown = {t for c in map(compile_component, components) for m in c['motifs'] + [k for _, ms in c['looks'] for k in ms]
                for tok in min_process_glycans([m.replace('!', '')])[0]
                for t in ([tok] if '-' in tok else tok.split('/')) if t not in lib}
     if unknown:
@@ -175,20 +178,30 @@ def trace_matches(components: list[dict], # Compiled pattern chunks
                 return -1
         return parent.get(top, -1)
 
+    hits_cache = _HITS_CACHE.setdefault(ggraph, {})
+
     def candidates(motifs, location):
         out = []
         for m in motifs:
-            if m.startswith('!') and '(' not in m:  # a lone negated residue has no positive motif graph to search for
-                _, hits = subgraph_isomorphism(ggraph, glycan_to_nxGraph('Monosaccharide'), count = True, return_matches = True)
-                _, excluded = subgraph_isomorphism(ggraph, glycan_to_nxGraph(m[1:]), count = True, return_matches = True)
-                banned = {e[0] for e in excluded}
-                hits = [h for h in hits if h[0] not in banned]
-            else:
-                g2 = glycan_to_nxGraph(m)
-                if not len(g2):
-                    continue
-                _, hits = subgraph_isomorphism(ggraph, g2, count = True, return_matches = True)
-            out.extend(h for h in hits if h)
+            if m not in hits_cache:
+                if m.startswith('!') and '(' not in m:  # a lone negated residue has no positive motif graph to search for
+                    _, hits = subgraph_isomorphism(ggraph, glycan_to_nxGraph('Monosaccharide'), count = True, return_matches = True)
+                    _, excluded = subgraph_isomorphism(ggraph, glycan_to_nxGraph(m[1:]), count = True, return_matches = True)
+                    banned = {e[0] for e in excluded}
+                    hits = [h for h in hits if h[0] not in banned]
+                elif not len(g2 := glycan_to_nxGraph(m)):
+                    hits = []
+                else:
+                    # The same node match subgraph_isomorphism builds; its tree embeddings are VF2's matches up to order, which only matters when two share the (first, last) node they are sorted on below
+                    g1, g2p = (_ptm_wildcarded(ggraph), _ptm_wildcarded(g2)) if _has_o(g2) or _has_o(ggraph) else (ggraph, g2)
+                    wl = build_wildcard_cache(set(_sl(g1)) | set(_sl(g2p)))
+                    emb = None if '!' in m else _tree_embeddings(g1, g2p, categorical_node_match_wildcard('string_labels', 'unknown', wl, 'termini', 'flexible') if wl else
+                                                                 nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
+                    hits = None if emb is None else sorted(sorted(h) for h in set().union(*emb))
+                    if hits is None or len({(h[0], h[-1]) for h in hits}) < len(hits):
+                        _, hits = subgraph_isomorphism(ggraph, g2, count = True, return_matches = True)
+                hits_cache[m] = [h for h in hits if h]
+            out.extend(hits_cache[m])
         return sorted(filter_matches_by_location(out, ggraph, location), key = lambda m: (m[0], m[-1]))
 
     # Refute the chunk that is hardest to satisfy first, so a glycan without it costs one subgraph search instead of all of them
@@ -304,7 +317,13 @@ def format_retrieved_matches(lists: list[list[int]], # List of traces
                              ggraph: nx.DiGraph # Glycan graph
                              ) -> list[str]: # Matching glycan strings
     "Convert traces into glycan strings"
-    out = [(graph_to_string(ggraph.subgraph(t)), t) for t in lists if nx.is_weakly_connected(ggraph.subgraph(t))]
+    out = []
+    for t in lists:  # a standalone copy is much faster to canonicalize than a subgraph view
+        sub = nx.DiGraph()
+        sub.add_nodes_from((n, ggraph.nodes[n]) for n in t)
+        sub.add_edges_from((n, c) for n in t for c in ggraph.succ[n] if c in sub)
+        if nx.is_weakly_connected(sub):
+            out.append((graph_to_string(sub), t))
     return [s for s, _ in sorted(out, key = lambda x: (-len(x[0]), min(x[1])))]
 
 
@@ -332,7 +351,9 @@ def get_match(pattern: str | list[str], # Expression or pre-compiled pattern; e.
     pattern_components = preprocess_pattern(pattern) if isinstance(pattern, str) else pattern
     if not pattern_components or not len(ggraph):
         return False if not return_matches else []
-    traces = trace_matches([compile_component(p) for p in pattern_components], ggraph)
+    if (key := tuple(pattern_components)) not in _COMPONENT_CACHE:
+        _COMPONENT_CACHE[key] = [compile_component(p) for p in pattern_components]
+    traces = trace_matches([dict(c) for c in _COMPONENT_CACHE[key]], ggraph)  # copies, as trace_matches files its candidates into them
     if not traces:
         return False if not return_matches else []
     return True if not return_matches else format_retrieved_matches(traces, ggraph)
