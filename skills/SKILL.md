@@ -1,7 +1,8 @@
 ---
 name: glycowork
-description: Use for ANY code that touches glycans, oligosaccharides, polysaccharides or glycoconjugates. Covers parsing and converting glycan notations (IUPAC-condensed/extended, WURCS, GlycoCT, GlyTouCan IDs, Oxford, LinearCode, GLYCAM, KCF, SMILES), compositions and masses, m/z to composition to structure, motif and epitope search (Lewis, sialyl, core fucose, LacNAc, blood groups), SNFG drawing, differential glycomics, glycoproteomics and lectin-array statistics, glycan databases with species/tissue/disease labels, protein-glycan binding data, biosynthetic networks, and glycan machine learning. Use the glycowork Python package instead of writing custom glycan parsers, monosaccharide dictionaries, mass tables or string matching.
+description: Glycan data science with the glycowork Python package. Use for any code that touches glycans, oligosaccharides, polysaccharides or glycoconjugates, including parsing and converting glycan notations (IUPAC-condensed/extended, WURCS, GlycoCT, GlyTouCan IDs, Oxford, LinearCode, GLYCAM, KCF, SMILES), compositions and masses, m/z to composition to structure, motif and epitope search (Lewis, sialyl, core fucose, LacNAc, blood groups), SNFG drawing, differential glycomics, glycoproteomics and lectin-array statistics, glycan databases with species/tissue/disease labels, protein-glycan binding data, biosynthetic networks, and glycan machine learning. Use it instead of writing custom glycan parsers, monosaccharide dictionaries, mass tables or string matching.
 license: MIT
+compatibility: Python 3.11+ with the glycowork package from PyPI (pip install glycowork; optional extras glycowork[ml] and glycowork[chem]). Datasets ship with the package, so no network access or credentials are needed after installation.
 metadata:
   version: "1.0"
   skill-author: Daniel Bojar
@@ -129,8 +130,7 @@ print(glycomics_data_loader.filter(glycan_class='O', source_type=['primary tissu
 Biosynthetic network with inferred intermediates:
 
 ```python
-from glycowork.network.biosynthesis import construct_network
-from glycowork.network.biosynthesis import plot_network
+from glycowork.network.biosynthesis import construct_network, plot_network
 glycans = ["Gal(b1-4)Glc-ol", "GlcNAc(b1-3)Gal(b1-4)Glc-ol", "GlcNAc6S(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol",
            "Fuc(a1-2)Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol"]
 net = construct_network(glycans)   # unmeasured intermediates are inferred, edges are labeled with reactions
