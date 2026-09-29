@@ -335,10 +335,13 @@ def get_class(glycan: str # Glycan in IUPAC-condensed nomenclature
     return ''
 
 
-def canonicalize_composition(comp: str, # Composition in Hex5HexNAc4Fuc1Neu5Ac2 or H5N4F1A2 format
+def canonicalize_composition(comp: str | dict[str, int], # Composition in Hex5HexNAc4Fuc1Neu5Ac2 or H5N4F1A2 format, or as a dict (e.g., {'Hex': 5})
                              as_string: bool = False # Whether to return canonical shorthand string (e.g., "H5N4F1A2") instead of dictionary
                              ) -> dict[str, int] | str: # Dictionary of monosaccharide:count, or canonical shorthand string if as_string
     "Converts composition from any common format to standardized dictionary or canonical shorthand string"
+    if isinstance(comp, dict):
+        # A dict, e.g. from glycan_to_composition, is read like its string form, so its keys get the same aliases
+        comp = ''.join(f'{k}{v}' for k, v in comp.items() if v)
     if '_' in comp:
         values = comp.split('_')
         if len(values) not in (4, 5):

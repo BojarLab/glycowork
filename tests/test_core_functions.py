@@ -92,7 +92,8 @@ from glycowork.motif.regex import (preprocess_pattern, specify_linkages,
 from glycowork.motif.draw import (process_bonds, draw_hex, process_per_residue, col_dict_base,
                  add_colors_to_map, is_jupyter, draw_bracket,
                  display_svg_with_matplotlib, get_coordinates_and_labels, get_highlight_attribute, add_sugar, add_bond, draw_shape,
-                 draw_chem2d, draw_chem3d, GlycoDraw, plot_glycans_excel, annotate_figure, resolve_motif_name, _spread_glycans
+                 draw_chem2d, draw_chem3d, GlycoDraw, plot_glycans_excel, annotate_figure, resolve_motif_name,
+                 _spread_glycans, plot_glycans_grid, _drawn_extent
 )
 from glycowork.motif.analysis import (preprocess_data, get_pvals_motifs, select_grouping, get_glycanova, get_differential_expression,
                      get_biodiversity, get_time_series, get_SparCC, get_roc, get_ma, get_volcano, get_meta_analysis,
@@ -1264,6 +1265,14 @@ def test_get_modification():
     assert get_modification('Gal6S') == '6S'
     assert get_modification('Man3S') == '3S'
     assert get_modification('Gal3S6S') == '3S6S'
+
+
+def test_get_core_expands_position_lists():
+    # Neu5,9Ac2 is Neu5Ac9Ac with its positions listed once, so core and modification come out the same
+    assert get_core('Neu5,9Ac2') == get_core('Neu5Ac9Ac') == 'Neu5Ac'
+    assert get_modification('Neu5,9Ac2') == get_modification('Neu5Ac9Ac') == '9Ac'
+    assert get_modification('Neu5,7,9Ac3') == '7Ac9Ac' and get_modification('Neu4,5Ac2') == '4Ac'
+    assert get_core('Gal3,6S2') == 'Gal' and get_modification('Gal3,6S2') == '3S6S'
 
 
 def test_get_stem_lib():
@@ -3146,6 +3155,21 @@ def test_glycodraw_highlight_named_regex_motif():
         GlycoDraw("Gal(b1-4)GlcNAc", highlight_motif = 'LewisXX', suppress = True)
 
 
+def test_glycodraw_refuses_a_glyco_regex_name():
+    # Nglycan_hybrid names a family of structures, which can be highlighted but not drawn as one glycan
+    with pytest.raises(ValueError, match = "glyco-regex"):
+        GlycoDraw("Nglycan_hybrid", suppress = True)
+
+
+def test_get_coordinates_and_labels_ring_and_amine_labels():
+    # A furanose that get_core does not know keeps its ring in the symbol, not in a stray 'f' label
+    main = get_coordinates_and_labels("L-Rhaf(a1-3)Altf(b1-4)Gal", highlight_motif = None)[0]
+    assert main[0] == ['Gal', 'Altf', 'Rhaf'] and main[3] == ['', '', ''] and main[5] == ['', '', 'L-']
+    # Text right after the amine of a HexN is its N-substituent, while a ring position or a uronic A is not
+    main = get_coordinates_and_labels("GlcNS6S(a1-4)GlcN3S(a1-4)GlcNA", highlight_motif = None)[0]
+    assert main[0] == ['GlcN'] * 3 and main[3] == ['A', '3S', 'NS6S']
+
+
 def test_deduplicate_glycans():
     glycans = [
         "Gal(b1-4)[Fuc(a1-3)]GlcNAc",
@@ -4032,6 +4056,17 @@ def test_draw_chem2d():
         draw_chem2d("InvalidGlycan", ["GlcNAc"])
 
 
+def test_draw_chem2d_file_formats(tmp_path):
+    pytest.importorskip("rdkit")
+    draw_chem2d("GlcNAc(b1-4)GlcA", ["GlcNAc"], filepath = tmp_path / "chem.png")
+    plt.close('all')
+    assert (tmp_path / "chem.png").read_bytes()[:8] == b'\x89PNG\r\n\x1a\n'
+    # Anything but .svg, .pdf, or .png is refused, and nothing is written
+    with pytest.raises(ValueError, match = r"\.svg, \.pdf, or \.png"):
+        draw_chem2d("GlcNAc(b1-4)GlcA", ["GlcNAc"], filepath = tmp_path / "chem.jpg")
+    assert not (tmp_path / "chem.jpg").exists()
+
+
 def test_draw_chem3d():
     missing_deps = []
     try:
@@ -4165,6 +4200,63 @@ def test_glycodraw():
     assert result is not None
 
 
+def test_glycodraw_compositions_and_lists():
+    # A composition dict, as glycan_to_composition returns it, goes through canonicalize_composition and draws exactly
+    # like its canonical string
+    comp = {'Hex': 5, 'HexNAc': 4, 'Sulfate': 1}
+    assert canonicalize_composition({**comp, 'dHex': 0}) == comp
+    lacnac = glycan_to_composition("Neu5Ac(a2-3)Gal6S(b1-4)GlcNAc")
+    assert canonicalize_composition(lacnac, as_string = True) == "H1N1A1S1"
+    comp = GlycoDraw({'Hex': 5, 'HexNAc': 4, 'Sulfate': 1}, suppress = True)
+    assert comp.as_svg() == GlycoDraw("H5N4Sulfate1", suppress = True).as_svg()
+    assert comp.alt_text == "SNFG composition diagram of H5N4Sulfate1: 5 Hex, 4 HexNAc, 1 Sulfate."
+    # A substituent is spelled out, and its count follows it instead of running into the name
+    boxes = {el.escaped_text: _drawn_extent(el, [])[0] for el in comp.drawing_obj.elements[0].children
+             if isinstance(el, draw.Text) and el.escaped_text}
+    assert boxes['Sulfate'][2] < boxes['1'][0]
+    # A list is drawn as one grid, compositions included
+    grid = GlycoDraw(["Gal(b1-4)GlcNAc", {'Hex': 3, 'HexNAc': 2}], vertical = True, suppress = True)
+    assert grid.vertical and grid.alt_text == "SNFG diagrams of 2 glycans: Gal(b1-4)GlcNAc; H3N2."
+
+
+def test_glycodraw_floating_bits_keep_their_branches():
+    # Every residue of a branched floating bit gets its symbol and every linkage its bond
+    for glycan, n in (("{Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-?)}Gal(b1-4)GlcNAc", 5),
+                      ("{Gal(b1-3)[Neu5Ac(a2-6)]GlcNAc(b1-3)[Gal(b1-4)]GlcNAc(b1-?)}Gal(b1-4)Glc", 7)):
+        svg = GlycoDraw(glycan, suppress = True).as_svg()
+        assert svg.count('snfg-symbol') == n and svg.count('snfg-linkage') == n - 1
+
+
+def test_glycodraw_vertical_free_text_stays_upright():
+    flat, turned = (GlycoDraw("GlcNAc(b1-4)GlcA(b1-3)", repeat = 3, vertical = v, suppress = True).drawing_obj
+                    .elements[0].children[-1] for v in (False, True))
+    (bx0, by0, bx1, by1), = _drawn_extent(flat, [])
+    # The repeat count turns back upright about its middle, against the quarter turn of the whole drawing...
+    assert flat.escaped_text == 'n = 3'
+    assert turned.args['transform'] == f'rotate(-90 {(bx0 + bx1) / 2} {(by0 + by1) / 2})'
+    # ...and still starts right below the chain, so that it grows away from it instead of into it
+    (tx0, ty0, tx1, ty1), = _drawn_extent(turned, [])
+    assert ty0 == pytest.approx(by0) and ty1 - ty0 == pytest.approx(bx1 - bx0)
+    # A reducing-end label just turns about its middle
+    flat, turned = (GlycoDraw("Gal(b1-4)GlcNAc", reducing_end_label = "Mucin", vertical = v, suppress = True)
+                    .drawing_obj.elements[0].children for v in (False, True))
+    i = next(i for i, el in enumerate(flat) if isinstance(el, draw.Text) and el.escaped_text == 'Mucin')
+    (bx0, by0, bx1, by1), (tx0, ty0, tx1, ty1) = _drawn_extent(flat[i], []) + _drawn_extent(turned[i], [])
+    assert (tx0 + tx1, ty0 + ty1) == pytest.approx((bx0 + bx1, by0 + by1)) and ty1 - ty0 == pytest.approx(bx1 - bx0)
+
+
+def test_glycodraw_repeat_range_brackets_clear_the_linkage_labels():
+    d = GlycoDraw("Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc", repeat = True, repeat_range = [1, 2], suppress = True)
+    children = d.drawing_obj.elements[0].children
+    brackets = [b for el in children if str(el.args.get('transform', '')).startswith('rotate(')
+                for b in _drawn_extent(el, [])]
+    labels = [b for el in children if isinstance(el, draw.Text) and el.args.get('x') is None
+              for b in _drawn_extent(el, [])]
+    assert len(brackets) == 2 and len(labels) == 3
+    # Each bracket stands between a symbol and the linkage label beside it, not through the label
+    assert not any(a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3] for a in brackets for b in labels)
+
+
 def test_glycodraw_branch_spacing():
     # Verify that heavily branched glycans keep long antennas separated vertically
     glycan = canonicalize_iupac("FA3F2G3S[3,6,6]3")
@@ -4228,9 +4320,11 @@ def test_plot_glycans_excel(tmp_path):
             'Values': [1, 2]
     })
     plot_glycans_excel(df2, str(test_dir), glycan_col_num = 0)
-    # The workbook is always written as output.xlsx inside a directory, so a file path is a mistake
+    # An .xlsx path names the workbook itself, while any other file suffix is a mistake
+    plot_glycans_excel(df, str(test_dir / "out.xlsx"))
+    assert (test_dir / "out.xlsx").exists()
     with pytest.raises(ValueError):
-        plot_glycans_excel(df, str(test_dir / "out.xlsx"))
+        plot_glycans_excel(df, str(test_dir / "out.csv"))
     # A cell holding a list of glycans is drawn from its first entry
     plot_glycans_excel(pd.DataFrame({'Glycans': [['GlcNAc(b1-4)GlcA']], 'Values': [1]}), str(tmp_path / "listcell"))
     # ...and one that cannot be drawn names its row
@@ -4238,6 +4332,43 @@ def test_plot_glycans_excel(tmp_path):
         plot_glycans_excel(pd.DataFrame({'Glycans': ['NotAGlycan'], 'Values': [1]}), str(tmp_path / "undrawable"))
     # Clean up the test folder after the test
     shutil.rmtree(test_dir)
+
+def test_plot_glycans_excel_column_name_and_kwargs(tmp_path):
+    from openpyxl import load_workbook
+    df = pd.DataFrame({'Values': [1], 'Glycan': ['GlcNAc(b1-4)GlcA']})
+    # The glycan column can be named, and GlycoDraw options such as vertical reach every drawing
+    plot_glycans_excel(df, str(tmp_path / "flat.xlsx"), glycan_col_num = 'Glycan')
+    plot_glycans_excel(df, str(tmp_path / "tall.xlsx"), glycan_col_num = 'Glycan', vertical = True)
+    flat, tall = (load_workbook(tmp_path / name).active for name in ("flat.xlsx", "tall.xlsx"))
+    assert len(flat._images) == len(tall._images) == 1
+    assert tall.row_dimensions[2].height > flat.row_dimensions[2].height
+    assert tall.column_dimensions['C'].width < flat.column_dimensions['C'].width
+
+def test_plot_glycans_grid(tmp_path):
+    glycans = ["Gal(b1-4)GlcNAc", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc", "Fuc(a1-2)Gal", "Man(a1-3)[Man(a1-6)]Man", "H5N4"]
+    # A filtered Series keeps its index (1 to 5 here), so captions have to be taken by position
+    labels = pd.Series(['dropped', 'a', 'b', 'c', 'd', 'e'])[1:]
+    grid = plot_glycans_grid(pd.Series(glycans), ncols = 2, labels = labels, suppress = True)
+    caps = {el.escaped_text: (el.args['x'], el.args['y']) for el in grid.drawing_obj.elements
+            if isinstance(el, draw.Text)}
+    assert list(caps) == ['a', 'b', 'c', 'd', 'e']
+    # Two per row, each caption centered under its own column
+    assert caps['a'][0] == caps['c'][0] == caps['e'][0] < caps['b'][0] == caps['d'][0]
+    assert caps['a'][1] == caps['b'][1] < caps['c'][1] == caps['d'][1] < caps['e'][1]
+    assert grid.alt_text == "SNFG diagrams of 5 glycans: " + "; ".join(glycans) + "."
+    assert [el.escaped_text for el in plot_glycans_grid(glycans[0], labels = "LacNAc", suppress = True).drawing_obj
+    .elements if isinstance(el, draw.Text)] == ['LacNAc']
+    with pytest.raises(ValueError, match = "labels has 1 entries"):
+        plot_glycans_grid(glycans, labels = ['only one'])
+    # Vertical glycans stand on their reducing end, so every one in a row ends at the same height, above its caption
+    tall = plot_glycans_grid(glycans[:3], labels = ['x', 'y', 'z'], vertical = True,
+                             filepath = tmp_path / "grid.svg")
+    assert tall.vertical and (tmp_path / "grid.svg").exists()
+    shifts = [float(el.args['transform'].split()[1][:-1]) for el in tall.drawing_obj.elements
+              if isinstance(el, draw.Group)]
+    boxes = [GlycoDraw(g, vertical = True, suppress = True).drawing_obj.view_box for g in glycans[:3]]
+    bottoms = [s + b[1] + b[3] for s, b in zip(shifts, boxes)]
+    assert bottoms == pytest.approx([bottoms[0]] * 3)
 
 
 @pytest.fixture
@@ -4347,6 +4478,41 @@ def test_glycodraw_per_residue_and_linkage_placement():
         assert len([p for p in re.findall(r'<path[^>]*>', svg) if 'snfg-linkage' in p and '#C23537' in p]) == 1
     with pytest.raises(ValueError):  # an index past the last linkage would otherwise highlight nothing
         GlycoDraw(branched, highlight_linkages = [branched.count('(')], suppress = True)
+
+
+def test_glycodraw_label_crowding():
+    # (font size, anchor, startOffset, text) of every linkage and modification label
+    label = re.compile(
+        r'<text font-size="([\d.]+)"[^>]*text-anchor="(\w+)"[^>]*><textPath[^>]*startOffset="([^"]+)">'
+        r'\s*<tspan dy="[^"]+">([^<]*)<')
+    # Labels that collide with nothing keep their default size and spot, in either orientation
+    nglycan = "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    for vertical in (False, True):
+        svg = GlycoDraw(nglycan, vertical = vertical, suppress = True).as_svg()
+        assert {k[:3] for k in label.findall(svg)} == {('20.0', 'middle', '50%')}
+    # A linkage label running into a converging bond slides along its own bond, the others stay put
+    svg = GlycoDraw("Man(a1-3)[Xyl(b1-2)][Man(a1-6)]Man", suppress = True).as_svg()
+    found = {k[3]: k for k in label.findall(svg)}
+    assert found['α 3'][2] != '50%' and found['α 6'][2] == found['β 2'][2] == '50%'
+    # Long modification labels on neighbouring residues shrink until they clear each other
+    svg = GlycoDraw("Gal2Ac3Ac4Ac6Ac(b1-4)Gal2Ac3Ac6Ac(b1-4)Glc2Ac3Ac6Ac", suppress = True).as_svg()
+    sizes = [float(k[0]) for k in label.findall(svg) if 'Ac' in k[3]]
+    assert min(sizes) < 17.5 and max(sizes) == 17.5
+    # In compact mode a residue with another symbol right above moves its label beside itself
+    svg = GlycoDraw("GlcOMe(b1-2)[AraOMe(a1-3)]GlcOMe", compact = True, suppress = True).as_svg()
+    assert ('14.0', 'start', '0.0000%', 'Me') in label.findall(svg)
+    # In vertical mode the label of a tucked Fuc would run into its parent, so it goes above the Fuc instead
+    svg = GlycoDraw("Fuc2Me4Me(?1-?)Rha(?1-?)Rha2Me", vertical = True, suppress = True).as_svg()
+    assert ('17.5', 'middle', '50.0000%', '2Me4Me') in label.findall(svg)
+    # Hemmed in on every side, a label stays where it was rather than moving somewhere just as bad
+    svg = GlycoDraw("Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc6S(b1-3)[GlcNAc(b1-6)]GalNAc", vertical = True, compact = True,
+                    suppress = True).as_svg()
+    assert label.findall(svg) == [('17.5', 'start', '0', '6S')]
+    # Free-standing text such as a repeat count is an obstacle as well
+    assert '>n</text>' in GlycoDraw("GlcNAc(b1-4)GlcA(b1-3)", repeat = True, suppress = True).as_svg()
+    # O marks an O-linked substituent and goes, but the O of a name such as Ole stays
+    svg = GlycoDraw("Glc1Ole(b1-4)GlcOMe", suppress = True).as_svg()
+    assert [k[3] for k in label.findall(svg)][1:] == ['Me', '1Ole']
 
 
 try:

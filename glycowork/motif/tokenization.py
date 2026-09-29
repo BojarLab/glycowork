@@ -94,9 +94,17 @@ def pad_sequence(seq: list[int], # Sequence to pad
     return seq + [pad_label] * padding_needed if padding_needed > 0 else seq
 
 
+def _expand_position_lists(sugar: str # Monosaccharide or linkage
+                           ) -> str: # Monosaccharide with one position per substituent
+    "Spell out position lists like Neu5,9Ac2 as Neu5Ac9Ac, the form lib and get_core use"
+    return re.sub(r'(\d(?:,\d)+)([A-Z][a-z]*)\d+', lambda m: ''.join(p + m.group(2) for p in m.group(1).split(',')),
+                  sugar) if ',' in sugar else sugar
+
+
 def get_core(sugar: str # Monosaccharide or linkage
              ) -> str: # Core monosaccharide string
     """Retrieve core monosaccharide from modified monosaccharide"""
+    sugar = _expand_position_lists(sugar)
     if (catch := next((c for c in _CORES if c in sugar), -1)) != -1:
         return catch
     if 'Neu' in sugar:
@@ -115,6 +123,7 @@ def get_core(sugar: str # Monosaccharide or linkage
 def get_modification(sugar: str # Monosaccharide or linkage
                      ) -> str: # Modification string
     """Retrieve modification from modified monosaccharide"""
+    sugar = _expand_position_lists(sugar)
     core = get_core(sugar)
     return multireplace(sugar, {core: '', 'Neu': '', '5Ac': '', '5Gc': ''})
 
