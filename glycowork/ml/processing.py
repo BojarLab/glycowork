@@ -125,8 +125,9 @@ def dataset_to_dataloader(glycan_list: list[str], # list of IUPAC-condensed glyc
         if len(data) < len(glycan_list):
             warnings.warn(
                 f"{len(glycan_list) - len(data)} of {len(glycan_list)} glycans have no defined molecular graph and were dropped from this dataloader")
-        return torch.utils.data.DataLoader(HeteroDataset(data), batch_size = batch_size, shuffle = shuffle,
-                                           drop_last = drop_last or (shuffle and len(HeteroDataset(data)) % batch_size == 1),
+        dataset = HeteroDataset(data)
+        return torch.utils.data.DataLoader(dataset, batch_size = batch_size, shuffle = shuffle,
+                                           drop_last = drop_last or (shuffle and len(dataset) % batch_size == 1),
                                            collate_fn = hetero_collate)
     # Converting glycans and labels to PyTorch Geometric Data objects
     glycan_graphs = dataset_to_graphs(glycan_list, labels, libr = libr, label_type = label_type)
@@ -179,6 +180,7 @@ class HeteroDataBatch:
         """Initialize the object by setting each given argument as attribute of the object."""
         self.x_dict = {}
         self.edge_index_dict = {}
+        self.edge_attr_dict = {}
         self.batch_dict = {}
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -209,13 +211,8 @@ def hetero_collate(data: list[list[HeteroData]] | list[HeteroData] | None,  # li
         raise ValueError("No data provided for collation.")
     if isinstance(data[0], list):
         data = data[0]
-    # Extract all valid node types and edge types
     node_types = ["atoms", "bonds", "monosacchs"]
-    edge_types = GIFFLAR_EDGE_TYPES
-    # Setup empty fields for the most important attributes of the resulting batch
-    x_dict, batch_dict, edge_index_dict, edge_attr_dict = {}, {}, {}, {}
-    # Store the node counts to offset edge indices when collating
-    node_counts = {node_type: [0] for node_type in node_types}
+    x_dict, batch_dict, edge_index_dict, edge_attr_dict, offsets = {}, {}, {}, {}, {}
     batch_kwargs = {"y": [], "ID": []}
     for d in data:
         for key in batch_kwargs:  # Collect all length-queryable fields
@@ -224,29 +221,20 @@ def hetero_collate(data: list[list[HeteroData]] | list[HeteroData] | None,  # li
                     batch_kwargs[key].append(d[key])
             except Exception:
                 pass
-        # Compute the offsets for each node type for sample identification after batching
-        for node_type in node_types:
-            node_counts[node_type].append(node_counts[node_type][-1] + d[node_type].num_nodes)
-    # Collect the node features for each node type and store their assignment to the individual samples
+    # Stack the node features of each type, and offset each sample's edges by the nodes before it with one tensor op per edge type rather than one per sample
     for node_type in node_types:
-        x_dict[node_type] = torch.concat([d[node_type].x for d in data], dim = 0)
-        batch_dict[node_type] = torch.cat([torch.full((d[node_type].num_nodes,), i, dtype = torch.long) for i, d in enumerate(data)], dim = 0)
-    # Collect edge information for each edge type
-    for edge_type in edge_types:
-        tmp_edge_index, tmp_edge_attr = [], []
-        for i, d in enumerate(data):
-            # Collect the edge indices and offset them according to the offsets of their respective nodes
-            if list(d[edge_type].edge_index.shape) == [0]:
-                continue
-            tmp_edge_index.append(torch.stack([d[edge_type].edge_index[0] + node_counts[edge_type[0]][i], d[edge_type].edge_index[1] + node_counts[edge_type[2]][i]]))
-            # Also collect edge attributes if existent (NOT TESTED!)
-            if hasattr(d[edge_type], "edge_attr"):
-                tmp_edge_attr.append(d[edge_type].edge_attr)
-        # Collate the edge information
-        if tmp_edge_index:
-            edge_index_dict[edge_type] = torch.cat(tmp_edge_index, dim = 1)
-        if tmp_edge_attr:
-            edge_attr_dict[edge_type] = torch.cat(tmp_edge_attr, dim = 0)
+        counts = torch.tensor([d[node_type].num_nodes for d in data])
+        offsets[node_type] = torch.cumsum(counts, 0) - counts
+        x_dict[node_type] = torch.cat([d[node_type].x for d in data], dim = 0)
+        batch_dict[node_type] = torch.repeat_interleave(torch.arange(len(data)), counts)
+    for edge_type in GIFFLAR_EDGE_TYPES:
+        stores = [(i, d[edge_type]) for i, d in enumerate(data) if d[edge_type].edge_index.numel()]
+        if not stores:
+            continue
+        idx, counts = torch.tensor([i for i, _ in stores]), torch.tensor([store.edge_index.shape[1] for _, store in stores])
+        edge_index_dict[edge_type] = torch.cat([store.edge_index for _, store in stores], dim = 1) + torch.stack([offsets[edge_type[0]][idx], offsets[edge_type[2]][idx]]).repeat_interleave(counts, dim = 1)
+        if all(hasattr(store, "edge_attr") for _, store in stores):
+            edge_attr_dict[edge_type] = torch.cat([store.edge_attr for _, store in stores], dim = 0)
     # Remove all incompletely given data and concat lists of tensors into single tensors
     num_nodes = {node_type: x_dict[node_type].shape[0] for node_type in node_types}
     for key, value in list(batch_kwargs.items()):
@@ -300,11 +288,13 @@ class GIFFLARTransform(BaseTransform):
         data["bonds", "coboundary", "bonds"].edge_index = torch.tensor(
             [(bond1, bond2) for ring in molecule.rings for bond1 in ring for bond2 in ring if bond1 != bond2],
             dtype = torch.long).t()
-        # Set up the monosaccharide information; This does not make sense. The monomer-ids are categorical features
+        # Set up the monosaccharide information
         data["monosacchs"].x = torch.tensor([lib.get(data["tree"].nodes[node]["name"], len(lib)) for node in data["tree"].nodes])
         data["monosacchs"].num_nodes = len(data["monosacchs"].x)
-        monosacchs_boundary = [(a, b) for a, b in data["tree"].edges] + [(b, a) for a, b in data["tree"].edges]
-        data["monosacchs", "boundary", "monosacchs"].edge_index = torch.tensor(monosacchs_boundary, dtype = torch.long).t()
+        linkages = list(data["tree"].edges(data = "linkage"))  # as (donor, acceptor), since iupac2mol numbers every donor before its acceptor
+        data["monosacchs", "boundary", "monosacchs"].edge_index = torch.tensor([(a, b) for a, b, _ in linkages] + [(b, a) for a, b, _ in linkages], dtype = torch.long).t()
+        # Linkages are lib tokens, shifted by len(lib) + 1 on the acceptor-to-donor copy so that each message also knows which way it runs
+        data["monosacchs", "boundary", "monosacchs"].edge_attr = torch.tensor([lib.get(link, len(lib)) for _, _, link in linkages] + [lib.get(link, len(lib)) + len(lib) + 1 for _, _, link in linkages], dtype = torch.long)
         return data
 
 

@@ -8792,6 +8792,12 @@ def test_glycans_to_emb(sample_data, mock_models):
     assert isinstance(preds, list)
     assert len(preds) == len(glycans)
     assert all(p in class_list for p in preds)
+    # GIFFLAR reads molecular heterographs; a glycan without one (unknown linkage) comes back as a NaN row in place
+    model = prep_model("GIFFLAR", 2)
+    rep_df = glycans_to_emb(glycans + ["Fuc(a1-?)Gal"], model, rep = True)
+    assert len(rep_df) == len(glycans) + 1 and rep_df.iloc[-1].isna().all() and not rep_df.iloc[:-1].isna().any().any()
+    preds = glycans_to_emb(glycans + ["Fuc(a1-?)Gal"], model, rep = False, class_list = class_list)
+    assert preds[-1] is None and all(p in class_list for p in preds[:-1])
 
 
 def test_get_multi_pred(sample_data, mock_models):

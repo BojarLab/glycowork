@@ -66,23 +66,32 @@ def glycans_to_emb(glycans: str | list[str],  # glycan(s) in IUPAC-condensed
                    multilabel = False  # whether to output predictions for a multilabel-task
                    ) -> pd.DataFrame | list[str]:  # dataframe of representations or list of predictions
     "Returns a dataframe of learned representations for a list of glycans"
+    from glycowork.ml.models import GIFFLAR
     if libr is None:
         libr = lib
     glycans = [glycans] if isinstance(glycans, str) else glycans
-    # Preparing dataset for PyTorch
+    # Preparing dataset for PyTorch; GIFFLAR reads molecular heterographs, labeled here with each glycan's position
+    hetero = isinstance(model, GIFFLAR)
     glycan_loader = dataset_to_dataloader(glycans, range(len(glycans)), libr = libr, batch_size = batch_size,
-                                          shuffle = False)
-    res = []
+                                          shuffle = False, hetero = hetero)
+    res, idx = [], []
     model = model.eval()
     # Get predictions for each mini-batch
     for data in glycan_loader:
         with torch.no_grad():
-            x, y, edge_index, batch = data.labels, data.y, data.edge_index, data.batch
-            x, y, edge_index, batch = x.to(device), y.to(device), edge_index.to(device), batch.to(device)
-            pred, out = model(x, edge_index, batch, inference = True)
+            if hetero:
+                out = model(data.to(device), embeddings = True)
+                y, pred, out = data.y, out["pred"], out["graph_embed"]
+            else:
+                x, y, edge_index, batch = data.labels, data.y, data.edge_index, data.batch
+                x, y, edge_index, batch = x.to(device), y.to(device), edge_index.to(device), batch.to(device)
+                pred, out = model(x, edge_index, batch, inference = True)
             # Unpacking and combining predictions
+            idx.extend(y.tolist())
             res.extend(out.detach().cpu().numpy()) if rep else res.extend(pred.detach().cpu().numpy())
-    return pd.DataFrame(res) if (rep or multilabel) else [class_list[k] for k in np.argmax(res, axis = 1)]
+    # GIFFLAR has to skip glycans without a molecular graph (unknown linkages, floating parts), which come back as NaN rows so that the output still lines up with the input
+    res = pd.DataFrame(res, index = idx).reindex(range(len(glycans)))
+    return res if (rep or multilabel) else [None if row.isna().any() else class_list[int(np.argmax(row))] for _, row in res.iterrows()]
 
 
 def get_multi_pred(prot: str,  # protein amino acid sequence
