@@ -195,7 +195,7 @@ def trace_matches(components: list[dict], # Compiled pattern chunks
                     # The same node match subgraph_isomorphism builds; its tree embeddings are VF2's matches up to order, which only matters when two share the (first, last) node they are sorted on below
                     g1, g2p = (_ptm_wildcarded(ggraph), _ptm_wildcarded(g2)) if _has_o(g2) or _has_o(ggraph) else (ggraph, g2)
                     wl = build_wildcard_cache(set(_sl(g1)) | set(_sl(g2p)))
-                    emb = None if '!' in m else _tree_embeddings(g1, g2p, categorical_node_match_wildcard('string_labels', 'unknown', wl, 'termini', 'flexible') if wl else
+                    emb = None if '!' in m else _tree_embeddings(g1, g2p, categorical_node_match_wildcard('string_labels', 'unknown', wl, 'termini', 'flexible') if wl or g1 is not ggraph else
                                                                  nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
                     hits = None if emb is None else sorted(sorted(h) for h in set().union(*emb))
                     if hits is None or len({(h[0], h[-1]) for h in hits}) < len(hits):

@@ -47,7 +47,7 @@ def _count_chains(
     "Counts chain motifs as subgraph isomorphism would: every node has at most one parent, so an occurrence is fixed by where the motif's first node lands and a walk up from each node finds them all, done once per distinct chain the glycans share"
     wild = lambda c: tuple((l if LINKAGE_LABEL.match(l) else PTM_REGEX.sub('O', l), t) for l, t in c)
     max_len = max(map(len, motifs), default = 0)
-    # Chains keyed by their first node, as written for glycans without PTM notation and PTM-wildcarded otherwise, plus PTM-wildcarded for all glycans, since both sides are wildcarded as soon as the motif carries one
+    # Chains keyed by their first node, as written for glycans without PTM notation and PTM-wildcarded otherwise, plus PTM-wildcarded for all glycans, since both sides are wildcarded as soon as the motif carries one; wildcarded chains keep the chain as written next to them, whose stated PTM positions still have to agree
     raw, ptm_o, ptm_all = (defaultdict(lambda: defaultdict(list)) for _ in range(3))
     for gi, g in enumerate(ggraphs):
         for v in g:
@@ -56,25 +56,26 @@ def _count_chains(
                 p.append(u)
             c = tuple((g.nodes[u]['string_labels'], g.nodes[u].get('termini', 'flexible')) for u in p)
             cp = wild(c)
-            (ptm_o[cp[0]][cp] if _has_o(g) else raw[c[0]][c]).append(gi)
-            ptm_all[cp[0]][cp].append(gi)
+            (ptm_o[cp[0]][cp, c] if _has_o(g) else raw[c[0]][c, c]).append(gi)
+            ptm_all[cp[0]][cp, c].append(gi)
     mcs = [tuple((d['string_labels'], d.get('termini', 'flexible')) for _, d in sorted(m.nodes(data = True))) for m
            in motifs]
     nm = categorical_node_match_wildcard('string_labels', 'unknown', build_wildcard_cache(
-        {l for idx in (raw, ptm_all) for cs in idx.values() for c in cs for l, _ in c} | {l for c in mcs for l, _ in
-                                                                                          c + wild(c)}), 'termini',
+        {l for idx in (raw, ptm_all) for cs in idx.values() for c, _ in cs for l, _ in c} | {l for c in mcs for l, _ in
+                                                                                             c + wild(c)}), 'termini',
                                          'flexible')
+    node = lambda l, o, t: {'string_labels': l, 'termini': t, 'ptm': o} if o != l else {'string_labels': l, 'termini': t}
     out = []
     for m, mc in zip(motifs, mcs):
         out.append(col := [0] * len(ggraphs))
         for idx, mm in ([(ptm_all, wild(mc))] if _has_o(m) else [(raw, mc), (ptm_o, wild(mc))]):
-            mm = [{'string_labels': l, 'termini': t} for l, t in mm]
+            mm = [node(l, o, t) for (l, t), (o, _) in zip(mm, mc)]
             for (l0, t0), cs in idx.items():
                 if not nm({'string_labels': l0, 'termini': t0}, mm[0]):
                     continue
-                for c, gis in cs.items():
-                    if len(c) >= len(mm) and all(nm({'string_labels': l, 'termini': t}, mm[i]) for i, (l, t) in
-                                                 enumerate(c[1:len(mm)], 1)):
+                for (c, co), gis in cs.items():
+                    if len(c) >= len(mm) and all(nm(node(l, o, t), mm[i]) for i, ((l, t), (o, _)) in
+                                                 enumerate(zip(c[:len(mm)], co))):
                         for gi in gis:
                             col[gi] += 1
     return out
@@ -746,8 +747,8 @@ def get_k_saccharides(
         chain = {f: all(h.has_edge(i + 1, i) for i in range(len(h) - 1)) and h.number_of_edges() == len(h) - 1 for f, h in (*vgraphs.items(), *mgraphs.items())}
         for n, m in mgraphs.items():
             cand = sorted(set.intersection(*(comp[l] for l in _sl(m))))
-            contains = lambda f: all(nm({'string_labels': ptm[a] if o else a}, {'string_labels': ptm[b] if o else b}) for o in [_has_o(vgraphs[f]) or _has_o(m)]
-                                     for a, b in zip(_sl(vgraphs[f]), _sl(m))) if chain[f] and chain[n] and len(vgraphs[f]) == len(m) else subgraph_isomorphism(vgraphs[f], m)
+            contains = lambda f: all(nm({'string_labels': ptm[a], 'ptm': a} if o and ptm[a] != a else {'string_labels': a}, {'string_labels': ptm[b], 'ptm': b} if o and ptm[b] != b else {'string_labels': b})
+                                     for o in [_has_o(vgraphs[f]) or _has_o(m)] for a, b in zip(_sl(vgraphs[f]), _sl(m))) if chain[f] and chain[n] and len(vgraphs[f]) == len(m) else subgraph_isomorphism(vgraphs[f], m)
             hits = [vocab[i] for i in cand if contains(vocab[i])] if build_wildcard_cache(set(_sl(m))) or _has_o(m) else \
                 ([n] if n in vgraphs else []) + [vocab[i] for i in cand if i in fuzzy and vocab[i] != n and contains(vocab[i])]
             counts_dict[n] = col = [0] * len(frags)

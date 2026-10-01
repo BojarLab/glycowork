@@ -81,7 +81,7 @@ from glycowork.motif.annotate import (
     group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type,
     Lectin, load_lectin_lib, create_lectin_and_motif_mappings, get_glycan_similarity,
     lectin_motif_scoring, deduplicate_motifs, quantify_motifs, get_size_branching_features,
-    count_unique_subgraphs_of_size_k, annotate_glycan_topology_uncertainty, _motif_ambiguity, get_minimal_ksaccharide_ambiguity
+    count_unique_subgraphs_of_size_k, annotate_glycan_topology_uncertainty, _motif_ambiguity, get_minimal_ksaccharide_ambiguity, _count_chains
 )
 from glycowork.motif.regex import (preprocess_pattern, specify_linkages,
                   convert_pattern_component, reformat_glycan_string,
@@ -3115,6 +3115,20 @@ def test_compare_glycans():
     # Test narrow monosaccharide wildcards
     assert compare_glycans("GlcNAc/GalNAc(?1-3/4)Gal(b1-3)GalNAc", "GlcNAc(a1-4)Gal(b1-3)GalNAc")
     assert compare_glycans('{6S}Gal(b1-3)GalNAc', '{OS}Gal(b1-3)GalNAc')
+    # Test that 'O' only wildcards unknown PTM positions, so stated positions still have to agree
+    assert not compare_glycans("Gal3S(b1-4)GlcNAcOS", "Gal6S(b1-4)GlcNAc6S")
+    assert compare_glycans("Gal6S(b1-4)GlcNAcOS", "Gal6S(b1-4)GlcNAc6S")
+    # Test subsumption (glycan_b is glycan_a or a more specific version of it)
+    assert compare_glycans("Gal(b1-3/4)GlcNAc", "Gal(b1-4)GlcNAc", subsumes = True)
+    assert not compare_glycans("Gal(b1-4)GlcNAc", "Gal(b1-3/4)GlcNAc", subsumes = True)
+    assert not compare_glycans("Gal(b1-3/4)GlcNAc", "Gal(b1-?)GlcNAc", subsumes = True)
+    assert compare_glycans("Hex(b1-4)GlcNAc", "Gal(b1-4)GlcNAc", subsumes = True)
+    assert compare_glycans("GalOS(b1-4)GlcNAc", "Gal6S(b1-4)GlcNAc", subsumes = True)
+    assert not compare_glycans("Gal6S(b1-4)GlcNAc", "GalOS(b1-4)GlcNAc", subsumes = True)
+    assert compare_glycans("{Fuc(a1-?)}{Fuc(a1-?)}Gal(b1-4)GlcNAc", "Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc", subsumes = True)
+    assert compare_glycans("{Fuc(a1-?)}{Fuc(a1-?)}Gal(b1-4)GlcNAc", "{Fuc(a1-?)}Fuc(a1-2)Gal(b1-4)GlcNAc", subsumes = True)
+    assert not compare_glycans("Fuc(a1-2)Gal(b1-4)GlcNAc", "{Fuc(a1-?)}Gal(b1-4)GlcNAc", subsumes = True)
+    assert compare_glycans("{6S}Gal(b1-3)GalNAc", "Gal6S(b1-3)GalNAc", subsumes = True)
 
 
 def test_subgraph_isomorphism():
@@ -3136,6 +3150,14 @@ def test_subgraph_isomorphism():
     # Test with narrow monosaccharide ambiguity
     assert subgraph_isomorphism("Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", "Gal/Man(b1-3)GalNAc")
     assert not subgraph_isomorphism("Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", "Glc/Man(b1-3)GalNAc")
+    # Test that 'O' only wildcards unknown PTM positions, so stated positions still have to agree
+    assert not subgraph_isomorphism("Gal3S(b1-4)GlcNAc6S(b1-3)Gal(b1-4)GlcNAcOS", "Gal6S(b1-4)GlcNAcOS")
+    assert subgraph_isomorphism("Gal3S(b1-4)GlcNAc6S(b1-3)Gal(b1-4)GlcNAcOS", "Gal3S(b1-4)GlcNAcOS")
+    assert not subgraph_isomorphism(glycan_to_nxGraph("Gal3S(b1-4)GlcNAc6S(b1-3)Gal(b1-4)GlcNAcOS"), glycan_to_nxGraph("Gal6S(b1-4)GlcNAcOS"))
+    assert subgraph_isomorphism("Gal3S(b1-4)GlcNAc6S(b1-3)Gal(b1-4)GlcNAcOS", "GalOS(b1-4)GlcNAcOS", count = True) == 1
+    assert not get_match("Gal6S(b1-4)GlcNAcOS", "Gal3S(b1-4)GlcNAc6S(b1-3)Gal(b1-4)GlcNAcOS")
+    assert _count_chains([glycan_to_nxGraph("Gal3S(b1-4)GlcNAc6S"), glycan_to_nxGraph("Gal6S(b1-4)GlcNAc6S")], [glycan_to_nxGraph("Gal6S(b1-4)GlcNAcOS")]) == [[0, 1]]
+    assert get_k_saccharides(["Man1P(a1-6)Man1P", "ManOP(a1-6)Man2P"], size = 2).loc[:, "ManOP(a1-6)Man2P"].tolist() == [0, 1]
 
 
 def test_generate_graph_features():

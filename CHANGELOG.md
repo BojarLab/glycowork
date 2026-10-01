@@ -62,6 +62,20 @@
 - Motif annotation is now generally faster (eac80ee)
 - Motif annotations with `feature_set` `terminal` are now ~10x faster (eac80ee)
 
+##### Fixed 🐛
+- Fixed `annotate_dataset`, `annotate_glycan_topology_uncertainty`, and `get_k_saccharides` counting motifs whose stated PTM positions differ from the glycan's (e.g., `Gal6S(b1-4)GlcNAcOS` in `Gal3S(b1-4)GlcNAc6S`, or `Terminal_Glc3Ac` in glycans with `Glc6Ac` and an `Ole` residue) as soon as either side contained an `O` ()
+
 #### analysis
 ##### Changed 🔄
 - `get_glycanova` is now faster (eac80ee)
+
+#### graph
+##### Added ✨
+- Added the new `subsumes` keyword argument to `compare_glycans`, to support asymmetric wildcard matching (glycan_b is glycan_a or a more specific version of it, but not vice versa) ()
+
+##### Fixed 🐛
+- Fixed `compare_glycans("Gal3S(b1-4)GlcNAcOS", "Gal6S(b1-4)GlcNAc6S")` returning `True` (PTM wildcards made specific PTMs non-comparable; same in `subgraph_isomorphism`) ()
+
+#### regex
+##### Fixed 🐛
+- Fixed `get_match` matching residues with differently stated PTM positions as soon as the glycan or the pattern contained a PTM wildcard ()
