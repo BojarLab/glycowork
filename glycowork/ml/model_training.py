@@ -300,9 +300,11 @@ class SAM(torch.optim.Optimizer):
         for group in self.param_groups:
             scale = group["rho"] / (grad_norm + 1e-12)
             for p in group["params"]:
+                self.state[p]["old_p"] = p.data.clone()
+                if self.minimize_surrogate_gap:
+                    self.state[p].pop("old_g", None)
                 if p.grad is None:
                     continue
-                self.state[p]["old_p"] = p.data.clone()
                 if self.minimize_surrogate_gap:
                     self.state[p]["old_g"] = p.grad.data.clone()
                 e_w = (torch.pow(p, 2) if group["adaptive"] else 1.0) * p.grad * scale.to(p)
@@ -316,9 +318,8 @@ class SAM(torch.optim.Optimizer):
         "Performs second optimization step with regular weights"
         for group in self.param_groups:
             for p in group["params"]:
-                if p.grad is None:
-                    continue
-                p.data = self.state[p]["old_p"]  # Get back to "w" from "w + e(w)"
+                if "old_p" in self.state[p]:
+                    p.data = self.state[p]["old_p"]  # Get back to "w" from "w + e(w)"
         if self.minimize_surrogate_gap:
             self._gradient_decompose()
         self.base_optimizer.step()  # Do the actual "sharpness-aware" update
@@ -329,14 +330,14 @@ class SAM(torch.optim.Optimizer):
         coeff_nomin, coeff_denom = 0.0, 0.0
         for group in self.param_groups:
             for p in group['params']:
-                if p.grad is None:
+                if p.grad is None or 'old_g' not in self.state[p]:
                     continue
                 coeff_nomin += (self.state[p]['old_g'] * p.grad).sum()
                 coeff_denom += p.grad.pow(2).sum()
         coeff = coeff_nomin / (coeff_denom + 1e-12)
         for group in self.param_groups:
             for p in group['params']:
-                if p.grad is None:
+                if p.grad is None or 'old_g' not in self.state[p]:
                     continue
                 rejection = self.state[p]['old_g'] - coeff * p.grad
                 p.grad.data.add_(rejection, alpha = -group["alpha"])
