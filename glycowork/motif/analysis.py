@@ -53,7 +53,7 @@ def preprocess_data(
         feature_set: list[str] = ['exhaustive', 'known'],
         # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
         paired: bool | None = None,  # Whether samples are paired; default: from the frame
-        impute: bool = True,  # Replace zeros with Random Forest model
+        impute: bool = True,  # Replace zeros with impute_biosynthetic predictions
         min_samples: float = 0.1,  # Min fraction (0-1) of non-zero samples required
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
@@ -71,7 +71,7 @@ def preprocess_data(
         motif_dag: bool = True # Build the containment DAG; only worth its n^2 isomorphism sweep for callers that read it
 ) -> tuple[pd.DataFrame, pd.DataFrame, list[str | int], list[
     str | int]]:  # (transformed df, untransformed df, group1 labels, group2 labels)
-    "Preprocesses glycomics data by handling missing values with Random Forest imputation, applying CLR/ALR transformations to escape compositional bias, and optionally quantifying glycan motifs"
+    "Preprocesses glycomics data by imputing missing values with impute_biosynthetic, applying CLR/ALR transformations to escape compositional bias, and optionally quantifying glycan motifs"
     if isinstance(df, (str, Path)):
         df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
             df).suffix.lower() == ".tsv" else pd.read_excel(df)
@@ -994,7 +994,7 @@ def get_differential_expression(
         feature_set: list[str] = ['exhaustive', 'known'],
         # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
         paired: bool | None = None,  # Whether samples are paired; default: from the frame
-        impute: bool = True,  # Replace zeros with Random Forest model
+        impute: bool = True,  # Replace zeros with impute_biosynthetic predictions
         sets: bool = False,  # Identify clusters of correlated glycans
         set_thresh: float = 0.9,  # Correlation threshold for clusters
         effect_size_variance: bool = False,  # Calculate effect size variance
@@ -1357,7 +1357,7 @@ def get_volcano(
 def get_glycanova(
         df: pd.DataFrame | str | Path,  # DataFrame with glycans in rows (col 1) and abundance values in columns
         groups: list[Any] | None = None,  # Group labels for samples (e.g., [1,1,1,2,2,2,3,3,3]); inferred from a GlycoDataFrame's contrasts if omitted
-        impute: bool = True,  # Replace zeros with Random Forest model
+        impute: bool = True,  # Replace zeros with impute_biosynthetic predictions
         motifs: bool = False,  # Analyze motifs instead of sequences
         feature_set: list[str] = ['exhaustive', 'known'],
         # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
@@ -1584,7 +1584,7 @@ def get_glycan_change_over_time(
 def get_time_series(
         df: pd.DataFrame | str | Path,
         # DataFrame with sample IDs as 'sampleID_timepoint_replicate' in col 1 (e.g., T1_h5_r1)
-        impute: bool = True,  # Replace zeros with Random Forest model
+        impute: bool = True,  # Replace zeros with impute_biosynthetic predictions
         motifs: bool = False,  # Analyze motifs instead of sequences
         feature_set: list[str] = ['known', 'exhaustive'],
         # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
@@ -2085,7 +2085,7 @@ def get_roc(
         feature_set: list[str] = ["known", "exhaustive"],
         # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
         paired: bool | None = None,  # Whether samples are paired; default: from the frame
-        impute: bool = True,  # Replace zeros with Random Forest model
+        impute: bool = True,  # Replace zeros with impute_biosynthetic predictions
         min_samples: float = 0.1,  # Min fraction (0-1) of non-zero samples required
         custom_motifs: list[str] = [],  # Custom motifs if using 'custom' feature set
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"
@@ -2275,7 +2275,7 @@ def get_glycoshift_per_site(
         # First group indices/names or group labels for multi-group; default: from the frame's contrasts
         group2: list[str | int] | None = None,  # Second group indices/names; default: from the frame's contrasts
         paired: bool | None = None,  # Whether samples are paired; default: from the frame
-        impute: bool = True,  # Replace zeros with Random Forest model
+        impute: bool = True,  # Replace zeros with impute_biosynthetic predictions
         min_samples: float = 0.2,  # Min fraction (0-1) of non-zero samples required
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
         custom_scale: float | dict = 0,

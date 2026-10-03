@@ -83,9 +83,27 @@
 ### ml
 #### inference
 ##### Changed 🔄
-- `glycans_to_emb` can now also be used with `GIFFLAR`-type models ()
+- `glycans_to_emb` can now also be used with `GIFFLAR`-type models (27dccf6)
 
 #### models
+##### Added ✨
+- A trained `GIFFLAR` checkpoint is now available (for embeddings etc) via `prep_model` ()
+
 ##### Changed 🔄
-- `GIFFLAR`-type models are now more accurate and almost twice as fast to train (Kingdom prediction MCC 0.835 to 0.876, macro-F1 0.758 to 0.868; Phylum MCC 0.746 to 0.812, macro-F1 0.579 to 0.746), via two-layer GIN updates with learnable self-weights, residual updates, per-node-type pooling, linkage-aware monosaccharide edges, and 4 instead of 8 layers ()
-- `GIFFLAR` now takes a `dropout` keyword argument ()
+- `GIFFLAR`-type models are now more accurate and almost twice as fast to train (Kingdom prediction MCC 0.835 to 0.876, macro-F1 0.758 to 0.868; Phylum MCC 0.746 to 0.812, macro-F1 0.579 to 0.746), via two-layer GIN updates with learnable self-weights, residual updates, per-node-type pooling, linkage-aware monosaccharide edges, and 4 instead of 8 layers (27dccf6)
+- `GIFFLAR` now takes a `dropout` keyword argument (27dccf6)
+- Improved the `SweetNet` model architecture via BatchNorm plus residual updates after each convolution, with mean and max pooling ()
+- The trained `SweetNet` checkpoint via `prep_model` has been updated ()
+
+#### model_training
+##### Changed 🔄
+- Lowered default `rho` for `SAM` from 0.5 to 0.05 ()
+
+### glycan_data
+#### stats
+##### Added ✨
+- Added `impute_biosynthetic`, a bespoke glycomics imputer that models log-abundances with per-sample activities of each biosynthetic step (monosaccharide and monosaccharide-linkage counts) plus a low-rank term, stacks it with stable-ratio partner glycans, and corrects for detection-limit censoring with a fitted selection model ()
+
+##### Changed 🔄
+- `impute_and_normalize`, and with it every function with an `impute` keyword, now imputes with `impute_biosynthetic` instead of `MissForest` (kept only for `circadian = True`): 33-46% lower log2 RMSE than `MissForest` across 41 glycomics datasets, 12-23% lower than MICE, and 94% instead of 68% of true differential hits recovered ()
+- Cells floored because a whole group is zero no longer enter imputation as measurements ()

@@ -7,7 +7,7 @@ from math import factorial
 from collections import Counter
 from scipy.stats import rankdata, norm, chi2, t, f, entropy, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind, gamma as gamma_dist
 from scipy.spatial import procrustes
-from scipy.special import digamma, polygamma
+from scipy.special import digamma, polygamma, expit
 import scipy.integrate as integrate
 rng = np.random.default_rng(42)
 np.random.seed(0)
@@ -220,12 +220,137 @@ class MissForest:
         return X_transform
 
 
+def _factor_fit(L: np.ndarray, # log2 abundances, glycans as rows and samples as columns
+                W: np.ndarray, # 1 where a cell enters the fit, 0 where it is missing or held out
+                F: np.ndarray, # centered per-glycan counts of each biosynthetic step; may have zero columns
+                rank: int, # number of free latent factors on top of the biosynthetic loadings
+                beta: float, # ridge penalty on the per-sample biosynthetic step activities
+                iters: int = 30 # alternating least squares rounds
+                ) -> np.ndarray: # fitted log2 abundance for every cell
+    "Fits L_ij = mu_i + b_j + F_i.A_j + U_i.V_j by ridge-penalized alternating least squares, with F the known biosynthetic loadings and A_j the step activities of sample j"
+    n, m = L.shape
+    r, k = max(0, min(rank, m - 2)), F.shape[1]
+    Lz = np.where(W > 0, L, 0)
+    mu = Lz.sum(axis = 1) / np.maximum(W.sum(axis = 1), 1)
+    U, s, Vt = np.linalg.svd(np.where(W > 0, L - mu[:, None], 0), full_matrices = False)
+    U, V = U[:, :r] * np.sqrt(s[:r]), Vt[:r].T * np.sqrt(s[:r])
+    # a vanishing ridge on the intercepts keeps a glycan or sample without any usable cell solvable
+    pen_sample, pen_glycan = np.diag([1e-6] + [beta] * k + [1.0] * r), np.diag([1e-6] + [1.0] * r)
+    for _ in range(iters):
+        D = np.column_stack([np.ones(n), F, U])
+        sol = np.linalg.solve(np.einsum('ij,ik,il->jkl', W, D, D) + pen_sample, np.einsum('ij,ik,ij->jk', W, D, Lz - mu[:, None])[..., None])[..., 0]
+        b, A, V = sol[:, 0], sol[:, 1:1 + k], sol[:, 1 + k:]
+        S = np.column_stack([np.ones(m), V])
+        theta = np.linalg.solve(np.einsum('ij,jk,jl->ikl', W, S, S) + pen_glycan, np.einsum('ij,jk,ij->ik', W, S, Lz - b - F @ A.T)[..., None])[..., 0]
+        mu, U = theta[:, 0], theta[:, 1:]
+    return mu[:, None] + b + F @ A.T + U @ V.T
+
+
+def _partner_fit(L: np.ndarray, # log2 abundances, glycans as rows and samples as columns
+                 O: np.ndarray, # boolean mask of the cells that may be used
+                 k: int = 10, # partner glycans per glycan
+                 iters: int = 10 # rounds in which imputed partners feed back
+                 ) -> np.ndarray: # predicted log2 abundance for every cell
+    "Predicts each cell from the k glycans whose log-ratio to it is most stable across samples, shifted by that mean ratio and weighted by its stability"
+    n, m = L.shape
+    Oi = O.astype(float)
+    Lz = np.where(O, L, 0)
+    # co-observed sums of each pairwise log-ratio and its square, as matrix products instead of an n x n x samples tensor
+    Q = Oi @ Oi.T
+    S1 = Lz @ Oi.T - Oi @ Lz.T
+    S2 = (Lz ** 2) @ Oi.T + Oi @ (Lz ** 2).T - 2 * Lz @ Lz.T
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        mean = S1 / Q
+        var = (S2 - S1 * mean) / (Q - 1)
+    var[(Q < 3) | np.eye(n, dtype = bool) | ~np.isfinite(var)] = np.inf
+    K = np.argsort(var, axis = 1, kind = 'stable')[:, :k]
+    w, R = 1 / (np.take_along_axis(var, K, axis = 1) + 0.05), np.take_along_axis(mean, K, axis = 1)
+    R[w == 0] = 0
+    mu = Lz.sum(axis = 1) / np.maximum(Oi.sum(axis = 1), 1)
+    Z, P = np.where(O, L, mu[:, None]), np.repeat(mu[:, None], m, axis = 1)
+    for _ in range(iters):
+        ww = w[..., None] * np.where(O[K], 1.0, 0.25)  # an imputed partner counts, but less than a measured one
+        den = ww.sum(axis = 1)
+        P = np.where(den > 0, (ww * (Z[K] + R[..., None])).sum(axis = 1) / np.maximum(den, 1e-12), mu[:, None])
+        Z = np.where(O, L, P)
+    return P
+
+
+def impute_biosynthetic(df: pd.DataFrame, # glycans as rows, samples as columns; NaN or 0 marks a missing value
+                        glycans: list[str] | None = None, # glycan of each row (IUPAC-condensed or composition), to give every sample its own activity per biosynthetic step
+                        mnar: bool = True, # pull imputations towards each sample's detection limit, as far as the data say missingness is intensity-dependent
+                        random_state: int | np.random.Generator | None = None # optional random state for reproducibility
+                        ) -> pd.DataFrame: # dataframe with every missing value imputed
+    "Imputes missing glycomics values with a low-rank model whose glycan loadings include each glycan's count of every biosynthetic step, stacked with stable-ratio partner glycans and corrected for detection-limit censoring by a fitted selection model"
+    from scipy.optimize import minimize
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        L = np.log2(df.to_numpy(dtype = float))
+    M = ~np.isfinite(L)
+    n, m = L.shape
+    if not M.any():
+        return df.copy()
+    L[M] = np.nan
+    F = np.zeros((n, 0))
+    if glycans is not None:
+        from glycowork.motif.processing import canonicalize_iupac, canonicalize_composition, is_composition
+        from glycowork.motif.graph import glycan_to_nxGraph
+        rows = []
+        try:
+            for g in glycans:
+                if is_composition(g):
+                    rows.append(canonicalize_composition(g))
+                    continue
+                lab = glycan_to_nxGraph(canonicalize_iupac(g)).nodes(data = 'string_labels')
+                lab = [lab[i] for i in range(len(lab))]
+                # each non-root residue is one biosynthetic step: counted as its monosaccharide and as monosaccharide plus linkage, the edge labels of the biosynthetic network
+                rows.append(Counter(lab[:-1:2] + [f'{lab[i]}({lab[i + 1]})' for i in range(0, len(lab) - 1, 2)]))
+            F = pd.DataFrame(rows).fillna(0).to_numpy(dtype = float)
+        except Exception:
+            pass  # rows that are not glycans (motifs, glycoforms with protein IDs) are imputed without biosynthetic step loadings
+        F = F[:, F.std(axis = 0) > 0]
+        F = F - F.mean(axis = 0)
+    rng = np.random.default_rng(0 if random_state is None else random_state)
+    # two held-out sets of observed cells pick the model and the stacking weight, and calibrate the prediction error
+    obs, folds = np.argwhere(~M), []
+    for _ in range(2):
+        C = np.zeros_like(M)
+        idx = obs[rng.choice(len(obs), max(1, len(obs) // 10), replace = False)]
+        C[idx[:, 0], idx[:, 1]] = True
+        C[(M | C).all(axis = 1)] = False
+        folds.append(C)
+    truth = np.concatenate([L[C] for C in folds])
+    grid = [(r, beta) for r in (0, 1, 2, 4) for beta in ((1, 10) if F.shape[1] else (1,))]
+    cv = {g: np.concatenate([_factor_fit(L, (~(M | C)).astype(float), F, *g)[C] for C in folds]) for g in grid}
+    best = min(grid, key = lambda g: np.mean((cv[g] - truth) ** 2))
+    partner = np.concatenate([_partner_fit(L, ~(M | C))[C] for C in folds])
+    weights = np.linspace(0, 1, 21)
+    err = [np.mean((w * cv[best] + (1 - w) * partner - truth) ** 2) for w in weights]
+    w, sigma = weights[int(np.argmin(err))], np.sqrt(min(err))
+    R = w * _factor_fit(L, (~M).astype(float), F, *best) + (1 - w) * _partner_fit(L, ~M)
+    if mnar:
+        lmin = np.nanmin(np.where(M, np.inf, L), axis = 0)
+        lmin = np.where(np.isfinite(lmin), lmin, np.nanmin(L))
+
+        def nll(p):
+            "Negative log-likelihood of the missingness pattern under P(missing | y) = pi + (1 - pi) * Phi((lmin_j + d - y) / s), a constant random dropout rate plus soft censoring below each sample's detection limit, with y ~ N(R, sigma^2)"
+            pi, sc = expit(p[0]), np.sqrt(sigma ** 2 + np.exp(2 * np.clip(p[2], -10, 10)))
+            q = np.clip(pi + (1 - pi) * norm.cdf((lmin + p[1] - R) / sc), 1e-9, 1 - 1e-9)
+            return -(np.log(q[M]).sum() + np.log1p(-q[~M]).sum())
+
+        p = min((minimize(nll, x0, method = 'Nelder-Mead', options = {'maxiter': 400}) for x0 in ([-2, 0, 0], [0, 1, -1], [-4, -1, 0.5])), key = lambda o: o.fun).x
+        pi, sc = expit(p[0]), np.sqrt(sigma ** 2 + np.exp(2 * np.clip(p[2], -10, 10)))
+        z = (lmin + p[1] - R) / sc
+        # E[y | missing] under that selection model
+        R = R - (1 - pi) * sigma ** 2 / sc * norm.pdf(z) / (pi + (1 - pi) * norm.cdf(z))
+    return pd.DataFrame(np.exp2(np.where(M, R, L)), index = df.index, columns = df.columns)
+
+
 def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences in first col and abundances in subsequent cols
                          groups: list[list[str]], # nested list of column name lists, one list per group
-                         impute: bool = True, # replaces zeroes with predictions from MissForest
+                         impute: bool = True, # replaces zeroes with predictions from impute_biosynthetic (MissForest if circadian)
                          min_samples: float = 0.1,  # fraction (0-1) of samples that need non-zero values for glycan to be kept
                          protect: pd.DataFrame | None = None,  # boolean frame in the shape/order of the abundance block, marking cells that were never measured and must stay NaN
-                         circadian: bool = False,  # inject sin/cos time features into MissForest
+                         circadian: bool = False,  # impute with MissForest, initialized from the same glycan's median at the same circadian phase
                          timepoints: int | list | np.ndarray | None = None, # number of timepoints, or explicit time values per column (only relevant if circadian)
                          periods: list[int] | None = None, # cycle lengths to encode (e.g., [12, 24]) (only relevant if circadian)
                          interval: int = 1, # time units between experimental timepoints (only relevant if circadian)
@@ -252,6 +377,7 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
         df = df.mask(
             protect)  # a cell that was never measured is not a zero; NaN keeps it out of floors, imputation targets, column totals, and geometric means
     floor = 1e-7 if len(groups) == 2 else 1e-5
+    floored = pd.DataFrame(False, index = df.index, columns = df.columns)
     for group in groups:
         group_data = df[group]
         all_zero_mask = (group_data.fillna(0) == 0).all(axis = 1) & group_data.notna().any(
@@ -259,14 +385,16 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
         if all_zero_mask.any():  # an empty selection changes nothing, but assigning to it still costs a column-by-column pass
             df.loc[all_zero_mask, group] = df.loc[
                                                all_zero_mask, group] + floor  # observed cells here are exactly 0 so this is the old assignment, but NaN + floor stays NaN
+            floored.loc[all_zero_mask, group] = df.loc[all_zero_mask, group].notna()
     old_cols = df.columns if isinstance(colname, int) else []
     if len(old_cols):
-        df.columns = df.columns.astype(str)
+        df.columns, floored.columns = df.columns.astype(str), df.columns.astype(str)
     if impute:
-        mf = MissForest(circadian = circadian, timepoints = timepoints, periods = periods,
-                        interval = interval, replicates = replicates, random_state = random_state)
-        df = df.replace(0, np.nan)
-        df = mf.fit_transform(df)
+        # floored cells go in as missing, since a 1e-7 floor read as a measurement is an extreme outlier on the log scale, and come back as the floor
+        df = df.mask(floored).replace(0, np.nan)
+        df = MissForest(circadian = circadian, timepoints = timepoints, periods = periods, interval = interval, replicates = replicates,
+                        random_state = random_state).fit_transform(df) if circadian else impute_biosynthetic(df, glycans = glycans.tolist(), random_state = random_state)
+        df = df.mask(floored, floor)
         if protect is not None:
             df = df.mask(
                 protect)  # re-blank afterwards; these cells still steer the iterative fit, which is the residual approximation of this approach
@@ -1058,7 +1186,7 @@ def estimate_technical_variance(df: pd.DataFrame, # dataframe with abundances in
                                                                random_state = local_rng,
                                                                size = (features, num_instances))
     columns = [col for col in df.columns for _ in range(num_instances)]
-    transformed_data_2d = transformed_data.reshape((features, samples* num_instances))
+    transformed_data_2d = transformed_data.reshape((features, samples * num_instances))
     transformed_df = pd.DataFrame(transformed_data_2d, columns = columns)
     return transformed_df
 

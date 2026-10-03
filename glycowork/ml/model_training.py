@@ -88,7 +88,7 @@ def enable_running_stats(model: torch.nn.Module  # model to enable batch norm
 def train_model(model: torch.nn.Module,  # graph neural network for analyzing glycans
                 dataloaders: dict[str, torch.utils.data.DataLoader],  # dict with 'train' and 'val' loaders
                 criterion: torch.nn.Module,  # PyTorch loss function
-                optimizer: torch.optim.Optimizer,  # PyTorch optimizer, has to be SAM if mode != "regression"
+                optimizer: torch.optim.Optimizer,  # PyTorch optimizer, e.g., from training_setup; SAM gets its two-step update
                 scheduler: torch.optim.lr_scheduler.LRScheduler,  # PyTorch learning rate decay
                 num_epochs: int = 25,  # number of epochs for training
                 patience: int = 50,  # epochs without improvement until early stop
@@ -120,8 +120,7 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                 model.train()
             else:
                 model.eval()
-            running_metrics = copy.deepcopy(blank_metrics)
-            running_metrics["weights"] = []
+            losses, weights, ys, preds = [], [], [], []
             for data in dataloaders[phase]:
                 # Get all relevant node attributes
                 if isinstance(data, HeteroDataBatch):
@@ -157,7 +156,6 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                     loss = criterion(pred, y)
                     if phase == 'train':
                         loss.backward()
-                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm = 1.0)
                         if hasattr(optimizer, "first_step"):
                             optimizer.first_step(zero_grad = True)
                             # Second forward pass
@@ -166,49 +164,45 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                                                                                                            edge_index,
                                                                                                            batch)
                             criterion(second_pred, y).backward()
+                            # SAM rescales the first gradient to length rho anyway, so only this second one, which the update is taken from, can be clipped
+                            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm = 1.0)
                             optimizer.second_step(zero_grad = True)
                         else:
+                            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm = 1.0)
                             optimizer.step()
-                # Collecting relevant metrics
-                running_metrics["loss"].append(loss.item())
-                running_metrics["weights"].append(len(y))
-                y_det = y.detach().cpu().numpy()
-                pred_det = pred.cpu().detach().numpy()
-                if mode == 'classification':
-                    if mode2 == 'multi':
-                        pred2 = np.argmax(pred_det, axis = 1)
-                    else:
-                        if pred_det.ndim > 1 and pred_det.shape[1] == 2:
-                            pred_proba = (np.exp(pred_det) / np.sum(np.exp(pred_det), axis = 1, keepdims = True))[:, 1]
-                        else:
-                            pred_proba = sigmoid(pred_det)
-                        pred2 = (pred_proba >= 0.5).astype(int)
-                    running_metrics["acc"].append(accuracy_score(y_det.astype(int), pred2))
-                    running_metrics["mcc"].append(matthews_corrcoef(y_det, pred2))
-                    # A batch that happens to hold one class has no defined AUROC; sklearn already returns nan for it, just noisily
-                    running_metrics["auroc"].append(
-                        roc_auc_score(y_det.astype(int), pred_proba) if mode2 == 'binary' and len(
-                            np.unique(y_det)) > 1 else np.nan)
-                elif mode == 'multilabel':
-                    pred_proba = sigmoid(pred_det)
-                    pred2 = (pred_proba >= 0.5).astype(int)
-                    running_metrics["acc"].append(accuracy_score(y_det.astype(int), pred2))
-                    running_metrics["mcc"].append(matthews_corrcoef(y_det.flatten(), pred2.flatten()))
-                    running_metrics["lrap"].append(label_ranking_average_precision_score(y_det.astype(int), pred_proba))
-                    running_metrics["ndcg"].append(ndcg_score(y_det.astype(int), pred_proba))
+                losses.append(loss.item())
+                weights.append(len(y))
+                ys.append(y.detach().cpu().numpy())
+                preds.append(pred.detach().cpu().numpy())
+            # Metrics are computed once over the whole epoch; averaging per-batch MCC, AUROC, LRAP, or R2 neither gives the epoch's value nor survives single-class batches
+            y_det, pred_det = np.concatenate(ys), np.concatenate(preds)
+            metrics[phase]["loss"].append(np.average(losses, weights = weights))
+            if mode == 'classification':
+                if mode2 == 'multi':
+                    pred2 = np.argmax(pred_det, axis = 1)
                 else:
-                    running_metrics["mse"].append(mean_squared_error(y_det, pred_det))
-                    running_metrics["mae"].append(mean_absolute_error(y_det, pred_det))
-                    running_metrics["r2"].append(r2_score(y_det, pred_det))
-            # Averaging metrics at end of epoch
-            for key in running_metrics:
-                if key == "weights":
-                    continue
-                vals, wts = np.asarray(running_metrics[key], dtype = float), np.asarray(running_metrics["weights"],
-                                                                                        dtype = float)
-                ok = ~np.isnan(vals)
-                # A metric that is undefined for some batches (AUROC on a single-class batch) should drop those batches, not poison the epoch average
-                metrics[phase][key].append(np.average(vals[ok], weights = wts[ok]) if ok.any() else np.nan)
+                    if pred_det.ndim > 1 and pred_det.shape[1] == 2:
+                        pred_proba = 1 / (1 + np.exp(pred_det[:, 0] - pred_det[
+                            :, 1]))  # the softmax's second column, without overflowing on large logits
+                    else:
+                        pred_proba = sigmoid(pred_det)
+                    pred2 = (pred_proba >= 0.5).astype(int)
+                metrics[phase]["acc"].append(accuracy_score(y_det.astype(int), pred2))
+                metrics[phase]["mcc"].append(matthews_corrcoef(y_det, pred2))
+                metrics[phase]["auroc"].append(
+                    roc_auc_score(y_det.astype(int), pred_proba) if mode2 == 'binary' and len(
+                        np.unique(y_det)) > 1 else np.nan)
+            elif mode == 'multilabel':
+                pred_proba = sigmoid(pred_det)
+                pred2 = (pred_proba >= 0.5).astype(int)
+                metrics[phase]["acc"].append(accuracy_score(y_det.astype(int), pred2))
+                metrics[phase]["mcc"].append(matthews_corrcoef(y_det.flatten(), pred2.flatten()))
+                metrics[phase]["lrap"].append(label_ranking_average_precision_score(y_det.astype(int), pred_proba))
+                metrics[phase]["ndcg"].append(ndcg_score(y_det.astype(int), pred_proba))
+            else:
+                metrics[phase]["mse"].append(mean_squared_error(y_det, pred_det))
+                metrics[phase]["mae"].append(mean_absolute_error(y_det, pred_det))
+                metrics[phase]["r2"].append(r2_score(y_det, pred_det))
             if mode == 'classification':
                 print('{} Loss: {:.4f} Accuracy: {:.4f} MCC: {:.4f}'.format(phase, metrics[phase]["loss"][-1],
                                                                             metrics[phase]["acc"][-1],
@@ -283,7 +277,7 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
 class SAM(torch.optim.Optimizer):
     def __init__(self, params: list[torch.nn.Parameter],  # model parameters
                  base_optimizer: type[torch.optim.Optimizer],  # base PyTorch optimizer type
-                 rho: float = 0.5,  # size of neighborhood to explore
+                 rho: float = 0.05,  # size of neighborhood to explore; 0.05 is the published value for plain SAM, 0.5 only suits adaptive=True
                  alpha: float = 0.0,  # surrogate gap minimization coefficient
                  adaptive: bool = False,  # whether to use adaptive SAM
                  **kwargs  # additional optimizer arguments

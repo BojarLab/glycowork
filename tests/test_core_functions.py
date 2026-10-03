@@ -63,7 +63,7 @@ from glycowork.glycan_data.stats import (
     clr_transformation, alr_transformation, get_procrustes_scores, meta_analysis,
     get_additive_logratio_transformation, get_BF, get_alphaN, mahalanobis_variance,
     pi0_tst, TST_grouped_benjamini_hochberg, compare_inter_vs_intra_group,
-    correct_multiple_testing, bh_adjust, partial_corr, estimate_technical_variance, MissForest, impute_and_normalize,
+    correct_multiple_testing, bh_adjust, partial_corr, estimate_technical_variance, MissForest, impute_and_normalize, impute_biosynthetic,
     variance_based_filtering, get_glycoform_diff, get_glm, process_glm_results,
     replace_outliers_winsorization, perform_tests_monte_carlo, hsic
 )
@@ -2938,6 +2938,25 @@ def test_missforest():
     assert imputed.shape == data.shape
     with pytest.raises(ValueError):  # circadian imputation needs to know the time of each column
         MissForest(circadian = True).fit_transform(data)
+
+
+def test_impute_biosynthetic():
+    rng = np.random.default_rng(0)
+    glycans = ['Gal(b1-4)GlcNAc', 'Fuc(a1-2)Gal(b1-4)GlcNAc', 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc', 'Neu5Ac(a2-6)Gal(b1-4)GlcNAc',
+               'Gal(b1-3)GlcNAc', 'Fuc(a1-2)Gal(b1-3)GlcNAc', 'GlcNAc(b1-3)Gal(b1-4)GlcNAc', 'Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc']
+    data = pd.DataFrame(np.exp2(rng.normal(3, 1, (8, 6))), columns = [f's{i}' for i in range(6)])
+    data.iloc[1, 2] = data.iloc[4, 0] = data.iloc[6, 5] = np.nan
+    imputed = impute_biosynthetic(data, glycans = glycans)
+    assert imputed.shape == data.shape and imputed.notna().all().all() and (imputed > 0).all().all()
+    observed = data.notna().to_numpy()
+    assert np.allclose(imputed.to_numpy()[observed], data.to_numpy()[observed])  # measured values pass through untouched
+    assert imputed.equals(impute_biosynthetic(data, glycans = glycans))  # reproducible without a random_state
+    # the censoring correction can only pull imputations down towards the detection limit
+    assert (imputed.to_numpy()[~observed] <= impute_biosynthetic(data, glycans = glycans, mnar = False).to_numpy()[~observed] + 1e-9).all()
+    assert impute_biosynthetic(data, glycans = ['H3N4', 'H4N4', 'H5N4', 'H5N4F1', 'H5N4A1', 'H5N4A2', 'H5N4F1A2', 'H6N5']).notna().all().all()
+    assert impute_biosynthetic(data, glycans = [f'P12345_N{i}' for i in range(8)]).notna().all().all()  # labels that are not glycans fall back to no loadings
+    assert impute_biosynthetic(data).notna().all().all()
+    assert impute_biosynthetic(data.fillna(1)).equals(data.fillna(1))  # nothing to impute
 
 
 def test_impute_and_normalize():
@@ -8698,10 +8717,10 @@ def test_prep_model_trained():
         warnings.simplefilter("ignore", UserWarning)
         model = prep_model("SweetNet", num_classes=1, trained=True)
         assert isinstance(model, SweetNet)
+        model = prep_model("GIFFLAR", num_classes=1, trained=True)
+        assert model.head[-1].out_features > 1  # the class count comes from the checkpoint, not from num_classes
     except (LocalEntryNotFoundError, HfHubHTTPError) as e:
       pytest.skip(f"HuggingFace Hub unavailable: {e}")
-    with pytest.warns(UserWarning, match="No pretrained GIFFLAR model is currently available"):
-      model = prep_model("GIFFLAR", num_classes=1, trained=True)
 
 
 @pytest.mark.parametrize("invalid_input", [
