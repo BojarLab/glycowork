@@ -47,7 +47,7 @@ Issues = "https://github.com/BojarLab/glycowork/issues"
 ml = ["torch_geometric", "torch", "xgboost", "huggingface_hub>=0.16.0"]
 chem = ["rdkit>=2021.9.2", "py3Dmol"]
 all = ["glycowork[ml,chem]"]
-dev = ["glycowork[all]", "nbdev", "pytest", "glycontact>=0.3.3"]
+dev = ["glycowork[all]", "nbdev", "pytest"]
 
 [tool.setuptools]
 include-package-data = true

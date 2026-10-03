@@ -52,6 +52,7 @@
 ##### Changed 🔄
 - `canonicalize_composition` now also accepts dictionary compositions as inputs (0967d8a)
 - `canonicalize_iupac` is more robust to nomenclature variations (e1c807a)
+- Moved `PDB_TO_IUPAC` from `glycontact` up into `glycowork` to facilitate atom-coloring in `.draw.draw_chem3d` without `glycontact` dependencies ()
 
 ##### Fixed 🐛
 - `sanitize_iupac` no longer flags phosphodiesters (e1c807a)
@@ -113,4 +114,4 @@
 #### data_entry
 ##### Added ✨
 - Added `read_glycoproteomics`, which reads the native output of FragPipe/MSFragger-Glyco and O-Pair, pGlyco3 and pGlycoQuant, Byonic and Byologic, GlycReSoft, MetaMorpheus O-Pair, Glyco-Decipher, StrucGP, and PEAKS GlycanFinder into a `protein_site_composition` x sample `GlycoDataFrame`, ready for `get_differential_expression(glycoproteomics = True)` and `get_glycoshift_per_site` (f936c23)
-- Added `read_glycomics`, which reads Skyline reports, LaCyTools and MassyTools summaries, and GlycoGenius, GlyHunter, GlycReSoft, GlycoWorkbench workspaces (.gwp) and annotated peak lists (.gwa), Thermo Compound Discoverer compound tables, and CandyCrunch tables into a glycan x sample `GlycoDataFrame`, with every label turned into a canonical sequence or composition and GlycoGenius groups kept as contrasts (f936c23, )
+- Added `read_glycomics`, which reads Skyline reports, LaCyTools and MassyTools summaries, and GlycoGenius, GlyHunter, GlycReSoft, GlycoWorkbench workspaces (.gwp) and annotated peak lists (.gwa), Thermo Compound Discoverer compound tables, and CandyCrunch tables into a glycan x sample `GlycoDataFrame`, with every label turned into a canonical sequence or composition and GlycoGenius groups kept as contrasts (f936c23, 43d7a40)

@@ -125,6 +125,29 @@ _PGLYCO_REPEAT = {('core0', 'F'): 'a1-3', ('arm', 'N'): 'b1-4/6'}  # linkage for
 _CSDB_AC_12 = re.compile(r'^Ac\(\??1-2\)')
 _CSDB_N_TO_NAC = re.compile(r'N(?=[^A-Za-z]|$)')
 FLOATY_ALT = re.compile(r'\{([^{}]*)\}')
+# PDB Chemical Component Dictionary codes (plus glycontact's merged codes for modified residues, e.g., NAG6SO3) to IUPAC monosaccharide with anomeric state, used by glycontact and draw_chem3d
+PDB_TO_IUPAC = {'NDG':'GlcNAc(a','NAG':'GlcNAc(b','MAN':'Man(a', 'BMA':'Man(b', 'AFL':'Fuc(a', 'MBG':'Gal1Me(b', 'AMG':'Gal1Me(a', 'MMA':'Man1Me(a', '2F8':'GlcNAc1Me(a',
+                'FUC':'Fuc(a', 'FUL':'Fuc(b', 'FCA':'D-Fuc(a', 'FCB':'D-Fuc(b', '0FA':'D-Fuc(a', 'GYE':'D-Fucf(b', 'M6P':'Man6P(a', 'MAG':'GlcNAc1Me(b', 'SGA': 'Gal3S(b', 'SEJ':'D-Ara(b', '64K':'D-Ara(a',
+                'GAL':'Gal(b', 'GLA':'Gal(a', 'GIV':'L-Gal(b', 'GZL':'Galf(b', '2kA': 'L-Gul(a', '0mA': 'L-Man(a', 'GYP':'Glc1Me(a', 'MFU':'Fuc1Me', 'MFB':'Fuc1Me(b', 'MNA':'Neu2Me5Ac(a',
+                'GLC':'Glc(a', '0WB':'ManNAc(b', 'ZAD':'Ara(b', '0aD':'Ara(a', '2aD':'Ara(a', '3aD':'Ara(a', 'YIO':'Gal1S(b', 'BDF':'Fru(b', 'RIP':'Rib(b',
+                'IDR':'IdoA(a', 'RAM':'Rha(a', 'RHM':'Rha(b', 'RM4':'Rha(b', 'XXR':'D-Rha(a', '0aU': 'Araf(b', '2aU': 'Araf(b', '3aU': 'Araf(b', 'ZaU': 'Araf(a', 'TYV':'Tyv(a', 'ABE':'Abe(a', 'ARW':'D-Ara1Me(b',
+                '0AU':'Ara(b', '2AU':'Ara(b', '3AU':'Ara(b', '0AD':'Ara(a', '2AD':'Ara(a', '3AD':'Ara(a', '3HA': 'D-Rha(a', 'ARB': 'D-Ara(b', 'MUR': 'MurNAc(b', 'MGC':'GalNAc1Me(a', 'GXL':'L-Gal(a',
+                'A2G':'GalNAc(a', 'NGA': 'GalNAc(b', 'YYQ':'L-GlcNAc(a', 'XYP':'Xyl(b', 'XYS':'Xyl(a', 'WOA': 'GalA(b', '3OA': 'GalA(a', 'TOA': 'GalA(a', 'GCV':'GlcA4Me(a', 'VDV':'Allf(a', 'VDS':'Allf(b',
+                'XYZ':'Xylf(b', '1CU': 'Fru(b',  '0CU': 'Fru(b', '4CD': 'Fru(a', '1CD': 'Fru(a', 'LXC':'L-Xyl(b', 'HSY':'L-Xyl(a', 'SIA':'Neu5Ac(a', 'SLB':'Neu5Ac(b', 'FRU': 'Fru(b', 'AHR':'Araf(a', '2GS':'Gal2Me(a',
+                'NGC':'Neu5Gc(a', 'NGE':'Neu5Gc(b', 'BDP':'GlcA(b', 'GCU':'GlcA(a','VYS':'GlcNS(a', '0YS':'GlcNS(a', '4YS':'GlcNS(a', '6YS':'GlcNS(a', 'UYS':'GlcNS(a', 'QYS':'GlcNS(a', 'GCS':'GlcN(b',
+                'PA1':'GlcN(a', 'ROH':' ', 'BGC':'Glc(b', '0OA':'GalA(a', '4OA':'GalA(a', 'BCA':'2-4-diacetimido-2-4-6-trideoxyhexose(a', 'ASO':'1,5-Anhydro-Glc-ol(?', 'L6N':'Glc6Me(?', 'BM3':'ManNAc(a',
+                "NAG6SO3":"GlcNAc6S(b", "NDG6SO3":"GlcNAc6S(a", "GLC4SO3":"GalNAc4S(b", "NGA4SO3":"GalNAc4S(b", 'A2G4SO3':'GalNAc4S(a', "IDR2SO3":"IdoA2S(a", '289':'DDManHep(a',
+                "BDP3SO3":"GlcA3S(b", "BDP2SO3":"GlcA2S(b", "GCU2SO3":"GlcA2S(a", "SIA9ACX":"Neu5Ac9Ac(a", "MAN2MEX":"Man2Me(a", "MAN3MEX":"Man3Me(a", '5N6':'Neu5Ac9Ac(a', 'PKM':'Neu4Ac5Ac(a', 'GMH':'LDManHep(a',
+                "SIA9MEX":"Neu5Ac9Me(a", "NGC9MEX":"Neu5Gc9Me(a", "BDP4MEX":"GlcA4Me(b", "GAL6SO3":"Gal6S(b", "NDG3SO3":"GlcNAc3S6S(a", "TOA2SO3": "GalA2S(a", 'GN1':'GlcNAc1P(a',
+                "NAG6PCX":"GlcNAc6PCho(b", "UYS6SO3":"GlcNS6S(a", 'VYS3SO3':'GlcNS3S6S(a',  'VYS6SO3':'GlcNS3S6S(a', "QYS3SO3":"GlcNS3S6S(a", "QYS6SO3":"GlcNS3S6S(a", "4YS6SO3":"GlcNS6S(a", "6YS6SO3":"GlcNS6S(a",
+                "FUC2MEX3MEX4MEX": "Fuc2Me3Me4Me(a", "QYS3SO36SO3": "GlcNS3S6S(a", "VYS3SO36SO3": "GlcNS3S6S(a", "NDG3SO36SO3": "GlcNAc3S6S(a", "RAM2MEX3MEX": "Rha2Me3Me(a", "RAM2ACX": "Rha2Ac(a",
+                "SIO":"Neu4Ac5Ac9Ac(a", "1GN":"GalN(b", "KD5":"4,7-Anhydro-Kdof(a", "BDR":"Ribf(b", "G1P":"Glc1P(a", "3LJ":"GlcN6S(a", "SGN":"GlcNS6S(a", "95Z":"ManN(a", "ADA":"GalA(a",
+                "GTR":"GalA(b", "3MG":"Glc3Me(b", "ZB1":"Glc3Me(a", "NGS":"GlcNAc6S(b", "ANA":"Neu2Me4Ac5Ac(a", "M6D":"Man6P(b", "G6S":"Gal6S(b", "GL0":"Gul(b", "ZEL":"D-Alt1Me(b", "EGA":"Gal1Et(b",
+                "ARA":"Ara(a", "2FG":"Gal2F(b", "MN0":"Neu2Me5Gc(a", "PZU":"Par(a", "A1Q":"LDManHepOMe(a", "GQ1":"Glc4S(a", "G4S":"Gal4S(b", "6S2":"GlcNAc1Me6S(b", "6C2":"GlcNAcA1Me(b",
+                "X6X":"GalN(a", "TVD":"GlcNAc1NAc(b", "MJJ":"Neu2Me5Ac9Ac(a", "K5B":"4,7-Anhydro-Kdof(b", "GAL3SO3": "Gal3S(b", "GAL3SO36SO3": "Gal3S6S(b", "GAL4SO36SO3": "Gal4S6S(b", "GAL4SO3": "Gal4S(b",
+                "A2G6SO3": "GalNAc6S(a", "GLC6SO3": "Glc6S(a", "0KN": "Kdn(a", "0eB": "Alt(a", "0bA": "Sor(a", "0JA": "Tag(a", "0NB": "D-All(a", 'FUC2MEX': 'Fuc2Me(a', 'FUC3MEX': 'Fuc3Me(a', 'FUC4MEX': 'Fuc4Me(a',
+                'RAM2MEX': 'Rha2Me(a', 'RAM3MEX': 'Rha3Me(a', 'FUC2MEX3MEX': 'Fuc2Me3Me(a', 'FUC2MEX4MEX': 'Fuc2Me4Me(a', 'FUC3MEX4MEX': 'Fuc3Me4Me(a', '0WA': 'ManNAc(a', '0RU': 'Ribf(a',
+                '0QB': 'Qui(a', '0PD': 'Psif(a', '0DA': 'Lyx(a', '0kB': 'L-Gul(a', '0tA': 'L-Tal(a', 'NBG': 'GlcNAc(b', 'KDO': 'Kdo(a', '0KO': 'Kdo(a', '4aA': 'Ara(a', "UYS6SO36SO3": "GlcNS6S(a", "IDR2SO32SO3": "IdoA2S(a"}
 
 
 def rescue_glycans(func: Callable # Function to wrap

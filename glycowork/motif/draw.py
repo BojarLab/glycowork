@@ -3,7 +3,7 @@ from glycowork.glycan_data.loader import unwrap, resolve_motif_name, lib
 from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, compare_glycans, graph_to_string, resolve_anchor
 from glycowork.motif.tokenization import get_core, get_modification
-from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit, is_composition, canonicalize_composition, _COMP_ORDER
+from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit, is_composition, canonicalize_composition, _COMP_ORDER, PDB_TO_IUPAC
 import warnings
 import html
 import hashlib
@@ -1347,16 +1347,11 @@ def draw_chem3d(
     # Color atoms by monosaccharide after mol is finalized
     atom_colors, bond_colors = {}, {}
     if from_pdb:
-        try:
-            from glycontact.process import get_pdb_atom_monosaccharides
-            atom_monos = get_pdb_atom_monosaccharides(mol)
-            for atom_idx, mono_name in atom_monos.items():
-                for i, mono in enumerate(mono_list):
-                    if mono_name == mono:
-                        add_colors_to_map([atom_idx], atom_colors, i, alpha = False)
-                        break
-        except Exception:
-            pass
+        for atom in mol.GetAtoms():
+            info = atom.GetPDBResidueInfo()
+            mono_name = PDB_TO_IUPAC.get(info.GetResidueName().strip(), '').split('(')[0].strip() if info else ''
+            if mono_name and get_core(mono_name) in mono_list:
+                add_colors_to_map([atom.GetIdx()], atom_colors, mono_list.index(get_core(mono_name)), alpha = False)
         # ROH reducing end oxygen belongs to adjacent monosaccharide
         for atom in mol.GetAtoms():
             info = atom.GetPDBResidueInfo()
