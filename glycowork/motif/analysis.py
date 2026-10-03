@@ -34,6 +34,7 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          estimate_technical_variance,
                                          perform_tests_monte_carlo)
 from glycowork.motif.processing import enforce_class, process_for_glycoshift
+from glycowork.glycan_data.data_entry import read_abundances
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type,
                                       load_lectin_lib, get_motif_dag, get_composition_dag, _motif_sequence,
@@ -73,8 +74,7 @@ def preprocess_data(
     str | int]]:  # (transformed df, untransformed df, group1 labels, group2 labels)
     "Preprocesses glycomics data by imputing missing values with impute_biosynthetic, applying CLR/ALR transformations to escape compositional bias, and optionally quantifying glycan motifs"
     if isinstance(df, (str, Path)):
-        df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
-            df).suffix.lower() == ".tsv" else pd.read_excel(df)
+        df = read_abundances(df)
     if group1 is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         group1, group2 = list(df.group1), list(df.group2)
     if group2 is None:
@@ -250,8 +250,7 @@ def get_pvals_motifs(
 ) -> GlycoDataFrame:  # DataFrame with p-values, FDR-corrected p-values, significance, Cohen's d effect sizes, and equivalence p-values for glycan motifs
     "Identifies significantly enriched glycan motifs using a moderated t-test with DAG-grouped FDR correction and Cohen's d effect size calculation, comparing samples above/below threshold"
     if isinstance(df, (str, Path)):
-        df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
-            df).suffix.lower() == ".tsv" else pd.read_excel(df)
+        df = read_abundances(df)
     in_name = getattr(df, '_glyco_name', '')
     glycan_col_name = GlycoDataFrame(df)._glycan_col or df.columns[0]
     if not multiple_samples and label_col_name not in df.columns:
@@ -444,8 +443,7 @@ def get_heatmap(
     "Creates hierarchically clustered heatmap visualization of glycan/motif abundances"
     import seaborn as sns
     if isinstance(df, (str, Path)):
-        df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
-            df).suffix.lower() == ".tsv" else pd.read_excel(df)
+        df = read_abundances(df)
     gcol = index_col if index_col in df.columns else GlycoDataFrame(df)._glycan_col
     set_idx = bool(gcol) or isinstance(df.iloc[0, 0], str)
     if set_idx:
@@ -534,8 +532,7 @@ def get_distance_matrix(
             raise ValueError(f"dist_func = '{dist_func}' is not a scipy.spatial.distance metric.")
         dist_func = getattr(distance, dist_func)
     if isinstance(df, (str, Path)):
-        df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
-            df).suffix.lower() == ".tsv" else pd.read_excel(df)
+        df = read_abundances(df)
     gcol = index_col if index_col in df.columns else GlycoDataFrame(df)._glycan_col
     set_idx = bool(gcol) or isinstance(df.iloc[0, 0], str)
     if set_idx:
@@ -731,8 +728,7 @@ def get_coverage(
     "Visualizes glycan detection frequency across samples with intensity-based ordering"
     import seaborn as sns
     if isinstance(df, (str, Path)):
-        df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
-            df).suffix.lower() == ".tsv" else pd.read_excel(df)
+        df = read_abundances(df)
     d = df.iloc[:, 1:]
     # arrange by mean intensity across all samples
     order = d.mean(axis = 1).sort_values().index
@@ -771,8 +767,7 @@ def get_pca(
     from sklearn.decomposition import PCA
     from sklearn.preprocessing import StandardScaler
     if isinstance(df, (str, Path)):
-        df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
-            df).suffix.lower() == ".tsv" else pd.read_excel(df)
+        df = read_abundances(df)
     if groups is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         groups = list(df.groups)
     if transform and not motifs:
@@ -1014,6 +1009,8 @@ def get_differential_expression(
         top_explained: int | None = 5  # How many child motifs to name in 'Explained by'; None names all of them
 ) -> GlycoDataFrame:  # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes
     "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets) with multiple testing correction on glycomics abundance data"
+    df = read_abundances(df) if isinstance(df, (str, Path)) else df
+    glycoproteomics = glycoproteomics or df.attrs.get('glycoproteomics', False)  # read_glycoproteomics output is per-glycosite data whatever the flag says
     grouped_BH = ((motifs or glycoproteomics) and not sets) if grouped_BH is None else grouped_BH
     if glycoproteomics and monte_carlo:
         raise ValueError(
@@ -1378,6 +1375,8 @@ def get_glycanova(
     str, pd.DataFrame]]:  # (ANOVA results with F-stats and omega-squared effect sizes, post-hoc results)
     "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
     from scipy.stats import studentized_range
+    df = read_abundances(df) if isinstance(df, (str, Path)) else df
+    glycoproteomics = glycoproteomics or df.attrs.get('glycoproteomics', False)  # read_glycoproteomics output is per-glycosite data whatever the flag says
     grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     if groups is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         groups = list(df.groups)
@@ -1602,8 +1601,7 @@ def get_time_series(
     "Analyzes time series glycomics data using polynomial regression"
     grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     if isinstance(df, (str, Path)):
-        df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
-            df).suffix.lower() == ".tsv" else pd.read_excel(df)
+        df = read_abundances(df)
     df = df.fillna(0)
     if isinstance(df.iloc[0, 0], str):
         df = df.set_index(df.columns[0])
@@ -2199,8 +2197,7 @@ def get_lectin_array(
     "Analyzes lectin microarray data by mapping lectin binding patterns to glycan motifs, calculating Cohen's d effect sizes between groups and clustering results by significance"
     from sklearn.cluster import KMeans
     if isinstance(df, (str, Path)):
-        df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
-            df).suffix.lower() == ".tsv" else pd.read_excel(df)
+        df = read_abundances(df)
     in_name, in_prov, contrasts = getattr(df, '_glyco_name', ''), getattr(df, '_provenance', {}), getattr(df,
                                                                                                           '_contrasts',
                                                                                                           {})

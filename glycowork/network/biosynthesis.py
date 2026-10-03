@@ -1179,8 +1179,9 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
         if paired:
             assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
     # Handle input data
-    if isinstance(df, str):
-        df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+    if isinstance(df, (str, Path)):
+        from glycowork.glycan_data.data_entry import read_abundances
+        df = read_abundances(df)
     if not longitudinal and not isinstance(group1[0], str):
         columns_list = df.columns.tolist()
         group1 = [columns_list[k] for k in group1]

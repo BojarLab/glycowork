@@ -1,6 +1,7 @@
 import re
 import ast
 import warnings
+import xml.etree.ElementTree as ET
 import pandas as pd
 from pathlib import Path
 from typing import Callable
@@ -8,6 +9,13 @@ from glycowork.glycan_data.loader import GlycoDataFrame
 from glycowork.motif.processing import check_nomenclature, canonicalize_composition, canonicalize_iupac, is_composition, _CODE_TO_NAME, _NAME_TO_CODE
 from glycowork.motif.tokenization import glycan_to_composition
 from glycowork.motif.graph import glycan_to_nxGraph, compare_glycans
+
+
+_GP_SIGNATURES = [('fragpipe', ('totalglycancomposition', 'proteinstart')), ('pglyco', ('prosites', 'glycancomposition')), ('byologic', ('xicareasummed', 'mod.summary')),
+                  ('byonic', ('proteinname', 'glycansnhfagna')), ('byonic', ('proteinname', 'composition', 'position')), ('glycresoft', ('glycopeptide', 'peptide_start')),
+                  ('metamorpheus', ('plausibleglycancomposition', 'fullsequence')), ('decipher', ('glycosite', 'glycancomposition')), ('strucgp', ('glycosite_position', 'glycancomposition')),
+                  ('glycanfinder', ('proteinaccession', 'glycantype')), ('decipher_site', ('site', 'glycan'))]  # columns (whitespace removed, lowercased) that identify each glycoproteomics engine
+_SUMMARY_HEAD = re.compile(r'Absolute Intensity|Analyte Area(?: - Background Area)?\tCalibrated')  # an abundance block of a LaCyTools or MassyTools Summary.txt
 
 
 def _accession(protein: str # protein label as a search engine writes it, e.g., '>sp|P02763|A1AG1_HUMAN Alpha-1-acid glycoprotein 1' or 'Q9P0K1(pre=R,post=L)'
@@ -59,10 +67,6 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
                          sample_map: dict[str, str] | Callable[[str], str] | None = None # renames runs (raw files, or FragPipe experiments) into samples; runs sharing a sample, e.g., fractions, are summed
                          ) -> GlycoDataFrame: # glycoforms as 'protein_site_composition' in column 'ID', samples as columns; ready for get_differential_expression(glycoproteomics = True) or get_glycoshift_per_site
     "Reads the native output of glycoproteomics search engines into a site-specific glycoform x sample table, quantified by intensity where the engine reports one and by spectral counts otherwise"
-    sigs = [('fragpipe', ('totalglycancomposition', 'proteinstart')), ('pglyco', ('prosites', 'glycancomposition')), ('byologic', ('xicareasummed', 'mod.summary')),
-            ('byonic', ('proteinname', 'glycansnhfagna')), ('byonic', ('proteinname', 'composition', 'position')), ('glycresoft', ('glycopeptide', 'peptide_start')),
-            ('metamorpheus', ('plausibleglycancomposition', 'fullsequence')), ('decipher', ('glycosite', 'glycancomposition')), ('strucgp', ('glycosite_position', 'glycancomposition')),
-            ('glycanfinder', ('proteinaccession', 'glycantype')), ('decipher_site', ('site', 'glycan'))]
     recs, skipped = [], 0  # (run, ion, protein, site, composition, abundance); an ion has one abundance per run, so its repeated matches must not add up
     for fi, f in enumerate(files if isinstance(files, list) else [files]):
         ext, stem = ('', f'sample{fi + 1}') if isinstance(f, pd.DataFrame) else (Path(f).suffix.lower(), Path(f).stem)
@@ -70,7 +74,7 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
             pd.read_csv(f, sep = ',' if ext == '.csv' else '\t', dtype = str)]
         for df in frames:
             c = {re.sub(r'\s+', '', str(k)).lower(): k for k in df.columns}
-            if (sig := next((s for s, ks in sigs if all(k in c for k in ks)), None)) is not None:
+            if (sig := next((s for s, ks in _GP_SIGNATURES if all(k in c for k in ks)), None)) is not None:
                 break
         else:
             raise ValueError(f"'{stem}' is not a recognized search engine output; expected FragPipe/MSFragger-Glyco or O-Pair, pGlyco3 or pGlycoQuant, Byonic or Byologic, GlycReSoft, MetaMorpheus O-Pair, Glyco-Decipher, StrucGP, or PEAKS GlycanFinder, but its columns are {list(frames[0].columns)[:8]}")
@@ -176,19 +180,44 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
     if bad := [g for g, v in canon.items() if v is None]:
         warnings.warn(f"Skipped glycoforms with {len(bad)} unparseable compositions, e.g., {bad[:3]}.", stacklevel = 2)
     df = df.assign(ID = df['protein'] + '_' + df['site'] + '_' + df['comp'].map(canon)).dropna(subset = ['ID'])
-    return _abundance_matrix(df[['run', 'ion', 'ID', 'value']], sample_map)
+    out = _abundance_matrix(df[['run', 'ion', 'ID', 'value']], sample_map)
+    out.attrs['glycoproteomics'] = True  # lets get_differential_expression and get_glycanova switch to the per-glycosite analysis on their own
+    return out
 
 
-def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataFrame], # export(s) of Skyline (report, long or pivoted by replicate), LaCyTools or MassyTools (Summary.txt), GlycoGenius, GlyHunter, GlycReSoft, or CandyCrunch, or any table with glycans in its first column and samples in the others
+def _glycomics_layout(df: pd.DataFrame # a glycomics table as read from file
+                      ) -> tuple: # (tool, or None for a plain glycans x samples table; lowercased header map; molecule, replicate, and area column; {pivoted area column: replicate})
+    "Recognizes the export of a glycomics tool by its columns"
+    c = {re.sub(r'\s+', '', str(k)).lower(): k for k in df.columns}
+    mol = next((c[k] for k in ('moleculename', 'molecule', 'peptide', 'peptidesequence') if k in c), None)
+    rep = next((c[k] for k in ('replicatename', 'replicate') if k in c), None)
+    area = next((c[k] for k in ('totalareams1', 'totalarea', 'area') if k in c), None)
+    wide = {k: m[1] for k in df.columns if (m := re.fullmatch(r'(.+) Total Area MS1', str(k)))} or {k: m[1] for k in df.columns if (m := re.fullmatch(r'(.+) Total Area', str(k)))}
+    tool = 'glycresoft' if all(k in c for k in ('composition', 'total_signal', 'neutral_mass')) else 'candycrunch' if 'num_spectra' in c and 'composition' in c else 'compound_discoverer' if 'name' in c and any(
+        str(k).startswith('Area: ') for k in df.columns) else 'skyline' if mol is not None and ((rep is not None and area is not None) or wide) else 'glycogenius' if str(df.columns[0]) == 'Sample' and len(df) > 0 and str(df.iloc[0, 0]) == 'Group' else None
+    return tool, c, mol, rep, area, wide
+
+
+def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataFrame], # export(s) of Skyline (report, long or pivoted by replicate), LaCyTools or MassyTools (Summary.txt), GlycoWorkbench (.gwp workspace or .gwa annotated peak list), Thermo Compound Discoverer, GlycoGenius, GlyHunter, GlycReSoft, or CandyCrunch, or any table with glycans in its first column and samples in the others
                    sample_map: dict[str, str] | Callable[[str], str] | None = None # renames runs (replicates, raw files, or sample columns) into samples; runs sharing a sample are summed
                    ) -> GlycoDataFrame: # glycans (IUPAC-condensed, canonical composition, or the label as written if it is neither) in column 'glycan', samples as columns; ready for get_differential_expression and the rest of glycowork
     "Reads the native output of glycomics software into a glycan x sample table, quantified by the tool's abundance where it reports one and by feature counts otherwise"
     recs, groups = [], {}  # (run, ion, label, abundance, S is NeuAc); Skyline, LaCyTools, MassyTools, and GlycoGenius write NeuAc as S, which glycowork reads as sulfate
     for fi, f in enumerate(files if isinstance(files, list) else [files]):
         ext, stem = ('', f'sample{fi + 1}') if isinstance(f, pd.DataFrame) else (Path(f).suffix.lower(), Path(f).stem)
+        if ext in ('.gwp', '.gwa'):  # GlycoWorkbench workspace, one top-level Scan per sample, or one annotated peak list; MS/MS scans are skipped
+            root = ET.parse(f).getroot()
+            scans = [root] if root.tag == 'AnnotatedPeakList' else [s for s in root.findall('Scan') if s.get('is_msms') != 'true']
+            for si, scan in enumerate(scans):
+                for pa in scan.findall(('' if scan is root else 'AnnotatedPeakList/') + 'Annotations/PeakAnnotationCollection/PeakAnnotation'):
+                    peak, frag = pa.find('Peak'), pa.find('Annotation/FragmentEntry')
+                    g = '' if frag is None else frag.get('fragment', '')
+                    if g and not re.search(r'/#[a-km-z]cleavage', g) and float(peak.get('intensity', 0)) > 0:  # the structure on this peak, possibly with a labile loss (/#lcleavage), e.g., of a sulfate; any other cleavage makes it an MS/MS fragment
+                        recs.append((scan.get('name') or (stem if len(scans) == 1 else f'{stem}_{si + 1}'), (fi, peak.get('mz_ratio')), g.replace('/#lcleavage', ''), float(peak.get('intensity')), False))
+            continue
         lines = Path(f).read_text(encoding = 'utf-8-sig', errors = 'replace').splitlines() if ext == '.txt' else []
         heads = [i for i, l in enumerate(lines) if re.match(r'Absolute Intensity \(Background Subtracted|Analyte Area - Background Area\tCalibrated', l)] or [
-            i for i, l in enumerate(lines) if re.match(r'Absolute Intensity|Analyte Area\tCalibrated', l)]
+            i for i, l in enumerate(lines) if _SUMMARY_HEAD.match(l)]
         for h in heads:  # LaCyTools: one block per charge state, analytes in the header and samples as rows below 'Fraction' and the mass row; MassyTools: 'Calibrated' and the mass row in front
             head = lines[h].split('\t')
             off = 2 if head[1:2] == ['Calibrated'] else 1
@@ -201,26 +230,26 @@ def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataF
         if heads:
             continue
         df = f if isinstance(f, pd.DataFrame) else pd.read_excel(f, dtype = str) if ext in ('.xlsx', '.xls') else pd.read_csv(f, sep = ',' if ext == '.csv' else '\t', dtype = str)
-        c = {re.sub(r'\s+', '', str(k)).lower(): k for k in df.columns}
+        tool, c, mol, rep, area, wide = _glycomics_layout(df)
         num = lambda k: pd.to_numeric(df[k].astype(str).str.lstrip('*'), errors = 'coerce')  # Skyline writes some values as '*2.4246E+7'
-        mol = next((c[k] for k in ('moleculename', 'molecule', 'peptide', 'peptidesequence') if k in c), None)
-        rep = next((c[k] for k in ('replicatename', 'replicate') if k in c), None)
-        area = next((c[k] for k in ('totalareams1', 'totalarea', 'area') if k in c), None)
-        wide = {k: m[1] for k in df.columns if (m := re.fullmatch(r'(.+) Total Area MS1', str(k)))} or {k: m[1] for k in df.columns if (m := re.fullmatch(r'(.+) Total Area', str(k)))}
-        if all(k in c for k in ('composition', 'total_signal', 'neutral_mass')):  # GlycReSoft, one analysis per file; unidentified chromatograms have the composition 'None'
+        if tool == 'glycresoft':  # one analysis per file; unidentified chromatograms have the composition 'None'
             recs.extend((stem, (fi, i), g, v, False) for i, (g, v) in enumerate(zip(df[c['composition']], num(c['total_signal']))) if isinstance(g, str) and g != 'None' and v > 0)
-        elif 'num_spectra' in c and 'composition' in c:  # CandyCrunch, one table per raw file; peaks without a predicted structure keep their composition
+        elif tool == 'candycrunch':  # one table per raw file; peaks without a predicted structure keep their composition
             vals = num(c['rel_abundance']) if 'rel_abundance' in c else pd.Series(1.0, index = df.index)
             tops = df[c['top1_pred']] if 'top1_pred' in c else pd.Series(None, index = df.index, dtype = object)
             recs.extend((stem, (fi, i), t if isinstance(t, str) and t.strip() else canonicalize_composition(ast.literal_eval(g) if isinstance(g, str) else g, as_string = True), v, False)
                         for i, (t, g, v) in enumerate(zip(tops, df[c['composition']], vals)) if v > 0 and (isinstance(t, str) or isinstance(g, (str, dict))))
-        elif mol is not None and ((rep is not None and area is not None) or wide):  # Skyline report: one row per precursor (or transition) and replicate, or replicates pivoted into '<replicate> Total Area' columns
+        elif tool == 'compound_discoverer':  # Thermo Compound Discoverer compounds table: one 'Area: <file>.raw (F<n>)' column per raw file, unnamed features skipped
+            for k in df.columns:
+                if m := re.fullmatch(r'Area: (.+?)(?:\.raw)?(?: \(F\d+\))?', str(k)):
+                    recs.extend((m[1], (fi, i), g, v, False) for i, (g, v) in enumerate(zip(df[c['name']], num(k))) if isinstance(g, str) and g.strip() and v > 0)
+        elif tool == 'skyline':  # one row per precursor (or transition) and replicate, or replicates pivoted into '<replicate> Total Area' columns
             ions = list(df[[c[k] for k in ('proteinname', 'protein', 'moleculelistname', 'moleculenote', 'precursorcharge', 'precursoradduct', 'precursormz', 'isotopelabeltype') if k in c] + [mol]].fillna('').astype(str).agg('/'.join, axis = 1))
             ions = [(fi, i) for i in range(len(df))] if not wide and area == c.get('area') else ions  # transition areas add up, a precursor's Total Area repeats on each of its transitions
             for k, run in (wide.items() if wide else [(area, None)]):
                 recs.extend((r if run is None else run, ion, g, v, True) for r, ion, g, v in zip(df[rep] if run is None else [run] * len(df), ions, df[mol], num(k)) if isinstance(g, str) and v > 0)
         else:  # GlyHunter, GlycoGenius, a CandyCrunch batch, or glycowork's own layout: glycans in the first column, one column per sample
-            gg = str(df.columns[0]) == 'Sample' and len(df) > 0 and str(df.iloc[0, 0]) == 'Group'  # GlycoGenius: a 'Group' row under the sample names, and '_<RT>' after each glycan of the peak-separated table
+            gg = tool == 'glycogenius'  # a 'Group' row under the sample names, and '_<RT>' after each glycan of the peak-separated table
             if gg:
                 groups |= {k: g for k, g in zip(df.columns[1:], df.iloc[0, 1:]) if isinstance(g, str) and g != 'Ungrouped'}
                 df = df.iloc[1:]
@@ -228,7 +257,7 @@ def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataF
             for k in df.columns[1:]:
                 recs.extend((k, (fi, i), g, v, gg) for i, (g, v) in enumerate(zip(labs, num(k))) if isinstance(g, str) and v > 0)
     if not recs:
-        raise ValueError("No abundances found; expected a Skyline report, a LaCyTools or MassyTools Summary.txt, or a GlycoGenius, GlyHunter, GlycReSoft, or CandyCrunch table with glycans and positive abundances.")
+        raise ValueError("No abundances found; expected a Skyline report, a LaCyTools or MassyTools Summary.txt, a GlycoWorkbench workspace, or a Compound Discoverer, GlycoGenius, GlyHunter, GlycReSoft, or CandyCrunch table with glycans and positive abundances.")
     df = pd.DataFrame(recs, columns = ['run', 'ion', 'label', 'value', 'sia'])
     valid, canon = set(_CODE_TO_NAME.values()) | set(_NAME_TO_CODE), {}
     for g, sia in df[['label', 'sia']].drop_duplicates().itertuples(index = False):
@@ -249,6 +278,22 @@ def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataF
     if merged := {k: v for k, v in df.groupby('glycan')['label'].unique().items() if len(v) > 1}:
         warnings.warn(f"{len(merged)} glycans were written in several ways and summed, e.g., {list(merged.items())[0][1].tolist()} into '{list(merged)[0]}'; sialic acid derivatives (ethyl esters, lactones, amides) become Neu5Ac or Neu5Gc, since compositions carry no linkages.", stacklevel = 2)
     return _abundance_matrix(df[['run', 'ion', 'glycan', 'value']], sample_map, groups = groups)
+
+
+def read_abundances(file: str | Path # glycowork table (.csv, .tsv, .xlsx) with glycans in the first column and samples in the others, or the export of a tool that read_glycomics or read_glycoproteomics supports
+                    ) -> pd.DataFrame: # the table as written, or the read_glycomics or read_glycoproteomics output for a recognized tool export
+    "Reads the input of glycowork's analysis functions: tool exports recognized by their columns go through read_glycomics or read_glycoproteomics, every other table is read exactly as written"
+    ext = Path(file).suffix.lower()
+    if ext in ('.gwp', '.gwa') or (ext == '.txt' and any(_SUMMARY_HEAD.match(l) for l in Path(file).read_text(encoding = 'utf-8-sig', errors = 'replace').splitlines())):
+        return read_glycomics(file)
+    sheets = {'': pd.read_csv(file)} if ext == '.csv' else {'': pd.read_csv(file, sep = '\t')} if ext in ('.tsv', '.txt', '.psmtsv', '.list') else pd.read_excel(file, sheet_name = None)
+    for df in sheets.values():
+        c = {re.sub(r'\s+', '', str(k)).lower(): k for k in df.columns}
+        if any(all(k in c for k in ks) for _, ks in _GP_SIGNATURES):
+            return read_glycoproteomics(file)
+        if _glycomics_layout(df)[0] is not None:
+            return read_glycomics(file)
+    return next(iter(sheets.values()))
 
 
 def check_presence(glycan: str, # IUPAC-condensed glycan sequence

@@ -1057,7 +1057,9 @@ def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
         name, branches, mods = f"{config}-{name}" if config else name, [], []
         for kid in kids:
             sub = _GWB_RESIDUE.match(kid[0])
-            if sub and sub.group(5) in ('S', 'P') and not kid[1]:
+            if kid[0] == 'NS' and not kid[1]:  # N-sulfate, as on heparan sulfate's GlcN
+                name += 'S' if name.endswith('N') else 'NS'
+            elif sub and sub.group(5) in ('S', 'P') and not kid[1]:
                 mods.append((sub.group(1) if sub.group(1).isdigit() else 'O') + sub.group(5))
             else:
                 branches.append('{}({})'.format(*render(kid)))
@@ -1069,7 +1071,8 @@ def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
     if not roots:
         return glycan
     body, _ = render(roots[0])
-    floating = ''.join('{{{}({})}}'.format(*render(f)) for f in parse(floaty))
+    floating = ''.join('{{{}}}'.format((sub.group(1) if sub.group(1).isdigit() else 'O') + sub.group(5)) if (sub := _GWB_RESIDUE.match(f[0])) and sub.group(5) in ('S', 'P') and not f[1] else '{{{}({})}}'.format(*render(f))
+                       for f in parse(floaty))  # a floating sulfate or phosphate is a substituent, {OS}, not a residue
     return floating + body + ('-ol' if ',o' in roots[0][0] else '')
 
 
@@ -1436,7 +1439,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     if '{' in glycan and '}' not in glycan:
         glycan = f'{{{glycan[:glycan.index("{")]}?1-?}}{glycan[glycan.index("{")+1:]}'
     if '{' in glycan and '(' not in glycan:
-        glycan = glycan.replace('{', '(').replace('}', ')')
+        floaty = re.fullmatch(r'((?:\{[\dO?][SP]\})+)([^{}]+)', glycan)  # {OS}GlcNAc, a lone residue with floating substituents, is GlcNAcOS
+        glycan = floaty[2] + re.sub(r'[{}]', '', floaty[1]) if floaty else glycan.replace('{', '(').replace('}', ')')
     # Trim linkers
     if '-' in glycan:
         glycan = re.sub(r'(?<=[a-z])1?-(?:O-)?(?=(?!(?:Ser|Thr|Asn|Cer|OMe|Me)$)[A-Z][^()\[\]{}\-]*$)', '-', glycan)  # GalNAca1-Sp8 or Glcb1-OCH2CH2NH2 to GalNAca-Sp8, trimmed below; amino acid, ceramide and methyl aglycones are kept

@@ -27,7 +27,7 @@ from contextlib import contextmanager
 import random
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
-from glycowork.glycan_data.data_entry import check_presence, read_glycoproteomics, read_glycomics
+from glycowork.glycan_data.data_entry import check_presence, read_glycoproteomics, read_glycomics, read_abundances
 from glycowork.motif.query import get_insight
 from glycowork.motif.tokenization import (
     constrain_prot, prot_to_coded, string_to_labels, pad_sequence, mz_to_composition,
@@ -7882,6 +7882,44 @@ def test_read_glycomics_tables(tmp_path):
     assert read_glycomics(candy).set_index('glycan')['sample1'].to_dict() == {'Gal(b1-3)GalNAc': 90.0, 'H2N2': 10.0}
     with pytest.raises(ValueError, match = 'No abundances'):
         read_glycomics(pd.DataFrame({'glycan': ['Gal(b1-4)Glc'], 'note': ['x']}))
+
+
+def test_read_glycomics_glycoworkbench_and_compound_discoverer(tmp_path):
+    m3 = 'freeEnd--?b1D-GlcNAc,p--4b1D-GlcNAc,p--4b1D-Man,p(--3a1D-Man,p)--6a1D-Man,p$MONO,perMe,Na,0,freeEnd'
+    m4 = 'freeEnd--?b1D-GlcNAc,p--4b1D-GlcNAc,p--4b1D-Man,p(--3a1D-Man,p--2a1D-Man,p)--6a1D-Man,p$MONO,perMe,Na,0,freeEnd'
+    ann = lambda mz, i, frag: f'<PeakAnnotation><Peak mz_ratio="{mz}" intensity="{i}"/><Annotation ions="Na" neutralExchanges="0"><FragmentEntry fragment="{frag}" name="" mass="0.0" mz_ratio="0.0" score="0.0"/></Annotation></PeakAnnotation>'
+    scan = lambda name, peaks, msms = 'false': (f'<Scan name="{name}" is_msms="{msms}"><PeakList/><AnnotatedPeakList><Annotations><Glycan structure="{m3}"/><PeakAnnotationCollection>'
+                                               + ''.join(ann(*p) for p in peaks) + '</PeakAnnotationCollection></Annotations></AnnotatedPeakList></Scan>')
+    (tmp_path / 'profile.gwp').write_text('<GlycanWorkspace><Configuration/>' + scan('ctrl', [(1171.6, 100, m3), (1375.7, 40, m4), (1375.7, 40, m4), (900.0, 50, '')])
+                                          + scan('case', [(1171.6, 30, m3), (597.3, 70, m3.replace('--6a1D-Man,p', '--6a1D-Man,p/#bcleavage'))]) + scan('msms', [(1171.6, 9, m3)], msms = 'true') + '</GlycanWorkspace>')
+    # one abundance per peak and structure, fragments and MS/MS scans skipped, peaks without a structure ignored
+    assert read_glycomics(tmp_path / 'profile.gwp').set_index('glycan').to_dict('index') == {canonicalize_iupac(m3): {'ctrl': 100.0, 'case': 30.0}, canonicalize_iupac(m4): {'ctrl': 40.0, 'case': 0.0}}
+    cd = pd.DataFrame({'Name': ['HexNAc(4)Hex(5)NeuAc(2)', 'Man5', None], 'Formula': ['C84 H138 N6 O62', 'C46 H78 N2 O36', 'C6 H12 O6'], 'Calc. MW': ['2222.78', '1234.43', '180.06'],
+                       'Area: S1.raw (F1)': ['100', '50', '9'], 'Area: S2.raw (F2)': ['80', '', '9'], 'Norm. Area: S1.raw (F1)': ['1', '1', '1']})
+    assert read_glycomics(cd).set_index('glycan').to_dict('index') == {'H5N4A2': {'S1': 100.0, 'S2': 80.0}, canonicalize_iupac('Man5'): {'S1': 50.0, 'S2': 0.0}}
+
+
+def test_read_abundances(tmp_path):
+    plain = pd.DataFrame({'glycan': ['Gal(b1-4)Glc', 'Gal(b1-4)Glc', 'Fuc(a1-2)Gal(b1-4)Glc'], 'S1': [1.0, 2.0, 3.0], 'S2': [4.0, 5.0, 6.0], 'note': ['a', 'b', 'c']})
+    plain.to_csv(tmp_path / 'plain.csv', index = False)
+    pd.testing.assert_frame_equal(read_abundances(tmp_path / 'plain.csv'), pd.read_csv(tmp_path / 'plain.csv'))  # a glycowork table is read exactly as written
+    pd.DataFrame({'Molecule Name': ['H5N4F1S1', 'H5N4F1S1'], 'Replicate Name': ['ctrl', 'case'], 'Total Area MS1': ['10', '20']}).to_csv(tmp_path / 'skyline.csv', index = False)
+    assert read_abundances(tmp_path / 'skyline.csv').to_dict('list') == {'glycan': ['H5N4F1A1'], 'ctrl': [10.0], 'case': [20.0]}
+    rng = np.random.default_rng(0)
+    rows = [{'RawName': 'S1', 'Peptide': pep, 'Mod': '', 'Charge': '3', 'GlycanComposition': g, 'Proteins': prot, 'ProSites': site, 'TotalFDR': '0.001',
+             **{f'Intensity(S{i})': str(round(rng.uniform(50, 150) * (3 if i > 3 and g == 'H(5)N(4)A(2)' else 1), 2)) for i in range(1, 7)}}
+            for pep, prot, site in (('EJGTR', 'sp|P19652|A1AG2_HUMAN', '103'), ('JITR', 'sp|P02763|A1AG1_HUMAN', '33')) for g in ('H(5)N(4)A(2)', 'H(5)N(4)A(1)', 'H(5)N(4)F(1)A(2)', 'H(6)N(5)A(3)')]
+    pd.DataFrame(rows).to_csv(tmp_path / 'pglycoquant.list', sep = '\t', index = False)
+    gp = read_abundances(tmp_path / 'pglycoquant.list')
+    assert gp.attrs['glycoproteomics'] and gp['ID'].str.startswith(('P19652_103_', 'P02763_33_')).all()
+    res = get_differential_expression(tmp_path / 'pglycoquant.list', group1 = ['S1', 'S2', 'S3'], group2 = ['S4', 'S5', 'S6'])
+    assert 'Glycosite' in res.columns  # the per-glycosite analysis switched on by itself
+
+
+def test_glycoworkbench_sulfates():
+    assert canonicalize_iupac('freeEnd--4b1D-GlcN,p(--4a1D-HexA,p--2S)--NS$MONO,Und,-H,0,freeEnd') == 'D-HexA2S(a1-4)GlcNS'
+    assert canonicalize_iupac('freeEnd--4b1D-GlcN,p--NS}--?S$MONO,Und,-H,0,freeEnd') == 'GlcNSOS'
+    assert canonicalize_iupac('{OS}GlcNAc') == 'GlcNAcOS'
 
 
 def test_get_insight():

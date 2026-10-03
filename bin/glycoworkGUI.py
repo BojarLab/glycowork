@@ -11,7 +11,6 @@ import pandas as pd
 import tkinter as tk
 from tkinter import simpledialog, filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
-from pathlib import Path
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -20,6 +19,7 @@ from glycowork.glycan_data.loader import motif_list
 from glycowork.motif.draw import GlycoDraw, plot_glycans_excel
 from glycowork.motif.analysis import get_differential_expression, get_heatmap, get_lectin_array, get_volcano, get_ma, get_coverage, get_pca
 from glycowork.motif.processing import canonicalize_iupac
+from glycowork.glycan_data.data_entry import read_abundances
 
 def create_tooltip(widget, text):
   tl = widget.winfo_toplevel()
@@ -42,8 +42,8 @@ class BaseDialog(simpledialog.Dialog):
 
     def add_file_input(self, master, row, label_text, help_text=None, filetypes=None):
         if filetypes is None:
-            filetypes = [("Data Files", "*.csv *.tsv *.xlsx"), ("CSV Files", "*.csv"),
-                         ("TSV Files", "*.tsv"), ("Excel Files", "*.xlsx")]
+            filetypes = [("Data Files", "*.csv *.tsv *.txt *.xlsx *.xls *.gwp *.gwa *.psmtsv *.list"), ("CSV Files", "*.csv"),
+                         ("TSV Files", "*.tsv"), ("Excel Files", "*.xlsx"), ("All Files", "*.*")]
         frame = ttk.Frame(master)
         frame.grid(row=row, column=0, columnspan=3, sticky='ew', pady=5)
         frame.grid_columnconfigure(1, weight=1)
@@ -116,8 +116,7 @@ class BaseDialog(simpledialog.Dialog):
         if not path:
             return
         try:
-            suffix = Path(path).suffix.lower()
-            head = pd.read_csv(path, nrows = 500) if suffix == '.csv' else pd.read_csv(path, sep = '\t', nrows = 500) if suffix == '.tsv' else pd.read_excel(path, nrows = 500)
+            head = read_abundances(path)  # an export of Skyline, FragPipe, GlycoWorkbench, etc. lists its samples as they will be analyzed
             labels = head.iloc[:, 0].astype(str).tolist() if by_rows else head.columns[1:].tolist()
         except Exception as e:
             messagebox.showerror("Error", f"Could not read {os.path.basename(path)}:\n{e}", parent = self)
@@ -321,8 +320,11 @@ class DifferentialExpressionDialog(BaseDialog):
         help_text = ("CSV Format Help:\n\n"
                     "Glycans should be in first column (ideally in IUPAC-condensed)\n"
                     "If you do NOT analyze motifs, the glycan format does not matter\n"
-                    "Other columns should be the abundances (each sample one column)")
-        self.csv_var = self.add_file_input(input_frame, 0, "CSV/Excel File:", help_text)
+                    "Other columns should be the abundances (each sample one column)\n\n"
+                    "Exports are also read directly: Skyline, LaCyTools, MassyTools, GlycoWorkbench, Compound Discoverer,\n"
+                    "GlycoGenius, GlyHunter, GlycReSoft, CandyCrunch, and glycoproteomics results from FragPipe, pGlyco3,\n"
+                    "Byonic, MetaMorpheus, Glyco-Decipher, StrucGP, and PEAKS GlycanFinder")
+        self.csv_var = self.add_file_input(input_frame, 0, "Data File:", help_text)
         # Groups frame
         groups_frame = ttk.LabelFrame(master, text="Sample Groups", padding=10)
         groups_frame.pack(fill=tk.X, padx=10, pady=5)
@@ -372,7 +374,7 @@ class DataOverviewDialog(BaseDialog):
         input_frame.pack(fill = tk.X, padx = 10, pady = 5)
         help_text = ("Glycans in the first column, one sample per remaining column.\n"
                      "Group selection is optional and only colours the PCA.")
-        self.file_var = self.add_file_input(input_frame, 0, "CSV/Excel File:", help_text)
+        self.file_var = self.add_file_input(input_frame, 0, "Data File:", help_text)
         groups_frame = ttk.LabelFrame(master, text = "Sample Groups (optional)", padding = 10)
         groups_frame.pack(fill = tk.X, padx = 10, pady = 5)
         self.group_a = self.add_group_selector(groups_frame, 0, "Group A:")
@@ -406,7 +408,7 @@ class GetHeatmapDialog(BaseDialog):
                     "Ideally, rows are samples and columns are glycans (but the function can deal with the opposite)\n"
                     "Glycans should be ideally in IUPAC-condensed\n"
                     "If you do NOT analyze motifs, the glycan format does not matter at all")
-        self.input_file_var = self.add_file_input(input_frame, 0, "Select Input CSV or Excel File:", help_text)
+        self.input_file_var = self.add_file_input(input_frame, 0, "Data File:", help_text)
         # Analysis options frame
         options_frame = ttk.LabelFrame(master, text="Analysis Options", padding=10)
         options_frame.pack(fill=tk.X, padx=10, pady=5)
@@ -786,7 +788,7 @@ https://bojarlab.github.io/glycowork/"""
                 plot_glycans_excel(df_out, out_folder)
             except Exception:
                 df_out.to_excel(os.path.join(out_folder, "output.xlsx"), index = False)
-            if plots:
+            if plots and 'Log2FC' in df_out.columns:  # glycoproteomics results are per glycosite, without fold changes to plot
                 get_volcano(df_out, annotate_volcano = not motifs, filepath = os.path.join(out_folder, "volcano.png"))
                 get_ma(df_out, filepath = os.path.join(out_folder, "ma_plot.png"))
 

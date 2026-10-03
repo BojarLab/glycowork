@@ -566,9 +566,8 @@ def quantify_motifs(
 ) -> pd.DataFrame:  # DataFrame with motif abundances (motifs as rows, samples as columns)
     "Extracts and quantifies motif abundances from glycan abundance data by weighting motif occurrences"
     if not isinstance(df, pd.DataFrame):
-        df = str(df)
-        df = pd.read_csv(df) if df.lower().endswith(".csv") else pd.read_csv(df, sep = "\t") if df.lower().endswith(
-            ".tsv") else pd.read_excel(df)
+        from glycowork.glycan_data.data_entry import read_abundances
+        df = read_abundances(df)
     if glycans is None:
         if pd.api.types.is_string_dtype(df.iloc[:, 0]):
             glycans = df.iloc[:, 0].tolist()

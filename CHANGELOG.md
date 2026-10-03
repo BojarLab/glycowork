@@ -47,7 +47,7 @@
 #### processing
 ##### Added ✨
 - The LINUCS nomenclature is now also supported in Universal Input/`canonicalize_iupac` via the new `linucs_to_iupac` parser (e1c807a)
-- Universal Input/`canonicalize_composition` now also supports composition nomenclatures from Byonic, FragPipe, GlycoMod, GlyHunter, GlyCombo, LaCyTools, MassyTools, GlycoGenius, and GlycReSoft (e1c807a, )
+- Universal Input/`canonicalize_composition` now also supports composition nomenclatures from Byonic, FragPipe, GlycoMod, GlyHunter, GlyCombo, LaCyTools, MassyTools, GlycoGenius, and GlycReSoft (e1c807a, f936c23)
 
 ##### Changed 🔄
 - `canonicalize_composition` now also accepts dictionary compositions as inputs (0967d8a)
@@ -56,6 +56,7 @@
 ##### Fixed 🐛
 - `sanitize_iupac` no longer flags phosphodiesters (e1c807a)
 - Fixed handling of variantly capitalized monosaccharides in KCF (e1c807a)
+- Fixed handling of `NS` in GlycoWorkbench parsing ()
 
 #### annotate
 ##### Changed 🔄
@@ -68,6 +69,7 @@
 #### analysis
 ##### Changed 🔄
 - `get_glycanova` is now faster (eac80ee)
+- Every analysis function that takes a file path now also reads exports of glycomics and glycoproteomics tools (via `read_abundances`), and `get_differential_expression`/`get_glycanova` switch to glycoproteomics mode by themselves for glycoproteomics exports ()
 
 #### graph
 ##### Added ✨
@@ -110,5 +112,5 @@
 
 #### data_entry
 ##### Added ✨
-- Added `read_glycoproteomics`, which reads the native output of FragPipe/MSFragger-Glyco and O-Pair, pGlyco3 and pGlycoQuant, Byonic and Byologic, GlycReSoft, MetaMorpheus O-Pair, Glyco-Decipher, StrucGP, and PEAKS GlycanFinder into a `protein_site_composition` x sample `GlycoDataFrame`, ready for `get_differential_expression(glycoproteomics = True)` and `get_glycoshift_per_site` ()
-- Added `read_glycomics`, which reads Skyline reports, LaCyTools and MassyTools summaries, and GlycoGenius, GlyHunter, GlycReSoft, and CandyCrunch tables into a glycan x sample `GlycoDataFrame`, with every label turned into a canonical sequence or composition and GlycoGenius groups kept as contrasts ()
+- Added `read_glycoproteomics`, which reads the native output of FragPipe/MSFragger-Glyco and O-Pair, pGlyco3 and pGlycoQuant, Byonic and Byologic, GlycReSoft, MetaMorpheus O-Pair, Glyco-Decipher, StrucGP, and PEAKS GlycanFinder into a `protein_site_composition` x sample `GlycoDataFrame`, ready for `get_differential_expression(glycoproteomics = True)` and `get_glycoshift_per_site` (f936c23)
+- Added `read_glycomics`, which reads Skyline reports, LaCyTools and MassyTools summaries, and GlycoGenius, GlyHunter, GlycReSoft, GlycoWorkbench workspaces (.gwp) and annotated peak lists (.gwa), Thermo Compound Discoverer compound tables, and CandyCrunch tables into a glycan x sample `GlycoDataFrame`, with every label turned into a canonical sequence or composition and GlycoGenius groups kept as contrasts (f936c23, )
