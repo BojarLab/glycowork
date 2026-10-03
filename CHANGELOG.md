@@ -40,8 +40,8 @@
 
 #### tokenization
 ##### Added ✨
-- Added `get_ion_mzs` to support more complex adducts in `mz_to_composition` ()
-- Added the new `adduct_ions` keyword argument to `mz_to_composition` to specify a list of permitted adduct ions ()
+- Added `get_ion_mzs` to support more complex adducts in `mz_to_composition` (a512f5d)
+- Added the new `adduct_ions` keyword argument to `mz_to_composition` to specify a list of permitted adduct ions (a512f5d)
 
 ##### Changed 🔄
 - `get_core` and `get_modification` can now better deal with cases such as `Neu5,9Ac2` (0967d8a)

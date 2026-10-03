@@ -202,11 +202,11 @@ def get_ion_mzs(mass: float | np.ndarray, # Neutral mass(es), including any redu
     m = np.asarray(mass, dtype = float)
     s, sign, out = (1 if max_charge > 0 else -1), ('+' if max_charge > 0 else '-'), {}
     for z in range(1, abs(max_charge) + 1):
-        ok, charge = m > (min_mass or {}).get(z, -np.inf), f"{z if z > 1 else ''}{sign}"
+        ok, charge, h = m > (min_mass or {}).get(z, -np.inf), f"{z if z > 1 else ''}{sign}", (f"{sign}{z - 1 if z > 2 else ''}H" if z > 1 else '')
         out[f"[M{sign}{z if z > 1 else ''}H]{charge}"] = np.where(ok, (m + z * (s * PROTON_MASS)) / z, np.nan)
         for adduct in adducts or []:
             a, name = mass_dict[adduct], adduct.rstrip('+-')
-            out[f"[M+{name}{f'{sign}{z - 1 if z > 2 else ''}H' if z > 1 else ''}]{charge}"] = np.where(ok, (m + (z - 1) * (s * PROTON_MASS) + a) / z, np.nan)
+            out[f"[M+{name}{h}]{charge}"] = np.where(ok, (m + (z - 1) * (s * PROTON_MASS) + a) / z, np.nan)
             if z > 1:
                 out[f"[M+{z}{name}]{charge}"] = np.where(ok, (m + z * a) / z, np.nan)
     return {k: v.item() if v.ndim == 0 else v for k, v in out.items()}
