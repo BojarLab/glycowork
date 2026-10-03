@@ -7,7 +7,7 @@ from math import factorial
 from collections import Counter
 from scipy.stats import rankdata, norm, chi2, t, f, entropy, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind, gamma as gamma_dist
 from scipy.spatial import procrustes
-from scipy.special import digamma, polygamma, expit
+from scipy.special import digamma, polygamma, expit, log_expit
 import scipy.integrate as integrate
 rng = np.random.default_rng(42)
 np.random.seed(0)
@@ -229,7 +229,8 @@ def _factor_fit(L: np.ndarray, # log2 abundances, glycans as rows and samples as
                 ) -> np.ndarray: # fitted log2 abundance for every cell
     "Fits L_ij = mu_i + b_j + F_i.A_j + U_i.V_j by ridge-penalized alternating least squares, with F the known biosynthetic loadings and A_j the step activities of sample j"
     n, m = L.shape
-    r, k = max(0, min(rank, m - 2)), F.shape[1]
+    r, k = max(0, min(rank, m - 2, n)), F.shape[
+        1]  # the SVD below has min(n, m) components, so a single glycan cannot carry more factors
     Lz = np.where(W > 0, L, 0)
     mu = Lz.sum(axis = 1) / np.maximum(W.sum(axis = 1), 1)
     U, s, Vt = np.linalg.svd(np.where(W > 0, L - mu[:, None], 0), full_matrices = False)
@@ -289,6 +290,9 @@ def impute_biosynthetic(df: pd.DataFrame, # glycans as rows, samples as columns;
     n, m = L.shape
     if not M.any():
         return df.copy()
+    if M.all():
+        warnings.warn("impute_biosynthetic got no observed value to impute from; the input is returned unchanged.")
+        return df.copy()
     L[M] = np.nan
     F = np.zeros((n, 0))
     if glycans is not None:
@@ -320,12 +324,15 @@ def impute_biosynthetic(df: pd.DataFrame, # glycans as rows, samples as columns;
         folds.append(C)
     truth = np.concatenate([L[C] for C in folds])
     grid = [(r, beta) for r in (0, 1, 2, 4) for beta in ((1, 10) if F.shape[1] else (1,))]
-    cv = {g: np.concatenate([_factor_fit(L, (~(M | C)).astype(float), F, *g)[C] for C in folds]) for g in grid}
-    best = min(grid, key = lambda g: np.mean((cv[g] - truth) ** 2))
-    partner = np.concatenate([_partner_fit(L, ~(M | C))[C] for C in folds])
-    weights = np.linspace(0, 1, 21)
-    err = [np.mean((w * cv[best] + (1 - w) * partner - truth) ** 2) for w in weights]
-    w, sigma = weights[int(np.argmin(err))], np.sqrt(min(err))
+    if truth.size:
+        cv = {g: np.concatenate([_factor_fit(L, (~(M | C)).astype(float), F, *g)[C] for C in folds]) for g in grid}
+        best = min(grid, key = lambda g: np.mean((cv[g] - truth) ** 2))
+        partner = np.concatenate([_partner_fit(L, ~(M | C))[C] for C in folds])
+        weights = np.linspace(0, 1, 21)
+        err = [np.mean((w * cv[best] + (1 - w) * partner - truth) ** 2) for w in weights]
+        w, sigma = weights[int(np.argmin(err))], np.sqrt(min(err))
+    else:  # no cell can be held out without emptying its glycan (e.g., a single sample): the smallest factor model, with the spread of the observed values as its error
+        best, w, sigma = grid[0], 1.0, np.nanstd(L)
     R = w * _factor_fit(L, (~M).astype(float), F, *best) + (1 - w) * _partner_fit(L, ~M)
     if mnar:
         lmin = np.nanmin(np.where(M, np.inf, L), axis = 0)
@@ -338,10 +345,11 @@ def impute_biosynthetic(df: pd.DataFrame, # glycans as rows, samples as columns;
             return -(np.log(q[M]).sum() + np.log1p(-q[~M]).sum())
 
         p = min((minimize(nll, x0, method = 'Nelder-Mead', options = {'maxiter': 400}) for x0 in ([-2, 0, 0], [0, 1, -1], [-4, -1, 0.5])), key = lambda o: o.fun).x
-        pi, sc = expit(p[0]), np.sqrt(sigma ** 2 + np.exp(2 * np.clip(p[2], -10, 10)))
+        sc = np.sqrt(sigma ** 2 + np.exp(2 * np.clip(p[2], -10, 10)))
         z = (lmin + p[1] - R) / sc
-        # E[y | missing] under that selection model
-        R = R - (1 - pi) * sigma ** 2 / sc * norm.pdf(z) / (pi + (1 - pi) * norm.cdf(z))
+        # E[y | missing] under that selection model, in log space: far above the detection limit pdf(z) and cdf(z) underflow together, and pi can be 0, so the direct ratio is 0/0
+        R = R - sigma ** 2 / sc * np.exp(
+            log_expit(-p[0]) + norm.logpdf(z) - np.logaddexp(log_expit(p[0]), log_expit(-p[0]) + norm.logcdf(z)))
     return pd.DataFrame(np.exp2(np.where(M, R, L)), index = df.index, columns = df.columns)
 
 

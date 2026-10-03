@@ -69,12 +69,12 @@
 
 #### analysis
 ##### Added ✨
-- Added `get_cosinor` to analyze circadian glycomics data via Cosinor analysis ()
+- Added `get_cosinor` to analyze circadian glycomics data via Cosinor analysis (6252915)
 
 ##### Changed 🔄
 - `get_glycanova` is now faster (eac80ee)
 - Every analysis function that takes a file path now also reads exports of glycomics and glycoproteomics tools (via `read_abundances`), and `get_differential_expression`/`get_glycanova` switch to glycoproteomics mode by themselves for glycoproteomics exports (43d7a40)
- - Every analysis function that takes a file path now also takes the name of a dataset shipped with glycowork (e.g., `get_differential_expression('human_serum_bacteremia_N_PMID33535571')`), which loads with its contrasts ()
+ - Every analysis function that takes a file path now also takes the name of a dataset shipped with glycowork (e.g., `get_differential_expression('human_serum_bacteremia_N_PMID33535571')`), which loads with its contrasts (6252915)
 
 #### graph
 ##### Added ✨
@@ -110,7 +110,7 @@
 #### stats
 ##### Added ✨
 - Added `impute_biosynthetic`, a bespoke glycomics imputer that models log-abundances with per-sample activities of each biosynthetic step (monosaccharide and monosaccharide-linkage counts) plus a low-rank term, stacks it with stable-ratio partner glycans, and corrects for detection-limit censoring with a fitted selection model (f568dc2)
-- Moved `pvca` and `cosinor_fit` up from `glycoforge` into `glycowork` ()
+- Moved `pvca` and `cosinor_fit` up from `glycoforge` into `glycowork` (6252915)
 
 ##### Changed 🔄
 - `impute_and_normalize`, and with it every function with an `impute` keyword, now imputes with `impute_biosynthetic` instead of `MissForest` (kept only for `circadian = True`): 33-46% lower log2 RMSE than `MissForest` across 41 glycomics datasets, 12-23% lower than MICE, and 94% instead of 68% of true differential hits recovered (f568dc2)

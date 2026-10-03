@@ -2964,6 +2964,22 @@ def test_impute_biosynthetic():
     assert impute_biosynthetic(data.fillna(1)).equals(data.fillna(1))  # nothing to impute
 
 
+def test_impute_biosynthetic_edge_cases():
+    rng = np.random.default_rng(0)
+    data = pd.DataFrame(np.array([0.5, 2.0, 10.0, 30.0, 50.0])[:, None] * np.exp2(rng.normal(0, 0.1, (5, 20))))
+    data.iloc[0, :12] = np.nan  # the faintest glycan sits below the detection limit in most samples
+    data.iloc[1, :3] = np.nan
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')  # far above the detection limit the censoring correction was a 0/0 ratio
+        assert impute_biosynthetic(data).notna().all().all()
+        assert impute_biosynthetic(data.iloc[:1]).notna().all().all()  # a single glycan
+        assert impute_biosynthetic(
+            data.iloc[:, :1]).notna().all().all()  # a single sample: no cell can be held out for cross-validation
+    empty = pd.DataFrame(np.zeros((5, 3)))
+    with pytest.warns(UserWarning, match = "no observed value"):
+        assert impute_biosynthetic(empty).equals(empty)
+
+
 def test_impute_and_normalize():
     # Test imputation and normalization
     data = pd.DataFrame({
