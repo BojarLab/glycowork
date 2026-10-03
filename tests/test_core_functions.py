@@ -27,7 +27,7 @@ from contextlib import contextmanager
 import random
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
-from glycowork.glycan_data.data_entry import check_presence
+from glycowork.glycan_data.data_entry import check_presence, read_glycoproteomics, read_glycomics
 from glycowork.motif.query import get_insight
 from glycowork.motif.tokenization import (
     constrain_prot, prot_to_coded, string_to_labels, pad_sequence, mz_to_composition,
@@ -7774,6 +7774,114 @@ def test_check_presence_fast_mode(sample_glycan_df, capsys):
         check_presence('Gal(b1-4)Glc-ol', sample_glycan_df, colname='not_a_column')
     with pytest.raises(KeyError):
         check_presence('Gal(b1-4)Glc-ol', sample_glycan_df, name='Homo sapiens', rank='not_a_column')
+
+
+def test_read_glycoproteomics_fragpipe(tmp_path):
+    for exp, inten in (('ctrl', '100'), ('case', '300')):
+        (tmp_path / exp).mkdir()
+        pd.DataFrame({'Spectrum': [f'{exp}_run.00001.00001.3', f'{exp}_run.00002.00002.3', f'{exp}_run.00003.00003.2', f'{exp}_run.00004.00004.2'],
+                      'Spectrum File': [str(tmp_path / exp / 'interact.pep.xml')] * 4, 'Modified Peptide': ['EN[2319]GTVSR', 'EN[2319]GTVSR', 'EN[2465]GTVSR', 'PEPTIDEK'],
+                      'Charge': ['3', '3', '2', '2'], 'Protein Start': ['102'] * 4, 'Intensity': [inten, inten, '50', '10'],
+                      'Assigned Modifications': ['2N(2204.7724)', '2N(2204.7724)', '2N(2350.8303),5C(57.0215)', ''],
+                      'Total Glycan Composition': ['HexNAc(4)Hex(5)NeuAc(2) % 2204.7724', 'HexNAc(4)Hex(5)NeuAc(2) % 2204.7724', 'HexNAc(4)Hex(5)Fuc(1)NeuAc(2) % 2350.8303', ''],
+                      'Glycan q-value': ['0.0', '0.0', '0.5', ''], 'Is Decoy': ['false'] * 4, 'Protein ID': ['P19652'] * 4}).to_csv(tmp_path / exp / 'psm.tsv', sep = '\t', index = False)
+    df = read_glycoproteomics([tmp_path / 'ctrl' / 'psm.tsv', tmp_path / 'case' / 'psm.tsv'])
+    assert isinstance(df, GlycoDataFrame)
+    # repeated PSMs of one ion count once, the glycan FDR drops the fucosylated match, and the unglycosylated PSM is ignored
+    assert df.to_dict('list') == {'ID': ['P19652_103_H5N4A2'], 'ctrl': [100.0], 'case': [300.0]}
+
+
+def test_read_glycoproteomics_pglyco_quant():
+    df = pd.DataFrame({'RawName': ['S1', 'S1', 'S2'], 'Peptide': ['RRJMTQGR'] * 3, 'Mod': ['4,Oxidation[M];'] * 3, 'Charge': ['3'] * 3,
+                       'GlycanComposition': ['H(4)N(4)F(1)', 'H(4)N(4)F(1)', 'H(5)N(2)'], 'Proteins': ['sp|P07998|RNAS1_HUMAN;sp|Q12860|CNTN1_HUMAN'] * 3, 'ProSites': ['62;494'] * 3,
+                       'GlyDecoy': ['0'] * 3, 'PepDecoy': ['0', '0', '1'], 'TotalFDR': ['0.001'] * 3, 'Intensity(S1)': ['10', '10', '5'], 'Intensity(S2)': ['20', '20', '7']})
+    assert read_glycoproteomics(df, sample_map = {'S1': 'ctrl', 'S2': 'ctrl'}).to_dict('list') == {'ID': ['P07998_62_H4N4F1'], 'ctrl': [30.0]}
+
+
+def test_read_glycoproteomics_byonic(tmp_path):
+    pd.DataFrame({'Protein Name': ['>sp|P02763|A1AG1_HUMAN Alpha-1-acid glycoprotein 1', '>sp|P02763|A1AG1_HUMAN Alpha-1-acid glycoprotein 1', '>Reverse sp|P02763|A1AG1_HUMAN'],
+                  'Peptide\n< ProteinMetrics Confidential >': ['K.N[+1216.42]ATN[+2204.77]GTK.E', 'K.QN[+203.08]QC[+57.021]FQS[+656.23]R.A', 'K.N[+1216.42]ATN[+2204.77]GTK.E'],
+                  'Glycans\nNHFAGNa': ['HexNAc(2)Hex(5),HexNAc(4)Hex(5)NeuAc(2)', 'HexNAc(2)Hex(1)NeuAc(1)', 'HexNAc(2)Hex(5),HexNAc(4)Hex(5)NeuAc(2)'],
+                  'Starting\nposition': [33, 70, 33], 'Comment': ['run1.ScanId;v=1;d1=1.1.3'] * 3}).to_excel(tmp_path / 'byonic.xlsx', sheet_name = 'Spectra', index = False)
+    out = read_glycoproteomics(tmp_path / 'byonic.xlsx')
+    assert out.set_index('ID')['run1'].to_dict() == {'P02763_33_H5N2': 1, 'P02763_36_H5N4A2': 1, 'P02763_71+76_H1N2A1': 1}
+
+
+def test_read_glycoproteomics_other_engines():
+    glycresoft = pd.DataFrame({'glycopeptide': ['NEEYN(N-Glycosylation)K{Fuc:1; Hex:5; HexNAc:4; NeuAc:2}', 'N(N-Glycosylation)ITEIVYLTN(N-Glycosylation)TTIEK{Hex:10; HexNAc:8}'],
+                               'analysis': ['A', 'A'], 'q_value': ['0.001', '0.0'], 'total_signal': ['1e6', '5e5'], 'peptide_start': ['86', '30'],
+                               'protein_name': ['sp|P01857|IGHG1_HUMAN Immunoglobulin heavy constant gamma 1', 'sp|P02763|A1AG1_HUMAN']})
+    assert read_glycoproteomics(glycresoft).set_index('ID')['A'].to_dict() == {'P01857_91_H5N4F1A2': 1e6, 'P02763_31+40_H10N8': 5e5}
+    metamorpheus = pd.DataFrame({'File Name': [r'E:\data\frac3.mzML'], 'Protein Accession': ['A2AS86|P55095'], 'Start and End Residues In Protein': ['[98 to 117]'],
+                                 'Full Sequence': ['HAEGTFTSDVSS[O-linked glycosylation:H1N1A2 on X]YLEGQAAK'], 'Plausible GlycanComposition': ['H1N1A2'], 'Decoy/Contaminant/Target': ['T'], 'QValue': ['0']})
+    assert read_glycoproteomics(metamorpheus).to_dict('list') == {'ID': ['A2AS86_109_H1N1A2'], 'frac3': [1.0]}
+    strucgp = pd.DataFrame({'FileName': ['run1'], 'ProteinID': ['P01857'], 'Glycosite_Position': ['180'], 'GlycanComposition': ['N4H5F1S1+Ammonium(+17)'], 'Peptide': ['EEQYNSTYR']})
+    assert read_glycoproteomics(strucgp)['ID'].tolist() == ['P01857_180_H5N4F1A1']
+    decipher = pd.DataFrame({'Site': ['O43866@226;O43866@229', 'P00738@211;P00739@153', 'O75882@1073'], 'Glycan': ['Hex(4)HexNAc(5)', 'Hex(5)HexNAc(4)NeuAc(2)', 'Hex(5)HexNAc(3)NeuAc(2)+225.06'],
+                             'H_1': ['3.8e6', '2e6', '1e7'], 'H_2': ['', '1e6', '1e7']})
+    with pytest.warns(UserWarning, match = 'unparseable'):
+        out = read_glycoproteomics(decipher)
+    assert out.set_index('ID').to_dict('index') == {'O43866_226/229_H4N5': {'H_1': 3.8e6, 'H_2': 0.0}, 'P00738_211_H5N4A2': {'H_1': 2e6, 'H_2': 1e6}}
+    glycanfinder = pd.DataFrame({'Protein Accession': ['P02749|APOH_HUMAN'], 'Peptide': ['LGN(+2786.96)WSAMPS(+755.30)C(+57.02)K'], 'Glycan': ['(HexNAc)4(Hex)5(NeuAc)4;(HexNAc)3(Fuc)1'],
+                                 'Glycan Type': ['N-Link;O-Link'], 'Area C_3': ['10'], 'Area H_1': ['20'], 'Sample Profile (Ratio)': ['1.00:2.00'], 'Area C': ['10'], 'Start': ['251']})
+    assert read_glycoproteomics(glycanfinder).set_index('ID').to_dict('index') == {'P02749_253_H5N4A4': {'C_3': 10.0, 'H_1': 20.0}, 'P02749_259_N3F1': {'C_3': 10.0, 'H_1': 20.0}}
+    with pytest.raises(ValueError, match = 'not a recognized'):
+        read_glycoproteomics(pd.DataFrame({'glycan': ['Gal(b1-4)Glc']}))
+
+
+def test_canonicalize_composition_glycomics_formats():
+    assert canonicalize_composition('(dHex)1 (Hex)5 (NeuAc)2 (HexNAc)4 ', as_string = True) == 'H5N4F1A2'
+    assert canonicalize_composition('Hex(6)HexNAc(4)NeuAc[+13.0316](2)', as_string = True) == 'H6N4A2'
+    assert canonicalize_composition('{Fuc^Me:1; Hex^Me:6; HexNAc^Me:5}$C1H4', as_string = True) == 'H6N5F1'
+    assert canonicalize_composition('H5N4F1E1L1', as_string = True) == 'H5N4F1A2'
+    assert canonicalize_composition('H5N4AmG1EG1', as_string = True) == 'H5N4G2'
+    assert is_composition('(Hex)5 (HexNAc)2') and is_composition('Hex(6)HexNAc(4)NeuAc[+13.0316](2)')
+    assert not is_composition('(Hex)3 (HexNAc)1 (NeuAc)1 + (Man)3(GlcNAc)2')
+
+
+def test_read_glycomics_skyline():
+    long = pd.DataFrame({'Molecule List Name': ['O-glycans'] * 6, 'Molecule Name': ['H1N1S1', 'H1N1S1', 'H1N1S1', 'H1N1S1', '(Hex)1 (HexNAc)1 ', 'Man5'],
+                         'Molecule Note': ['24.1', '24.1', '25.4', '25.4', '', ''], 'Precursor Charge': ['1'] * 6,
+                         'Replicate Name': ['ctrl', 'case', 'ctrl', 'case', 'ctrl', 'ctrl'], 'Total Area MS1': ['100', '50', '20', '#N/A', '*1.5E+2', '7']})
+    out = read_glycomics(long)
+    assert out.columns.tolist() == ['glycan', 'ctrl', 'case']
+    # S is NeuAc in Skyline names, isomers of one composition add up, and Man5 is a sequence
+    assert out.set_index('glycan').to_dict('index') == {'H1N1A1': {'ctrl': 120.0, 'case': 50.0}, 'H1N1': {'ctrl': 150.0, 'case': 0.0}, canonicalize_iupac('Man5'): {'ctrl': 7.0, 'case': 0.0}}
+    wide = pd.DataFrame({'Protein Name': ['AB', 'AB'], 'Peptide': ['H1N1S1', 'H1N1S1'], 'Molecule Note': ['24.1-HexNAc', '25.4-HexNAc'], 'Precursor Charge': ['1', '1'],
+                         '01_Ogly Total Area MS1': ['172056016', '43020300'], '01_Ogly Normalized Area': ['1.7E+8', '4.3E+7'], '02_Ogly Total Area MS1': ['1', '#N/A']})
+    assert read_glycomics(wide).to_dict('list') == {'glycan': ['H1N1A1'], '01_Ogly': [215076316.0], '02_Ogly': [1.0]}
+
+
+def test_read_glycomics_summary_files(tmp_path):
+    (tmp_path / 'lacy_Summary.txt').write_text('Parameter Settings\t\t\nLaCyTools Version\t2.0.1\t\n\t\t\nAbsolute Intensity (Background Subtracted, 2+)\tH5N4F1S1\tIgGI1H5N4\t\nFraction\t0.93\t0.92\t\n'
+                                               'Exact mass of most abundant isotopologue\t[1203.97]\t[1284.99]\t\nS1.raw\t100\t10\t\nS2.raw\t50\t\t\n\t\t\t\nAbsolute Intensity (Background Subtracted, 3+)\tH5N4F1S1\tIgGI1H5N4\t\n'
+                                               'Fraction\t0.93\t0.92\t\nExact mass of most abundant isotopologue\t[802.98]\t[857.00]\t\nS1.raw\t20\t5\t\nS2.raw\t10\t\t\n\t\t\t\nNoise (2+)\tH5N4F1S1\tIgGI1H5N4\t\nS1.raw\t999\t999\t\n')
+    with pytest.warns(UserWarning, match = 'kept as written'):
+        out = read_glycomics(tmp_path / 'lacy_Summary.txt')
+    assert out.set_index('glycan').to_dict('index') == {'H5N4F1A1': {'S1.raw': 120.0, 'S2.raw': 60.0}, 'IgGI1H5N4': {'S1.raw': 15.0, 'S2.raw': 0.0}}
+    (tmp_path / 'massy_Summary.txt').write_text('Processing Parameters\nCharge carrier\t[M+Na]+\n\nAnalyte Area - Background Area\tCalibrated\tH5N4F1E1\tH5N4F1L1\tH3N4F1\n\t[M+Na]+\t2000.7\t1950.6\t1485.5\n'
+                                                'S1.xy\t1\t100.0\t50.0\t10.0\nS2.xy\t1\t80.0\t40.0\t0.0\n\nS/N\tCalibrated\tH5N4F1E1\tH5N4F1L1\tH3N4F1\n\t[M+Na]+\t2000.7\t1950.6\t1485.5\nS1.xy\t1\t9\t9\t9\n')
+    with pytest.warns(UserWarning, match = 'summed'):
+        out = read_glycomics(tmp_path / 'massy_Summary.txt', sample_map = lambda s: s.split('.')[0])
+    assert out.set_index('glycan').to_dict('index') == {'H3N4F1': {'S1': 10.0, 'S2': 0.0}, 'H5N4F1A1': {'S1': 150.0, 'S2': 120.0}}
+
+
+def test_read_glycomics_tables(tmp_path):
+    glyhunter = pd.DataFrame({'glycan': ['Hex(5)HexNAc(4)NeuAc[+13.0316](1)', 'Hex(5)HexNAc(4)NeuAc[+16.0500](1)', 'Hex(3)HexNAc(3)dHex(1)'], 'N21': ['10', '20', '5'], 'N22': ['1', '', '7']})
+    with pytest.warns(UserWarning, match = 'summed'):
+        assert read_glycomics(glyhunter).set_index('glycan').to_dict('index') == {'H3N3F1': {'N21': 5.0, 'N22': 7.0}, 'H5N4A1': {'N21': 30.0, 'N22': 1.0}}
+    (tmp_path / 'run_glycan_abundance_table.csv').write_text('Sample,ctrl_1,ctrl_2,case_1\nGroup,ctrl,ctrl,case\nH5N4S1F1_12.34,100.0,90.0,10.0\nH5N4S1F1_14.20,10.0,9.0,30.0\n')
+    gg = read_glycomics(tmp_path / 'run_glycan_abundance_table.csv')
+    assert gg.to_dict('list') == {'glycan': ['H5N4F1A1'], 'ctrl_1': [110.0], 'ctrl_2': [99.0], 'case_1': [40.0]}
+    assert gg.group1 == ['ctrl_1', 'ctrl_2'] and gg.group2 == ['case_1']
+    pd.DataFrame({'composition': ['{Hex:5; HexNAc:4; Neu5Ac:2}', '{Fuc^Me:1; Hex^Me:5; HexNAc^Me:4}$C1H4', 'None'], 'neutral_mass': ['2222.78', '2500.0', '1000.0'], 'score': ['20', '15', '5'],
+                  'total_signal': ['1e7', '3e6', '5e5']}).to_csv(tmp_path / 'serum_A.csv', index = False)
+    assert read_glycomics(tmp_path / 'serum_A.csv').set_index('glycan')['serum_A'].to_dict() == {'H5N4A2': 1e7, 'H5N4F1': 3e6}
+    candy = pd.DataFrame({'top1_pred': ['Gal(b1-3)GalNAc', None], 'composition': [{'Hex': 1, 'HexNAc': 1}, {'Hex': 2, 'HexNAc': 2}], 'num_spectra': [3, 1], 'rel_abundance': [90.0, 10.0]},
+                         index = pd.Index([384.15, 749.3], name = 'm/z'))
+    assert read_glycomics(candy).set_index('glycan')['sample1'].to_dict() == {'Gal(b1-3)GalNAc': 90.0, 'H2N2': 10.0}
+    with pytest.raises(ValueError, match = 'No abundances'):
+        read_glycomics(pd.DataFrame({'glycan': ['Gal(b1-4)Glc'], 'note': ['x']}))
 
 
 def test_get_insight():

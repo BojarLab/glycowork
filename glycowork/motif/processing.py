@@ -46,9 +46,12 @@ COMMON_ENANTIOMER = {"L-Fuc": "Fuc", "D-Gal": "Gal", "D-Man": "Man", "D-Glc": "G
 _CODE_TO_NAME = {m: base for base, pool in (('Hex', Hex), ('HexNAc', HexNAc), ('dHex', dHex), ('HexA', HexA), ('HexN', loader.HexN), ('Pen', Pen)) for m in sorted(pool)} | {
                  'H': 'Hex', 'N': 'HexNAc', 'F': 'dHex', 'A': 'Neu5Ac', 'G': 'Neu5Gc', 'NeuGc': 'Neu5Gc', 'Gc': 'Neu5Gc', 'HexAc': 'HexNAc', 'deHex': 'dHex',
                  'Neu5Ac': 'Neu5Ac', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'HexNac': 'HexNAc', 'HexNc': 'HexNAc', 'hex': 'Hex', 'KDN': 'Kdn', 'OAc': 'Ac',
-                 'Su': 'S', 's': 'S', 'Sul': 'S', 'Sulfo': 'Sulf', 'Sulph': 'Sulf', 'p': 'P', 'Phospho': 'P', 'Phos': 'P', 'Pent': 'Pen', 'Deoxyhexose': 'dHex'}
+                 'Su': 'S', 's': 'S', 'Sul': 'S', 'Sulfo': 'Sulf', 'Sulph': 'Sulf', 'p': 'P', 'Phospho': 'P', 'Phos': 'P', 'Pent': 'Pen', 'Deoxyhexose': 'dHex',
+                 'X': 'Pen', 'HN': 'HexN', 'UA': 'HexA', 'Acetyl': 'Ac'} | {
+                 # Linkage-specific sialic acid derivatives (ethyl ester, lactone, methyl ester, amides) of LaCyTools, MassyTools, GlycoGenius, and GlyCombo; a composition has no linkages, so they are plain sialic acids
+                 code: sia for sia, codes in (('Neu5Ac', ('E', 'L', 'M', 'Am', 'eNeuAc', 'lNeuAc', 'dNeuAc', 'amNeuAc')), ('Neu5Gc', ('Ge', 'Gl', 'EG', 'AmG', 'eNeuGc', 'lNeuGc', 'dNeuGc', 'amNeuGc'))) for code in codes}
 _SULFATE_CODES = frozenset({'Su', 's', 'Sul'})
-_COMP_TABLE_FORM = re.compile(r'(?:\s*(?:Neu5[AG]c|[A-Za-z]+)\(\d+\))+|\{[^{}]*:\s*\d+[^{}]*\}')  # HexNAc(4)Hex(5) (Byonic), H(5)N(4)A(2)F(1) (pGlyco), {Hex:5; HexNAc:4} (GlycReSoft)
+_COMP_TABLE_FORM = re.compile(r'(?:\s*(?:Neu5[AG]c|[A-Za-z]+)(?:\[[+-]?[\d.]+\])?\(\d+\))+|(?:\s*\([A-Za-z]+\)\d+)+\s*|\{[^{}]*:\s*\d+[^{}]*\}(?:\$\S*)?')  # HexNAc(4)Hex(5) (Byonic), H(5)N(4)A(2)F(1) (pGlyco), NeuAc[+13.0316](2) (GlyHunter), (Hex)5 (HexNAc)2 (GlyCombo; GlycoMod's '+ (Man)3(GlcNAc)2' stays a sequence), {Hex:5; HexNAc:4} (GlycReSoft)
 _NAME_TO_CODE = {'Hex': 'H', 'HexNAc': 'N', 'dHex': 'F', 'Neu5Ac': 'A', 'Neu5Gc': 'G', 'HexA': 'HexA', 'Pen': 'Pen', 'S': 'S', 'P': 'P'}
 _COMP_ORDER = {k: i for i, k in enumerate(_NAME_TO_CODE)}
 _COMP_MASS_SUFFIX = re.compile(r'\s*%.*$')  # "HexNAc(4)Hex(5) % 1702.5814" (MSFragger-Glyco, Byonic) into "HexNAc(4)Hex(5)"
@@ -354,7 +357,7 @@ def canonicalize_composition(comp: str | dict[str, int], # Composition in Hex5He
         # A dict, e.g., from glycan_to_composition, gets the same key aliases as a string, but a formula key like '-H2O' or '+N3' stays whole
         pairs = [(k, int(v)) for k, v in comp.items()]
     else:
-        comp = _COMP_MASS_SUFFIX.sub('', comp).strip()
+        comp = re.sub(r'\[[+-]?[\d.]+\]|\^[A-Za-z]+|\$\S*$', '', _COMP_MASS_SUFFIX.sub('', comp)).strip()  # GlyHunter's derivatized NeuAc[+13.0316], GlycReSoft's permethylated Hex^Me and reducing-end $C1H4
         fields = re.split(r'[\s_,;]+', comp)
         if comp.isdigit() or (len(fields) > 1 and all(f.isdigit() for f in fields)):
             # Positional: "5421" (one digit per residue), or "5_4_2_1", "5 4 2 0 1" (pGlyco Glycan(H,N,A,G,F)), "5,4,2,1"
@@ -1013,15 +1016,9 @@ def glycam_to_iupac(glycan: str # Glycan in GLYCAM nomenclature
     "Convert glycan from GLYCAM to IUPAC-condensed format"
     # Convert single D/L to D-/L- format instead of stripping
     pattern = r'(?:^([DL])(?!Dman)|(?<=\d)([DL])(?!Dman)|(?<=[\[\]])([DL])(?!Dman))|(?:\[(\d+[SPCMeA\d]+)\])'
-    def replacement(match):
-        if match.group(4):  # modification group
-            return match.group(4)
-        else:  # D/L group - convert to D-/L- format
-            dl = match.group(1) or match.group(2) or match.group(3)
-            return f"{dl}-"
     glycan = glycan.replace('-OME', '1Me')
     glycan = re.sub(r'(?:[abx?]\d)?-OH$', '', glycan)  # DGlcpNAcb1-OH and GlcNAc-OH both end in GlcNAc
-    glycan = re.sub(pattern, replacement, glycan.replace(',', ''))
+    glycan = re.sub(pattern, lambda m: m.group(4) or f"{m.group(1) or m.group(2) or m.group(3)}-", glycan.replace(',', ''))  # a modification stays as it is, a lone D or L becomes D- or L-
     return glycan.replace('[', '(').replace(']', ')').replace('DmanpHep', 'DManpHep')  # capitalized here, before a branched heptose is mistaken for a modification
 
 
