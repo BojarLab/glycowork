@@ -1248,6 +1248,52 @@ def hsic(x: np.ndarray, # first variable; 1-D or (n_samples, n_features)
         gamma_dist.sf(stat * (n - 1) ** 2 / n, mean_T ** 2 / var_T, scale = var_T / mean_T)) if var_T > 0 else 1.0)
 
 
+def pvca(data: pd.DataFrame | np.ndarray, # features as rows and samples as columns, log-ratio transformed (e.g., CLR)
+         factors: dict[str, list | np.ndarray], # factor name : label per sample in column order, e.g., {'batch': batch_labels, 'group': group_labels}
+         n_components: int = 10 # number of leading principal components to decompose
+         ) -> dict[str, float]: # percentage of variance explained per factor, plus 'residual'
+    "Principal variance component analysis: the variance share of each factor (e.g., batch vs. biological group), from type II sums of squares on the leading principal components, weighted by the variance they explain"
+    from sklearn.decomposition import PCA
+    X = np.asarray(data, dtype = float).T
+    out = dict.fromkeys([*factors, 'residual'], 0.0)
+    if not X.std(axis = 0).any():
+        return out  # no variance to decompose, and PCA would divide by a zero total
+    pca = PCA(n_components = min(n_components, X.shape[0] - 1, X.shape[1]))
+    scores = pca.fit_transform(X)
+    dummies = {k: pd.get_dummies(np.asarray(v)).to_numpy(dtype = float)[:, 1:] for k, v in factors.items()}
+    for y, w in zip(scores.T, pca.explained_variance_ratio_):
+        ss_total = np.sum((y - y.mean()) ** 2)
+        if ss_total < 1e-10:
+            continue
+        # residual sum of squares without each factor in turn ('residual': the full model), so a factor only claims variance the others cannot explain
+        ss_res = {k: np.sum((y - (D := np.column_stack([np.ones(len(y))] + [d for j, d in dummies.items() if j != k])) @ np.linalg.lstsq(D, y, rcond = None)[0]) ** 2) for k in out}
+        for k in factors:
+            out[k] += w * (ss_res[k] - ss_res['residual']) / ss_total
+        out['residual'] += w * ss_res['residual'] / ss_total
+    total = sum(out.values())
+    return {k: 100 * v / total if total > 1e-10 else 0.0 for k, v in out.items()}
+
+
+def cosinor_fit(y: np.ndarray | list[float], # one feature's (log-ratio transformed) values across samples
+                t: np.ndarray | list[float], # time of each sample (e.g., hours); repeated values are replicates of one timepoint
+                period: float = 24 # rhythm period, in the units of t
+                ) -> dict[str, float | np.ndarray]: # mesor, amplitude, acrophase (peak time, in units of t), r_squared, f_stat, p_value, beta (mesor, cosine and sine coefficients), y_hat (fit at each unique timepoint)
+    "Single-harmonic cosinor, fitted by weighted least squares to the timepoint means (weights: inverse squared standard errors) and F-tested against the intercept-only model"
+    y, t = np.asarray(y, dtype = float), np.asarray(t, dtype = float)
+    unique_t = np.unique(t)
+    y_means = np.array([y[t == u].mean() for u in unique_t])
+    sems = np.array([y[t == u].std(ddof = 1) / np.sqrt(k) if (k := (t == u).sum()) > 1 else np.nan for u in unique_t])
+    w = 1.0 / (sems ** 2 + 1e-10) if np.isfinite(sems).all() else np.ones(len(unique_t))  # without replicates there are no standard errors, so every timepoint counts the same
+    X = np.column_stack([np.ones(len(unique_t)), np.cos(2 * np.pi * unique_t / period), np.sin(2 * np.pi * unique_t / period)])
+    beta = np.linalg.solve(X.T @ (w[:, None] * X) + np.eye(3) * 1e-12, X.T @ (w * y_means))
+    y_hat = X @ beta
+    ss_res, ss_tot = np.sum(w * (y_means - y_hat) ** 2), np.sum(w * (y_means - np.average(y_means, weights = w)) ** 2)
+    df_res = len(unique_t) - 3
+    f_stat = ((ss_tot - ss_res) / 2) / (ss_res / df_res) if df_res > 0 and ss_res > 0 else 0.0
+    return {'mesor': beta[0], 'amplitude': np.hypot(beta[1], beta[2]), 'acrophase': (np.arctan2(beta[2], beta[1]) * period / (2 * np.pi)) % period,
+            'r_squared': 1 - ss_res / ss_tot if ss_tot > 0 else 0.0, 'f_stat': f_stat, 'p_value': f.sf(f_stat, 2, df_res) if df_res > 0 and ss_res > 0 else 1.0, 'beta': beta, 'y_hat': y_hat}
+
+
 def _bh(p_sorted, alpha):
     n = len(p_sorted)
     ecdf = np.arange(1, n + 1)/n

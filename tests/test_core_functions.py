@@ -63,9 +63,10 @@ from glycowork.glycan_data.stats import (
     clr_transformation, alr_transformation, get_procrustes_scores, meta_analysis,
     get_additive_logratio_transformation, get_BF, get_alphaN, mahalanobis_variance,
     pi0_tst, TST_grouped_benjamini_hochberg, compare_inter_vs_intra_group,
-    correct_multiple_testing, bh_adjust, partial_corr, estimate_technical_variance, MissForest, impute_and_normalize, impute_biosynthetic,
+    correct_multiple_testing, bh_adjust, partial_corr, estimate_technical_variance, MissForest, impute_and_normalize,
+    impute_biosynthetic,
     variance_based_filtering, get_glycoform_diff, get_glm, process_glm_results,
-    replace_outliers_winsorization, perform_tests_monte_carlo, hsic
+    replace_outliers_winsorization, perform_tests_monte_carlo, hsic, pvca, cosinor_fit
 )
 from glycowork.motif.graph import (
     glycan_to_graph, glycan_to_nxGraph,
@@ -95,11 +96,15 @@ from glycowork.motif.draw import (process_bonds, draw_hex, process_per_residue, 
                  draw_chem2d, draw_chem3d, GlycoDraw, plot_glycans_excel, annotate_figure, resolve_motif_name,
                  _spread_glycans, plot_glycans_grid, _drawn_extent
 )
-from glycowork.motif.analysis import (preprocess_data, get_pvals_motifs, select_grouping, get_glycanova, get_differential_expression,
-                     get_biodiversity, get_time_series, get_SparCC, get_roc, get_ma, get_volcano, get_meta_analysis,
-                     get_representative_substructures, get_lectin_array, get_coverage, plot_embeddings, get_pval_distribution,
-                     characterize_monosaccharide, get_heatmap, get_distance_matrix, get_pca, get_pcoa, get_jtk, multi_feature_scoring, get_glycoshift_per_site
-)
+from glycowork.motif.analysis import (preprocess_data, get_pvals_motifs, select_grouping, get_glycanova,
+                                      get_differential_expression,
+                                      get_biodiversity, get_time_series, get_SparCC, get_roc, get_ma, get_volcano,
+                                      get_meta_analysis,
+                                      get_representative_substructures, get_lectin_array, get_coverage, plot_embeddings,
+                                      get_pval_distribution,
+                                      characterize_monosaccharide, get_heatmap, get_distance_matrix, get_pca, get_pcoa,
+                                      get_jtk, get_cosinor, multi_feature_scoring, get_glycoshift_per_site
+                                      )
 from glycowork.network.biosynthesis import (safe_compare, safe_index, create_neighbors, apply_constraints, _load_constraints,
                          find_diff, construct_network, prune_network, network_alignment, export_network,
                          extend_glycans, highlight_network, infer_roots, get_edge_weight_by_abundance,
@@ -3099,6 +3104,41 @@ def test_hsic():
     x = rng.normal(size=200)
     assert hsic(x, rng.normal(size=200))[1] > 0.05  # independent: non-significant
     assert hsic(x, x**2 + rng.normal(size=200, scale=0.1))[1] < 0.05  # nonlinear dependence: significant
+
+
+def test_cosinor_fit():
+    t = np.repeat(np.arange(0, 48, 6.0), 3)
+    rng = np.random.default_rng(0)
+    for peak in (3, 6, 9, 21):
+        res = cosinor_fit(2 + 0.8 * np.cos(2 * np.pi * (t - peak) / 24) + rng.normal(scale = 0.05, size = len(t)), t)
+        assert abs(res['acrophase'] - peak) < 0.5  # the peak time, not its mirror image 24 - peak
+        assert abs(res['amplitude'] - 0.8) < 0.1 and abs(res['mesor'] - 2) < 0.1
+        assert res['p_value'] < 1e-4 and res['r_squared'] > 0.95 and len(res['y_hat']) == 8
+    assert cosinor_fit(rng.normal(size = len(t)), t)['p_value'] > 0.05  # no rhythm
+    flat = cosinor_fit(np.full(len(t), 3.0), t)
+    assert flat['p_value'] == 1.0 and flat['amplitude'] < 1e-6
+    with warnings.catch_warnings():
+        warnings.simplefilter(
+            'error')  # without replicates there are no standard errors: an unweighted fit, not a degrees-of-freedom warning
+        res = cosinor_fit(np.cos(2 * np.pi * np.arange(0, 24, 2) / 12), np.arange(0, 24, 2.0), period = 12)
+    assert res['p_value'] < 1e-6 and min(res['acrophase'], 12 - res['acrophase']) < 1e-6
+
+
+def test_pvca():
+    rng = np.random.default_rng(0)
+    batch, group = np.tile([0, 1, 2], 10), np.repeat([0, 1], 15)
+    data = rng.normal(size = (40, 30)) + 2 * np.outer(rng.normal(size = 40), group) + np.outer(rng.normal(size = 40),
+                                                                                               batch == 1)  # features x samples
+    res = pvca(data, {'batch': batch, 'group': group})
+    assert list(res) == ['batch', 'group', 'residual'] and abs(sum(res.values()) - 100) < 1e-8
+    assert res['group'] > res['batch'] > 5
+    assert pvca(pd.DataFrame(data), {'batch': list(batch), 'group': list(group)}) == pytest.approx(res)
+    signal = rng.normal(size = (40, 30)) + 3 * np.outer(rng.normal(size = 40), group)
+    confounded = np.array([0] * 12 + [1] * 3 + [0] * 3 + [1] * 12)
+    res = pvca(signal, {'batch': confounded, 'group': group})
+    assert res['batch'] < 5 < res['group']  # batch labels that track the groups claim none of the group variance
+    assert pvca(signal, {'group': group})['group'] > 30
+    assert pvca(np.zeros((5, 6)), {'group': [0, 0, 0, 1, 1, 1]}) == {'group': 0.0, 'residual': 0.0}
 
 
 def test_glycan_to_graph():
@@ -6355,6 +6395,69 @@ def test_time_series_and_jtk_accept_glycoforms(glycoform_timecourse, capsys):
     assert 'Adjusted_P_value' in jtk.columns and len(jtk) > 0
 
 
+def test_get_cosinor(sample_jtk_df, tmp_path):
+    man3 = 'Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
+    res = get_cosinor(sample_jtk_df, timepoints = 8, interval = 3, periods = [12, 24], random_state = 0)
+    assert {'Molecule_Name', 'P_value', 'Period_Length', 'Mesor', 'Amplitude', 'Acrophase', 'R2', 'Adjusted_P_value',
+            'significant'} <= set(res.columns)
+    assert res.attrs['test'] == 'cosinor' and len(res) == len(sample_jtk_df) and (
+                res['Adjusted_P_value'] >= res['P_value']).all()
+    row = res[res['Molecule_Name'] == man3].iloc[0]
+    assert row['significant'] and row['Period_Length'] == 24 and 9 < row[
+        'Acrophase'] < 15  # the 24 h glycan peaks at 12 h
+    pd.testing.assert_frame_equal(res, get_cosinor(sample_jtk_df, timepoints = np.repeat(np.arange(8) * 3.0, 3),
+                                                   periods = [12, 24],
+                                                   random_state = 0))  # explicit times match the shorthand
+    keep = [c for c in sample_jtk_df.columns if
+            c not in ('T_h9_r1', 'T_h9_r2', 'T_h9_r3', 'T_h15_r2')]  # uneven spacing and replication
+    uneven = get_cosinor(sample_jtk_df[keep], timepoints = [float(c.split('_h')[1].split('_')[0]) for c in keep[1:]],
+                         periods = 24, random_state = 0)
+    assert uneven.loc[uneven['Molecule_Name'] == man3, 'significant'].iloc[0]
+    single = get_cosinor(sample_jtk_df, timepoints = 8, interval = 3, periods = 24, random_state = 0).set_index(
+        'Molecule_Name')
+    best24 = res[res['Period_Length'] == 24].set_index('Molecule_Name')['P_value']
+    assert (single['Period_Length'] == 24).all() and np.allclose(np.minimum(single.loc[best24.index, 'P_value'] * 2, 1),
+                                                                 best24)  # two candidate periods double the p-value, one leaves it as is
+    sample_jtk_df.to_csv(tmp_path / 'jtk.csv', index = False)
+    assert len(get_cosinor(tmp_path / 'jtk.csv', timepoints = 8, interval = 3)) == len(sample_jtk_df)
+    for transform in ('ALR', 'Nothing'):
+        assert not get_cosinor(sample_jtk_df, timepoints = 8, interval = 3, transform = transform).empty
+    with pytest.raises(ValueError, match = "Only ALR and CLR"):
+        get_cosinor(sample_jtk_df, timepoints = 8, interval = 3, transform = 'wrong')
+    with pytest.raises(ValueError, match = "cannot be split"):
+        get_cosinor(sample_jtk_df, timepoints = 5)
+    with pytest.raises(ValueError, match = "one time per sample column"):
+        get_cosinor(sample_jtk_df, timepoints = [0, 3, 6])
+    with pytest.raises(ValueError, match = "at least 4 distinct"):
+        get_cosinor(sample_jtk_df, timepoints = 3)
+    with pytest.raises(ValueError, match = "positive"):
+        get_cosinor(sample_jtk_df, timepoints = 8, periods = [0])
+
+
+def test_get_cosinor_motifs(sample_jtk_df):
+    res = get_cosinor(sample_jtk_df, timepoints = 8, interval = 3, motifs = True, random_state = 0)
+    assert not res.empty and res['Molecule_Name'].is_unique and res.attrs['test'] == 'cosinor'
+    custom = get_cosinor(sample_jtk_df, timepoints = 8, interval = 3, motifs = True, feature_set = 'custom',
+                         custom_motifs = ['Man(a1-2)Man', 'Neu5Ac(a2-3)Gal'], grouped_BH = False, random_state = 0)
+    assert set(custom['Molecule_Name']) == {'Man(a1-2)Man', 'Neu5Ac(a2-3)Gal'}
+    for transform in ('ALR', 'Nothing'):
+        assert not get_cosinor(sample_jtk_df, timepoints = 8, interval = 3, motifs = True, transform = transform).empty
+    with pytest.raises(ValueError, match = "Only ALR and CLR"):
+        get_cosinor(sample_jtk_df, timepoints = 8, interval = 3, motifs = True, transform = 'wrong')
+
+
+def test_get_cosinor_glycoforms(glycoform_timecourse, capsys):
+    res = get_cosinor(glycoform_timecourse, timepoints = [0, 4, 8, 12, 16, 20],
+                      glycoproteomics = True)  # unreplicated timepoints
+    assert 'by_motif_family' in capsys.readouterr().out  # the composition DAG drove the grouping
+    assert len(res) > 0 and res['P_value'].between(0, 1).all()
+
+
+def test_get_jtk_reads_paths(sample_jtk_df, tmp_path):
+    sample_jtk_df.to_csv(tmp_path / 'jtk.csv', index = False)
+    assert len(get_jtk(tmp_path / 'jtk.csv', timepoints = 8, interval = 3, periods = [24])) == len(sample_jtk_df)
+
+
 def test_multi_feature_scoring_basic(sample_df):
     """Test basic functionality of multi_feature_scoring"""
     np.random.seed(42)
@@ -7914,6 +8017,22 @@ def test_read_abundances(tmp_path):
     assert gp.attrs['glycoproteomics'] and gp['ID'].str.startswith(('P19652_103_', 'P02763_33_')).all()
     res = get_differential_expression(tmp_path / 'pglycoquant.list', group1 = ['S1', 'S2', 'S3'], group2 = ['S4', 'S5', 'S6'])
     assert 'Glycosite' in res.columns  # the per-glycosite analysis switched on by itself
+
+
+def test_read_abundances_dataset_names():
+    cached = glycomics_data_loader.human_serum_bacteremia_N_PMID33535571
+    for name in ('human_serum_bacteremia_N_PMID33535571', 'glycomics_human_serum_bacteremia_N_PMID33535571.csv'):
+        df = read_abundances(name)
+        assert isinstance(df, GlycoDataFrame) and df.shape == cached.shape
+        assert list(df.group1) == list(cached.group1)  # contrasts come along
+    df.iloc[0, 1] = -1.0
+    assert cached.iloc[0, 1] != -1.0  # a copy, never the cached loader frame
+    assert read_abundances(
+        'human_milk_N_PMID34087070').shape == glycoproteomics_data_loader.human_milk_N_PMID34087070.shape
+    with pytest.raises(FileNotFoundError):
+        read_abundances('not_a_shipped_dataset.csv')
+    assert not get_differential_expression(
+        'human_serum_bacteremia_N_PMID33535571').empty  # analysis functions take dataset names, with their contrasts
 
 
 def test_glycoworkbench_sulfates():

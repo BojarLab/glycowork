@@ -52,12 +52,12 @@
 ##### Changed 🔄
 - `canonicalize_composition` now also accepts dictionary compositions as inputs (0967d8a)
 - `canonicalize_iupac` is more robust to nomenclature variations (e1c807a)
-- Moved `PDB_TO_IUPAC` from `glycontact` up into `glycowork` to facilitate atom-coloring in `.draw.draw_chem3d` without `glycontact` dependencies ()
+- Moved `PDB_TO_IUPAC` from `glycontact` up into `glycowork` to facilitate atom-coloring in `.draw.draw_chem3d` without `glycontact` dependencies (0a28132)
 
 ##### Fixed 🐛
 - `sanitize_iupac` no longer flags phosphodiesters (e1c807a)
 - Fixed handling of variantly capitalized monosaccharides in KCF (e1c807a)
-- Fixed handling of `NS` in GlycoWorkbench parsing ()
+- Fixed handling of `NS` in GlycoWorkbench parsing (43d7a40)
 
 #### annotate
 ##### Changed 🔄
@@ -68,9 +68,13 @@
 - Fixed `annotate_dataset`, `annotate_glycan_topology_uncertainty`, and `get_k_saccharides` counting motifs whose stated PTM positions differ from the glycan's (e.g., `Gal6S(b1-4)GlcNAcOS` in `Gal3S(b1-4)GlcNAc6S`, or `Terminal_Glc3Ac` in glycans with `Glc6Ac` and an `Ole` residue) as soon as either side contained an `O` (9576826)
 
 #### analysis
+##### Added ✨
+- Added `get_cosinor` to analyze circadian glycomics data via Cosinor analysis ()
+
 ##### Changed 🔄
 - `get_glycanova` is now faster (eac80ee)
-- Every analysis function that takes a file path now also reads exports of glycomics and glycoproteomics tools (via `read_abundances`), and `get_differential_expression`/`get_glycanova` switch to glycoproteomics mode by themselves for glycoproteomics exports ()
+- Every analysis function that takes a file path now also reads exports of glycomics and glycoproteomics tools (via `read_abundances`), and `get_differential_expression`/`get_glycanova` switch to glycoproteomics mode by themselves for glycoproteomics exports (43d7a40)
+ - Every analysis function that takes a file path now also takes the name of a dataset shipped with glycowork (e.g., `get_differential_expression('human_serum_bacteremia_N_PMID33535571')`), which loads with its contrasts ()
 
 #### graph
 ##### Added ✨
@@ -106,6 +110,7 @@
 #### stats
 ##### Added ✨
 - Added `impute_biosynthetic`, a bespoke glycomics imputer that models log-abundances with per-sample activities of each biosynthetic step (monosaccharide and monosaccharide-linkage counts) plus a low-rank term, stacks it with stable-ratio partner glycans, and corrects for detection-limit censoring with a fitted selection model (f568dc2)
+- Moved `pvca` and `cosinor_fit` up from `glycoforge` into `glycowork` ()
 
 ##### Changed 🔄
 - `impute_and_normalize`, and with it every function with an `impute` keyword, now imputes with `impute_biosynthetic` instead of `MissForest` (kept only for `circadian = True`): 33-46% lower log2 RMSE than `MissForest` across 41 glycomics datasets, 12-23% lower than MICE, and 94% instead of 68% of true differential hits recovered (f568dc2)

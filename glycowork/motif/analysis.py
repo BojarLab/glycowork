@@ -32,7 +32,7 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          omega_squared, moderated_variance, dag_neighbors,
                                          get_glycoform_diff, process_glm_results, partial_corr,
                                          estimate_technical_variance,
-                                         perform_tests_monte_carlo)
+                                         perform_tests_monte_carlo, cosinor_fit)
 from glycowork.motif.processing import enforce_class, process_for_glycoshift
 from glycowork.glycan_data.data_entry import read_abundances
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, create_correlation_network,
@@ -1696,11 +1696,7 @@ def get_jtk(
 ) -> GlycoDataFrame:  # DataFrame with JTK results: adjusted p-values, period length, lag phase, amplitude
     "Identifies rhythmically expressed glycans using Jonckheere-Terpstra-Kendall algorithm for time series analysis"
     grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
-    if isinstance(df_in, (str, Path)):
-        df = pd.read_csv(df_in) if Path(df_in).suffix.lower() == ".csv" else pd.read_csv(df_in, sep = "\t") if Path(
-            df_in).suffix.lower() == ".tsv" else pd.read_excel(df_in)
-    else:
-        df = df_in.copy(deep = True)
+    df = read_abundances(df_in) if isinstance(df_in, (str, Path)) else df_in.copy(deep = True)
     if (df.shape[1] - 1) % timepoints:
         raise ValueError(
             f"{df.shape[1] - 1} sample columns cannot be split into {timepoints} timepoints with the same number of replicates each; check timepoints and that the first column holds the glycans.")
@@ -1764,6 +1760,111 @@ def get_jtk(
     df_out['Adjusted_P_value'] = corrpvals
     df_out['significant'] = significance
     df_out.attrs.update({'alpha': alpha, 'n': df.shape[1] - 1, 'test': 'JTK_CYCLE', 'transform': transform, 'paired': False})
+    return df_out.sort_values("Adjusted_P_value").reset_index(drop = True)
+
+
+def get_cosinor(
+        df_in: pd.DataFrame | str | Path,
+        # DataFrame with glycans in rows (first column) and samples in the other columns
+        timepoints: int | list[float] | np.ndarray,
+        # Number of timepoints, for columns arranged by ascending time with equal replicates (as in get_jtk), or the time of each sample column (any spacing or replication)
+        interval: float = 1,  # Time units between timepoints (only used if timepoints is a number)
+        periods: float | list[float] = [24],
+        # Candidate period(s) in time units; each feature gets its best-fitting one, with the p-value Bonferroni-corrected for the number of candidates
+        motifs: bool = False,  # Analyze motifs instead of sequences
+        feature_set: str | list[str] = ['known', 'exhaustive', 'terminal'],
+        # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
+        custom_motifs: str | list[str] = [],  # Custom motifs if using 'custom' feature set
+        transform: str | None = None,  # Transformation type: "CLR" or "ALR"; None auto-decides
+        gamma: float = 0.1,  # Uncertainty parameter for CLR transform
+        correction_method: str = "two-stage",  # Multiple testing correction method
+        grouped_BH: bool | None = None,
+        # Family-grouped two-stage Benjamini-Hochberg via the motif DAG; None infers True for motifs and False for sequences
+        glycoproteomics: bool = False,
+        # Whether rows are glycoforms, ordered by composition containment instead of substructure containment
+        random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
+) -> GlycoDataFrame:  # DataFrame with cosinor results: best period, mesor, amplitude, acrophase (peak time, on the time axis of timepoints), R2, raw and adjusted p-values
+    "Identifies rhythmically expressed glycans or motifs with single-harmonic cosinor regression, reporting amplitude and acrophase (peak time) next to an F-test against no rhythm; unlike get_jtk, timepoints may be unevenly spaced or unevenly replicated"
+    grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
+    feature_set = [feature_set] if isinstance(feature_set, str) else feature_set
+    custom_motifs = [custom_motifs] if isinstance(custom_motifs, str) else custom_motifs
+    periods = [periods] if isinstance(periods, (int, float, np.number)) else list(periods)
+    if not periods or min(periods) <= 0:
+        raise ValueError(f"periods have to be positive cycle lengths in time units, got {periods}.")
+    df = read_abundances(df_in) if isinstance(df_in, (str, Path)) else df_in.copy(deep = True)
+    n = df.shape[1] - 1
+    if isinstance(timepoints, (int, np.integer)):
+        if n % timepoints:
+            raise ValueError(
+                f"{n} sample columns cannot be split into {timepoints} timepoints with the same number of replicates each; check timepoints and that the first column holds the glycans, or pass the time of each sample column.")
+        t = np.repeat(np.arange(timepoints) * interval, n // timepoints).astype(float)
+    else:
+        t = np.asarray(timepoints, dtype = float)
+        if len(t) != n:
+            raise ValueError(
+                f"{len(t)} timepoints were given for {n} sample columns; pass one time per sample column, in column order.")
+    if len(np.unique(t)) < 4:
+        raise ValueError(
+            f"A cosinor needs at least 4 distinct timepoints to test for a rhythm, got {len(np.unique(t))}.")
+    alpha = get_alphaN(n)
+    df = replace_outliers_winsorization(df)
+    annot = df.pop(df.columns[0])
+    df = MissForest(circadian = True, timepoints = t, periods = periods, random_state = random_state).fit_transform(
+        df.replace(0, np.nan))
+    df.insert(0, 'Molecule_Name', annot)
+    if transform is None:
+        transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
+    dag = None
+    if motifs:
+        df = quantify_motifs(df, feature_set = feature_set, custom_motifs = custom_motifs) + 0.0000001
+        # Containment DAG off the raw motif frame (pre-transform), keeping the abundance-dominance prefilter valid
+        dag = get_motif_dag(df.index.tolist(), abundances = df) if grouped_BH else None
+        if transform == "CLR":
+            df = clr_transformation(df, df.columns.tolist(), [], gamma = gamma,
+                                    random_state = random_state).reset_index()
+        elif transform == "ALR":
+            df = get_additive_logratio_transformation(df.reset_index(), df.columns.tolist(), [], paired = False,
+                                                      gamma = gamma, random_state = random_state)
+        elif transform == "Nothing":
+            df = df.reset_index()
+        else:
+            raise ValueError("Only ALR and CLR are valid transforms for now.")
+    else:
+        if glycoproteomics and grouped_BH:
+            # Composition containment off the raw glycoform frame (pre-transform), keeping the abundance-dominance prefilter valid
+            raw = df.set_index(df.columns[0]).astype(float)
+            dag = get_composition_dag(raw.index.tolist(), abundances = raw)
+        if transform == "ALR":
+            df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = False,
+                                                      gamma = gamma, random_state = random_state)
+        elif transform == "CLR":
+            df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], df.columns[1:].tolist(), [], gamma = gamma,
+                                                random_state = random_state)
+        elif transform != "Nothing":
+            raise ValueError("Only ALR and CLR are valid transforms for now.")
+    results = []
+    for name, values in zip(df.iloc[:, 0].tolist(), df.iloc[:, 1:].to_numpy(
+            dtype = float)):  # plain rows instead of a mixed-dtype Series per iterrows step
+        period, fit = min(((p, cosinor_fit(values, t, period = p)) for p in periods), key = lambda pf: pf[1]['p_value'])
+        results.append(
+            [name, min(fit['p_value'] * len(periods), 1.0), period, fit['mesor'], fit['amplitude'], fit['acrophase'],
+             fit['r_squared']])
+    df_out = GlycoDataFrame(results,
+                            columns = ['Molecule_Name', 'P_value', 'Period_Length', 'Mesor', 'Amplitude', 'Acrophase',
+                                       'R2'])
+    if grouped_BH and dag is not None:
+        df_num = df.iloc[:, 1:].astype(float)
+        grouped_glycans, grouped_pvals = select_grouping(df_num, df_num, df_out['Molecule_Name'].tolist(),
+                                                         df_out['P_value'].tolist(), grouped_BH = grouped_BH, dag = dag)
+        corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_glycans, grouped_pvals, alpha)
+        corrpvals = [max(corrpvals[g], p) for g, p in zip(df_out['Molecule_Name'], df_out['P_value'])]
+        significance = [significance_dict[g] for g in df_out['Molecule_Name']]
+    else:
+        corrpvals, significance = correct_multiple_testing(df_out['P_value'].tolist(), alpha,
+                                                           correction_method = correction_method)
+    df_out['Adjusted_P_value'] = corrpvals
+    df_out['significant'] = significance
+    df_out.attrs.update({'alpha': alpha, 'n': n, 'test': 'cosinor', 'transform': transform, 'paired': False})
     return df_out.sort_values("Adjusted_P_value").reset_index(drop = True)
 
 

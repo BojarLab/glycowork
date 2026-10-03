@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 import pandas as pd
 from pathlib import Path
 from typing import Callable
-from glycowork.glycan_data.loader import GlycoDataFrame
+from glycowork.glycan_data.loader import GlycoDataFrame, glycomics_data_loader, glycoproteomics_data_loader, lectin_array_data_loader
 from glycowork.motif.processing import check_nomenclature, canonicalize_composition, canonicalize_iupac, is_composition, _CODE_TO_NAME, _NAME_TO_CODE
 from glycowork.motif.tokenization import glycan_to_composition
 from glycowork.motif.graph import glycan_to_nxGraph, compare_glycans
@@ -280,9 +280,13 @@ def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataF
     return _abundance_matrix(df[['run', 'ion', 'glycan', 'value']], sample_map, groups = groups)
 
 
-def read_abundances(file: str | Path # glycowork table (.csv, .tsv, .xlsx) with glycans in the first column and samples in the others, or the export of a tool that read_glycomics or read_glycoproteomics supports
-                    ) -> pd.DataFrame: # the table as written, or the read_glycomics or read_glycoproteomics output for a recognized tool export
-    "Reads the input of glycowork's analysis functions: tool exports recognized by their columns go through read_glycomics or read_glycoproteomics, every other table is read exactly as written"
+def read_abundances(file: str | Path # glycowork table (.csv, .tsv, .xlsx) with glycans in the first column and samples in the others, the export of a tool that read_glycomics or read_glycoproteomics supports, or the name of a dataset shipped with glycowork (e.g., 'human_serum_bacteremia_N_PMID33535571')
+                    ) -> pd.DataFrame: # the table as written, the read_glycomics or read_glycoproteomics output for a recognized tool export, or a copy of the shipped dataset with its contrasts
+    "Reads the input of glycowork's analysis functions: shipped dataset names load with their contrasts, tool exports recognized by their columns go through read_glycomics or read_glycoproteomics, every other table is read exactly as written"
+    if not Path(file).exists():
+        for loader in (glycomics_data_loader, glycoproteomics_data_loader, lectin_array_data_loader):
+            if (name := Path(file).stem.removeprefix(loader.prefix)) in dir(loader):
+                return getattr(loader, name).copy()
     ext = Path(file).suffix.lower()
     if ext in ('.gwp', '.gwa') or (ext == '.txt' and any(_SUMMARY_HEAD.match(l) for l in Path(file).read_text(encoding = 'utf-8-sig', errors = 'replace').splitlines())):
         return read_glycomics(file)
