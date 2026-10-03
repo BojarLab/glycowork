@@ -1229,6 +1229,15 @@ def perform_tests_monte_carlo(group_a: pd.DataFrame, # rows as features, columns
     return avg_uncorrected_p_values, avg_corrected_p_values, avg_effect_sizes
 
 
+def spearman_exact_pvals(r: np.ndarray | float, # Spearman correlation(s), all computed on the same n untied samples
+                         n: int # number of samples, at most 9, since the null enumerates all n! rank orders
+                         ) -> np.ndarray | float: # two-sided p-value(s)
+    "Exact two-sided p-values of Spearman correlations from their full permutation null, for small n where the t approximation used by spearmanr is badly anti-conservative"
+    base = np.arange(n) - (n - 1) / 2
+    null = np.sort(np.abs((np.array(list(iter_permutations(range(n)))) - (n - 1) / 2) @ base) / (base @ base))
+    return 1 - np.searchsorted(null, np.abs(r) - 1e-9) / len(null)  # the tolerance keeps a float-noisy r from dropping below its own null value
+
+
 def hsic(x: np.ndarray, # first variable; 1-D or (n_samples, n_features)
          y: np.ndarray, # second variable; same n_samples as x
          sigma: float | None = None # RBF bandwidth; per-variable median heuristic if None

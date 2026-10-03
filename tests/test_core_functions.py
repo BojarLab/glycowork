@@ -66,7 +66,7 @@ from glycowork.glycan_data.stats import (
     correct_multiple_testing, bh_adjust, partial_corr, estimate_technical_variance, MissForest, impute_and_normalize,
     impute_biosynthetic,
     variance_based_filtering, get_glycoform_diff, get_glm, process_glm_results,
-    replace_outliers_winsorization, perform_tests_monte_carlo, hsic, pvca, cosinor_fit
+    replace_outliers_winsorization, perform_tests_monte_carlo, hsic, pvca, cosinor_fit, spearman_exact_pvals
 )
 from glycowork.motif.graph import (
     glycan_to_graph, glycan_to_nxGraph,
@@ -81,7 +81,7 @@ from glycowork.motif.annotate import (
     get_k_saccharides, get_terminal_structures, create_correlation_network,
     group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type,
     Lectin, load_lectin_lib, create_lectin_and_motif_mappings, get_glycan_similarity,
-    lectin_motif_scoring, deduplicate_motifs, quantify_motifs, get_size_branching_features,
+    lectin_motif_scoring, deduplicate_motifs, quantify_motifs, quantify_dag_steps, get_size_branching_features,
     count_unique_subgraphs_of_size_k, annotate_glycan_topology_uncertainty, _motif_ambiguity, get_minimal_ksaccharide_ambiguity, _count_chains
 )
 from glycowork.motif.regex import (preprocess_pattern, specify_linkages,
@@ -3113,6 +3113,14 @@ def test_perform_tests_monte_carlo():
     # the within-instance correction is calibrated to alpha, so a looser alpha cannot yield larger adjusted p-values
     loose = perform_tests_monte_carlo(group_a, group_b, num_instances = 10, alpha = 0.2)[1]
     assert all(l <= a + 1e-12 for l, a in zip(loose, adj_p))
+
+
+def test_spearman_exact_pvals():
+    # 2 of the 120 rank orders of 5 samples reach |r| = 1 and 10 reach |r| >= 0.9; spearmanr's t approximation calls r = 1 p < 1e-20
+    assert np.allclose(spearman_exact_pvals(np.array([1.0, -1.0, 0.9, 0.0]), 5), [2 / 120, 2 / 120, 10 / 120, 1.0])
+    rng = np.random.default_rng(0)
+    r = np.array([np.corrcoef(rng.permutation(6), np.arange(6))[0, 1] for _ in range(4000)])  # without ties, a Spearman r under the null is the correlation of a random rank order with the identity
+    assert (spearman_exact_pvals(r, 6) < 0.05).mean() <= 0.055  # calibrated under the null
 
 
 def test_hsic():
@@ -9440,6 +9448,18 @@ def test_get_motif_dag_wildcard_is_the_ancestor():
     assert dag.has_edge('Man(b1-4)GlcNAc(b1-4)GlcNAc', 'high_mannose')
     assert dag.has_edge('Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Nglycan_complex')
     assert dag.out_degree('high_mannose') == 0 and nx.is_directed_acyclic_graph(dag)
+
+
+def test_quantify_dag_steps(motif_abundances):
+    R = quantify_dag_steps(motif_abundances)
+    A = motif_abundances + 0.65 * 7.0
+    assert list(R.columns) == list(motif_abundances.columns)
+    # a child is its log2 yield on its tightest parent, a root its log2 share of the sample total
+    assert np.allclose(R.loc['Gal(b1-3)GalNAc'], np.log2(A.loc['Gal(b1-3)GalNAc'] / A.loc['GalNAc']))
+    assert np.allclose(R.loc['GalNAc'], np.log2(A.loc['GalNAc'] / motif_abundances.sum(axis = 0)))
+    assert np.allclose(quantify_dag_steps(motif_abundances * 10), R)  # scale-free
+    traced = pd.concat([motif_abundances, pd.DataFrame([[0.0, 0.01, 0.0, 0.0]], index = ['Fuc'], columns = motif_abundances.columns)])
+    assert 'Fuc' not in quantify_dag_steps(traced).index  # trace motifs never enter the DAG
 
 
 def test_get_motif_dag_ignores_non_structural_features(motif_abundances):

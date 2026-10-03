@@ -595,6 +595,37 @@ def quantify_motifs(
     return df if not remove_redundant else deduplicate_motifs(df)
 
 
+def quantify_dag_steps(
+        M: pd.DataFrame, # Motifs x samples abundances, as returned by quantify_motifs
+        min_share: float = 1e-3, # Minimum median share of a sample's total motif signal; rarer motifs are dropped before the DAG is built
+        verbose: bool = False # Print which motifs and features were dropped
+) -> pd.DataFrame: # Features x samples; each row is a motif's log2 ratio to its tightest containment parent, or to the sample total for DAG roots
+    "Re-expresses motif abundances as biosynthetic step yields along the motif containment DAG, which are non-redundant and scale-free and so need no log-ratio transformation"
+    # Motifs at trace level carry six log2 units of detection noise once logged, which swamps real steps spanning tenths of a unit, so they are dropped before the DAG and their edges never exist
+    share = M.div(M.sum(axis = 0), axis = 1)
+    kept = share.index[share.median(axis = 1) >= min_share]
+    if verbose and len(kept) < len(M):
+        print(f"  {len(M) - len(kept)} trace motifs below {min_share:.0e} median share dropped: "
+              f"{', '.join(sorted(set(M.index) - set(kept))[:6])}{' ...' if len(M) - len(kept) > 6 else ''}")
+    M = M.loc[kept]
+    # Non-structural features (graph, chemical, size_branch) have no containment relation, so get_motif_dag gives them no node and they drop out here
+    dag = get_motif_dag(M.index.tolist(), abundances = M)
+    # 0.65 x the smallest nonzero value: multiplicative replacement for continuous compositional data (Martin-Fernandez et al. 2003)
+    A = M + 0.65 * float(M.values[M.values > 0].min())
+    total = M.sum(axis = 0).values
+    R = pd.DataFrame({m: np.log2(A.loc[m].values / A.loc[list(dag.predecessors(m))].min(axis = 0).values) if dag.in_degree(m) else np.log2(A.loc[m].values / total)
+                      for m in dag.nodes()}, index = M.columns).T
+    n_raw = len(R)
+    # Relative, not absolute: an edge like Terminal_Neu5Ac(a2-3) -> Neu5Ac(a2-3)Gal is structurally empty (every terminal a2-3 sits on a Gal) but one sample deviating by 0.02 defeats a fixed floor
+    sd = R.std(axis = 1)
+    R = R.loc[sd >= 0.01 * sd.median()].drop_duplicates()
+    if verbose:
+        n_roots = sum(1 for m in dag.nodes() if not dag.in_degree(m))
+        print(f"  {len(R)} DAG features from {len(M)} motifs "
+              f"({len(dag) - n_roots} conditional yields + {n_roots} roots, {n_raw - len(R)} constant or duplicated)")
+    return R
+
+
 def count_unique_subgraphs_of_size_k(
         graph: nx.DiGraph, # NetworkX graph of a glycan
         size: int = 2, # Number of monosaccharides per subgraph

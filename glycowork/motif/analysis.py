@@ -32,7 +32,7 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          omega_squared, moderated_variance, dag_neighbors,
                                          get_glycoform_diff, process_glm_results, partial_corr,
                                          estimate_technical_variance,
-                                         perform_tests_monte_carlo, cosinor_fit)
+                                         perform_tests_monte_carlo, cosinor_fit, spearman_exact_pvals)
 from glycowork.motif.processing import enforce_class, process_for_glycoshift
 from glycowork.glycan_data.data_entry import read_abundances
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, create_correlation_network,
@@ -2094,6 +2094,9 @@ def get_SparCC(
         corrs, pvals = np.broadcast_to(corrs, (n, n)), np.broadcast_to(pvals, (n, n))
         correlation_matrix, p_value_matrix = corrs[:df1.shape[1], df1.shape[1]:], pvals[
             :df1.shape[1], df1.shape[1]:]
+    if df1.shape[0] <= 8:
+        # spearmanr's t approximation is badly anti-conservative at small n: at n = 5 it gives r = 1 a p-value below 1e-20, while 2 of the 120 rank orders reach |r| = 1
+        p_value_matrix = spearman_exact_pvals(correlation_matrix, df1.shape[0])
     if motifs:
         # Each motif's correlations are one family, grouped by rarest ancestral motif family so that branches with different null proportions each get their own pi0
         dag = get_motif_dag(df1.columns.tolist())
