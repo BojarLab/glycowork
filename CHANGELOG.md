@@ -39,6 +39,10 @@
 - Fixed `draw_method='chem2d', filepath='x.png'` not saving a `png` (0967d8a)
 
 #### tokenization
+##### Added ✨
+- Added `get_ion_mzs` to support more complex adducts in `mz_to_composition` ()
+- Added the new `adduct_ions` keyword argument to `mz_to_composition` to specify a list of permitted adduct ions ()
+
 ##### Changed 🔄
 - `get_core` and `get_modification` can now better deal with cases such as `Neu5,9Ac2` (0967d8a)
 - `map_to_basic` is now cached, making functions that call it repeatedly (e.g., `structure_to_basic`) about 2x faster (e1c807a)
@@ -61,7 +65,7 @@
 
 #### annotate
 ##### Added ✨
-- Added `quantify_dag_steps` to re-express motif abundances as non-redundant, scale-free biosynthetic step yields (log2 ratio of each motif to its tightest containment parent in `get_motif_dag`) ()
+- Added `quantify_dag_steps` to re-express motif abundances as non-redundant, scale-free biosynthetic step yields (log2 ratio of each motif to its tightest containment parent in `get_motif_dag`) (51c1fc6)
 
 ##### Changed 🔄
 - Motif annotation is now generally faster (eac80ee)
@@ -78,7 +82,7 @@
 - `get_glycanova` is now faster (eac80ee)
 - Every analysis function that takes a file path now also reads exports of glycomics and glycoproteomics tools (via `read_abundances`), and `get_differential_expression`/`get_glycanova` switch to glycoproteomics mode by themselves for glycoproteomics exports (43d7a40)
 - Every analysis function that takes a file path now also takes the name of a dataset shipped with glycowork (e.g., `get_differential_expression('human_serum_bacteremia_N_PMID33535571')`), which loads with its contrasts (6252915)
-- `get_SparCC` now uses `spearman_exact_pvals` at small n (<=8) to avoid anticonservative bias ()
+- `get_SparCC` now uses `spearman_exact_pvals` at small n (<=8) to avoid anticonservative bias (51c1fc6)
 
 #### graph
 ##### Added ✨
@@ -115,7 +119,7 @@
 ##### Added ✨
 - Added `impute_biosynthetic`, a bespoke glycomics imputer that models log-abundances with per-sample activities of each biosynthetic step (monosaccharide and monosaccharide-linkage counts) plus a low-rank term, stacks it with stable-ratio partner glycans, and corrects for detection-limit censoring with a fitted selection model (f568dc2)
 - Moved `pvca` and `cosinor_fit` up from `glycoforge` into `glycowork` (6252915)
-- Added `spearman_exact_pvals` to avoid anticonservative bias of Spearman's t approximation at small n ()
+- Added `spearman_exact_pvals` to avoid anticonservative bias of Spearman's t approximation at small n (51c1fc6)
 
 ##### Changed 🔄
 - `impute_and_normalize`, and with it every function with an `impute` keyword, now imputes with `impute_biosynthetic` instead of `MissForest` (kept only for `circadian = True`): 33-46% lower log2 RMSE than `MissForest` across 41 glycomics datasets, 12-23% lower than MICE, and 94% instead of 68% of true differential hits recovered (f568dc2)

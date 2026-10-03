@@ -193,6 +193,25 @@ def stemify_dataset(df: pd.DataFrame, # DataFrame with glycan column
     return df_out
 
 
+def get_ion_mzs(mass: float | np.ndarray, # Neutral mass(es), including any reducing-end modification or label
+                max_charge: int = -2, # Signed charge ceiling: sign sets ion mode (negative/positive), magnitude the highest charge state z considered
+                adducts: list[str] | None = None, # Adduct ions as named in mz_to_composition.csv, e.g., ['Acetate', 'Formate'] or ['Na+', 'K+', 'NH4+']; default: protonated ions only
+                min_mass: dict[int, float] | None = None # Smallest neutral mass that can carry charge z, e.g., {2: 900, 3: 1500}; default: no limit
+                ) -> dict[str, float | np.ndarray]: # Ion name (e.g., '[M-H]-', '[M+Acetate-H]2-', '[M+2Na]2+') : theoretical m/z (NaN where min_mass excludes the ion); by charge, then z protons, one adduct with z-1 protons, z adducts
+    "Theoretical m/z of every ion species of a neutral mass"
+    m = np.asarray(mass, dtype = float)
+    s, sign, out = (1 if max_charge > 0 else -1), ('+' if max_charge > 0 else '-'), {}
+    for z in range(1, abs(max_charge) + 1):
+        ok, charge = m > (min_mass or {}).get(z, -np.inf), f"{z if z > 1 else ''}{sign}"
+        out[f"[M{sign}{z if z > 1 else ''}H]{charge}"] = np.where(ok, (m + z * (s * PROTON_MASS)) / z, np.nan)
+        for adduct in adducts or []:
+            a, name = mass_dict[adduct], adduct.rstrip('+-')
+            out[f"[M+{name}{f'{sign}{z - 1 if z > 2 else ''}H' if z > 1 else ''}]{charge}"] = np.where(ok, (m + (z - 1) * (s * PROTON_MASS) + a) / z, np.nan)
+            if z > 1:
+                out[f"[M+{z}{name}]{charge}"] = np.where(ok, (m + z * a) / z, np.nan)
+    return {k: v.item() if v.ndim == 0 else v for k, v in out.items()}
+
+
 def mz_to_composition(mz_value: float, # m/z value from mass spec
                       max_charge: int = -2, # Signed charge ceiling: sign sets ion mode (negative/positive), magnitude the highest charge state z considered
                       mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
@@ -207,6 +226,7 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
                       deprioritized: set[str] | None = {"Me", "HexA", "PCho"}, # Monosaccharides to use only as fallback if no other composition matches
                       extras: list[str] = [], # Additional operations: adduct
                       adduct: str | None = None, # Chemical formula of adduct that contributes to m/z, e.g., "C2H4O2"
+                      adduct_ions: list[str] | None = None, # Adduct ions considered with extras = ['adduct'], as named in mz_to_composition.csv (e.g., 'Na+', 'K+', 'NH4+', 'Acetate', 'Formate'); default: Acetate (negative) or Na+ (positive)
                       mass_tag: float | None = None, # Mass in Da of a reducing-end label (e.g., 137.14 for 2AA, 219.21 for 2AB+procA), subtracted from mz_value
                       ) -> list[dict[str, int]]: # List of matching compositions
     """Map m/z value to matching monosaccharide composition"""
@@ -228,31 +248,22 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
         mz_value -= calculate_adduct_mass(adduct, mass_value = mass_value)
     if mass_tag:
         mz_value -= mass_tag
-    adduct_mass = mass_dict['Acetate'] if max_charge < 0 else mass_dict['Na+']
-    # Theoretical m/z offset for proton ionization: [M-H]- or [M+H]+
-    ion_offset = -PROTON_MASS if max_charge < 0 else PROTON_MASS
+    if adduct_ions is None:
+        adduct_ions = ['Acetate'] if max_charge < 0 else ['Na+']
     tol = mass_tolerance if tolerance_unit.lower() == "da" else mz_value * mass_tolerance / 1e6
     masses = [(dict(t), _MASS_CACHE[key] if (key := (t, mass_value, sample_prep, modification)) in _MASS_CACHE else
                _MASS_CACHE.setdefault(key, composition_to_mass(dict(t), mass_value = mass_value, sample_prep = sample_prep, modification = modification)))
               for t in comp_pool if filter_out.isdisjoint(k for k, _ in t)]
-    # Ionization scenarios in Occam order (lower charge first, proton before adduct), each generalized to z protons or one adduct plus z-1 protons
-    scenarios = [('proton', z) for z in range(1, abs(max_charge) + 1)] + (
-        [('adduct', z) for z in range(1, abs(max_charge) + 1)] if "adduct" in extras else [])
-    scenarios.sort(key = lambda s: (s[1], s[0] == 'adduct'))
+    comps = [comp for comp, _ in masses]
     fallback = []
-    # Compare each composition's theoretical m/z against the observed value; return first non-deprioritized hit, else first deprioritized fallback
-    for kind, z in scenarios:
-        hits = []
-        for comp, mass in masses:
-            observed = (mass + z * ion_offset) / z if kind == 'proton' else (mass + (
-                    z - 1) * ion_offset + adduct_mass) / z
-            if abs(observed - mz_value) < tol:
-                hits.append((abs(observed - mz_value), comp))
-        for _, comp in sorted(hits, key = lambda x: x[0]):
-            if deprioritized.intersection(comp.keys()):
-                fallback.append(comp)
+    # Compare each composition's theoretical m/z against the observed value, ion by ion in Occam order (lower charge first, protons before adducts); return first non-deprioritized hit, else first deprioritized fallback
+    for observed in get_ion_mzs(np.array([mass for _, mass in masses]), max_charge = max_charge, adducts = adduct_ions if "adduct" in extras else None).values():
+        diffs = np.abs(observed - mz_value)
+        for i in sorted(np.flatnonzero(diffs < tol), key = lambda i: diffs[i]):
+            if deprioritized.intersection(comps[i].keys()):
+                fallback.append(comps[i])
             else:
-                return [comp]
+                return [comps[i]]
     return fallback[:1]
 
 
