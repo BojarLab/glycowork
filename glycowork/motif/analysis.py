@@ -23,7 +23,7 @@ from glycowork.glycan_data import loader
 from glycowork.glycan_data.loader import strip_suffixes, download_model, GlycoDataFrame
 from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
                                          impute_and_normalize, variance_based_filtering, JTKTest,
-                                         MissForest, get_alphaN, TST_grouped_benjamini_hochberg,
+                                         impute_biosynthetic, get_alphaN, TST_grouped_benjamini_hochberg,
                                          compare_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
                                          get_equivalence_test, clr_transformation, anosim, permanova_with_permutation,
@@ -64,11 +64,7 @@ def preprocess_data(
         monte_carlo: bool = False,
         # Use Monte Carlo simulation to control for technical variation (will take longer to run)
         random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
-        circadian: bool = False,  # initialize missing values from the same feature's median at the same circadian phase
-        circadian_timepoints: int | list | np.ndarray | None = None,  # number of timepoints or explicit time values (only relevant if circadian)
-        circadian_periods: list[int] | None = None,  # cycle lengths to encode (only relevant if circadian)
-        circadian_interval: int = 1,  # time units between timepoints (only relevant if circadian)
-        circadian_replicates: int = 1,  # replicates per timepoint (only relevant if circadian)
+        circadian: bool = False,  # data for a rhythm test: every imputed value gets a draw of the prediction error, so imputed replicates keep the spread of measured ones
         motif_dag: bool = True # Build the containment DAG; only worth its n^2 isomorphism sweep for callers that read it
 ) -> tuple[pd.DataFrame, pd.DataFrame, list[str | int], list[
     str | int]]:  # (transformed df, untransformed df, group1 labels, group2 labels)
@@ -115,16 +111,12 @@ def preprocess_data(
     df = replace_outliers_winsorization(df)
     if experiment == "diff":
         df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples, protect = protect,
-                                  circadian = circadian, timepoints = circadian_timepoints, periods = circadian_periods,
-                                  interval = circadian_interval, replicates = circadian_replicates,
-                                  random_state = random_state)
+                                  circadian = circadian, random_state = random_state)
     elif experiment == "anova":
         groups_unq = sorted(set(group1))
         df = impute_and_normalize(df, [[df.columns[i + 1] for i, x in enumerate(group1) if x == g] for g in groups_unq],
                                   impute = impute, min_samples = min_samples, protect = protect,
-                                  circadian = circadian, timepoints = circadian_timepoints, periods = circadian_periods,
-                                  interval = circadian_interval, replicates = circadian_replicates,
-                                  random_state = random_state)
+                                  circadian = circadian, random_state = random_state)
     df_org = df.copy(deep = True)
     if transform is None:
         transform = "CLR" if glycoproteomics else "ALR" if (isinstance(df.iloc[0, 0], str) and enforce_class(
@@ -1489,7 +1481,7 @@ def get_glycanova(
             bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9] if len(bal) and obs.sum() > 1 else bal[:0]
             bal_p = permanova_with_permutation(squareform(pdist(bal.T, metric = 'euclidean')), group_labels = grp_b,
                                                permutations = 999, random_state = random_state)[1] if len(
-                bal) and len(set(grp_b)) > 1 else np.nan
+                bal) and 1 < len(set(grp_b)) < len(grp_b) else np.nan  # a PERMANOVA needs a within-group degree of freedom; with one sample per group every F is infinite
             explained = _explained_by(p, kids, eff, top = top_explained)
             if min((usable & (garr == g)).sum() for g in levels) < 2:
                 rows[p] = (explained, 1.0, 0.0,
@@ -1682,7 +1674,7 @@ def get_jtk(
         # DataFrame with glycans in rows (first column), then groups arranged by ascending timepoints
         timepoints: int,  # Number of timepoints (each must have same number of replicates)
         interval: int,  # Time units between experimental timepoints
-        periods: list[int] = [12, 24],  # Timepoints per cycle to test
+        periods: list[int] = [12, 24],  # Cycle lengths to test, in the time units of interval (e.g., hours)
         motifs: bool = False,  # Analyze motifs instead of sequences
         feature_set: list[str] = ['known', 'exhaustive', 'terminal'],
         # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
@@ -1704,11 +1696,8 @@ def get_jtk(
     alpha = get_alphaN(df.shape[1] - 1)
     jtk = JTKTest(timepoints, periods, interval, replicates)
     df = replace_outliers_winsorization(df)
-    mf = MissForest(circadian = True, timepoints = timepoints, periods = periods, interval = interval, replicates = replicates,
-                    random_state = random_state)
-    df = df.replace(0, np.nan)
     annot = df.pop(df.columns[0])
-    df = mf.fit_transform(df)
+    df = impute_biosynthetic(df, glycans = annot.tolist(), draw = True, random_state = random_state)
     df.insert(0, 'Molecule_Name', annot)
     if transform is None:
         transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
@@ -1809,8 +1798,7 @@ def get_cosinor(
     alpha = get_alphaN(n)
     df = replace_outliers_winsorization(df)
     annot = df.pop(df.columns[0])
-    df = MissForest(circadian = True, timepoints = t, periods = periods, random_state = random_state).fit_transform(
-        df.replace(0, np.nan))
+    df = impute_biosynthetic(df, glycans = annot.tolist(), draw = True, random_state = random_state)
     df.insert(0, 'Molecule_Name', annot)
     if transform is None:
         transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
@@ -2250,7 +2238,7 @@ def get_roc(
         y = label_binarize(df['group'], classes = classes)
         n_classes = y.shape[1]
         sorted_auc_scores, best_fpr, best_tpr = {}, {}, {}
-        # sklearn takes a seed rather than a Generator, so one is drawn from it, as MissForest does
+        # sklearn takes a seed rather than a Generator, so one is drawn from it
         seed = 42 if random_state is None else random_state if isinstance(random_state, (int, np.integer)) else int(
             np.random.default_rng(random_state).integers(2 ** 32))
         for feature in df.columns[:-1]:  # exclude the 'group' label column

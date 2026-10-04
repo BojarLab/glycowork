@@ -280,6 +280,7 @@ def _partner_fit(L: np.ndarray, # log2 abundances, glycans as rows and samples a
 def impute_biosynthetic(df: pd.DataFrame, # glycans as rows, samples as columns; NaN or 0 marks a missing value
                         glycans: list[str] | None = None, # glycan of each row (IUPAC-condensed or composition), to give every sample its own activity per biosynthetic step
                         mnar: bool = True, # pull imputations towards each sample's detection limit, as far as the data say missingness is intensity-dependent
+                        draw: bool = False, # add a random draw of the held-out prediction error to every imputed value, so imputed replicates keep the spread of measured ones (for rhythm tests that weigh each timepoint by its standard error)
                         random_state: int | np.random.Generator | None = None # optional random state for reproducibility
                         ) -> pd.DataFrame: # dataframe with every missing value imputed
     "Imputes missing glycomics values with a low-rank model whose glycan loadings include each glycan's count of every biosynthetic step, stacked with stable-ratio partner glycans and corrected for detection-limit censoring by a fitted selection model"
@@ -350,19 +351,21 @@ def impute_biosynthetic(df: pd.DataFrame, # glycans as rows, samples as columns;
         # E[y | missing] under that selection model, in log space: far above the detection limit pdf(z) and cdf(z) underflow together, and pi can be 0, so the direct ratio is 0/0
         R = R - sigma ** 2 / sc * np.exp(
             log_expit(-p[0]) + norm.logpdf(z) - np.logaddexp(log_expit(p[0]), log_expit(-p[0]) + norm.logcdf(z)))
+    if draw:
+        # a conditional mean carries none of a measurement's noise, so a timepoint with imputed replicates would get a too-small standard error and too much weight in a rhythm test
+        R = R + rng.normal(0, sigma, R.shape)
     return pd.DataFrame(np.exp2(np.where(M, R, L)), index = df.index, columns = df.columns)
 
 
 def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences in first col and abundances in subsequent cols
                          groups: list[list[str]], # nested list of column name lists, one list per group
-                         impute: bool = True, # replaces zeroes with predictions from impute_biosynthetic (MissForest if circadian)
-                         min_samples: float = 0.1,  # fraction (0-1) of samples that need non-zero values for glycan to be kept
-                         protect: pd.DataFrame | None = None,  # boolean frame in the shape/order of the abundance block, marking cells that were never measured and must stay NaN
-                         circadian: bool = False,  # impute with MissForest, initialized from the same glycan's median at the same circadian phase
-                         timepoints: int | list | np.ndarray | None = None, # number of timepoints, or explicit time values per column (only relevant if circadian)
-                         periods: list[int] | None = None, # cycle lengths to encode (e.g., [12, 24]) (only relevant if circadian)
-                         interval: int = 1, # time units between experimental timepoints (only relevant if circadian)
-                         replicates: int = 1,  # replicates per timepoint (only relevant if circadian)
+                         impute: bool = True,  # replaces zeroes with predictions from impute_biosynthetic
+                         min_samples: float = 0.1,
+                         # fraction (0-1) of samples that need non-zero values for glycan to be kept
+                         protect: pd.DataFrame | None = None,
+                         # boolean frame in the shape/order of the abundance block, marking cells that were never measured and must stay NaN
+                         circadian: bool = False,
+                         # data for a rhythm test: every imputed value gets a draw of the prediction error, so imputed replicates keep the spread of measured ones
                          random_state: int | np.random.Generator | None = None # optional random state for reproducibility
                          ) -> pd.DataFrame:  # normalized dataframe in same style as input
     "discards rows with too many missings, imputes the rest, and normalizes"
@@ -379,7 +382,7 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
     colname = df.columns[0]
     glycans = df[colname]
     df = df.iloc[:, 1:]
-    df = df.astype(float).copy()  # a deep copy consolidates the one-block-per-column frame pandas 3 reads a csv into, which every frame-wide operation below and in MissForest would otherwise loop over
+    df = df.astype(float).copy()  # a deep copy consolidates the one-block-per-column frame pandas 3 reads a csv into, which every frame-wide operation below would otherwise loop over
     if protect is not None:
         protect = protect.set_axis(df.index).set_axis(df.columns, axis = 1).astype(bool)
         df = df.mask(
@@ -400,8 +403,7 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
     if impute:
         # floored cells go in as missing, since a 1e-7 floor read as a measurement is an extreme outlier on the log scale, and come back as the floor
         df = df.mask(floored).replace(0, np.nan)
-        df = MissForest(circadian = circadian, timepoints = timepoints, periods = periods, interval = interval, replicates = replicates,
-                        random_state = random_state).fit_transform(df) if circadian else impute_biosynthetic(df, glycans = glycans.tolist(), random_state = random_state)
+        df = impute_biosynthetic(df, glycans = glycans.tolist(), draw = circadian, random_state = random_state)
         df = df.mask(floored, floor)
         if protect is not None:
             df = df.mask(
@@ -610,7 +612,7 @@ def replace_outliers_winsorization(df: pd.DataFrame, # features as rows, all but
     num = df.set_axis(range(df.shape[1]), axis = 1).select_dtypes('number')  # positional labels, so the numeric columns can be written back by position below
     V = num.to_numpy(float)
     n = V.shape[1]
-    nan_mask = np.isnan(V)
+    nan_mask = np.isnan(V) | (V == 0)  # a zero is a missing value: ranked as a measurement, it would be capped up to the k-th smallest one and so imputed before any imputer sees it
     # NaNs are pushed to +inf so they sort to the back, which leaves the k-th slot as the k-th real order statistic; the upper rank still has to be counted from the observed count per row, not from n
     obs = n - nan_mask.sum(axis = 1)
     V = np.where(nan_mask, np.inf, V)
@@ -620,8 +622,7 @@ def replace_outliers_winsorization(df: pd.DataFrame, # features as rows, all but
     rows = np.arange(V.shape[0])
     lower = S[rows, kk][:, None] if cap_side in ('both', 'lower') else -np.inf
     upper = S[rows, np.maximum(obs - 1 - kk, 0)][:, None] if cap_side in ('both', 'upper') else np.inf
-    out = np.clip(V, lower, upper)
-    out[nan_mask] = np.nan
+    out = np.where(nan_mask, num.to_numpy(float), np.clip(V, lower, upper))  # missing cells come back as they went in, NaN or zero
     res = df.copy()
     res.isetitem(num.columns.tolist(), out)  # replaces the columns like res[cols] = out did, but as one block instead of one assignment per column, which dominated on wide cohorts
     return res
@@ -835,7 +836,7 @@ def permanova_with_permutation(df: pd.DataFrame, # square distance matrix
                                random_state: int | np.random.Generator | None = None # optional random state for reproducibility
                                ) -> tuple[float, float]: # (F statistic, p-value)
     "Performs permutational multivariate analysis of variance (PERMANOVA)"
-    # The label matrix is cached, so the key has to be hashable and a Generator is drawn from once, as MissForest does
+    # The label matrix is cached, so the key has to be hashable and a Generator is drawn from once
     seed = random_state if random_state is None or isinstance(random_state, (int, np.integer)) else int(np.random.default_rng(random_state).integers(2 ** 32))
     D2 = np.square(np.asarray(df, dtype = float))
     codes, ug = pd.factorize(np.asarray(group_labels))

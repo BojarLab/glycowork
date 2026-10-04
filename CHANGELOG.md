@@ -17,8 +17,6 @@
 - Fixed alditols engaging in glycosidic linkages (01253cb)
 - Various other fixes for more exotic modifications (01253cb)
 
-##### Deprecated ⚠️
-
 #### draw
 ##### Added ✨
 - Added the new `plot_glycans_grid` function to draw glycans with a shared symbol size into a grid (0967d8a)
@@ -84,6 +82,12 @@
 - Every analysis function that takes a file path now also takes the name of a dataset shipped with glycowork (e.g., `get_differential_expression('human_serum_bacteremia_N_PMID33535571')`), which loads with its contrasts (6252915)
 - `get_SparCC` now uses `spearman_exact_pvals` at small n (<=8) to avoid anticonservative bias (51c1fc6)
 
+##### Fixed 🐛
+- `get_glycanova` no longer runs a redistribution PERMANOVA without within-group degrees of freedom (one sample per group), which divided by zero ()
+
+##### Deprecated ⚠️
+- Removed the `circadian_timepoints`, `circadian_periods`, `circadian_interval`, and `circadian_replicates` keyword arguments of `preprocess_data`; imputation no longer uses sample times ()
+
 #### graph
 ##### Added ✨
 - Added the new `subsumes` keyword argument to `compare_glycans`, to support asymmetric wildcard matching (glycan_b is glycan_a or a more specific version of it, but not vice versa) (9576826)
@@ -122,8 +126,12 @@
 - Added `spearman_exact_pvals` to avoid anticonservative bias of Spearman's t approximation at small n (51c1fc6)
 
 ##### Changed 🔄
-- `impute_and_normalize`, and with it every function with an `impute` keyword, now imputes with `impute_biosynthetic` instead of `MissForest` (kept only for `circadian = True`): 33-46% lower log2 RMSE than `MissForest` across 41 glycomics datasets, 12-23% lower than MICE, and 94% instead of 68% of true differential hits recovered (f568dc2)
+- `impute_and_normalize`, and with it every function with an `impute` keyword, now imputes with `impute_biosynthetic` instead of `MissForest`: 33-46% lower log2 RMSE than `MissForest` across 41 glycomics datasets, 12-23% lower than MICE, and 94% instead of 68% of true differential hits recovered (f568dc2, )
 - Cells floored because a whole group is zero no longer enter imputation as measurements (f568dc2)
+- Made sure `replace_outliers_winsorization` does no longer removes zero values (that's the job of imputation) ()
+
+##### Deprecated ⚠️
+- Removed the `timepoints`, `periods`, `interval`, and `replicates` keyword arguments of `impute_and_normalize`, which only fed `MissForest` ()
 
 #### data_entry
 ##### Added ✨

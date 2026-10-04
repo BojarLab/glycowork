@@ -2945,6 +2945,21 @@ def test_missforest():
         MissForest(circadian = True).fit_transform(data)
 
 
+def test_impute_biosynthetic_draw():
+    rng = np.random.default_rng(0)
+    data = pd.DataFrame(np.exp2(rng.normal(3, 1, (8, 24))), columns = [f's{i}' for i in range(24)])
+    data.iloc[1, [2, 7, 15]] = data.iloc[5, [0, 11]] = np.nan
+    missing = data.isna().to_numpy()
+    drawn = impute_biosynthetic(data, draw = True)
+    assert np.allclose(drawn.to_numpy()[~missing], data.to_numpy()[~missing])  # measured values pass through untouched
+    assert drawn.equals(impute_biosynthetic(data, draw = True))  # reproducible without a random_state
+    assert not np.allclose(drawn.to_numpy()[missing], impute_biosynthetic(data).to_numpy()[missing])  # imputed values scatter around the conditional mean
+    df = data.fillna(0)
+    df.insert(0, 'glycan', [f'g{i}' for i in range(8)])
+    out = impute_and_normalize(df, [df.columns[1:].tolist()], circadian = True)
+    assert out.iloc[:, 1:].notna().all().all() and (out.iloc[:, 1:] > 0).all().all()
+
+
 def test_impute_biosynthetic():
     rng = np.random.default_rng(0)
     glycans = ['Gal(b1-4)GlcNAc', 'Fuc(a1-2)Gal(b1-4)GlcNAc', 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc', 'Neu5Ac(a2-6)Gal(b1-4)GlcNAc',
@@ -3093,6 +3108,7 @@ def test_replace_outliers_winsorization():
     assert len(result) == 10
     result = replace_outliers_winsorization(data, cap_side='lower')
     result = replace_outliers_winsorization(data, cap_side='upper')
+    assert replace_outliers_winsorization(pd.DataFrame([[0] + list(range(1, 45))])).iloc[0, 0] == 0  # a zero is a missing value for the imputer, not a low outlier to cap
     try:
         result = replace_outliers_winsorization(data, cap_side='wrong')
         return False
