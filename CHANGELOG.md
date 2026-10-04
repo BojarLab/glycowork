@@ -40,11 +40,16 @@
 ##### Added ✨
 - Added `get_ion_mzs` to support more complex adducts in `mz_to_composition` (a512f5d)
 - Added the new `adduct_ions` keyword argument to `mz_to_composition` to specify a list of permitted adduct ions (a512f5d)
+- `calculate_adduct_mass` now also supports F/Br/I halogen atom masses ()
 
 ##### Changed 🔄
 - `get_core` and `get_modification` can now better deal with cases such as `Neu5,9Ac2` (0967d8a)
 - `map_to_basic` is now cached, making functions that call it repeatedly (e.g., `structure_to_basic`) about 2x faster (e1c807a)
 - `mz_to_composition` and related functions are now faster (eac80ee)
+
+##### Fixed 🐛
+- Fixed handling of `adduct` and `mass_tag` with multiply-charged glycans in `mz_to_composition` ()
+- Fixed handling of amino acid and ceramide aglycones (e.g., `GalNAc1Ser`, `GlcNAc1Asn`) in `glycan_to_composition` ()
 
 #### processing
 ##### Added ✨
@@ -83,10 +88,10 @@
 - `get_SparCC` now uses `spearman_exact_pvals` at small n (<=8) to avoid anticonservative bias (51c1fc6)
 
 ##### Fixed 🐛
-- `get_glycanova` no longer runs a redistribution PERMANOVA without within-group degrees of freedom (one sample per group), which divided by zero ()
+- `get_glycanova` no longer runs a redistribution PERMANOVA without within-group degrees of freedom (one sample per group), which divided by zero (8124f7b)
 
 ##### Deprecated ⚠️
-- Removed the `circadian_timepoints`, `circadian_periods`, `circadian_interval`, and `circadian_replicates` keyword arguments of `preprocess_data`; imputation no longer uses sample times ()
+- Removed the `circadian_timepoints`, `circadian_periods`, `circadian_interval`, and `circadian_replicates` keyword arguments of `preprocess_data`; imputation no longer uses sample times (8124f7b)
 
 #### graph
 ##### Added ✨
@@ -126,12 +131,12 @@
 - Added `spearman_exact_pvals` to avoid anticonservative bias of Spearman's t approximation at small n (51c1fc6)
 
 ##### Changed 🔄
-- `impute_and_normalize`, and with it every function with an `impute` keyword, now imputes with `impute_biosynthetic` instead of `MissForest`: 33-46% lower log2 RMSE than `MissForest` across 41 glycomics datasets, 12-23% lower than MICE, and 94% instead of 68% of true differential hits recovered (f568dc2, )
+- `impute_and_normalize`, and with it every function with an `impute` keyword, now imputes with `impute_biosynthetic` instead of `MissForest`: 33-46% lower log2 RMSE than `MissForest` across 41 glycomics datasets, 12-23% lower than MICE, and 94% instead of 68% of true differential hits recovered (f568dc2, 8124f7b)
 - Cells floored because a whole group is zero no longer enter imputation as measurements (f568dc2)
-- Made sure `replace_outliers_winsorization` does no longer removes zero values (that's the job of imputation) ()
+- Made sure `replace_outliers_winsorization` does no longer removes zero values (that's the job of imputation) (8124f7b)
 
 ##### Deprecated ⚠️
-- Removed the `timepoints`, `periods`, `interval`, and `replicates` keyword arguments of `impute_and_normalize`, which only fed `MissForest` ()
+- Removed the `timepoints`, `periods`, `interval`, and `replicates` keyword arguments of `impute_and_normalize`, which only fed `MissForest` (8124f7b)
 
 #### data_entry
 ##### Added ✨

@@ -141,7 +141,7 @@ def find_ptm(glycan: str, # Glycan with PTM
              ) -> tuple[tuple[str, str], str] | int: # Edge tuple (glycan, precursor) and PTM or 0
     "Identify precursor glycans for glycan with PTM"
     # Checks which PTM(s) are present
-    mod = next((ptm for ptm in allowed_ptms if ptm in sia_re.sub('', glycan)), None)
+    mod = next((ptm for ptm in sorted(allowed_ptms) if ptm in sia_re.sub('', glycan)), None)  # sorted, as frozenset order changes with PYTHONHASHSEED and a multiply modified glycan would get a different label per run
     if mod is None:
         return 0
     # Stemifying returns the unmodified glycan
@@ -738,7 +738,7 @@ def infer_virtual_nodes(network_a: nx.DiGraph, # First network
     supported = virtual_a & virtual_b
     inferred_a = virtual_a - virtual_combined
     inferred_b = virtual_b - virtual_combined
-    return (list(inferred_a), list(supported)), (list(inferred_b), list(supported))
+    return (sorted(inferred_a), sorted(supported)), (sorted(inferred_b), sorted(supported))
 
 
 def infer_network(network: nx.DiGraph, # Network to infer
@@ -1165,6 +1165,10 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
     "Compare biosynthetic patterns between conditions/timepoints"
     from scipy.stats import t as tdist
     from scipy.stats import f as f_dist
+    # Handle input data; read before anything looks at the frame, since a shipped dataset name brings its contrasts, pairing, and name
+    if isinstance(df, (str, Path)):
+        from glycowork.glycan_data.data_entry import read_abundances
+        df = read_abundances(df)
     if group1 is None and not longitudinal and isinstance(df, GlycoDataFrame) and df._contrasts:
         group1, group2 = list(df.group1), list(df.group2)
     in_name, in_prov = getattr(df, '_glyco_name', ''), getattr(df, '_provenance', {})
@@ -1178,10 +1182,6 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
         assert group2 is not None, "group2 must be specified for binary comparison"
         if paired:
             assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
-    # Handle input data
-    if isinstance(df, (str, Path)):
-        from glycowork.glycan_data.data_entry import read_abundances
-        df = read_abundances(df)
     if not longitudinal and not isinstance(group1[0], str):
         columns_list = df.columns.tolist()
         group1 = [columns_list[k] for k in group1]
@@ -1406,11 +1406,13 @@ def edges_for_extension(leaf_glycans: set[str], # Terminal glycans in a network
     "Create edges connecting leaf and extended glycans"
     new_edges, new_edge_labels = [], []
     leaves_by_fp = defaultdict(list)  # isomorphism is only attempted within a topology bucket, as in build_network_from_glycans, since scanning every leaf per precursor is quadratic once a targeted step has produced thousands of leaves
-    for leaf in leaf_glycans:
+    for leaf in sorted(leaf_glycans):  # sorted, since a wildcard leaf (Man(a1-3/6)) also matches its concrete sibling's precursor and set order would pick between them per process
         leaves_by_fp[_graph_fp(safe_index(leaf, graphs))].append(leaf)
-    for new_g in new_glycans:
+    for new_g in sorted(new_glycans):
         for prec_graph in create_neighbors(safe_index(new_g, graphs), min_size = 1):
-            match = next((leaf for leaf in leaves_by_fp.get(_graph_fp(prec_graph), []) if safe_compare(safe_index(leaf, graphs), prec_graph)), None)
+            # Fast path: canonical string directly identifies the leaf; fallback: graph isomorphism for wildcard cases
+            prec_str = graph_to_string(prec_graph)
+            match = prec_str if prec_str in leaf_glycans else next((leaf for leaf in leaves_by_fp.get(_graph_fp(prec_graph), []) if safe_compare(safe_index(leaf, graphs), prec_graph)), None)
             if match:
                 new_edges.append((match, new_g))
                 new_edge_labels.append(find_diff(match, new_g))
@@ -1522,7 +1524,7 @@ def extend_network(network: nx.DiGraph, # Biosynthetic network
             flows.update(get_maximum_flow(weighted, source = root, sinks = sorted(set(new_glycans) - set(simple))))
             for g, v in flows.items():
                 scores[g] = max(scores[g], v['flow_value'])
-        new_glycans = dict(sorted(scores.items(), key = lambda kv: -kv[1]))
+        new_glycans = dict(sorted(scores.items(), key = lambda kv: (-kv[1], kv[0])))  # ties broken by name, as scores inherits the set order of new_glycans
     return (network, new_glycans) if not auto_steps else (network, new_glycans, steps)
 
 

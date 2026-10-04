@@ -2304,8 +2304,7 @@ def plot_glycans_excel(
     out.parent.mkdir(parents = True, exist_ok = True)
     writer = pd.ExcelWriter(out, engine = "openpyxl")
     df.to_excel(writer, index = False)
-    # Load the workbook and get the active sheet
-    workbook = writer.book
+    # Get the active sheet
     sheet = writer.sheets["Sheet1"]
     column = df[glycan_col_num] if isinstance(glycan_col_num, str) else df.iloc[:, glycan_col_num]
     for i, glycan_structure in enumerate(column):
@@ -2331,5 +2330,5 @@ def plot_glycans_excel(
             column_letter = get_column_letter(image_column_number)
             sheet.column_dimensions[column_letter].width = img_width * 0.1125
             sheet.row_dimensions[cell.row].height = img_height * 0.75
-    # Save the workbook
-    workbook.save(filename = out)
+    # Save the workbook; closing the writer saves it and releases the file handle it has held open since creation
+    writer.close()

@@ -548,21 +548,12 @@ def TST_grouped_benjamini_hochberg(identifiers_grouped: dict[str, list], # dicti
         if not len(group_p_values):
             continue
         # Estimate π0 for the group within the Two-Stage method
-        pi0_estimate = pi0_tst(group_p_values, alpha = alpha)
+        pi0_estimate = pi0_tst(group_p_values[~np.isnan(group_p_values)], alpha = alpha)
         # π0 = 1 just means stage 1 found no signal in this family; standard TST then falls back to ordinary within-group BH (adjusted_alpha = alpha below), instead of discarding the whole family, which silently wipes out sparse-signal conditions
-        n = len(group_p_values)
-        sorted_indices = np.argsort(group_p_values)
-        sorted_p_values = group_p_values[sorted_indices]
         # Weight the alpha value by π0 estimate
         adjusted_alpha = alpha / max(pi0_estimate, 0.3)
-        # Calculate the BH adjusted p-values
-        ecdffactor = (np.arange(1, n + 1) / n)
-        pvals_corrected_raw = sorted_p_values / (ecdffactor)
-        group_adjusted_p_values = np.minimum.accumulate(pvals_corrected_raw[::-1])[::-1]
-        group_adjusted_p_values_sorted_indices = np.argsort(sorted_indices)
-        group_adjusted_p_values = group_adjusted_p_values[group_adjusted_p_values_sorted_indices]
-        group_adjusted_p_values = np.minimum(group_adjusted_p_values, 1)
-        group_adjusted_p_values = np.maximum(group_adjusted_p_values, group_p_values)
+        # Calculate the BH adjusted p-values; an untestable feature (NaN p-value) stays NaN instead of turning its whole family NaN
+        group_adjusted_p_values = np.maximum(bh_adjust(group_p_values, alpha, two_stage = False), group_p_values)
         for identifier, corrected_pval in zip(identifiers_grouped[group], group_adjusted_p_values):
             adjusted_p_values[identifier] = corrected_pval
             significance_dict[identifier] = bool(corrected_pval < adjusted_alpha)
@@ -1250,8 +1241,9 @@ def hsic(x: np.ndarray, # first variable; 1-D or (n_samples, n_features)
     n = x.shape[0]
     sq_x = np.sum((x[:, None] - x[None, :]) ** 2, axis = -1)
     sq_y = np.sum((y[:, None] - y[None, :]) ** 2, axis = -1)
-    sx = np.sqrt(np.median(sq_x[sq_x > 0]) + 1e-10) if sigma is None else sigma
-    sy = np.sqrt(np.median(sq_y[sq_y > 0]) + 1e-10) if sigma is None else sigma
+    # a constant variable has no positive distance to take the median of, and its kernel is all ones whatever the bandwidth
+    sx = np.sqrt(np.median(sq_x[sq_x > 0]) + 1e-10) if sigma is None and sq_x.any() else sigma or 1.0
+    sy = np.sqrt(np.median(sq_y[sq_y > 0]) + 1e-10) if sigma is None and sq_y.any() else sigma or 1.0
     H = np.eye(n) - 1.0 / n
     Kc = H @ np.exp(-sq_x / (2 * sx ** 2)) @ H
     Lc = H @ np.exp(-sq_y / (2 * sy ** 2)) @ H
@@ -1328,13 +1320,14 @@ def bh_adjust(pvals: list[float] | np.ndarray, # raw p-values
               ) -> np.ndarray: # Benjamini-Hochberg adjusted p-values
     "Benjamini-Hochberg adjusted p-values, optionally with two-stage pi0 estimation"
     p = np.asarray(pvals, dtype = float)
-    order = np.argsort(p)
-    ps, n = p[order], len(p)
+    tested = np.flatnonzero(~np.isnan(p))  # an untestable feature (NaN p-value) is no hypothesis; sorted last, it would turn every adjusted p-value into NaN
+    order = tested[np.argsort(p[tested])]
+    ps, n = p[order], len(order)
     rej, corr = _bh(ps, alpha)
     if two_stage and 0 < (r1 := int(rej.sum())) < n:
         n0 = float(n - r1)
         _, corr = _bh(ps, alpha * n / n0)
         corr = (corr * (n0 / n)).clip(max = 1)
-    out = np.empty_like(corr)
+    out = np.full(len(p), np.nan)
     out[order] = corr
     return out

@@ -92,7 +92,7 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                 scheduler: torch.optim.lr_scheduler.LRScheduler,  # PyTorch learning rate decay
                 num_epochs: int = 25,  # number of epochs for training
                 patience: int = 50,  # epochs without improvement until early stop
-                mode: str = 'classification',  # 'classification', 'multilabel', or 'regression'
+                mode: str = 'classification',  # 'classification', 'multilabel', or 'regression'; training_setup's 'multiclass' and 'binary' set mode2 themselves
                 mode2: str = 'multi',  # 'multi' or 'binary' classification
                 return_metrics: bool = False,  # whether to return metrics
                 ) -> torch.nn.Module | tuple[torch.nn.Module, dict[
@@ -101,6 +101,8 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
     from sklearn.metrics import accuracy_score, label_ranking_average_precision_score, matthews_corrcoef, mean_absolute_error, mean_squared_error, ndcg_score, r2_score, roc_auc_score
     import matplotlib.pyplot as plt
     since = time.time()
+    if mode in {'multiclass', 'binary'}:  # the mode names of training_setup, which would otherwise fall through to regression
+        mode, mode2 = 'classification', 'multi' if mode == 'multiclass' else 'binary'
     early_stopping = EarlyStopping(patience = patience, verbose = True)
     best_model_wts = copy.deepcopy(model.state_dict())
     best_loss = float("inf")
@@ -130,7 +132,7 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                 x = x.to(device)
                 if mode == 'multilabel':
                     # hetero_collate already stacks the per-sample label rows, so only the flat PyG y has to be folded back into [B, C]
-                    y = (y if batch is None else y.view(int(batch.max()) + 1, -1)).to(device)
+                    y = (y if batch is None else y.view(int(batch.max()) + 1, -1)).float().to(device)
                 elif mode == "regression":
                     y = y.view(-1, 1).to(device)
                 else:
@@ -415,11 +417,11 @@ class WarmupScheduler:
             warmup_factor = min(1.0, (self.current_epoch + 1) / self.warmup_epochs)
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = self.base_lr * warmup_factor
+        elif isinstance(self.base_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+            self.base_scheduler.step(metrics)
         else:
-            if metrics is not None:
-                self.base_scheduler.step(metrics)
-            else:
-                self.base_scheduler.step()
+            # train_model hands every WarmupScheduler the validation loss, which any other scheduler would read as its epoch
+            self.base_scheduler.step()
 
 
 def training_setup(model: torch.nn.Module,  # graph neural network for analyzing glycans
@@ -451,7 +453,7 @@ def training_setup(model: torch.nn.Module,  # graph neural network for analyzing
     # Choose loss function
     if mode == 'multiclass':
         if num_classes == 2:
-            raise ValueError("You have to set the number of classes via num_classes")
+            raise ValueError("mode = 'multiclass' needs num_classes > 2; set it to the number of classes, or use mode = 'binary' for two classes")
         criterion = Poly1CrossEntropyLoss(num_classes = num_classes).to(device)
     elif mode == 'multilabel':
         criterion = torch.nn.BCEWithLogitsLoss().to(device)
@@ -556,7 +558,7 @@ def get_mismatch(model: xgb.XGBModel,  # trained ML model from train_ml_model
     preds = model.predict(X_test)
     preds_proba = model.predict_proba(X_test)
     # Get false predictions
-    idx = [k for k in range(len(preds)) if preds[k] != y_test[k]]
+    idx = [k for k, (pred, y) in enumerate(zip(preds, y_test)) if pred != y]  # by position, as a Series y_test would otherwise be indexed by its labels
     preds = X_test.iloc[idx, :].index.values.tolist()
     preds_proba = [preds_proba[k].tolist()[1] for k in idx]
     # Return the mismatches

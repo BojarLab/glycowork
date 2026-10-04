@@ -210,7 +210,7 @@ def get_molecular_properties(
         hs = {k: max(VALENCE.get(el, 0) - order[k] + ch, 0) for k, (el, ch, _) in enumerate(mol.atoms)}
         elements = Counter(a[0] for a in mol.atoms)
         elements['H'] = sum(hs.values())
-        formula = ''.join(f'{e}{elements[e] if elements[e] > 1 else ""}' for e in ('C', 'H', 'N', 'O', 'P', 'S') if elements[e])
+        formula = ''.join(f'{e}{elements[e] if elements[e] > 1 else ""}' for e in ('C', 'H', *sorted(elements.keys() - {'C', 'H'})) if elements[e])  # Hill order, so halogens of residues like Gal6F are kept
         carbonyl = {i for i, (el, _, _) in enumerate(mol.atoms) if el == 'C' and any(mol.atoms[j][0] == 'O' and o == 2 for j, o in nb[i])}
         amide = {i for i, (el, _, _) in enumerate(mol.atoms) if el == 'N' and any(j in carbonyl for j, _ in nb[i])}
         # A rotatable bond is an acyclic single bond between two non-terminal heavy atoms, which is exactly a bridge of the molecular graph, minus the amide bond

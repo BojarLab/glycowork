@@ -925,7 +925,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
     if "Sulf" in oxford:
         sulf = oxford[oxford.index("Sulf") + 4:oxford.index("Sulf") + 5]
         sulf = int(sulf) if sulf.isdigit() else 1
-        oxford = oxford.replace("Sulf", '')
+        oxford = re.sub(r'Sulf\d?', '', oxford)  # the sulfate count goes too, or A2G2(s)2 would read as 22 Gal
     else:
         sulf = 0
     if 'B' in oxford:
@@ -1151,8 +1151,9 @@ def glytoucan_to_glycan(ids: str | list[str], # GlyTouCan ID(s) or glycan(s)
                         ) -> str | list[str]: # Glycan(s) or ID(s), a single string for a single string input
     "Convert between GlyTouCan IDs and IUPAC-condensed glycans"
     if not hasattr(glytoucan_to_glycan, 'glycan_dict'):
-        glytoucan_to_glycan.glycan_dict = dict(zip(loader.df_glycan.glytoucan_id, loader.df_glycan.glycan))
-        glytoucan_to_glycan.id_dict = dict(zip(loader.df_glycan.glycan, loader.df_glycan.glytoucan_id))
+        has_id = loader.df_glycan.dropna(subset = ['glytoucan_id'])  # a glycan without a GlyTouCan ID would otherwise map to NaN instead of being reported as missing
+        glytoucan_to_glycan.glycan_dict = dict(zip(has_id.glytoucan_id, has_id.glycan))
+        glytoucan_to_glycan.id_dict = dict(zip(has_id.glycan, has_id.glytoucan_id))
     lookup = glytoucan_to_glycan.id_dict if revert else glytoucan_to_glycan.glycan_dict
     result, not_found = [], []
     for item in ([ids] if isinstance(ids, str) else ids):
@@ -1469,7 +1470,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
         glycan = re.sub(r'(?<=[a-z])1?-(?:O-)?(?=(?!(?:Ser|Thr|Asn|Cer|OMe|Me)$)[A-Z][^()\[\]{}\-]*$)', '-', glycan)  # GalNAca1-Sp8 or Glcb1-OCH2CH2NH2 to GalNAca-Sp8, trimmed below; amino acid, ceramide and methyl aglycones are kept
         last_dash = glycan.rindex('-')
         if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[last_dash - 1:])) and not glycan[last_dash + 1:].startswith(('ol', 'onic', 'aric', 'ulos', 'uronic')) and glycan[
-            last_dash + 1:] not in lib:  # alditol and acid suffixes (-ol, -onic, -aric, -ulosonic, -ulosaric, -uronic) are part of the residue, not a linker
+            last_dash + 1:] not in lib and _MONO_STEM.sub('', glycan[last_dash + 1:]) not in lib:  # alditol and acid suffixes (-ol, -onic, -aric, -ulosonic, -ulosaric, -uronic) are part of the residue, not a linker, and neither is a modified residue like the Tal6P of 2,5-Anhydro-Tal6P
             tail_mono = re.match(r'[A-Z][A-Za-z]*', glycan[last_dash + 1:])
             glycan = glycan[:last_dash - 1] + glycan[last_dash + 1:] if glycan[last_dash - 1] in 'ab' and tail_mono and tail_mono.group() in lib else glycan[:last_dash]
     # Anomeric and steric indicators placed before monosaccharide (e.g., "bDGal(1-4)bDGlcNAc")
@@ -1634,7 +1635,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
         glycan = re.sub(r'([\w-]+)(?:-ol)?\(([\w\?])(\d+)-([PS])-(\d+)\)',
                         lambda m: f"{m.group(1)}{m.group(3)}{m.group(4)}({m.group(2)}{m.group(3)}-{m.group(5)})",
                         glycan)  # Rha(a1-P-4) into Rha1P(a1-4)
-    glycan = re.sub(r'[A-Z][A-Za-z0-9]+', _sort_mono_mods, glycan)  # Sort modifications: ManNA3Ac1Ac to ManAN1Ac3Ac
+    glycan = re.sub(r'[^()\[\]{}]+', lambda t: s if (s := re.sub(r'[A-Z][A-Za-z0-9]+', _sort_mono_mods, t.group())) in lib or t.group() not in lib else t.group(), glycan)  # Sort modifications: ManNA3Ac1Ac to ManAN1Ac3Ac, but never turn a lib residue (also a prefixed one like D-Rha4NLac) into a non-lib one
     glycan, repeat = transform_repeat_glycan(glycan)
     glycan = re.sub(r"n\=[\d\?\-]+\/", "", glycan)  # Strip out internal repeats such as n=?/
     glycan = re.sub(r"(?<=[\)\]\d])\/([A-Z])", r"\1", glycan)  # Strip out any remaining / from internal repeats
@@ -1642,7 +1643,13 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     if '[' in glycan and not glycan.startswith('[') and ']' in glycan and not repeat:
         from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string
         if '^' not in glycan:
-            glycan = graph_to_string(glycan_to_nxGraph.__wrapped__(glycan))
+            g = glycan_to_nxGraph.__wrapped__(glycan).copy()  # a copy, since the graph can come straight out of glycan_to_nxGraph_int's cache
+            for n in g:  # one acceptor position takes one child; sanitize_iupac only sees a branch next to its main chain, so sibling branches that only meet after reordering are caught here, else a second pass would make them uncertain
+                pos = [(c, g.nodes[c]['string_labels'].rpartition('-')) for c in g.successors(n)]
+                for c, (donor, _, acc) in pos:
+                    if acc.isdigit() and sum(a == acc for _, (_, _, a) in pos) > 1:
+                        g.nodes[c]['string_labels'] = f"{donor}-?"
+            glycan = graph_to_string(g)
         elif (cut := glycan.rfind('}') + 1) and '[' in glycan[cut:]:
             glycan = glycan[:cut] + graph_to_string(glycan_to_nxGraph.__wrapped__(glycan[cut:]))
     if '{' in glycan:

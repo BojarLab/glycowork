@@ -392,7 +392,7 @@ def graph_to_smiles(graph: nx.DiGraph, # Glycan graph, as produced by glycan_to_
                 options = [int(p) for p in target.split('/') if p.isdigit()]
                 if strict or not (free or options):
                     raise GlycanSMILESError(f"linkage '{link}' onto '{labels[node]}' has no known position")
-                target = str(next((p for p in options if p in free), options[0] if options else free[0]))
+                target = str(next((p for p in options if p in free), options[0] if options else next((p for p in free if hetero[p] == 'O'), free[0])))  # a glycosidic bond at an unknown position takes a hydroxyl, never the amine of an amino sugar
             onto_anomeric = int(target) == first and '{p%s}' % target not in fragment
             if onto_anomeric and depth:
                 raise GlycanSMILESError(f"'{labels[node]}' cannot use its anomeric oxygen for both its own linkage and '{link}'")

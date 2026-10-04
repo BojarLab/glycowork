@@ -62,7 +62,7 @@ def glycans_to_emb(glycans: str | list[str],  # glycan(s) in IUPAC-condensed
                    libr: dict[str, int] | None = None,  # dictionary of form glycoletter:index
                    batch_size: int = 32,  # batch size used during training
                    rep: bool = True,  # True returns representations, False returns predicted labels
-                   class_list: list[str] | None = None,  # list of unique classes to map predictions
+                   class_list: list[str] | None = None,  # list of unique classes to map predictions; a model with a single output is a binary classifier, read as class_list[1] for logits >= 0
                    multilabel = False  # whether to output predictions for a multilabel-task
                    ) -> pd.DataFrame | list[str]:  # dataframe of representations or list of predictions
     "Returns a dataframe of learned representations for a list of glycans"
@@ -91,7 +91,8 @@ def glycans_to_emb(glycans: str | list[str],  # glycan(s) in IUPAC-condensed
             res.extend(out.detach().cpu().numpy()) if rep else res.extend(pred.detach().cpu().numpy())
     # GIFFLAR has to skip glycans without a molecular graph (unknown linkages, floating parts), which come back as NaN rows so that the output still lines up with the input
     res = pd.DataFrame(res, index = idx).reindex(range(len(glycans)))
-    return res if (rep or multilabel) else [None if row.isna().any() else class_list[int(np.argmax(row))] for _, row in res.iterrows()]
+    # argmax over a single logit is always 0, so a one-output binary model is thresholded like train_model's binary mode
+    return res if (rep or multilabel) else [None if row.isna().any() else class_list[int(np.argmax(row)) if len(row) > 1 else int(row.iloc[0] >= 0)] for _, row in res.iterrows()]
 
 
 def get_multi_pred(prot: str,  # protein amino acid sequence

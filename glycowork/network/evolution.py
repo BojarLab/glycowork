@@ -193,5 +193,5 @@ def get_communities(network_list: list[nx.Graph], # List of undirected biosynthe
         communities = nx.algorithms.community.louvain.louvain_communities(network, seed = random_state)
         for comm_index, community in enumerate(communities):
             comm_name = f"{comm_index}_{label_list[i]}"
-            final_comm_dict[comm_name] = list(community)
+            final_comm_dict[comm_name] = sorted(community)  # a community is a set, whose order changes with PYTHONHASHSEED
     return final_comm_dict

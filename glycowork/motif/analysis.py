@@ -760,8 +760,10 @@ def get_pca(
     from sklearn.preprocessing import StandardScaler
     if isinstance(df, (str, Path)):
         df = read_abundances(df)
+    df = df.fillna(0)
     if groups is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         groups = list(df.groups)
+        df = df[[df._glycan_col or df.columns[0]] + [c for c in df.columns if c in df._contrasts]]  # the labels only cover the contrast columns, and X pairs them with columns by position
     if transform and not motifs:
         df = df[(df.iloc[:, 1:] > 0).sum(axis = 1) >= np.max([np.round(rarity_filter * (df.shape[1] - 1)), 1])].reset_index(drop = True)
         df.iloc[:, 1:] = df.iloc[:, 1:].replace(0, 1e-6)
@@ -858,11 +860,14 @@ def get_pcoa(
 ) -> pd.DataFrame:  # Sample coordinates on all principal coordinates, explained variance and PERMANOVA in .attrs
     "Performs principal coordinate analysis (PCoA) on any sample distance matrix with group-based visualization and PERMANOVA"
     import seaborn as sns
-    if isinstance(df, pd.DataFrame) and df.shape[0] == df.shape[1] and df.index.equals(df.columns):
+    if isinstance(df, (str, Path)):
+        df = read_abundances(df)
+    if df.shape[0] == df.shape[1] and df.index.equals(df.columns):
         dm = df
     else:
         if groups is None and isinstance(df, GlycoDataFrame) and df._contrasts:
             groups = list(df.groups)
+            df = df[[df._glycan_col or df.columns[0]] + [c for c in df.columns if c in df._contrasts]]  # the labels only cover the contrast columns, one per row of the distance matrix
         dm = get_distance_matrix(df, dist_func = dist_func, motifs = motifs, feature_set = feature_set,
                                  custom_motifs = custom_motifs, transform = transform)
     n = len(dm)
@@ -1372,6 +1377,7 @@ def get_glycanova(
     grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     if groups is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         groups = list(df.groups)
+        df = df[[df._glycan_col or df.columns[0]] + [c for c in df.columns if c in df._contrasts]]  # the labels only cover the contrast columns, and preprocess_data pairs them with columns by position
     if not groups:
         raise ValueError(
             "No groups given: pass groups as a list of per-sample labels; groups are only inferred automatically from a GlycoDataFrame that carries contrasts.")
@@ -1881,6 +1887,8 @@ def get_biodiversity(
         periods: list[int] = [12, 24],  # cycle lengths to test (only relevant if circadian)
 ) -> tuple:  # First DataFrame with diversity indices and test statistics, second with beta-diversity distance matrix
     "Calculates alpha (Shannon/Simpson) and beta (ANOSIM/PERMANOVA) diversity measures from glycomics data"
+    if isinstance(df, (str, Path)):
+        df = read_abundances(df)
     if group1 is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         group1, group2 = list(df.group1), list(df.group2)
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
@@ -2004,12 +2012,8 @@ def get_SparCC(
         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> tuple[pd.DataFrame, pd.DataFrame]:  # (Spearman correlation matrix, FDR-corrected p-value matrix)
     "Calculates SparCC (Sparse Correlations for Compositional Data) between two matching datasets (e.g., glycomics)"
-    if isinstance(df1, (str, Path)):
-        df1 = pd.read_csv(df1) if Path(df1).suffix.lower() == ".csv" else pd.read_csv(df1, sep = "\t") if Path(
-            df1).suffix.lower() == ".tsv" else pd.read_excel(df1)
-    if isinstance(df2, (str, Path)):
-        df2 = pd.read_csv(df2) if Path(df2).suffix.lower() == ".csv" else pd.read_csv(df2, sep = "\t") if Path(
-            df2).suffix.lower() == ".tsv" else pd.read_excel(df2)
+    df1 = read_abundances(df1) if isinstance(df1, (str, Path)) else df1
+    df2 = read_abundances(df2) if isinstance(df2, (str, Path)) else df2
     if df1.columns.tolist()[0] != df2.columns.tolist()[0] and df1.columns.tolist()[0] in df2.columns.tolist():
         common_columns = df1.columns.intersection(df2.columns)
         df1 = df1[common_columns]
@@ -2194,6 +2198,8 @@ def get_roc(
     from sklearn.model_selection import train_test_split
     from sklearn.multiclass import OneVsRestClassifier
     from sklearn.preprocessing import label_binarize
+    if isinstance(df, (str, Path)):
+        df = read_abundances(df)
     if group1 is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         group1, group2 = list(df.group1), list(df.group2)
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
@@ -2231,7 +2237,7 @@ def get_roc(
         if filepath:
             plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
     else:  # multi-group comparison
-        classes = list(set(group1))
+        classes = list(dict.fromkeys(group1))  # first-appearance order; a set's order changes with PYTHONHASHSEED
         df = df.groupby(df.index).mean()
         df = df.T  # Ensure features are columns
         df['group'] = group1

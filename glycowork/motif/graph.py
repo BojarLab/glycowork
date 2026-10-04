@@ -487,6 +487,10 @@ def subgraph_isomorphism(glycan: str | nx.DiGraph, # Glycan sequence or graph
         if termini_list and all('termini' not in d for _, d in motif.nodes(data = True)):
             motif = motif.copy()
             nx.set_node_attributes(motif, dict(zip(motif.nodes(), expand_termini_list(motif, termini_list) if len(termini_list) < len(motif) else termini_list)), 'termini')
+        if termini_list and all('termini' not in d for _, d in glycan.nodes(data = True)):  # a glycan graph built without termini would match any position, so they are calculated as glycan_to_nxGraph(termini = 'calc') does, per part
+            roots, degrees = {max(c) for c in nx.weakly_connected_components(glycan)}, dict(glycan.degree())
+            glycan = glycan.copy()
+            nx.set_node_attributes(glycan, {k: 'terminal' if degrees[k] == 1 or k in roots else 'internal' for k in glycan}, 'termini')
         if ptm := (_has_o(motif) or _has_o(glycan)):
             g1, g2 = _ptm_wildcarded(glycan), _ptm_wildcarded(motif)
         else:
@@ -714,7 +718,7 @@ def graph_to_string_int(graph: nx.DiGraph, # Glycan graph
     # Successor lists and labels are read into plain dicts once, as every step below would otherwise go through networkx views
     succ, labels = {n: list(nbrs) for n, nbrs in graph.adjacency()}, dict(graph.nodes(data = "string_labels", default = ""))
     # Build depths with a single traversal
-    depths, leaf_labels, subtree_keys = {}, {}, {}
+    depths, leaf_labels, subtree_keys, tree_keys = {}, {}, {}, {}
 
     def compute_metrics(node):
         if node in depths:
@@ -722,15 +726,17 @@ def graph_to_string_int(graph: nx.DiGraph, # Glycan graph
         successors, label = succ[node], labels[node]
         for child in successors:
             compute_metrics(child)
+        # subtree_keys concatenate without delimiters, so two different subtrees can share one; the nested tree_keys spell out the topology and break such ties, which would otherwise leave the order to the input string
         if len(successors) == 1:  # linkages and chain residues, the vast majority of nodes
             child = successors[0]
-            depths[node], leaf_labels[node], subtree_keys[node] = depths[child] + 1, leaf_labels[child], label + subtree_keys[child]
+            depths[node], leaf_labels[node], subtree_keys[node], tree_keys[node] = depths[child] + 1, leaf_labels[child], label + subtree_keys[child], (label, (tree_keys[child],))
         elif successors:
             depths[node] = 1 + max(map(depths.__getitem__, successors))
             leaf_labels[node] = min(map(leaf_labels.__getitem__, successors))
             subtree_keys[node] = label + ''.join(sorted(map(subtree_keys.__getitem__, successors)))
+            tree_keys[node] = (label, tuple(sorted(map(tree_keys.__getitem__, successors))))
         else:
-            depths[node], leaf_labels[node], subtree_keys[node] = 0, label, label
+            depths[node], leaf_labels[node], subtree_keys[node], tree_keys[node] = 0, label, label, (label, ())
 
     compute_metrics(root_idx)
 
@@ -760,10 +766,10 @@ def graph_to_string_int(graph: nx.DiGraph, # Glycan graph
             if canonicalize:
                 # Combining the stable sorts: length-based and special branches use the same canonical tie-breakers
                 if order_by == "length" or any(is_special_branch(child) for child in children):
-                    children = sorted(children, key = lambda x: (-depths[x], get_linkage_number(x, graph), leaf_labels[x], subtree_keys[x]), reverse = True)
+                    children = sorted(children, key = lambda x: (-depths[x], get_linkage_number(x, graph), leaf_labels[x], subtree_keys[x], tree_keys[x]), reverse = True)
                 else:
                     # Standard linkage canonicalization relies on positive depth rather than negative
-                    children = sorted(children, key = lambda x: (get_linkage_number(x, graph), depths[x], leaf_labels[x], subtree_keys[x]), reverse = True)
+                    children = sorted(children, key = lambda x: (get_linkage_number(x, graph), depths[x], leaf_labels[x], subtree_keys[x], tree_keys[x]), reverse = True)
             elif order_by == "length":
                 # Sort by depth (shallow to deep)
                 children = sorted(children, key = lambda x: depths[x])

@@ -98,7 +98,7 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
         if sig == 'fragpipe':
             runs = [(re.split(r'[\\/]', str(fl))[-2] if re.search(r'[\\/]', str(fl)) else '', str(s).rsplit('.', 3)[0]) for s, fl in zip(col('spectrum'), col('spectrumfile'))]  # (experiment, raw file)
             prots = col('proteinid') if 'proteinid' in c else col('protein')
-            ions = [f'{p}/{z}/{g}' for p, z, g in zip(col('modifiedpeptide'), col('charge'), col('totalglycancomposition'))]
+            ions = [f'{r}/{p}/{z}/{g}' for (_, r), p, z, g in zip(runs, col('modifiedpeptide'), col('charge'), col('totalglycancomposition'))]  # an experiment's raw files are fractions, so an ion is collapsed per raw file and only then summed into its experiment
             pairs = []
             for g, am, sp, start in zip(col('totalglycancomposition'), col('assignedmodifications'), col('siteprobabilities'), col('proteinstart')):
                 if not isinstance(g, str) or g.startswith('Decoy'):
