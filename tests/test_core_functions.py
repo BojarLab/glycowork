@@ -90,7 +90,7 @@ from glycowork.motif.regex import (preprocess_pattern, specify_linkages,
                   get_match_batch, explain_match,
                   filter_matches_by_location, parse_pattern, compile_pattern
 )
-from glycowork.motif.draw import (process_bonds, draw_hex, process_per_residue, col_dict_base,
+from glycowork.motif.draw import (process_bonds, draw_hex, process_per_residue, process_per_linkage, col_dict_base,
                  add_colors_to_map, is_jupyter, draw_bracket,
                  display_svg_with_matplotlib, get_coordinates_and_labels, get_highlight_attribute, add_sugar, add_bond, draw_shape,
                  draw_chem2d, draw_chem3d, GlycoDraw, plot_glycans_excel, annotate_figure, resolve_motif_name,
@@ -3531,7 +3531,7 @@ def test_glycans():
                'Glc(a1-3)Man(a1-2)[GlcNAc(b1-6)]Man6P(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man6P(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
                'Neu5Ac(a2-3)[GalNAc(b1-4)]Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc', 'Neu5Ac(a2-?)GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-?)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
                'Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)[GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc', 'Fuc2S4S(a1-3)Fuc2S4S(a1-3)Fuc2S4S',
-               'Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-3)[Fuc(a1-2)Gal(b1-4)GlcNAc(b1-6)]GalNAc', 'Gal(b1-3)GalN2Suc-ol'
+               'Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-3)[Fuc(a1-2)Gal(b1-4)GlcNAc(b1-6)]GalNAc', 'Gal(b1-3)GalN2Suc-ol',
                'Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc(b1-4)[Gal(b1-4)GlcNAc(b1-2)]Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc',
                'Gal(a1-3)Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Gal(a1-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
                'Gal(b1-?)GlcNAc(b1-3)Gal(b1-?)[Fuc(a1-?)]GlcNAc6S(b1-3)[GlcNAc(b1-6)]GalNAc', 'Neu5Gc(a2-?)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(?1-?)GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
@@ -4187,10 +4187,35 @@ def test_annotate_dataset_regex_motifs():
     assert list(known['Nglycan_hybrid']) == [0, 1, 0, 0]
     assert list(known['Nglycan_complex']) == [0, 0, 1, 0]
     # r-prefixed custom motifs go through the same route and quantifiers count repeats
-    custom = annotate_dataset(glycans, feature_set = ['custom'], custom_motifs = ['Gal(b1-4)GlcNAc', 'r[Hex-HexNAc]{2,}'])
-    assert list(custom.columns) == ['Gal(b1-4)GlcNAc', '[Hex-HexNAc]{2,}']
+    custom = annotate_dataset(glycans, feature_set = ['custom'], custom_motifs = ['Gal(b1-4)GlcNAc', 'r[Hex-HexNAc]{2,}', 'high_mannose'])
+    assert list(custom.columns) == ['Gal(b1-4)GlcNAc', 'r[Hex-HexNAc]{2,}', 'high_mannose']
     assert list(custom['Gal(b1-4)GlcNAc']) == [0, 0, 2, 3]
-    assert list(custom['[Hex-HexNAc]{2,}']) == [0, 0, 0, 1]
+    assert list(custom['r[Hex-HexNAc]{2,}']) == [0, 0, 0, 1]
+    assert list(custom['high_mannose']) == list(known['high_mannose'])
+    # A named motif is counted with its termini spec, and a label that is neither a name nor a sequence is an error rather than a column of zeros
+    assert annotate_dataset(['Gal(b1-4)GlcNAc(b1-3)Gal', 'Gal(b1-4)GlcNAc'], feature_set = 'custom', custom_motifs = 'Terminal_LacNAc_type2')['Terminal_LacNAc_type2'].tolist() == [1, 1]
+    assert annotate_dataset(['Gal(b1-4)GlcNAc(b1-3)Gal'], feature_set = 'custom', custom_motifs = 'Internal_LacNAc_type2')['Internal_LacNAc_type2'].tolist() == [0]
+    with pytest.raises(ValueError, match = 'neither motif_list names'):
+        annotate_dataset(['Gal(b1-4)GlcNAc'], feature_set = 'custom', custom_motifs = 'H_type2')
+
+
+def test_annotate_fixes():
+    # Monosaccharides are counted per residue, so D-Fuc, LDManHep, and 6dTal do not also count as Fuc, Hep, and Tal
+    counts = get_k_saccharides(['D-Fuc(a1-3)Gal(b1-4)Glc', 'LDManHep(a1-3)LDManHep(a1-5)Kdo', 'Rha(a1-2)6dTal', 'Hep(a1-3)Glc', 'Tal(a1-3)Glc'], up_to = True)
+    assert counts.reindex(columns = ['Fuc', 'Hep', 'Tal'], fill_value = 0).values.tolist() == [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 1, 0], [0, 0, 1]]
+    # A size bin is labeled with exactly the sizes np.digitize puts in it, and there are never more bins than sizes in range
+    sb = get_size_branching_features(['Glc', 'Gal(b1-4)Glc', 'Gal(b1-4)Gal(b1-4)Glc', 'Gal(b1-4)' * 5 + 'Glc', 'Gal(b1-4)' * 9 + 'Glc'])
+    assert [c for c in sb.columns if c.startswith('Size')] == ['Size_1 - 3', 'Size_4 - 7', 'Size_8 - 10']
+    assert sb.loc['Gal(b1-4)' * 5 + 'Glc', 'Size_4 - 7'] == 1
+    assert list(get_size_branching_features(['Glc', 'Gal(b1-4)Glc']).columns) == ['Size_1', 'Size_2', 'Branch_0']
+    # Repeats plus a glycan without a molecule no longer break the placeholder reindex, and an alditol keeps its two extra hydrogens
+    glycans = ['Gal(b1-4)Glc', 'Gal(b1-4)Glc', 'Gal(b1-4)Glc-ol', 'Monosaccharide(?1-?)Glc']
+    props = get_molecular_properties(glycans, placeholder = True)
+    assert len(props) == 4 and not props.exact_mass.isna().any()
+    chem = annotate_dataset(glycans[:3], feature_set = 'chemical')
+    assert round(chem.exact_mass.iloc[2] - chem.exact_mass.iloc[0], 3) == 2.016
+    # Sialic acids beyond Neu5Ac/Neu5Gc count as sialylated
+    assert list(group_glycans_sia_fuc(['Kdn(a2-3)Gal(b1-4)Glc', 'Fuc(a1-2)Gal'], [0.1, 0.2])[0]) == ['Sia', 'Fuc']
 
 
 def test_filter_matches_by_location():
@@ -4713,6 +4738,12 @@ def test_process_per_residue():
     # One value per monosaccharide, no more and no less
     with pytest.raises(ValueError):
         process_per_residue("Gal(b1-4)GlcNAc", [0.1], "Gal(b1-4)GlcNAc")
+    # An anchored floating bit lists every alternative, but draws one residue
+    anchored = "{Fuc^(a1-3)[Gal(b1-4)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert len(process_per_residue(anchored, list(range(8)), anchored)) == 8
+    assert process_per_linkage(anchored, [6], anchored)[13]
+    # Arrays and Series have no truth value
+    GlycoDraw(anchored, per_residue = np.linspace(0, 1, 8), highlight_linkages = np.array([1, 2]), suppress = True)
 
 
 def test_glycodraw_per_residue_and_linkage_placement():

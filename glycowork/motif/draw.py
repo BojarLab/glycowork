@@ -245,17 +245,8 @@ def draw_hex(
     y_base = y_pos * dim
     half_dim = 0.5 * dim
     stroke_width = 0.04 * dim
-    points = [v for a in (0,60,120,180,240,300) for v in (x_base+half_dim*cos(radians(a)), y_base+half_dim*sin(radians(a)))]
-    if outline_only:
-        p = draw.Path(stroke_width = stroke_width, stroke = col_dict['black'], fill = 'none')
-        p.M(points[0], points[1])  # Move to first point
-        for i in range(2, len(points), 2):  # Line to subsequent points
-            p.L(points[i], points[i+1])
-        p.Z()  # Close path
-        drawing.append(p)
-    else:
-        # Draw filled hexagon with border
-        drawing.append(draw.Lines(*points, close = True, fill = color, stroke = col_dict['black'], stroke_width = stroke_width))
+    points = [v for a in (0, 60, 120, 180, 240, 300) for v in (x_base + half_dim * cos(radians(a)), y_base + half_dim * sin(radians(a)))]
+    drawing.append(draw.Lines(*points, close = True, fill = 'none' if outline_only else color, stroke = col_dict['black'], stroke_width = stroke_width))
 
 
 def add_customization(
@@ -711,28 +702,13 @@ def get_branches_from_graph(graph: nx.DiGraph, main_chain: list, main_chain_suga
     all_nodes = main_chain_set.copy()
     main_chain_sugars = sorted(main_chain_sugars, reverse = True)
 
-    # Find branch by always following lowest node index
-    def follow_lowest_index_path(start_node: int):
-        path = [start_node]
-        current = start_node
-        while True:
-            successors = [n for n in graph.successors(current) if n not in all_nodes]
-            if not successors: break
-            # Always take the lowest node index
-            next_node = min(successors)
-            path.append(next_node)
-            current = next_node
-        # Extract sugars and bonds
-        sugar_nodes = sorted([n for n in path if n % 2 == 0], reverse = True)
-        bond_nodes = sorted([n for n in path if n % 2 == 1], reverse = True)
-        return path, sugar_nodes, bond_nodes
-
     def add_branch(branch_list: list, start_node: int, connection: tuple):
-        path, sugar_nodes, bond_nodes = follow_lowest_index_path(start_node)
-        branch_list.append({
-            'nodes': path, 'sugar_nodes': sugar_nodes,
-            'bond_nodes': bond_nodes, 'connection': connection
-        })
+        # A branch always follows the lowest node index at a fork
+        path = [start_node]
+        while successors := [n for n in graph.successors(path[-1]) if n not in all_nodes]:
+            path.append(min(successors))
+        branch_list.append({'nodes': path, 'sugar_nodes': sorted([n for n in path if n % 2 == 0], reverse = True),
+                            'connection': connection})
         all_nodes.update(path)
 
     def process_level(parent_level):
@@ -754,8 +730,7 @@ def get_branches_from_graph(graph: nx.DiGraph, main_chain: list, main_chain_suga
     levels = [first_level]
     while levels[-1]:
         levels.append(process_level(levels[-1]))
-    if not levels[-1]:
-        levels.pop()
+    levels.pop()  # The loop only stops on an empty level
     return levels + [[]] * max(0, 3 - len(levels))
 
 
@@ -1156,10 +1131,10 @@ def process_per_residue(
         glycan: str, # original IUPAC-condensed glycan sequence
 ) -> dict[int, float]: # Value per sugar node of the drawn sequence
     "Maps per-residue scalar values onto the sugar nodes of the drawn sequence"
-    temp = re.sub(r'\([^)]*\)', 'x', re.sub(r'[^\[\]()]', '', draw_this)) + 'x'
-    if temp.count('x') != len(per_residue):
+    n_residues = (len(glycan_to_nxGraph(draw_this)) + 1) // 2
+    if n_residues != len(per_residue):
         raise ValueError(
-            f"per_residue has {len(per_residue)} values but {glycan} has {temp.count('x')} monosaccharides to color")
+            f"per_residue has {len(per_residue)} values but {glycan} has {n_residues} monosaccharides to color")
     if glycan != draw_this:
         g1 = glycan_to_nxGraph(glycan)
         g2 = glycan_to_nxGraph(draw_this)
@@ -1174,10 +1149,11 @@ def process_per_linkage(
         glycan: str, # original IUPAC-condensed glycan sequence
 ) -> dict[int, bool]: # Flag per linkage node of the drawn sequence
     "Maps which linkages to highlight onto the linkage nodes of the drawn sequence"
-    if any(not 0 <= i < glycan.count('(') for i in highlight_linkages):
+    n_linkages = len(glycan_to_nxGraph(glycan)) // 2
+    if any(not 0 <= i < n_linkages for i in highlight_linkages):
         raise ValueError(
-            f"highlight_linkages {highlight_linkages} has to index the {glycan.count('(')} linkages of {glycan}, starting from 0")
-    per_linkage = [i in highlight_linkages for i in range(glycan.count('('))]
+            f"highlight_linkages {highlight_linkages} has to index the {n_linkages} linkages of {glycan}, starting from 0")
+    per_linkage = [i in highlight_linkages for i in range(n_linkages)]
     if glycan != draw_this:
         g1 = glycan_to_nxGraph(glycan)
         g2 = glycan_to_nxGraph(draw_this)
@@ -1258,7 +1234,7 @@ def add_colors_to_map(
 
 def draw_chem2d(
         draw_this: str, # IUPAC-condensed glycan sequence
-        mono_list: list[str], # List of monosaccharides to highlight
+        mono_list: str | list[str], # Monosaccharide(s) to highlight
         filepath: str | Path | None = None # Output file path
 ) -> Any: # IPython SVG display object
     "Creates 2D chemical structure drawing with highlighted monosaccharides using RDKit"
@@ -1285,15 +1261,16 @@ def draw_chem2d(
     if filepath:
         filepath = Path(filepath)
         filepath = filepath.with_name(filepath.name.replace('?', '_'))
-        if filepath.suffix.lower() == '.svg':
-            with open(filepath, 'w') as f:
-                f.write(svg_data)
-        elif filepath.suffix.lower() in {'.pdf', '.png'}:
-            convert_svg_to_pdf, convert_svg_to_png = _get_glycorender()
-            convert = convert_svg_to_pdf if filepath.suffix.lower() == '.pdf' else convert_svg_to_png
-            convert(svg_data, str(filepath), chem = True)
-        else:
+        suffix = filepath.suffix.lower()
+        if suffix not in {'.svg', '.pdf', '.png'}:
             raise ValueError(f"Cannot save to '{filepath.name}': filepath has to end in .svg, .pdf, or .png")
+        filepath.parent.mkdir(parents = True, exist_ok = True)
+        if suffix == '.svg':
+            with open(filepath, 'w', encoding = "utf-8") as f:
+                f.write(svg_data)
+        else:
+            convert_svg_to_pdf, convert_svg_to_png = _get_glycorender()
+            (convert_svg_to_pdf if suffix == '.pdf' else convert_svg_to_png)(svg_data, str(filepath), chem = True)
     if not is_jupyter():
         return display_svg_with_matplotlib(svg_data, chem = True)
     from IPython.display import SVG
@@ -1302,7 +1279,7 @@ def draw_chem2d(
 
 def draw_chem3d(
         draw_this: str, # IUPAC-condensed glycan sequence
-        mono_list: list[str], # List of monosaccharides to highlight
+        mono_list: str | list[str], # Monosaccharide(s) to highlight
         filepath: str | Path | None = None, # Output file path for PDB
         pdb_file: str | Path | None = None  # already existing glycan structure
 ) -> None:
@@ -1319,6 +1296,7 @@ def draw_chem3d(
             from rdkit.Chem.Draw.rdMolDraw2D import MolDraw2DSVG
     except ImportError:
         raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
+    mono_list = [mono_list] if isinstance(mono_list, str) else mono_list
     smiles, atom_monos = get_mono_atoms(draw_this, mono_list)
     smiles_mol = MolFromSmiles(smiles)
     from_pdb = False
@@ -1728,7 +1706,8 @@ def GlycoDraw(
     elif is_composition(glycan) and not sugar_dict.keys().isdisjoint(comp := canonicalize_composition(glycan)):
         # Compositions have no topology to lay out, so each monosaccharide gets its symbol followed by its count, and substituents like S or P are spelled out
         d, cursor, row = draw.Group(), 0.0, 0.0
-        for mono, count in sorted(comp.items(), key = lambda x: (_COMP_ORDER.get(x[0], len(_COMP_ORDER)), x[0])):
+        comp = dict(sorted(comp.items(), key = lambda x: (_COMP_ORDER.get(x[0], len(_COMP_ORDER)), x[0])))
+        for mono, count in comp.items():
             if mono in sugar_dict:
                 shape, color, furanose = sugar_dict[mono]
                 draw_shape(shape, color, x_pos = -(cursor + 0.5), y_pos = row, col_dict = col_dict_base, drawing = d, furanose = furanose, dim = dim)
@@ -1745,18 +1724,21 @@ def GlycoDraw(
         if alt_text is None:
             alt_text = f"SNFG composition diagram of {glycan}: " + ", ".join(f"{count} {mono}" for mono, count in comp.items()) + "."
         return _finish_drawing(d, in_glycan, alt_text, (in_glycan, compact, vertical, dim), dim = dim, filepath = filepath, suppress = suppress, shadow = shadow, sticker = sticker)
+    # Values often arrive as an array or Series (attributions, a dataframe column), whose truth value is ambiguous
+    per_residue = list(per_residue)
+    highlight_linkages = [] if highlight_linkages is None else list(highlight_linkages)
     if repeat and not repeat_range:
         _backbone = re.findall(r'.*\((?!.*\()', glycan)[0]
         _conn = re.sub(r'\)(.*)', '', re.sub(r'.*\((?!.*\()', '', glycan))
         glycan = f'blank(?1-{_conn[-1]}){_backbone}{_conn[:2]}-?)'
         if per_residue:
-            per_residue = [0] + list(per_residue)
+            per_residue = [0] + per_residue
         if highlight_linkages:
             highlight_linkages = [k + 1 for k in highlight_linkages]
     if glycan.endswith(')'):
         glycan += 'blank'
         if per_residue:
-            per_residue = list(per_residue) + [0]
+            per_residue = per_residue + [0]
     cut = glycan.rfind('}') + 1 if '^' in glycan else 0
     draw_this = glycan[:cut] + (
         graph_to_string(glycan_to_nxGraph(glycan[cut:]), order_by = "linkage") if not glycan[cut:].startswith(
@@ -1793,12 +1775,14 @@ def GlycoDraw(
     floaty_bits, anchored_bits, node_shift = [], [], 0
     for openpos, closepos, _ in get_matching_indices(draw_this, opendelim = '{', closedelim = '}'):
         bit = draw_this[openpos:closepos]
-        node_shift += 2 * bit.count('(')  # the values were indexed against the string that still carried these bits, so the nodes they contributed have to be added back when reading them
         if '^' in bit:
             fragment, bit_anchors = parse_floating_bit(bit)
             anchored_bits.append((f"{fragment}blank", bit_anchors))
         else:
+            fragment = bit
             floaty_bits.append(f"{bit}blank")
+        # The values were indexed against the string that still carried these bits, so the nodes they contributed have to be added back when reading them; an anchored bit contributes its merged fragment, not every alternative
+        node_shift += 2 * fragment.count('(')
         draw_this = draw_this[:openpos-1] + len(draw_this[openpos-1:closepos+1])*'*' + draw_this[closepos+1:]
     draw_this = draw_this.replace('*', '')
     if anchored_bits:  # An anchor matching nothing must not silently delete its residue from the drawing
@@ -1807,7 +1791,7 @@ def GlycoDraw(
                      anchored_bits]
         floaty_bits += [bit for (bit, _), ok in zip(anchored_bits, placeable) if not ok]
         anchored_bits = [entry for entry, ok in zip(anchored_bits, placeable) if ok]
-    if restrict_vocab and not in_lib(draw_this, expand_lib(libr, list(sugar_dict.keys()) + [k for k in min_process_glycans([draw_this])[0] if '/' in k])): # support for super-narrow wildcard linkages
+    if restrict_vocab and not _drawable(draw_this, libr):
         if "!" in draw_this:
             draw_this = re.sub(r'\[!.*?\)\]|!.*?\)', '', draw_this)
         else:
@@ -2292,7 +2276,7 @@ def plot_glycans_excel(
             df).suffix.lower() == ".tsv" else pd.read_excel(df)
     else:
         df = df.copy()
-    df["SNFG"] = [np.nan for k in range(len(df))]
+    df["SNFG"] = np.nan
     image_column_number = df.columns.tolist().index("SNFG") + 1
     # Convert df_out to Excel; a directory gets the workbook as 'output.xlsx', an .xlsx path names it
     out = Path(folder_filepath)

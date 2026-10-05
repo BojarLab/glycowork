@@ -46,13 +46,13 @@
 - `get_core` and `get_modification` can now better deal with cases such as `Neu5,9Ac2` (0967d8a)
 - `map_to_basic` is now cached, making functions that call it repeatedly (e.g., `structure_to_basic`) about 2x faster (e1c807a)
 - `mz_to_composition` and related functions are now faster (eac80ee)
-- `condense_composition_matching` now condenses better ()
+- `condense_composition_matching` now condenses better (cac1c78)
 
 ##### Fixed 🐛
 - Fixed handling of `adduct` and `mass_tag` with multiply-charged glycans in `mz_to_composition` (a34092c)
 - Fixed handling of amino acid and ceramide aglycones (e.g., `GalNAc1Ser`, `GlcNAc1Asn`) in `glycan_to_composition` (a34092c)
-- Fixed azido sugar masses ()
-- Fixed handling of reduced peracetylated glycans in `composition_to_mass` ()
+- Fixed azido sugar masses (cac1c78)
+- Fixed handling of reduced peracetylated glycans in `composition_to_mass` (cac1c78)
 
 #### processing
 ##### Added ✨
@@ -79,6 +79,7 @@
 
 ##### Fixed 🐛
 - Fixed `annotate_dataset`, `annotate_glycan_topology_uncertainty`, and `get_k_saccharides` counting motifs whose stated PTM positions differ from the glycan's (e.g., `Gal6S(b1-4)GlcNAcOS` in `Gal3S(b1-4)GlcNAc6S`, or `Terminal_Glc3Ac` in glycans with `Glc6Ac` and an `Ole` residue) as soon as either side contained an `O` (9576826)
+- Fixed labeling of `size_branch` `feature_set` bins ()
 
 #### analysis
 ##### Added ✨
