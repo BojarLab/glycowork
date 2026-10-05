@@ -12,8 +12,8 @@ from glycowork.glycan_data.loader import lib, unwrap, Hex, dHex, HexA, HexN, Hex
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, rescue_compositions, parse_floating_bit, FLOATY_ALT
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, IS_LINKAGE
 
-chars = {'A':1, 'B':2, 'C':3, 'D':4, 'E':5, 'F':6, 'G':7, 'H':8, 'I':9, 'J':10, 'K':11,
-         'L':12, 'M':13, 'N':14, 'P':15, 'Q':16, 'R':17, 'S':18, 'T':19, 'V':20, 'W':21, 'Y':22, 'X':23, 'Z':24, 'z':25}
+chars = {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7, 'H': 8, 'I': 9, 'J': 10, 'K': 11,
+         'L': 12, 'M': 13, 'N': 14, 'P': 15, 'Q': 16, 'R': 17, 'S': 18, 'T': 19, 'V': 20, 'W': 21, 'Y': 22, 'X': 23, 'Z': 24, 'z': 25}
 _CORES = ['dHexNAc', 'GlcNAc', 'GalNAc', 'ManNAc', 'FucNAc', 'QuiNAc', 'RhaNAc', 'GulNAc', 'IdoNAc', 'Ins', 'MurNAc',
           '6dAltNAc', 'AcoNAc', 'HexA', 'GlcA', 'AltA', 'GalA', 'ManA', 'Tyv', 'Yer', 'Abe', 'GlcfNAc', 'GalfNAc',
           'ManfNAc', 'FucfNAc', 'IdoA', 'GulA', 'LDManHep', 'DDManHep', 'DDGlcHep', 'LyxHep', 'ManHep', 'DDAltHep',
@@ -25,13 +25,12 @@ _CORES = ['dHexNAc', 'GlcNAc', 'GalNAc', 'ManNAc', 'FucNAc', 'QuiNAc', 'RhaNAc',
           'Tal', 'All', 'Pse', 'Leg', 'Asc', 'Hex', 'Fru', 'Alt', 'Xluf', 'Api', 'Ko', 'Pau', 'Fus', 'Erwiniose',
           'Aco', 'Bac', 'Dig', 'Thre-ol', 'Ery-ol', 'Tag', 'Sor', 'Psi', 'Mur', 'Aci', 'Sia', 'Par', 'Col', 'Ido']
 _SPECIAL_MODS = {
-    '1,7lactone': {'replacement': '', 'diff_moiety': '-H2O'},
-    'Az': {'replacement': 'AcH2O', 'diff_moiety': '+N3'},
-    'AcH2O': {'replacement': 'Ac', 'diff_moiety': '-OH'}
+    '1,7lactone': {'replacement': '', 'diff_moiety': ('-H2O',)},
+    'Az': {'replacement': 'Ac', 'diff_moiety': ('+N3', '-H')}  # azidoacetyl is acetyl with one H swapped for N3
     # Add other special modifications here in the format:
-    # 'modification': {'replacement': 'what to replace with', 'diff_moiety': chemical formula, sign indicating loss/gain}
+    # 'modification': {'replacement': 'what to replace with', 'diff_moiety': tuple of chemical formulas, sign indicating loss/gain}
 }
-_VALID_COMPONENTS = {'Hex', 'dHex', 'HexNAc', 'HexN', 'HexA', 'Neu5Ac', 'Neu5Gc', 'Kdn', 'Pen', 'Me', 'S', 'P', 'PCho', 'PEtN', 'Ac', '-H2O', '+N3', '-OH'}
+_VALID_COMPONENTS = {'Hex', 'dHex', 'HexNAc', 'HexN', 'HexA', 'Neu5Ac', 'Neu5Gc', 'Kdn', 'Pen', 'Me', 'S', 'P', 'PCho', 'PEtN', 'Ac', '-H2O', '+N3', '-H'}
 _COMPOSITION_INDEX = {}
 _MZ_POOL = {}  # (kingdom, glycan_class) -> (source frame, unique composition item-tuples) for the default mz_to_composition database
 _MASS_CACHE = {}  # (composition item-tuple, mass_value, sample_prep, modification) -> composition_to_mass result
@@ -43,8 +42,7 @@ _MASS_DICTS = {col: dict(zip(mapping_file.composition, mapping_file[col])) for c
 HYDROGEN_MASS = 1.007825
 ELECTRON_MASS = 0.000548580
 PROTON_MASS = HYDROGEN_MASS - ELECTRON_MASS  # charge carrier; the H atom is 0.55 mDa heavier
-METHYL_MASS = 14.01565
-modification_mass_dict = {'reduced': 2 * HYDROGEN_MASS, '2AA': 121.0528, '2AB': 120.0688, 'procainamide': 219.1736}
+modification_formula_dict = {'reduced': 'H2', '2AA': 'C7H7NO', '2AB': 'C7H8N2', 'procainamide': 'C13H21N3'}  # net gain at the reducing end: H2 by reduction, label minus O by reductive amination
 
 
 def constrain_prot(proteins: str | list[str], # Protein sequence(s)
@@ -153,7 +151,7 @@ def stemify_glycan(glycan: str, # Glycan in IUPAC-condensed format
         libr = lib
     stem_lib = (_STEM_LIB if libr is lib else get_stem_lib(libr)) if stem_lib is None else stem_lib
     if '(' not in glycan:
-        return get_core(glycan)
+        return stem_lib.get(glycan, get_core(glycan))
     if stem_lib is _STEM_LIB:
         rank, clean_values = _STEM_LIB_RANK, _STEM_LIB_VALUES
     else:  # derived lookups of a custom stem_lib are kept for as long as its content is unchanged, as stemify_dataset passes the same one for every glycan
@@ -176,7 +174,7 @@ def stemify_dataset(df: pd.DataFrame, # DataFrame with glycan column
                     stem_lib: dict[str, str] | None = None, # Modified to core monosaccharide mapping; default:created from lib
                     libr: dict[str, int] | None = None, # Glycoletter to index mapping
                     glycan_col_name: str = 'glycan', # Column name for glycans
-                    rarity_filter: int = 1 # Minimum occurrences to keep modification
+                    rarity_filter: int = 1 # Modified monosaccharides occurring more often than this keep their modification
                     ) -> pd.DataFrame: # DataFrame with stemified glycans
     """Remove monosaccharide modifications from all glycans in dataset"""
     if libr is None:
@@ -289,27 +287,11 @@ def match_composition_relaxed(composition: dict[str, int], # Dictionary indicati
 def condense_composition_matching(matched_composition: list[str] # List of matching glycans
                                   ) -> list[str]: # Minimal list of representative glycans
     """Find minimum set of glycans characterizing matched composition"""
-    # Establish glycan equality given the wildcards
+    # Keep the first copy of every glycan that no other glycan in the list refines (e.g., Gal(?1-4)GlcNAc goes when Gal(b1-4)GlcNAc is there); only pairs equal given the wildcards, a much cheaper check, are tested, which leaves floating-part glycans next to their placed versions
     n = len(matched_composition)
-    match_matrix = [[1] * n for _ in range(n)]
-    for i in range(n):
-        for j in range(i + 1, n):
-            match_matrix[i][j] = match_matrix[j][i] = compare_glycans(matched_composition[i], matched_composition[j])
-    # Cluster glycans by pairwise equality (given the wildcards)
-    from sklearn.cluster import DBSCAN
-    clustering = DBSCAN(eps = 1, min_samples = 1).fit(match_matrix)
-    num_clusters = len(set(clustering.labels_))
-    sum_glycans = []
-    # For each cluster, get the most well-defined glycan and return it
-    for k in range(num_clusters):
-        cluster_glycans = np.array(matched_composition)[np.where(clustering.labels_ == k)[0]].tolist()
-        county = np.array([j.count("?") for j in cluster_glycans])
-        idx = np.where(county == county.min())[0]
-        if len(idx) == 1:
-            sum_glycans.append(cluster_glycans[idx[0]])
-        else:
-            sum_glycans.extend([cluster_glycans[j] for j in idx])
-    return sum_glycans
+    equal = {(i, j) for i in range(n) for j in range(i + 1, n) if compare_glycans(matched_composition[i], matched_composition[j])}
+    refines = lambda i, j: (min(i, j), max(i, j)) in equal and compare_glycans(matched_composition[i], matched_composition[j], subsumes = True)
+    return [glycan for i, glycan in enumerate(matched_composition) if not any(refines(i, j) and (j < i or not refines(j, i)) for j in range(n) if j != i)]
 
 
 @rescue_compositions
@@ -333,9 +315,7 @@ def compositions_to_structures(composition_list: str | dict[str, int] | list[str
         matched = match_composition_relaxed(comp, glycan_class = glycan_class, kingdom = kingdom, df_use = df_use)
         # If multiple structure matches, try to condense them by wildcard clustering
         if matched:
-            condensed = condense_composition_matching(matched)
-            matched_data = [abundances_values[k]] * len(condensed)
-            df_out.extend([[condensed[ele]] + matched_data[ele] for ele in range(len(condensed))])
+            df_out.extend([glycan] + abundances_values[k] for glycan in condense_composition_matching(matched))
         else:
             not_matched_count += 1
             if verbose:
@@ -407,23 +387,10 @@ def mask_rare_glycoletters(glycans: list[str], # List of IUPAC-condensed glycans
          for x, count in Counter(rare_elements[i]).items() if count <= thresholds[i]}
         for i in range(2)
     ]
-    out, rare_monos = [], list(rare_dict[0])
-    rank = {k: i for i, k in enumerate(rare_monos)}
-    # For each glycan, check whether they have rare monosaccharides/linkages and mask them
+    out = []
     for glycan in glycans:
-        pos, todo = -1, None
-        # Replace rare monosaccharides, visiting (in dict order) only those occurring in the glycan, re-collected after every change; glycoletters never span a bracket, so in-token substrings suffice
-        while todo is None or todo:
-            if todo is None:
-                todo = sorted({r for t in set(re.split(r'[()\[\]{}]', glycan)) for i in range(len(t)) for j in range(i + 1, len(t) + 1) if (r := rank.get(t[i:j], -1)) > pos})
-                continue
-            pos = todo.pop(0)
-            k, v = rare_monos[pos], rare_dict[0][rare_monos[pos]]
-            if f'-{k}' not in glycan:
-                masked = glycan.replace(f'{k}(', f'{v}(')
-                masked = masked[:-len(k)] + v if masked.endswith(k) else masked
-                if masked != glycan:
-                    glycan, todo = masked, None
+        # Mask rare monosaccharides only as whole glycoletters (from a bracket or the start up to a '(' or the end), so masking Alt leaves 6dAlt and 2,5-Anhydro-Alt intact
+        glycan = re.sub(r'(?<![^()\[\]{}])[^()\[\]{}]+(?=\(|$)', lambda m: rare_dict[0].get(m.group(), m.group()), glycan)
         # Replace rare linkages
         for k, v in rare_dict[1].items():
             glycan = glycan.replace(f'({k})', f'({v})')
@@ -498,8 +465,8 @@ def glycan_to_composition(glycan: str, # Glycan in IUPAC-condensed format
     glycan = re.sub(r'1(?:Ser|Thr|Asn|Cer)$', '', glycan)
     diff_moieties = Counter()
     for mod, info in _SPECIAL_MODS.items():
-        while mod in glycan:
-            diff_moieties[info['diff_moiety']] += 1
+        if n := glycan.count(mod):  # every occurrence counts, as replace swaps them all at once
+            diff_moieties.update({moiety: n for moiety in info['diff_moiety']})
             glycan = glycan.replace(mod, info['replacement'])
     letters = min_process_glycans([glycan])[0]
     if unknown := [k for k in letters if '/' not in k and k not in stem_libr]:
@@ -516,9 +483,9 @@ def glycan_to_composition(glycan: str, # Glycan in IUPAC-condensed format
         composition['P'] = n_p
     if n_s := len(re.findall(r'S(?!ia|or|ed|er|te|uc)', glycan)):
         composition['S'] = n_s
-    ac_mods = ('OAc', '2Ac', '3Ac', '4Ac', '6Ac', '7Ac', '9Ac')
-    if any(mod in glycan for mod in ac_mods):
-        composition['Ac'] = sum(glycan.count(mod) for mod in ac_mods)
+    # every O-acetyl (OAc, 1Ac to 9Ac) except the N-acetyl that makes each Neu5Ac
+    if n_ac := len(re.findall(r'[\dO]Ac', glycan)) - composition.get('Neu5Ac', 0):
+        composition['Ac'] = n_ac
     composition.pop('?1-?', None)
     return dict(composition) if all(k in _VALID_COMPONENTS for k in composition) else {}
 
@@ -536,9 +503,11 @@ def calculate_adduct_mass(formula: str, # Chemical formula of adduct (e.g., "C2H
     elif enforce_sign:
         return 0
     element_masses = {
-        'monoisotopic': {'C': 12.0000, 'H': 1.007825, 'O': 15.994915, 'N': 14.0031, 'S': 31.9721, 'P': 30.9738, 'Na': 22.9898, 'K': 38.9637, 'Cl': 34.9689, 'F': 18.998403, 'Br': 78.918337, 'I': 126.904473},
-        'average': {'C': 12.0107, 'H': 1.00794, 'O': 15.9994, 'N': 14.0067, 'S': 32.065, 'P': 30.9738, 'Na': 22.9898, 'K': 39.0983, 'Cl': 35.453, 'F': 18.998403, 'Br': 79.904, 'I': 126.904473}
+        'monoisotopic': {'C': 12.0000, 'H': 1.007825, 'O': 15.994915, 'N': 14.003074, 'S': 31.972071, 'P': 30.973762, 'Na': 22.989769, 'K': 38.963707, 'Cl': 34.968853, 'F': 18.998403, 'Br': 78.918337, 'I': 126.904473},
+        'average': {'C': 12.0107, 'H': 1.00794, 'O': 15.9994, 'N': 14.0067, 'S': 32.065, 'P': 30.973762, 'Na': 22.989769, 'K': 39.0983, 'Cl': 35.453, 'F': 18.998403, 'Br': 79.904, 'I': 126.904473}
     }
+    if not re.fullmatch(r'(?:[A-Z][a-z]?\d*)+', formula):
+        raise ValueError(f"Cannot parse the formula '{formula}'; write it as element symbols with counts, e.g., 'C2H4O2'.")
     elements = re.findall(r'([A-Z][a-z]?)(\d*)', formula)
     if unknown := sorted({el for el, _ in elements} - element_masses[mass_value].keys()):
         raise ValueError(f"Cannot calculate the mass of '{formula}': {unknown} are not element symbols with a known mass ({sorted(element_masses[mass_value])}).")
@@ -554,8 +523,9 @@ def composition_to_mass(dict_comp_in: dict[str, int], # Composition dictionary o
                         ) -> float: # Theoretical mass
     """Calculate theoretical mass from composition"""
     dict_comp = dict_comp_in.copy()
-    mass_key = f"{sample_prep}_{mass_value}"
-    mass_dict_in = _MASS_DICTS[mass_key] if mass_key in _MASS_DICTS else dict(zip(mapping_file.composition, mapping_file[mass_key]))
+    if (mass_key := f"{sample_prep}_{mass_value}") not in _MASS_DICTS:
+        raise ValueError(f"No masses for sample_prep {sample_prep!r} with mass_value {mass_value!r}; sample_prep is underivatized/permethylated/peracetylated, mass_value monoisotopic/average.")
+    mass_dict_in = _MASS_DICTS[mass_key]
     for old_key, new_key in {'S': 'Sulphate', 'P': 'Phosphate', 'Me': 'Methyl'}.items():
         if old_key in dict_comp:
             dict_comp[new_key] = dict_comp.pop(old_key)
@@ -570,13 +540,12 @@ def composition_to_mass(dict_comp_in: dict[str, int], # Composition dictionary o
     if adduct:
         total_mass += calculate_adduct_mass(adduct, mass_value = mass_value) if isinstance(adduct, str) else adduct
     if modification:
-        if modification not in modification_mass_dict:
+        if modification not in modification_formula_dict:
             raise ValueError(
-                f"Unknown reducing-end modification {modification!r}; choose one of {list(modification_mass_dict)} or pass a label mass via adduct.")
-        mod_mass = modification_mass_dict[modification]
-        if modification == 'reduced' and sample_prep == 'permethylated':
-            mod_mass += METHYL_MASS # ring-opening creates one additional free OH (at C5, previously the ring oxygen) that gets methylated
-        total_mass += mod_mass
+                f"Unknown reducing-end modification {modification!r}; choose one of {list(modification_formula_dict)} or pass a label mass via adduct.")
+        total_mass += calculate_adduct_mass(modification_formula_dict[modification], mass_value = mass_value)
+        if modification == 'reduced' and sample_prep != 'underivatized':  # ring-opening creates one additional free OH (at C5, previously the ring oxygen) that gets methylated or acetylated
+            total_mass += calculate_adduct_mass('CH2' if sample_prep == 'permethylated' else 'C2H2O', mass_value = mass_value)
     return total_mass
 
 

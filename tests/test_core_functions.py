@@ -1399,9 +1399,11 @@ def test_glycan_to_composition():
 
 def test_glycan_to_mass():
     assert abs(glycan_to_mass("Neu1,7lactone5,9Ac2(a2-3)Gal(b1-4)Glc") - 657.2115545999999) < 0.1
-    assert abs(glycan_to_mass("Neu5Az(a2-3)Gal(b1-4)Glc") - 658.2181545999999) < 0.1
+    assert abs(glycan_to_mass("Neu5Az(a2-3)Gal(b1-4)Glc") - 674.2129516) < 0.1
     assert abs(glycan_to_mass("Neu5Ac(a2-3)Gal(b1-4)Glc") - 633.2115546) < 0.1
-    assert abs(glycan_to_mass("Neu5Az9Ac(a2-3)Gal(b1-4)Glc") - 700.2286545999999) < 0.1
+    assert abs(glycan_to_mass("Neu5Az9Ac(a2-3)Gal(b1-4)Glc") - 716.2235166) < 0.1
+    assert glycan_to_composition("GlcNAz(b1-4)GlcNAz") == {'HexNAc': 2, '+N3': 2, '-H': 2}
+    assert glycan_to_composition("Neu5Ac8Ac(a2-8)Neu5Ac") == {'Neu5Ac': 2, 'Ac': 1}
     assert abs(glycan_to_mass("Neu5Ac(a2-3)Gal(b1-4)Glc", adduct = "C2H4O2") - 693.2325546) < 0.1
     assert abs(glycan_to_mass("Neu5Ac(a2-3)Gal(b1-4)Glc", adduct = "-C2H4O2") - 573.1905546) < 0.1
     assert abs(glycan_to_mass("GalOS(b1-3)GalNAc4/6S") - 543.0563546) < 0.1
@@ -1423,6 +1425,8 @@ def test_calculate_adduct_mass():
     assert h2o_mono != h2o_avg
     # Test enforce_sign
     assert calculate_adduct_mass('CH3COOH', enforce_sign=True) < 0.001
+    with pytest.raises(ValueError):
+        calculate_adduct_mass('c2h4o2')
 
 
 def test_structure_to_basic():
@@ -1477,6 +1481,8 @@ def test_mask_rare_glycoletters():
     result = mask_rare_glycoletters(glycans, thresh_monosaccharides=2)
     assert "Neu5Ac" in result[0]  # Occurs twice, should remain
     assert "Man6P" not in result[4]  # Occurs once, should be masked
+    # Only whole glycoletters are masked, so a rare Alt leaves 6dAlt intact
+    assert mask_rare_glycoletters(["6dAlt(a1-3)Gal", "6dAlt(a1-3)Gal", "Alt(a1-3)Gal"], thresh_monosaccharides = 1, thresh_linkages = 0) == ["6dAlt(a1-3)Gal", "6dAlt(a1-3)Gal", "Monosaccharide(a1-3)Gal"]
 
 
 def test_mz_to_composition():
@@ -1633,6 +1639,8 @@ def test_stemify_dataset():
     assert "Neu5Ac(a2-3)Gal(b1-4)GlcNAc" in result['glycan'].values
     assert "6S" not in result['glycan'].str.cat()
     assert "5Ac9Ac" not in result['glycan'].str.cat()
+    # A frequent modified monosaccharide keeps its modification as a whole glycan, too
+    assert stemify_dataset(pd.DataFrame({'glycan': ['Neu5Ac9Ac', 'Neu5Ac9Ac']})).glycan.tolist() == ['Neu5Ac9Ac', 'Neu5Ac9Ac']
 
 
 def test_composition_to_mass():
@@ -1668,6 +1676,7 @@ def test_composition_to_mass():
     base_underiv = composition_to_mass(comp)
     assert abs(reduced_perm - base_perm - 2 * 1.007825 - 14.01565) < 0.01
     assert abs(reduced_underiv - base_underiv - 2 * 1.007825) < 0.01
+    assert abs(composition_to_mass(comp, modification = 'reduced', sample_prep = 'peracetylated') - composition_to_mass(comp, sample_prep = 'peracetylated') - 2 * 1.007825 - 42.010565) < 0.01
     # Man5GlcNAc2 permethylated reduced [M+Na]+ should match literature m/z 1595
     assert abs(reduced_perm + 22.989218 - 1595.81) < 0.5
 
@@ -1684,6 +1693,7 @@ def test_condense_composition_matching():
     assert len(result) < len(glycans)
     assert "Gal(b1-4)GlcNAc" in result
     assert "Man(a1-3)GlcNAc" in result
+    assert condense_composition_matching(["Gal(?1-4)GlcNAc", "Gal(b1-4)GlcNAc", "Gal(a1-4)GlcNAc"]) == ["Gal(b1-4)GlcNAc", "Gal(a1-4)GlcNAc"]
 
 
 def test_get_unique_topologies():

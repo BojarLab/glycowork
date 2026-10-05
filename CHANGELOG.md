@@ -40,16 +40,19 @@
 ##### Added ✨
 - Added `get_ion_mzs` to support more complex adducts in `mz_to_composition` (a512f5d)
 - Added the new `adduct_ions` keyword argument to `mz_to_composition` to specify a list of permitted adduct ions (a512f5d)
-- `calculate_adduct_mass` now also supports F/Br/I halogen atom masses ()
+- `calculate_adduct_mass` now also supports F/Br/I halogen atom masses (a34092c)
 
 ##### Changed 🔄
 - `get_core` and `get_modification` can now better deal with cases such as `Neu5,9Ac2` (0967d8a)
 - `map_to_basic` is now cached, making functions that call it repeatedly (e.g., `structure_to_basic`) about 2x faster (e1c807a)
 - `mz_to_composition` and related functions are now faster (eac80ee)
+- `condense_composition_matching` now condenses better ()
 
 ##### Fixed 🐛
-- Fixed handling of `adduct` and `mass_tag` with multiply-charged glycans in `mz_to_composition` ()
-- Fixed handling of amino acid and ceramide aglycones (e.g., `GalNAc1Ser`, `GlcNAc1Asn`) in `glycan_to_composition` ()
+- Fixed handling of `adduct` and `mass_tag` with multiply-charged glycans in `mz_to_composition` (a34092c)
+- Fixed handling of amino acid and ceramide aglycones (e.g., `GalNAc1Ser`, `GlcNAc1Asn`) in `glycan_to_composition` (a34092c)
+- Fixed azido sugar masses ()
+- Fixed handling of reduced peracetylated glycans in `composition_to_mass` ()
 
 #### processing
 ##### Added ✨
