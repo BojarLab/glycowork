@@ -9,6 +9,7 @@ import pandas as pd
 import networkx as nx
 from collections import Counter, OrderedDict
 from functools import lru_cache, wraps
+from itertools import permutations
 
 PTM_REGEX = re.compile(r"(?<=[A-Za-z{])(?<!Neu)(\d+/\d+|\d+)(?=\D)(?![^()]*\))")
 NEGATION_REGEX = re.compile(r'(?<!\()(!\w+(?:\([^)]+\))?)')
@@ -26,18 +27,7 @@ _ROOT_CACHE = WeakKeyDictionary()
 _STUB_CACHE = WeakKeyDictionary()
 _ANCHOR_CACHE = WeakKeyDictionary()
 _DEG_CACHE = WeakKeyDictionary()
-
-
-def memoize_node_match(func):
-    """Memoization decorator for narrow wildcard lists"""
-    cache = {}
-    @wraps(func)
-    def wrapper(proc):
-        key = frozenset(proc)
-        if key not in cache:
-            cache[key] = func(proc)
-        return cache[key]
-    return wrapper
+_WILDCARD_CACHE = {}
 
 
 def _sl(g):  # cached string_labels, keyed on graph identity (subgraph views share g.graph, so it cannot live there)
@@ -113,11 +103,11 @@ def _with_ptm(g, orig):  # copy of g, built from the PTM-wildcarded string of or
     return g
 
 
-@memoize_node_match
 def build_wildcard_cache(proc: set) -> dict:
-    """Precompute all possible wildcard expansions"""
-    return {k: get_possible_linkages(k) for k in proc if '?' in k or ('/' in k and '-' in k)} | \
-        {k: get_possible_monosaccharides(k) for k in proc if MONO_PATTERN.match(k) or k.startswith('!') or ('/' in k and '-' not in k)}
+    """Precompute all possible wildcard expansions, cached per label set"""
+    if (hit := _WILDCARD_CACHE.get(key := frozenset(proc))) is None:
+        hit = _WILDCARD_CACHE[key] = {k: get_possible_linkages(k) for k in proc if '?' in k or ('/' in k and '-' in k)} | {k: get_possible_monosaccharides(k) for k in proc if MONO_PATTERN.match(k) or k.startswith('!') or ('/' in k and '-' not in k)}
+    return hit
 
 
 def resolve_anchor(ggraph: nx.DiGraph, # Glycan graph to search
@@ -318,9 +308,7 @@ def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
                     ) -> bool: # True if glycans are same (or glycan_a subsumes glycan_b), False if not
     "Check whether two glycans are identical, or whether glycan_a subsumes glycan_b"
     if glycan_a == glycan_b:
-        return ((True, {n: n for n in glycan_a.nodes}) if return_matches else True) if isinstance(glycan_a,
-                                                                                                  nx.DiGraph) else (
-            True, None) if return_matches else True
+        return (True, {n: n for n in glycan_a.nodes} if isinstance(glycan_a, nx.DiGraph) else None) if return_matches else True
     if subsumes:
         expand = lambda l: (frozenset(k for k in get_possible_linkages(l) if '?' not in k and '/' not in k) if IS_LINKAGE(l) else get_possible_monosaccharides(l)) or frozenset([l])
 
@@ -335,7 +323,7 @@ def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
         ga, gb = ensure_graph(glycan_a), ensure_graph(glycan_b)
         n_parts = nx.number_weakly_connected_components(gb)
         main_b = gb.subgraph(nx.node_connected_component(gb.to_undirected(as_view = True), 0))
-        # place glycan_a's floating parts one at a time (re-parsed, as get_possible_topologies only places the first floating part of a freshly parsed graph), keeping placements whose main part still embeds into glycan_b's at its root, until the layouts agree and every part of glycan_b sits on an equally or more general part of glycan_a
+        # place glycan_a's floating parts one at a time (as strings, so equal placements collapse into one lru-cached graph), keeping placements whose main part still embeds into glycan_b's at its root, until the layouts agree and every part of glycan_b sits on an equally or more general part of glycan_a
         frontier, same = [ga], False
         while frontier and not (same := any(_degs(g) == _degs(gb) and (any(hits) if (hits := _tree_embeddings(gb, g, covers)) is not None else nx.isomorphism.DiGraphMatcher(gb, g, covers).is_isomorphic()) for g in frontier if nx.number_weakly_connected_components(g) == n_parts)):
             placed = {}
@@ -390,7 +378,8 @@ def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
         # First check whether components of both glycan graphs are identical, then check graph isomorphism (costly)
         if sorted(g1_sl) != sorted(g2_sl):
             return (False, None) if return_matches else False
-        if graph_to_string(g1) != graph_to_string(g2):
+        # floating parts are written in numbering order, so the parts are compared as a multiset
+        if sorted(graph_to_string(g1).split('}')) != sorted(graph_to_string(g2).split('}')):
             return (False, None) if return_matches else False
         if not return_matches and not ptm:
             return True
@@ -847,15 +836,25 @@ def try_string_conversion(graph: nx.DiGraph # Glycan graph to validate
 def largest_subgraph(glycan_a: str | nx.DiGraph, # First glycan
                      glycan_b: str | nx.DiGraph # Second glycan
                      ) -> str: # Largest common subgraph in IUPAC format
-    "Find the largest common subgraph of two glycans"
-    graph_a = ensure_graph(glycan_a)
-    graph_b = ensure_graph(glycan_b)
-    ismags = nx.isomorphism.ISMAGS(graph_a, graph_b,
-                                   node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
-    largest_common_subgraph = list(ismags.largest_common_subgraph(symmetry = False))
-    if not largest_common_subgraph:
-        return ''
-    return graph_to_string(graph_a.subgraph(largest_common_subgraph[0].keys()))
+    "Find the largest connected structure two glycans share, with wildcards and PTMs matching as in compare_glycans"
+    graph_a, graph_b = ensure_graph(glycan_a), ensure_graph(glycan_b)
+    wa, wb = (_ptm_wildcarded(graph_a), _ptm_wildcarded(graph_b)) if _has_o(graph_a) or _has_o(graph_b) else (graph_a, graph_b)
+    node_match, memo = categorical_node_match_wildcard('string_labels', 'unknown', build_wildcard_cache(set(_sl(wa)) | set(_sl(wb))), 'termini', 'flexible'), {}
+
+    def common(u, v):  # graph_a nodes of the largest shared subtree with u on v, its top node; children pair up one to one, and a linkage only counts with its donor, so nothing ends in a dangling linkage
+        if (u, v) not in memo:
+            memo[u, v] = None
+            if node_match(wa.nodes[u], wb.nodes[v]):
+                ca, cb = list(wa.successors(u)), list(wb.successors(v))
+                subs = [[common(x, y) for y in cb] for x in ca]
+                w = subs if len(ca) <= len(cb) else [list(c) for c in zip(*subs)]
+                picked = max(([s for i, j in enumerate(p) if (s := w[i][j])] for p in permutations(range(len(w[0])), len(w))), key = lambda ss: sum(map(len, ss))) if ca and cb else []
+                if picked or not IS_LINKAGE(wa.nodes[u]['string_labels']):
+                    memo[u, v] = frozenset([u]).union(*picked)
+        return memo[u, v]
+
+    best = max((s for u in wa for v in wb if (s := common(u, v))), key = len, default = None)
+    return graph_to_string(graph_a.subgraph(best)) if best else ''
 
 
 def get_possible_topologies(glycan: str | nx.DiGraph, # Glycan with floating substituent
@@ -869,7 +868,9 @@ def get_possible_topologies(glycan: str | nx.DiGraph, # Glycan with floating sub
     parts = [ggraph.subgraph(c) for c in nx.weakly_connected_components(ggraph)]
     if len(parts) == 1:
         raise ValueError("This glycan already has a defined topology; please don't use this function.")
-    main_part, floating_part = parts[-1], parts[0]
+    # the main part holds node 0; an anchored bit goes first, as its alternatives are what compare_glycans has to resolve
+    main_part, floating = next(p for p in parts if 0 in p), [p for p in parts if 0 not in p]
+    floating_part = next((p for p in floating if 'anchors' in ggraph.nodes[max(p)]), floating[0])
     dangling_linkage = max(floating_part.nodes())
     is_modification = len(floating_part.nodes()) == 1
     anchors = ggraph.nodes[dangling_linkage].get('anchors', {})
@@ -884,9 +885,9 @@ def get_possible_topologies(glycan: str | nx.DiGraph, # Glycan with floating sub
         candidates = [(k, ggraph.nodes[dangling_linkage]['string_labels']) for i, k in enumerate(main_part.nodes()) if
                       i % 2 == 0 and (exhaustive or is_modification or main_part.out_degree[k] == 0)]
     for k, link in candidates:
-        dangling_carbon = modification[0] if is_modification else link[-1]
-        neighbor_carbons = [ggraph.nodes[n]['string_labels'][-1] for n in ggraph.neighbors(k) if n < k]
-        if dangling_carbon in neighbor_carbons:
+        # the bit cannot go on k only if every position it may take is already stated as taken there; '?' and '3/6' leave a position open
+        options = set((modification[0] if is_modification else link.split('-')[-1]).split('/'))
+        if all(o.isdigit() for o in options) and options <= {ggraph.nodes[n]['string_labels'].split('-')[-1] for n in ggraph.neighbors(k) if n < k}:
             continue
         new_graph = deepcopy(ggraph) if deep else ggraph.copy()
         new_graph.nodes[dangling_linkage].pop('anchors', None)
@@ -907,8 +908,12 @@ def get_possible_topologies(glycan: str | nx.DiGraph, # Glycan with floating sub
                                 f"{new_graph.nodes[k]['string_labels']}")
                 if disaccharide not in allowed_disaccharides:
                     continue
-        new_graph = nx.convert_node_labels_to_integers(new_graph)
-        topologies.append(new_graph)
+        # renumbered into glycan_to_nxGraph's layout (main part first, the placed bit ahead of it so the root stays last; remaining floating parts numbered after, inserted before), so the output can be placed again
+        main, rest = [n for n in new_graph if n in main_part or n in floating_part], [n for n in new_graph if n not in main_part and n not in floating_part]
+        mapping, out = {n: i for i, n in enumerate(main + rest)}, nx.DiGraph()
+        out.add_nodes_from((mapping[n], new_graph.nodes[n]) for n in rest + main)
+        out.add_edges_from((mapping[u], mapping[v]) for u, v in new_graph.edges())
+        topologies.append(out)
     return topologies if return_graphs else [graph_to_string(t) for t in topologies]
 
 

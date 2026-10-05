@@ -63,11 +63,16 @@
 - `canonicalize_composition` now also accepts dictionary compositions as inputs (0967d8a)
 - `canonicalize_iupac` is more robust to nomenclature variations (e1c807a)
 - Moved `PDB_TO_IUPAC` from `glycontact` up into `glycowork` to facilitate atom-coloring in `.draw.draw_chem3d` without `glycontact` dependencies (0a28132)
+- Refined `infer_features_from_composition` output ()
 
 ##### Fixed 🐛
 - `sanitize_iupac` no longer flags phosphodiesters (e1c807a)
 - Fixed handling of variantly capitalized monosaccharides in KCF (e1c807a)
 - Fixed handling of `NS` in GlycoWorkbench parsing (43d7a40)
+- Fixed `glycoctxml_to_iupac` dropping substituent positions such as in GlcNAc6S ()
+
+##### Deprecated ⚠️
+- Removed the `degrees` keyword argument from `glycoct_build_iupac`; handled automatically ()
 
 #### annotate
 ##### Added ✨
@@ -79,7 +84,7 @@
 
 ##### Fixed 🐛
 - Fixed `annotate_dataset`, `annotate_glycan_topology_uncertainty`, and `get_k_saccharides` counting motifs whose stated PTM positions differ from the glycan's (e.g., `Gal6S(b1-4)GlcNAcOS` in `Gal3S(b1-4)GlcNAc6S`, or `Terminal_Glc3Ac` in glycans with `Glc6Ac` and an `Ole` residue) as soon as either side contained an `O` (9576826)
-- Fixed labeling of `size_branch` `feature_set` bins ()
+- Fixed labeling of `size_branch` `feature_set` bins (79c0ac9)
 
 #### analysis
 ##### Added ✨

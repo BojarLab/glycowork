@@ -45,7 +45,7 @@ from glycowork.motif.processing import (
     presence_to_matrix, process_for_glycoshift, linearcode_to_iupac, iupac_extended_to_condensed,
     in_lib, get_class, enforce_class, equal_repeats, get_matching_indices, is_composition,
     bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono, iupac_to_smiles,
-    max_specify_glycan, parse_floating_bit, check_nomenclature
+    max_specify_glycan, parse_floating_bit, rescue_compositions
 )
 from glycowork.motif.smiles import (SKELETONS, ALDITOLS, SUBSTITUENTS, ENANTIOMER, CERAMIDE, GlycanSMILESError,
                                     glycan_to_smiles, glycan_to_molecule, smiles_to_iupac, looks_like_smiles,
@@ -1790,6 +1790,9 @@ def test_rescue_compositions():
     assert abs(result - 530) < 0.5
     result = composition_to_mass('H1N1F1') + 1.0078
     assert abs(result - 530) < 0.5
+    # Only the composition, which every decorated function takes first, is rescued; any other string argument stays as given
+    rescued = rescue_compositions(lambda comp, label: f"{sorted(comp.items())}{label}")
+    assert rescued('Hex1', 'Hex2') == "[('Hex', 1)]Hex2"
 
 
 # Test for get_random_glycan
@@ -1944,6 +1947,9 @@ LIN
     assert glycoctxml_to_iupac(xml) == "Gal(b1-4)Glcb"
     far = xml.replace('<linkage id="1"', '\n'.join(['      <!-- annotation -->'] * 12) + '\n      <linkage id="1"')
     assert glycoctxml_to_iupac(far) == "Gal(b?-?)Glcb"
+    # A substituent keeps its position, as in GlycoCT condensed: Gal6S, not GalOS
+    sulf = xml.replace('</residues>', '  <substituent id="3" name="sulfate" />\n      </residues>').replace('</linkages>', '  <connection id="2" parent="2" child="3">\n          <linkage id="2" parentType="o" childType="n">\n            <parent pos="6" />\n            <child pos="1" />\n          </linkage>\n        </connection>\n      </linkages>')
+    assert glycoctxml_to_iupac(sulf) == "Gal6S(b1-4)Glcb"
 
 
 def test_wurcs_to_iupac():
@@ -1970,6 +1976,9 @@ def test_oxford_to_iupac():
         oxford_to_iupac("A2F1")
     # ManXGlcNAc2 is the same high-mannose shorthand as MX
     assert oxford_to_iupac("Man9GlcNAc2") == oxford_to_iupac("M9")
+    # Oxford only writes M for high-mannose and hybrid glycans, so an antenna makes a hybrid, sialylated or not
+    assert oxford_to_iupac("M5A1G1") == "Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert oxford_to_iupac("A2G2GalNAc1").startswith("GalNAc(?1-?)Gal(b1-3/4)")
 
 
 def test_canonicalize_composition():
@@ -2057,6 +2066,8 @@ def test_parse_glycoform():
     assert result["high_Man"] == 0
     # Long-form composition strings go through canonicalize_composition instead of parsing to all zeros
     assert parse_glycoform("Hex5HexNAc4dHex1NeuAc2") == parse_glycoform("H5N4F1A2")
+    # The composition rules approximate process_for_glycoshift's structural definitions: Man5 is high-mannose, H5N4 complex, H6N3 hybrid
+    assert [(r['high_Man'], r['complex'], r['hybrid']) for r in map(parse_glycoform, ("H5N2", "H5N4", "H6N3"))] == [(1, 0, 0), (0, 1, 0), (0, 0, 1)]
 
 
 def test_presence_to_matrix():
@@ -2090,7 +2101,7 @@ def test_process_for_glycoshift():
     result, features = process_for_glycoshift(df)
     assert result.Glycoform.tolist() == [{'HexNAc': 4, 'Hex': 5, 'dHex': 1, 'Neu5Ac': 2},
                                          {'HexNAc': 3, 'Hex': 3, 'dHex': 1}]
-    assert result.complex.tolist() == [1, 0]
+    assert result.complex.tolist() == [1, 1]  # H3N3F1 is a monoantennary complex glycan, as the structural definition calls it
 
 
 def test_linearcode_to_iupac():
@@ -2215,6 +2226,8 @@ def test_IUPAC_to_SMILES():
     assert '@' in smiles[0]
     # Anything without a defined structure comes back empty rather than raising
     assert IUPAC_to_SMILES(["HexNAc(b1-4)Sia"]) == ['']
+    # A composition has no defined structure either, and must not abort the rest of the list
+    assert IUPAC_to_SMILES(["HexNAc(4)Hex(5)", "Gal(b1-4)GlcNAc"])[0] == ''
 
 
 def test_max_specify_glycan():
@@ -2226,6 +2239,9 @@ def test_max_specify_glycan():
     assert max_specify_glycan("Man(b1-4)GlcNAc(b1-4)[Fuc(a1-?)]GlcNAc") == "Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert max_specify_glycan("Fuc(a1-?)Gal(b1-4)Glc",
                               species = "Homo sapiens") == "Fuc(a1-2)Gal(b1-4)Glc"  # species written with a space
+    assert max_specify_glycan("GlcNAc(b1-?)GlcNAc(b1-2)Man(b1-4)GlcNAc(b1-?)GlcNAc") == "GlcNAc(b1-?)GlcNAc(b1-2)Man(b1-4)GlcNAc(b1-4)GlcNAc"  # only the core chitobiose is b1-4
+    with pytest.raises(ValueError, match = "not in df_species"):
+        max_specify_glycan("Gal", species = "Not_a_species")
 
 
 def test_unwrap():
@@ -3232,6 +3248,11 @@ def test_compare_glycans():
     assert not compare_glycans("Gal(b1-4)GlcNAc", "Gal(b1-3/4)GlcNAc", subsumes = True)
     assert not compare_glycans("Gal(b1-3/4)GlcNAc", "Gal(b1-?)GlcNAc", subsumes = True)
     assert compare_glycans("Hex(b1-4)GlcNAc", "Gal(b1-4)GlcNAc", subsumes = True)
+    assert compare_glycans("{Fuc(a1-?)}Gal(b1-?)GlcNAc", "Gal(b1-?)[Fuc(a1-?)]GlcNAc", subsumes = True)
+    # Test floating parts written in a different order, plain and next to an anchored bit
+    assert compare_glycans("{Fuc(a1-2)}{Neu5Ac(a2-3)}Gal(b1-4)GlcNAc", "{Neu5Ac(a2-3)}{Fuc(a1-2)}Gal(b1-4)GlcNAc")
+    assert compare_glycans("{Neu5Ac(a2-?)}" + ANCHORED, ANCHORED.replace("}", "}{Neu5Ac(a2-?)}", 1))
+    assert compare_glycans(glycan_to_nxGraph("{Neu5Ac(a2-?)}" + ANCHORED), glycan_to_nxGraph("{Neu5Ac(a2-?)}" + ANCHORED))
     assert compare_glycans("GalOS(b1-4)GlcNAc", "Gal6S(b1-4)GlcNAc", subsumes = True)
     assert not compare_glycans("Gal6S(b1-4)GlcNAc", "GalOS(b1-4)GlcNAc", subsumes = True)
     assert compare_glycans("{Fuc(a1-?)}{Fuc(a1-?)}Gal(b1-4)GlcNAc", "Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc", subsumes = True)
@@ -3285,6 +3306,9 @@ def test_largest_subgraph():
     glycan2 = "Man(a1-3)GlcNAc(b1-4)GlcNAc"
     result = largest_subgraph(glycan1, glycan2)
     assert "GlcNAc(b1-4)GlcNAc" in result
+    assert largest_subgraph("Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man", "Gal(b1-4)GlcNAc(b1-2)Man(a1-6)Man") == "Gal(b1-4)GlcNAc(b1-2)Man"
+    assert largest_subgraph("Fuc(a1-2)Gal", "Gal(a1-2)Gal") == "Gal"
+    assert largest_subgraph("Gal(b1-?)GlcNAc(b1-3)Gal", "Gal(b1-4)GlcNAc(b1-3)Gal") == "Gal(b1-?)GlcNAc(b1-3)Gal"
 
 
 def test_get_possible_topologies():
@@ -3297,6 +3321,9 @@ def test_get_possible_topologies():
     assert get_possible_topologies("{OS}Gal(b1-3)GalNAc") == ['GalOS(b1-3)GalNAc', 'Gal(b1-3)GalNAcOS']
     glycan = "{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert 'Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc' in get_possible_topologies(glycan)
+    assert get_possible_topologies("{Fuc(a1-?)}Gal(b1-?)GlcNAc", exhaustive = True) == ['Fuc(a1-?)Gal(b1-?)GlcNAc', 'Fuc(a1-?)[Gal(b1-?)]GlcNAc']
+    placed = get_possible_topologies("{Fuc(a1-2)}{Neu5Ac(a2-3)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man", return_graphs = True)[0]
+    assert len(again := get_possible_topologies(placed)) == 2 and all('Neu5Ac' in t and 'Fuc' in t for t in again)
     with pytest.raises(ValueError, match="This glycan already has a defined topology; please don't use this function."):
         get_possible_topologies("Gal(b1-4)GlcNAc")
 
