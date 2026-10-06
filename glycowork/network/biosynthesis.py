@@ -520,7 +520,7 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
                  compact: bool = False,  # Use compact SNFG style
                  glycan_size: str = 'small',  # Glycan size preset ('small', 'medium', 'large')
                  title: str | None = None  # Plot title; None for none, as before
-                 ) -> None:  # Displays plot, or returns it as a Jupyter-renderable SVG when draw_glycans without a filepath
+                 ) -> None:  # Jupyter-renderable plot (interactive HTML, or SVG with draw_glycans); outside Jupyter it opens in the browser
     "Visualize biosynthetic network"
     if plot_format == 'hierarchical':
         roots = [n for n in network.nodes() if network.in_degree(n) == 0]
@@ -538,7 +538,7 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
         for node, level in levels.items():
             level_nodes[level].append(node)
         max_level = max(levels.values()) if levels else 0
-        max_width = max(len(nodes) for nodes in level_nodes.values())
+        max_width = max((len(nodes) for nodes in level_nodes.values()), default = 1)
         pos = {}
         for level, nodes in level_nodes.items():
             for i, node in enumerate(nodes):
@@ -617,14 +617,16 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
         w, h = (1.5 * f * max(rows.values()), 1.8 * f * len(rows)) if max(rows.values()) > 1 else (1.5 * f * len(
             network) ** 0.5,) * 2
         fig, ax = plt.subplots(figsize = (min(60, max(12, w)), min(60, max(9, h))))
-        for (x0, x1), (y0, y1), color, width in zip(edge_data['xs'], edge_data['ys'], edge_data['color'],
-                                                    edge_data['width']):
+        # gids tag each arrow and node in the SVG, so the Jupyter display can attach hover text to them
+        for i, ((x0, x1), (y0, y1), color, width) in enumerate(zip(edge_data['xs'], edge_data['ys'], edge_data['color'],
+                                                                   edge_data['width'])):
             ax.annotate('', xy = (x1, y1), xytext = (x0, y0),
                         arrowprops = dict(arrowstyle = '-|>', color = color, linewidth = width, shrinkA = 0,
-                                          shrinkB = 0))
-        ax.scatter(node_data['x'], node_data['y'], s = [s ** 2 for s in node_data['size']], c = node_data['color'],
-                   alpha = node_data['alpha'], edgecolors = '#888888', linewidths = 1)
-        for x, y, name, s in zip(node_data['x'], node_data['y'], node_data['name'], node_data['size']):
+                                          shrinkB = 0)).arrow_patch.set_gid(f'gwedge{i}')
+        for i, (x, y, name, s, color, alpha) in enumerate(zip(node_data['x'], node_data['y'], node_data['name'],
+                                                              node_data['size'], node_data['color'], node_data['alpha'])):
+            ax.scatter(x, y, s = s ** 2, color = color, alpha = alpha, edgecolors = '#888888', linewidths = 1,
+                       gid = f'gwnode{i}')
             # anchored just right of the node, since annotate_figure grows the SNFG from the label's own origin
             ax.annotate(name, (x, y), textcoords = 'offset points', xytext = (s / 2 + 4, 0), fontsize = 8, ha = 'left',
                         va = 'center')
@@ -650,49 +652,105 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
             svg = annotate_figure(svg_temp, filepath = filepath, compact = compact, glycan_size = glycan_size)
         if svg is None and filepath and Path(filepath).suffix.lower() == '.svg':
             svg = Path(filepath).read_text(encoding = 'utf-8')
-        if svg and is_jupyter():
-            from IPython.display import SVG
-            return SVG(svg)
-        if svg and not filepath:
-            from glycowork.motif.draw import display_svg_with_matplotlib
-            display_svg_with_matplotlib(svg)
-        return
-    from bokeh.plotting import figure, show
-    from bokeh.io import output_notebook
-    from bokeh.models import HoverTool, Arrow, NormalHead, LabelSet, ColumnDataSource
-    try:
-        output_notebook()
-    except (ImportError, RuntimeError, Exception):
-        pass
-    p = figure(width = 900, height = 900, x_range = (-1.2, 1.2), y_range = (-1.2, 1.2),
-               tools = "pan,wheel_zoom,box_zoom,reset,save", toolbar_location = "above",
-               x_axis_type = None, y_axis_type = None, background_fill_color = "white",
-               title = title if title is not None else None)
-    # Draw nodes with hover
-    node_renderer = p.scatter('x', 'y', size = 'size', color = 'color', alpha = 'alpha', line_color = "#888",
-                              line_width = 1, source = ColumnDataSource(data = node_data))
-    p.add_tools(HoverTool(renderers = [node_renderer], tooltips = [("Node", "@name")]))
-    for edge, color, width in zip(network.edges(), edge_data['color'], edge_data['width']):
-        p.add_layout(
-            Arrow(end = NormalHead(size = 8, fill_color = color), x_start = pos[edge[0]][0], y_start = pos[edge[0]][1],
-                  x_end = pos[edge[1]][0], y_end = pos[edge[1]][1], line_width = width, line_color = color))
-    # Draw visible edges as segments; multi_line renderer (invisible) enables hover tooltips
-    edge_source = ColumnDataSource(data = edge_data)
-    edge_renderer = p.multi_line('xs', 'ys', color = 'color', line_width = 'width', source = edge_source, line_alpha = 0)
-    p.add_tools(HoverTool(renderers = [edge_renderer], tooltips = [("Reaction", "@label")]))
-    p.segment([x[0] for x in edge_data['xs']], [y[0] for y in edge_data['ys']],
-              [x[1] for x in edge_data['xs']], [y[1] for y in edge_data['ys']],
-              color = edge_data['color'], line_width = edge_data['width'])
-    # Add all edge labels in one LabelSet
-    if edge_label_draw:
-        p.add_layout(LabelSet(x = 'x', y = 'y', text = 'text', text_color = 'black', text_font_size = '10pt',
-                              x_offset = 0, y_offset = 0, text_align = 'center',
-                              source = ColumnDataSource(data = dict(
-                                  x = [(pos[e[0]][0] + pos[e[1]][0]) / 2 for e in network.edges()],
-                                  y = [(pos[e[0]][1] + pos[e[1]][1]) / 2 for e in network.edges()],
-                                  text = [edge_attributes.get(e, '') for e in network.edges()]))))
-    show(p)
-    return p
+        if not (svg and is_jupyter()):
+            if svg and not filepath:
+                from glycowork.motif.draw import display_svg_with_matplotlib
+                display_svg_with_matplotlib(svg)
+            return
+    import html
+    from uuid import uuid4
+    from glycowork.motif.draw import is_jupyter
+    uid = f'gwnet{uuid4().hex[:12]}'
+    W = H = 900
+    if draw_glycans:
+        # Jupyter display of the SNFG figure: hover text goes onto the elements tagged by gid above
+        for i, name in enumerate(node_data['name']):
+            svg = svg.replace(f'<g id="gwnode{i}">', f'<g id="gwnode{i}"><title>Node: {html.escape(name)}</title>', 1)
+        for i, lab in enumerate(edge_data['label']):
+            # the arrow's line again as a wide transparent stroke, so a thin edge is easy to hover
+            svg = re.sub(rf'<g id="gwedge{i}">\s*(<path d="[^"]*")', lambda m: (
+                f'<g id="gwedge{i}"><title>Reaction: {html.escape(lab)}</title>{m[1]} '
+                f'style="fill:none;stroke:transparent;stroke-width:9;pointer-events:stroke"/>{m[1]}'), svg, count = 1)
+        # inlined into the notebook page, so ids get the plot's uid; otherwise two figures resolve each other's glyphs
+        svg = re.sub(r'(\bid="|href="#|url\(#)', rf'\g<1>{uid}', svg[svg.index('<svg'):]).replace(
+            '<svg', '<svg style="max-width:100%;height:auto;background:#fff"', 1)
+    else:
+        # Interactive plot as self-contained SVG + HTML; <title> elements are the hover text where scripts can't run
+        pad = max(node_data['size'], default = 0) / 2 + 30
+        x_lo, x_hi = min(node_data['x'], default = 0), max(node_data['x'], default = 0)
+        y_lo, y_hi = min(node_data['y'], default = 0), max(node_data['y'], default = 0)
+        px = lambda x: W / 2 if x_hi == x_lo else pad + (x - x_lo) * (W - 2 * pad) / (x_hi - x_lo)
+        py = lambda y: H / 2 if y_hi == y_lo else H - pad - (y - y_lo) * (H - 2 * pad) / (y_hi - y_lo)
+        heads = {k: i for i, k in enumerate(dict.fromkeys(zip(edge_data['color'], edge_data['width'])))}
+        parts = ['<defs>'] + [f'<marker id="{uid}-{i}" viewBox="0 0 10 10" refX="0" refY="5" '
+                              f'markerWidth="{6 + 2 * w}" markerHeight="{6 + 2 * w}" markerUnits="userSpaceOnUse" '
+                              f'orient="auto"><path d="M0,0L10,5L0,10z" fill="{html.escape(c)}"/></marker>'
+                              for (c, w), i in heads.items()] + ['</defs><g>']
+        hits, labels = [], []
+        for (x0, x1), (y0, y1), c, w, lab in zip(edge_data['xs'], edge_data['ys'], edge_data['color'],
+                                                 edge_data['width'], edge_data['label']):
+            xy = f'x1="{px(x0):.1f}" y1="{py(y0):.1f}" x2="{px(x1):.1f}" y2="{py(y1):.1f}"'
+            parts.append(f'<line {xy} stroke="{html.escape(c)}" stroke-width="{w}" '
+                         f'marker-end="url(#{uid}-{heads[(c, w)]})"/>')
+            # invisible wider twin, so a thin edge is easy to hover
+            hits.append(f'<line {xy} stroke="transparent" stroke-width="{max(w, 9)}" style="pointer-events:stroke">'
+                        f'<title>Reaction: {html.escape(lab)}</title></line>')
+            if edge_label_draw:
+                labels.append(f'<text x="{px((x0 + x1) / 2):.1f}" y="{py((y0 + y1) / 2):.1f}">'
+                              f'{html.escape(lab)}</text>')
+        parts += hits
+        for x, y, name, s, c, a in zip(node_data['x'], node_data['y'], node_data['name'], node_data['size'],
+                                       node_data['color'], node_data['alpha']):
+            parts.append(f'<circle cx="{px(x):.1f}" cy="{py(y):.1f}" r="{s / 2}" fill="{html.escape(c)}" '
+                         f'opacity="{a}" stroke="#888"><title>Node: {html.escape(name)}</title></circle>')
+        parts.append(f'</g><g text-anchor="middle" dominant-baseline="central" font-size="13.3" '
+                     f'style="pointer-events:none">{"".join(labels)}</g>')
+        svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" '
+               f'style="max-width:100%;height:auto;background:#fff;cursor:grab;touch-action:none;user-select:none">'
+               f'{"".join(parts)}</svg>')
+    # notebook scripts share one global scope, so the script runs inside a function: top-level constants would make
+    # a second plot (or a rerun) fail on redeclaring them
+    js = ("(()=>{const r=document.currentScript?.parentNode||document.getElementById('UID'),"
+          "s=r.querySelector('svg'),t=r.querySelector('div[data-tooltip]'),"
+          "A={circle:['cx','cy'],line:['x1','y1','x2','y2'],text:['x','y']};"
+          "s.querySelectorAll('title').forEach(e=>{e.parentNode.dataset.tip=e.textContent;e.remove()});"
+          "const els=[...s.querySelectorAll('circle,line,text')].map(e=>[e,A[e.tagName].map(a=>+e.getAttribute(a))]);"
+          "let k=1,tx=0,ty=0,drag=null;"
+          "const draw=()=>els.forEach(([e,b])=>A[e.tagName].forEach((a,i)=>e.setAttribute(a,b[i]*k+(i%2?ty:tx))));"
+          "const u=ev=>{const q=s.getBoundingClientRect(),f=WIDTH/q.width;"
+          "return[(ev.clientX-q.left)*f,(ev.clientY-q.top)*f]};")
+    # pan and zoom only for the interactive plot; the SNFG figure is a fixed layout and only gets tooltips
+    if not draw_glycans:
+        js += ("s.addEventListener('wheel',ev=>{if(!(ev.ctrlKey||ev.metaKey))return;ev.preventDefault();"
+               "const[x,y]=u(ev),f=Math.exp(-ev.deltaY/300);k*=f;tx=x-(x-tx)*f;ty=y-(y-ty)*f;draw()},{passive:false});"
+               "s.addEventListener('pointerdown',ev=>{drag=u(ev);t.style.display='none';"
+               "s.setPointerCapture(ev.pointerId)});"
+               "s.addEventListener('pointerup',()=>{drag=null});"
+               "s.addEventListener('dblclick',()=>{k=1;tx=ty=0;draw()});")
+    js += ("s.addEventListener('pointerleave',()=>{t.style.display='none'});"
+           "s.addEventListener('pointermove',ev=>{if(drag){const[x,y]=u(ev);tx+=x-drag[0];ty+=y-drag[1];drag=[x,y];"
+           "return draw()}const e=ev.target.closest('[data-tip]'),q=r.getBoundingClientRect();"
+           "if(!e)return t.style.display='none';t.textContent=e.dataset.tip;t.style.display='block';"
+           "t.style.left=ev.clientX-q.left+14+'px';t.style.top=ev.clientY-q.top+14+'px'})})()")
+    js = js.replace('UID', uid).replace('WIDTH', str(W))
+    page = (f'<div id="{uid}" style="position:relative;display:inline-block;font-family:sans-serif;color:#222">'
+            + (f'<div style="font-weight:bold;font-size:14px;margin:4px 0">{html.escape(str(title))}</div>'
+               if title is not None and not draw_glycans else '') + svg
+            + '<div style="font-size:11px;color:#888">Hover for details'
+            + ('' if draw_glycans else ', drag to pan, Ctrl+scroll to zoom, double-click to reset') + '</div>'
+            '<div data-tooltip style="position:absolute;display:none;pointer-events:none;background:#fff;'
+            'border:1px solid #ccc;border-radius:4px;padding:4px 8px;font-size:12px;white-space:nowrap;'
+            'box-shadow:0 2px 6px rgba(0,0,0,.15)"></div>'
+            f'<script>{js}</script></div>')
+    if is_jupyter():
+        from IPython.display import HTML
+        return HTML(page)
+    import tempfile
+    import webbrowser
+    with tempfile.NamedTemporaryFile('w', suffix = '.html', delete = False, encoding = 'utf-8') as f:
+        f.write(f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>{html.escape(str(title or "Biosynthetic network"))}'
+                f'</title></head><body>{page}</body></html>')
+    webbrowser.open(Path(f.name).as_uri())
 
 
 def network_alignment(network_a: nx.DiGraph, # First network

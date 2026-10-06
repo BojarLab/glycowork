@@ -1,6 +1,7 @@
 # Changelog
 
 ## [1.10.2]
+- Removed the `bokeh` dependency from `glycowork`; handled within-package instead ()
 
 ### motif
 #### smiles
@@ -170,8 +171,8 @@
 - Added new curated glycoproteomics datasets: `tomato_fruit_mnsI1_N_PMID41017156`, `human_hek293_stt3_N_PMID36139350`, `human_hek293_surface_N_PMID39930009`, `mouse_tissues_N_PMID39930009`, `mouse_brain_neurodegeneration_N_PMID40593524`, `mouse_macrophages_infection_N_PMC8416091`, `human_serum_igg_liverdisease_N_PMID36879659`, `human_fibroblasts_srd5a3cdg_N_PMID39360848`, `human_fibroblasts_ngly1cddg_N_PMID36102038`, `schistosoma_mansoni_sex_N_PMID41545360`, and `schistosoma_mansoni_sex_O_PMID41545360` to `glycoproteomics_data_loader` (99ad40e)
 
 ##### Changed 🔄
-- Streamlined row labels of `human_milk_N_PMID34087070` glycoproteomics dataset ()
-- Re-curated labels of `human_keratinocytes_N_PMID37956981` and `sorghum_N_PMID39137587` glycoproteomics datasets ()
+- Streamlined row labels of `human_milk_N_PMID34087070` glycoproteomics dataset (69d0a3e)
+- Re-curated labels of `human_keratinocytes_N_PMID37956981` and `sorghum_N_PMID39137587` glycoproteomics datasets (69d0a3e)
 
 ##### Deprecated ⚠️
-- Removed `human_lipoproteins_PMC9218963` glycoproteomics dataset (no per-sample values) ()
+- Removed `human_lipoproteins_PMC9218963` glycoproteomics dataset (no per-sample values) (69d0a3e)

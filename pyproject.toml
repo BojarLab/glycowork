@@ -30,7 +30,6 @@ dependencies = [
     "networkx>=3.0",
     "scipy>=1.16",
     "seaborn",
-    "bokeh",
     "pandas>=2.1",
     "drawSvg~=2.0",
     "openpyxl",

@@ -7740,65 +7740,51 @@ def test_extend_network_specific_leaf(extension_test_network):
         assert subgraph_isomorphism(new_glycan, leaf_to_extend)
 
 
-@patch('bokeh.io.output_notebook')
-@patch('bokeh.plotting.show')
-def test_plot_network_basic(mock_show, mock_enable, evo_test_networks):
+@patch('glycowork.motif.draw.is_jupyter', return_value = True)
+def test_plot_network_basic(mock_jupyter, evo_test_networks):
     """Test basic network plotting functionality"""
     main_net, _ = evo_test_networks
     plot = plot_network(main_net, plot_format = 'kamada_kawai', draw_glycans = False)
-    # Check that plot was created
-    assert plot is not None
-    # Check renderer properties
-    assert len(plot.renderers) > 0
+    # one hoverable circle per node, plus hoverable reactions
+    assert plot.data.count('<circle') == len(main_net) and 'Reaction: ' in plot.data
     # Test without edge labels
     plot = plot_network(main_net, plot_format = 'kamada_kawai', edge_label_draw = False, draw_glycans = False)
-    assert plot is not None
+    assert '<text ' not in plot.data
     plt.close('all')
 
 
-@patch('bokeh.io.output_notebook')
-@patch('bokeh.plotting.show')
-def test_plot_network_n(mock_show, mock_enable, n_glycan_network):
+@patch('glycowork.motif.draw.is_jupyter', return_value = True)
+def test_plot_network_n(mock_jupyter, n_glycan_network):
     """Test basic network plotting functionality for N-glycans"""
     plot = plot_network(n_glycan_network, plot_format = 'spring', draw_glycans = False)
-    # Check that plot was created
-    assert plot is not None
-    # Check renderer properties
-    assert len(plot.renderers) > 0
+    assert plot.data.count('<circle') == len(n_glycan_network) and 'Reaction: ' in plot.data
     # Test without edge labels
     plot = plot_network(n_glycan_network, plot_format = 'spring', edge_label_draw = False, draw_glycans = False)
-    assert plot is not None
+    assert '<text ' not in plot.data
     plt.close('all')
 
 
-@patch('bokeh.io.output_notebook')
-@patch('bokeh.plotting.show')
-def test_plot_network_with_edge_labels(mock_show, mock_enable, evo_test_networks):
+@patch('glycowork.motif.draw.is_jupyter', return_value = True)
+def test_plot_network_with_edge_labels(mock_jupyter, evo_test_networks):
     """Test network plotting with edge labels"""
     main_net, _ = evo_test_networks
     plot = plot_network(main_net, plot_format = 'kamada_kawai', edge_label_draw = True, draw_glycans = False)
-    # Check for edge labels
-    assert plot is not None
+    assert '<text ' in plot.data
     plt.close('all')
 
 
-@patch('bokeh.io.output_notebook')
-@patch('bokeh.plotting.show')
-def test_plot_network_with_lfc(mock_show, mock_enable, evo_test_networks):
+@patch('glycowork.motif.draw.is_jupyter', return_value = True)
+def test_plot_network_with_lfc(mock_jupyter, evo_test_networks):
     """Test network plotting with log fold change data"""
     lfc_dict = {'Fuc(a1-2)': 1.5, 'GlcNAc(b1-3)': -0.5}
     main_net, _ = evo_test_networks
     plot = plot_network(main_net, plot_format = 'kamada_kawai', edge_label_draw = True, lfc_dict = lfc_dict, draw_glycans = False)
-    # Verify plot was created
-    assert plot is not None
-    # Check for renderers
-    assert len(plot.renderers) > 0
+    assert '<circle' in plot.data and '<marker' in plot.data
     plt.close('all')
 
 
-@patch('bokeh.io.output_notebook')
-@patch('bokeh.plotting.show')
-def test_plot_network_layouts(mock_show, mock_enable, evo_test_networks):
+@patch('glycowork.motif.draw.is_jupyter', return_value = True)
+def test_plot_network_layouts(mock_jupyter, evo_test_networks):
     """Test different layout options with fallback handling"""
     # Test kamada_kawai and spring layouts which don't require external dependencies
     safe_layouts = ['kamada_kawai', 'spring']
@@ -7831,7 +7817,7 @@ def test_plot_network_static_figure(tmp_path, evo_test_networks):
     # without a filepath the SNFG figure is built in a temp dir and handed back for Jupyter to render
     with patch('glycowork.motif.draw.is_jupyter', return_value = True):
         out = plot_network(main_net, plot_format = 'kamada_kawai')
-    assert out is not None and '<svg' in out.data
+    assert out is not None and '<svg' in out.data and 'Node: ' in out.data and 'Reaction: ' in out.data
     assert not list(tmp_path.glob('*_temp.svg'))
     # ...and outside Jupyter it is shown through matplotlib instead of vanishing
     with patch('glycowork.motif.draw.is_jupyter', return_value = False), patch(
@@ -7842,13 +7828,16 @@ def test_plot_network_static_figure(tmp_path, evo_test_networks):
 
 
 def test_plot_network_no_notebook(evo_test_networks):
-    """Test fallback behavior when not in notebook"""
+    """Outside Jupyter the interactive plot is written to a temporary HTML file and opened in the browser"""
+    from urllib.request import url2pathname
+    from urllib.parse import urlparse
     main_net, _ = evo_test_networks
-    with patch('bokeh.io.output_notebook', side_effect=Exception):
-        with patch('bokeh.plotting.show') as mock_show:
-            plot = plot_network(main_net, plot_format = 'kamada_kawai', draw_glycans = False)
-            # Even with notebook initialization failing, should still return a plot
-            assert plot is not None
+    with patch('glycowork.motif.draw.is_jupyter', return_value = False), patch('webbrowser.open') as mock_open:
+        assert plot_network(main_net, plot_format = 'kamada_kawai', draw_glycans = False, title = 'Milk') is None
+    page = Path(url2pathname(urlparse(mock_open.call_args[0][0]).path))
+    text = page.read_text(encoding = 'utf-8')
+    page.unlink()
+    assert '<title>Milk</title>' in text and 'Node: ' in text and '<script>' in text
     plt.close('all')
 
 
@@ -7922,9 +7911,8 @@ def test_get_biosynthetic_coherence_prebuilt_network_and_column_index():
   assert set(result.columns) == _EXPECTED_COLS
 
 
-@patch('bokeh.io.output_notebook')
-@patch('bokeh.plotting.show')
-def test_infer_network(mock_show, mock_enable):
+@patch('glycowork.motif.draw.is_jupyter', return_value = True)
+def test_infer_network(mock_jupyter):
     net = construct_network(["Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"])
     spec_dic = {"test": construct_network(["GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"]), "org": net}
     net2 = infer_network(net, "org", ["test", "org"], spec_dic)
@@ -10268,10 +10256,10 @@ def test_get_biosynthetic_coherence_nothing_scorable():
         get_biosynthetic_coherence(df, list(df.columns[:3]), list(df.columns[3:]), n_permutations = 0)
 
 
-@patch('bokeh.io.output_notebook')
-@patch('bokeh.plotting.show')
-def test_plot_network_hierarchical_and_origin(mock_show, mock_enable, sample_network):
+@patch('glycowork.motif.draw.is_jupyter', return_value = True)
+def test_plot_network_hierarchical_and_origin(mock_jupyter, sample_network):
     assert plot_network(sample_network, plot_format = 'hierarchical', draw_glycans = False) is not None  # diamond revisits a levelled node
+    assert '<circle' not in plot_network(nx.DiGraph(), draw_glycans = False).data
     nx.set_node_attributes(sample_network, {n: 'red' for n in sample_network.nodes()}, 'origin')
     assert plot_network(sample_network, plot_format = 'hierarchical', draw_glycans = False) is not None
     plt.close('all')
