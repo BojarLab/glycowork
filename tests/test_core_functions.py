@@ -622,6 +622,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("WURCS=2.0/5,5,4/[Aad1122h-2x_2-?][a11221h-1a_1-5][a11221h-1a_1-5_7*OP^XOCCN/3O/3=O][a2122h-1a_1-5_2*NCC/3=O][a2122h-1b_1-5]/1-2-3-4-5/a5-b1_b3-c1_b4-e1_c2-d1") == "GlcNAc(a1-2)LDManHep7PEtN(a1-3)[Glc(b1-4)]LDManHep(a1-5)Kdo"
     assert canonicalize_iupac("WURCS=2.0/6,11,10/[a2122h-1x_1-5_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a2112h-1b_1-5][a1221m-1a_1-5]/1-2-3-4-2-5-4-2-6-2-5/a4-b1_a6-i1_b4-c1_c3-d1_c6-g1_d2-e1_e4-f1_g2-h1_j4-k1_j1-d4|d6|g4|g6}") == "{Gal(b1-4)GlcNAc(b1-?)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"  # attachment alternatives across residues leave the part floating
     assert canonicalize_iupac("Man2F6P") == "Man2F6P"  # not Oxford
+    assert canonicalize_iupac("Neu5Ac(a2-?)Neu5Gc(a2-?)Gal") == "Neu5Ac(a2-8)Neu5Gc(a2-3/6)Gal"
     with pytest.raises(ValueError, match = 'repeating units'):
         canonicalize_iupac("WURCS=2.0/3,3,3/[a2211m-1a_1-5][a2122h-1a_1-5][a1122h-1b_1-5_2*NCC/3=O]/1-2-3/a2-b1_b4-c1_a1-c?~n")
     assert canonicalize_iupac(782) == "Gal(?1-?)[GlcNAcOS(?1-?)]GalNAc"
@@ -4668,6 +4669,30 @@ def test_plot_glycans_excel_column_name_and_kwargs(tmp_path):
     assert len(flat._images) == len(tall._images) == 1
     assert tall.row_dimensions[2].height > flat.row_dimensions[2].height
     assert tall.column_dimensions['C'].width < flat.column_dimensions['C'].width
+    # Each picture carries a vector twin that Excel 2016+ draws, and its PNG fallback is 4x the display size
+    import zipfile
+    with zipfile.ZipFile(tmp_path / "flat.xlsx") as z:
+        names = ('drawings/drawing1.xml', 'media/image1.png', 'media/image1.svg', 'drawings/_rels/drawing1.xml.rels')
+        drawing, png, svg, rels = (z.read('xl/' + name) for name in names)
+        assert b'image/svg+xml' in z.read('[Content_Types].xml') and b'image1.svg" Id="rId1s"' in rels
+    assert b'<asvg:svgBlip' in drawing and b'r:embed="rId1s"' in drawing
+    assert svg.startswith(b'<?xml') and b'<text' not in svg
+    display_width = int(re.search(rb'<ext cx="(\d+)"', drawing).group(1)) / 9525
+    assert abs(int.from_bytes(png[16:20], 'big') - 4 * display_width) <= 2
+    # The column fits the widest picture, not whichever came last
+    big = 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc'
+    plot_glycans_excel(pd.DataFrame({'Glycan': [big, 'Gal(b1-3)GalNAc']}), str(tmp_path / "two.xlsx"))
+    with zipfile.ZipFile(tmp_path / "two.xlsx") as z:
+        widest = int(re.search(rb'<ext cx="(\d+)"', z.read('xl/drawings/drawing1.xml')).group(1)) / 9525
+    assert round(load_workbook(tmp_path / "two.xlsx").active.column_dimensions['B'].width * 7) >= widest
+    # Office's SVG renderer ignores filters, so shadowed glycans keep only their PNG, while a sticker cut is vector
+    plot_glycans_excel(df, str(tmp_path / "shadow.xlsx"), glycan_col_num = 'Glycan', shadow = True)
+    plot_glycans_excel(df, str(tmp_path / "sticker.xlsx"), glycan_col_num = 'Glycan', sticker = True)
+    with zipfile.ZipFile(tmp_path / "shadow.xlsx") as shadow, zipfile.ZipFile(tmp_path / "sticker.xlsx") as sticker:
+        assert 'xl/media/image1.svg' not in shadow.namelist() and 'xl/media/image1.svg' in sticker.namelist()
+    # Without a drawable glycan there is nothing to patch
+    plot_glycans_excel(pd.DataFrame({'Glycan': [np.nan]}), str(tmp_path / "none.xlsx"))
+    assert not load_workbook(tmp_path / "none.xlsx").active._images
 
 def test_plot_glycans_grid(tmp_path):
     glycans = ["Gal(b1-4)GlcNAc", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc", "Fuc(a1-2)Gal", "Man(a1-3)[Man(a1-6)]Man", "H5N4"]

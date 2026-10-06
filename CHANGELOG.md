@@ -35,6 +35,7 @@
 - Fixed `Altf` and `Tagf` not being recognized as furanoses by `GlycoDraw` (0967d8a)
 - Fixed `NS` not being recognized as a joint modification by `GlycoDraw` (0967d8a)
 - Fixed `draw_method='chem2d', filepath='x.png'` not saving a `png` (0967d8a)
+- Fixed blurriness of glycan drawings in `plot_glycans_excel` ()
 
 #### tokenization
 ##### Added ✨
@@ -59,8 +60,8 @@
 - The LINUCS nomenclature is now also supported in Universal Input/`canonicalize_iupac` via the new `linucs_to_iupac` parser (e1c807a)
 - StrucGP structure codes (e.g., `A2B2C1D1E2F1fedD1E2edcbB5ba`) are now also supported in Universal Input/`canonicalize_iupac` via the new `strucgp_to_iupac` parser, which infers monosaccharides and linkages from N-glycan position and StrucGP's arm order (99ad40e)
 - Universal Input/`canonicalize_composition` now also supports composition nomenclatures from Byonic, FragPipe, GlycoMod, GlyHunter, GlyCombo, LaCyTools, MassyTools, GlycoGenius, and GlycReSoft (e1c807a, f936c23)
-- Expanded GlyTouCan ID coverage ()
-- Support heptoses in WURCS conversion ()
+- Expanded GlyTouCan ID coverage (dc0e740)
+- Support heptoses in WURCS conversion (dc0e740)
 
 ##### Changed 🔄
 - `canonicalize_composition` now also accepts dictionary compositions as inputs (0967d8a)
@@ -73,8 +74,8 @@
 - Fixed handling of variantly capitalized monosaccharides in KCF (e1c807a)
 - Fixed handling of `NS` in GlycoWorkbench parsing (43d7a40)
 - Fixed `glycoctxml_to_iupac` dropping substituent positions such as in GlcNAc6S (342a605)
-- Fixed `wurcs_to_iupac` leaving `|` in its output for attachment alternatives spanning several residues (e.g., `d4|d6|g4|g6`), which now give a floating part ()
-- Fixed lone residues with positioned substituents (e.g., `Man2F6P`) being read as Oxford nomenclature by `canonicalize_iupac` ()
+- Fixed `wurcs_to_iupac` leaving `|` in its output for attachment alternatives spanning several residues (e.g., `d4|d6|g4|g6`), which now give a floating part (dc0e740)
+- Fixed lone residues with positioned substituents (e.g., `Man2F6P`) being read as Oxford nomenclature by `canonicalize_iupac` (dc0e740)
 
 ##### Deprecated ⚠️
 - Removed the `degrees` keyword argument from `glycoct_build_iupac`; handled automatically (342a605)
