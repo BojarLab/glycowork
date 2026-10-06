@@ -64,9 +64,8 @@ time_series_HMO_PMID22649065,PMID:22649065,10.1152/ajpendo.00175.2012,,,Homo sap
 time_series_N_PMID32149347,PMID:32149347,10.1093/glycob/cwaa020,,,Homo sapiens,macrophages,primary cells,,N,negative,reduced,PGC-LC
 time_series_O_PMID32149347,PMID:32149347,10.1093/glycob/cwaa020,,,Homo sapiens,macrophages,primary cells,,O,negative,reduced,PGC-LC
 human_keratinocytes_N_PMID37956981,PMID:37956981,10.1021/acs.analchem.3c03626,,,Homo sapiens,skin,cell line,,N,positive,none,RP-LC
-human_lipoproteins_PMC9218963,PMC9218963,10.1039/d2ra02294j,,,Homo sapiens,plasma,body fluid,,N/O,positive,none,RP-LC
 human_milk_N_PMID34087070,PMID:34087070,10.1021/acs.jafc.0c07998,,,Homo sapiens,milk,body fluid,,N,positive,none,RP-LC
-sorghum_N_PMID39137587,PMID:39137587,10.1016/j.bbrc.2024.150509,,,Sorghum bicolor,,plant tissue,,N,positive,none,RP-LC
+sorghum_N_PMID39137587,PMID:39137587,10.1016/j.bbrc.2024.150509,,,Sorghum bicolor,,plant tissue,,N,positive,diethyl,RP-LC
 tomato_fruit_mnsI1_N_PMID41017156,PMID:41017156,10.1016/j.xplc.2025.101537,ProteomeXchange,PXD059300,Solanum lycopersicum,fruit,plant tissue,,N,positive,none,RP-LC
 human_hek293_stt3_N_PMID36139350,PMID:36139350,10.3390/cells11182775,ProteomeXchange,PXD031276,Homo sapiens,kidney,cell line,,N,positive,none,RP-LC
 human_hek293_surface_N_PMID39930009,PMID:39930009,10.1038/s41594-025-01485-w,ProteomeXchange,PXD052447,Homo sapiens,kidney,cell line,,N,positive,TMT,RP-LC

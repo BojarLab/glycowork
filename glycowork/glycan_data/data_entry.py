@@ -113,7 +113,8 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
         elif sig == 'pglyco':
             runs, prots = list(col('rawname')), [str(p).split(';')[0] for p in col('proteins')]
             pairs = [[(re.sub(r'\.0+$', '', str(s).split(';')[0]), g)] if isinstance(g, str) and pd.notna(s) else [] for s, g in zip(col('prosites'), col('glycancomposition'))]
-            ions = [f'{p}/{m}/{z}/{g}' for p, m, z, g in zip(col('peptide'), col('mod'), col('charge'), col('glycancomposition'))]
+            wide = {k: m[1] for k in df.columns if (m := re.fullmatch(r'ReportIon\s*\((.+)\)', str(k)))}  # pGlycoQuant TMT: one reporter ion column per channel, named by its m/z
+            ions = [f'{r}/{s}' for r, s in zip(runs, col('glyspec'))] if wide else [f'{p}/{m}/{z}/{g}' for p, m, z, g in zip(col('peptide'), col('mod'), col('charge'), col('glycancomposition'))]  # reporter ions come from each spectrum, so every PSM adds up, whereas an LFQ intensity belongs to the ion and is repeated on each of its PSMs
             vals = num('monoarea') if 'monoarea' in c and num('monoarea').gt(0).any() else None
         elif sig in ('byonic', 'byologic'):
             pep, comp, start = [c[next(k for k in c if k.startswith(x))] for x in (('sequence', 'glycans', 'startaa') if sig == 'byologic' else ('peptide', 'glycansnhfagna' if 'glycansnhfagna' in c else 'composition', 'startingposition' if 'startingposition' in c else 'position'))]

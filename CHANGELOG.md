@@ -62,16 +62,16 @@
 - Universal Input/`canonicalize_composition` now also supports composition nomenclatures from Byonic, FragPipe, GlycoMod, GlyHunter, GlyCombo, LaCyTools, MassyTools, GlycoGenius, and GlycReSoft (e1c807a, f936c23)
 - Expanded GlyTouCan ID coverage (dc0e740)
 - Support heptoses in WURCS conversion (dc0e740)
-- Added `strict` keyword argument to `canonicalize_composition` to raise an error if any non-valid component is present ()
-- Added `glycan_class` keyword argument to `parse_glycoform` and `process_for_glycoshift`, to prevent annotating O-glycoproteomics data with N-glycan features by `infer_features_from_composition` ()
-- Added `peptide` keyword argument to `composition_to_mass` and `glycan_to_mass`, to calculate glycopeptide masses ()
+- Added `strict` keyword argument to `canonicalize_composition` to raise an error if any non-valid component is present (4c31c0a)
+- Added `glycan_class` keyword argument to `parse_glycoform` and `process_for_glycoshift`, to prevent annotating O-glycoproteomics data with N-glycan features by `infer_features_from_composition` (4c31c0a)
+- Added `peptide` keyword argument to `composition_to_mass` and `glycan_to_mass`, to calculate glycopeptide masses (4c31c0a)
 
 ##### Changed 🔄
 - `canonicalize_composition` now also accepts dictionary compositions as inputs (0967d8a)
 - `canonicalize_iupac` is more robust to nomenclature variations (e1c807a)
 - Moved `PDB_TO_IUPAC` from `glycontact` up into `glycowork` to facilitate atom-coloring in `.draw.draw_chem3d` without `glycontact` dependencies (0a28132)
 - Refined `infer_features_from_composition` output (342a605)
-- `get_motif_dag` and `quantify_motifs` now also support glycoproteomics data, if glycan sequences are available ()
+- `get_motif_dag` and `quantify_motifs` now also support glycoproteomics data, if glycan sequences are available (4c31c0a)
 
 ##### Fixed 🐛
 - `sanitize_iupac` no longer flags phosphodiesters (e1c807a)
@@ -99,8 +99,8 @@
 #### analysis
 ##### Added ✨
 - Added `get_cosinor` to analyze circadian glycomics data via Cosinor analysis (6252915)
-- `get_biodiversity` on glycoproteomics data (using its new `glycoproteomics` keyword argument) now reports per-glycosite microheterogeneity ()
-- Added `glycan_class` keyword argument to `get_glycoshift_per_site`, to prevent annotating O-glycoproteomics data with N-glycan features by `processing.infer_features_from_composition` ()
+- `get_biodiversity` on glycoproteomics data (using its new `glycoproteomics` keyword argument) now reports per-glycosite microheterogeneity (4c31c0a)
+- Added `glycan_class` keyword argument to `get_glycoshift_per_site`, to prevent annotating O-glycoproteomics data with N-glycan features by `processing.infer_features_from_composition` (4c31c0a)
 
 ##### Changed 🔄
 - `get_glycanova` is now faster (eac80ee)
@@ -168,3 +168,10 @@
 ##### Added ✨
 - Datasets above 1 MB now ship as xz-compressed CSV (`.csv.xz`), which all data loaders read without special treatment (99ad40e)
 - Added new curated glycoproteomics datasets: `tomato_fruit_mnsI1_N_PMID41017156`, `human_hek293_stt3_N_PMID36139350`, `human_hek293_surface_N_PMID39930009`, `mouse_tissues_N_PMID39930009`, `mouse_brain_neurodegeneration_N_PMID40593524`, `mouse_macrophages_infection_N_PMC8416091`, `human_serum_igg_liverdisease_N_PMID36879659`, `human_fibroblasts_srd5a3cdg_N_PMID39360848`, `human_fibroblasts_ngly1cddg_N_PMID36102038`, `schistosoma_mansoni_sex_N_PMID41545360`, and `schistosoma_mansoni_sex_O_PMID41545360` to `glycoproteomics_data_loader` (99ad40e)
+
+##### Changed 🔄
+- Streamlined row labels of `human_milk_N_PMID34087070` glycoproteomics dataset ()
+- Re-curated labels of `human_keratinocytes_N_PMID37956981` and `sorghum_N_PMID39137587` glycoproteomics datasets ()
+
+##### Deprecated ⚠️
+- Removed `human_lipoproteins_PMC9218963` glycoproteomics dataset (no per-sample values) ()
