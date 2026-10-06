@@ -35,7 +35,7 @@
 - Fixed `Altf` and `Tagf` not being recognized as furanoses by `GlycoDraw` (0967d8a)
 - Fixed `NS` not being recognized as a joint modification by `GlycoDraw` (0967d8a)
 - Fixed `draw_method='chem2d', filepath='x.png'` not saving a `png` (0967d8a)
-- Fixed blurriness of glycan drawings in `plot_glycans_excel` ()
+- Fixed blurriness of glycan drawings in `plot_glycans_excel` (0364cf7)
 
 #### tokenization
 ##### Added ✨

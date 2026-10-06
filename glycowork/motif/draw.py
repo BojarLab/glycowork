@@ -2335,7 +2335,8 @@ def plot_glycans_excel(
         parts[media + '.svg'] = svgs[parts[media + '.png']]
         rels = rels.replace('</Relationships>', '<Relationship Type="http://schemas.openxmlformats.org/officeDocument/'
                             f'2006/relationships/image" Target="/{media}.svg" Id="{rid}s"/></Relationships>')
-        xml = re.sub(f'(<a:blip [^>]*r:embed="{rid}")/>',
+        # lxml writes '"/>', the stdlib serializer openpyxl falls back to without it '" />'
+        xml = re.sub(f'(<a:blip [^>]*?r:embed="{rid}"[^>]*?)\\s*/>',
                      '\\1><a:extLst><a:ext uri="{96DAC541-7B7A-43D3-8B79-37D633B846F1}"><asvg:svgBlip xmlns:asvg='
                      f'"http://schemas.microsoft.com/office/drawing/2016/SVG/main" r:embed="{rid}s"/>'
                      '</a:ext></a:extLst></a:blip>', xml)
