@@ -1,7 +1,7 @@
 # Changelog
 
 ## [1.10.2]
-- Removed the `bokeh` dependency from `glycowork`; handled within-package instead ()
+- Removed the `bokeh` dependency from `glycowork`; handled within-package instead (81a910f)
 
 ### motif
 #### smiles

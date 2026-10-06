@@ -32,7 +32,7 @@ _SPECIAL_MODS = {
 }
 _VALID_COMPONENTS = {'Hex', 'dHex', 'HexNAc', 'HexN', 'HexA', 'Neu5Ac', 'Neu5Gc', 'Kdn', 'Pen', 'Me', 'S', 'P', 'PCho', 'PEtN', 'Ac', '-H2O', '+N3', '-H'}
 _COMPOSITION_INDEX = {}
-_MZ_POOL = {}  # (kingdom, glycan_class) -> (source frame, unique composition item-tuples) for the default mz_to_composition database
+_MZ_POOL = {}  # (kingdom, glycan_class) or ('custom', glycan_class) -> (source frame, unique composition item-tuples, {(mass_value, sample_prep, modification, filter_out): (compositions, masses)}) for mz_to_composition
 _MASS_CACHE = {}  # (composition item-tuple, mass_value, sample_prep, modification) -> composition_to_mass result
 
 with resources.files("glycowork.motif").joinpath("mz_to_composition.csv").open(encoding = 'utf-8-sig') as f:
@@ -231,16 +231,16 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
                       mass_tag: float | None = None, # Mass in Da of a reducing-end label (e.g., 137.14 for 2AA, 219.21 for 2AB+procA), added to every candidate's neutral mass
                       ) -> list[dict[str, int]]: # List of matching compositions
     """Map m/z value to matching monosaccharide composition"""
-    if df_use is None:  # the default pool is filtered from SugarBase once per kingdom/class; re-filtered whenever the source frame has been swapped out
-        source = loader.df_glycan
-        if (entry := _MZ_POOL.get((kingdom, glycan_class))) is None or entry[0] is not source:
+    # The pool is filtered once per kingdom/class from SugarBase, or once per class from the last custom database (one slot, so a caller making a
+    # new frame per run does not pile them up), and re-filtered whenever the source frame has been swapped out
+    source, pool_key = (loader.df_glycan, (kingdom, glycan_class)) if df_use is None else (df_use, ('custom', glycan_class))
+    if (entry := _MZ_POOL.get(pool_key)) is None or entry[0] is not source:
+        if df_use is None:
             keep = source.Kingdom.apply(lambda x: kingdom in x) if glycan_class == "all" else (source.glycan_type == glycan_class) & (source.Kingdom.apply(lambda x: kingdom in x))
-            entry = _MZ_POOL[(kingdom, glycan_class)] = (source, list(dict.fromkeys(tuple(d.items()) for d in source.Composition[keep])))
-        comp_pool = entry[1]
-    else:
-        if glycan_class != "all":
-            df_use = df_use[df_use.glycan_type == glycan_class] if 'glycan_type' in df_use.columns else df_use
-        comp_pool = dict.fromkeys(tuple(d.items()) for d in df_use.Composition)
+            comp_pool = source.Composition[keep]
+        else:
+            comp_pool = (df_use[df_use.glycan_type == glycan_class] if glycan_class != "all" and 'glycan_type' in df_use.columns else df_use).Composition
+        entry = _MZ_POOL[pool_key] = (source, list(dict.fromkeys(tuple(d.items()) for d in comp_pool)), {})
     if filter_out is None:
         filter_out = set()
     if deprioritized is None:
@@ -250,19 +250,22 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
     if adduct_ions is None:
         adduct_ions = ['Acetate'] if max_charge < 0 else ['Na+']
     tol = mass_tolerance if tolerance_unit.lower() == "da" else mz_value * mass_tolerance / 1e6
-    masses = [(dict(t), _MASS_CACHE[key] if (key := (t, mass_value, sample_prep, modification)) in _MASS_CACHE else
-               _MASS_CACHE.setdefault(key, composition_to_mass(dict(t), mass_value = mass_value, sample_prep = sample_prep, modification = modification)))
-              for t in comp_pool if filter_out.isdisjoint(k for k, _ in t)]
-    comps = [comp for comp, _ in masses]
+    # The compositions left after filter_out and their masses are kept with the pool, as repeated calls (one per fragment or peak) would rebuild them
+    if (cached := entry[2].get(mass_key := (mass_value, sample_prep, modification, frozenset(filter_out)))) is None:
+        comps = [t for t in entry[1] if filter_out.isdisjoint(k for k, _ in t)]
+        cached = entry[2][mass_key] = (comps, np.array([_MASS_CACHE[key] if (key := (t, mass_value, sample_prep, modification)) in _MASS_CACHE else
+                                                         _MASS_CACHE.setdefault(key, composition_to_mass(dict(t), mass_value = mass_value, sample_prep = sample_prep, modification = modification))
+                                                         for t in comps], dtype = float))
+    comps, masses = cached
     fallback = []
     # Compare each composition's theoretical m/z against the observed value, ion by ion in Occam order (lower charge first, protons before adducts); return first non-deprioritized hit, else first deprioritized fallback
-    for observed in get_ion_mzs(np.array([mass for _, mass in masses]) + shift, max_charge = max_charge, adducts = adduct_ions if "adduct" in extras else None).values():
+    for observed in get_ion_mzs(masses + shift, max_charge = max_charge, adducts = adduct_ions if "adduct" in extras else None).values():
         diffs = np.abs(observed - mz_value)
         for i in sorted(np.flatnonzero(diffs < tol), key = lambda i: diffs[i]):
-            if deprioritized.intersection(comps[i].keys()):
-                fallback.append(comps[i])
+            if not deprioritized.isdisjoint(k for k, _ in comps[i]):
+                fallback.append(dict(comps[i]))
             else:
-                return [comps[i]]
+                return [dict(comps[i])]
     return fallback[:1]
 
 
