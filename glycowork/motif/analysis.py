@@ -33,7 +33,7 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          get_glycoform_diff, process_glm_results, partial_corr,
                                          estimate_technical_variance,
                                          perform_tests_monte_carlo, cosinor_fit, spearman_exact_pvals)
-from glycowork.motif.processing import enforce_class, process_for_glycoshift
+from glycowork.motif.processing import enforce_class, process_for_glycoshift, split_glycoform_id, GLYCOFORM_ID
 from glycowork.glycan_data.data_entry import read_abundances
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type,
@@ -49,7 +49,7 @@ def preprocess_data(
         group2: list[str | int] | None = None,
         # Column indices/names for second group; default: from the frame's contrasts
         experiment: str = "diff",  # Type of experiment: "diff" or "anova"
-        motifs: bool = False,  # Analyze motifs instead of sequences
+        motifs: bool = False,  # Analyze motifs instead of sequences; with glycoproteomics, motifs are quantified per glycosite (protein_site_motif)
         glycoproteomics: bool = False, # Whether rows are glycoforms, ordered by composition containment instead of substructure containment
         feature_set: list[str] = ['exhaustive', 'known'],
         # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
@@ -100,12 +100,12 @@ def preprocess_data(
     df = df.loc[~(df.iloc[:, 1:] == 0).all(axis = 1)].reset_index(drop = True)
     protect = None
     if glycoproteomics:
-        sites = pd.Series(['_'.join(str(k).split('_')[:-1]) for k in df.iloc[:, 0]])
+        sites = pd.Series([split_glycoform_id(k)[0] for k in df.iloc[:, 0]])
         seen = (df.iloc[:, 1:] > 0).groupby(
             sites.values).max()  # a site counts as measured in a sample if any of its glycoforms was seen there
         if min_samples:
             df = df[sites.map(seen.mean(axis = 1) >= min_samples).values].reset_index(drop = True)
-            sites = pd.Series(['_'.join(str(k).split('_')[:-1]) for k in df.iloc[:, 0]])
+            sites = pd.Series([split_glycoform_id(k)[0] for k in df.iloc[:, 0]])
         protect = pd.DataFrame(~seen.loc[sites.values].to_numpy(), index = df.index, columns = df.columns[
             1:])  # every glycoform of a site that was never identified in a sample is structurally missing, not below detection
     df = replace_outliers_winsorization(df)
@@ -123,9 +123,6 @@ def preprocess_data(
             df.iloc[0, 0], "N")) and len(df) > 50 else "CLR"
     if transform not in ("ALR", "CLR", "Nothing"):
         raise ValueError("Only ALR and CLR are valid transforms for now.")
-    if motifs and glycoproteomics:
-        raise ValueError(
-            "motifs and glycoproteomics cannot be combined: the motif path replaces df with run-wide motif abundances and never applies the per-glycosite closure, so glycoproteomics would be silently ignored. For now, quantify motifs per glycosite yourself and pass the result with glycoproteomics = True instead.")
     if motifs or glycoproteomics:
         pass  # both cases overwrite df below with their own transform, so running the run-wide one here only pays for ALR's O(features) Procrustes search and, for glycoproteomics, would close over a simplex that does not exist
     elif transform == "ALR":
@@ -150,7 +147,7 @@ def preprocess_data(
                                                 [] if paired else group2, gamma = gamma,
                                                 custom_scale = 0 if paired else custom_scale,
                                                 random_state = random_state).to_numpy()
-    if motifs:
+    if motifs and not glycoproteomics:
         # Motif extraction and quantification
         df_org = quantify_motifs(df_org, feature_set = feature_set, custom_motifs = custom_motifs)
         # Re-normalization
@@ -169,6 +166,10 @@ def preprocess_data(
                                                       custom_scale = custom_scale, random_state = random_state)
             df = df.set_index(df.columns[0])
     else:
+        if motifs:
+            # Per-glycosite motifs (protein_site_motif) from the imputed glycoforms, which then compete within their site exactly as glycoforms do; structurally missing sites stay NaN
+            df_org = quantify_motifs(df_org, feature_set = feature_set, custom_motifs = custom_motifs).rename_axis('motif').reset_index()
+            df = df_org.copy()
         df = df.set_index(df.columns[0])
         df = df.groupby(df.index).sum() if glycoproteomics else df.groupby(
             df.index).mean()  # duplicate glycoproteomics rows are charge states/repeat identifications of one part, so they amalgamate by summation before closure
@@ -176,7 +177,7 @@ def preprocess_data(
         df_org = df_org.groupby(df_org.index).sum() if glycoproteomics else df_org.groupby(df_org.index).mean()
         if glycoproteomics:
             # Component-wise composition containment forces the same abundance inequality as substructure containment, so glycoforms admit the same balances and residuals as motifs
-            sites = pd.Series(['_'.join(str(k).split('_')[:-1]) for k in df_org.index], index = df_org.index)
+            sites = pd.Series([split_glycoform_id(k)[0] for k in df_org.index], index = df_org.index)
             keep = sites.groupby(sites).transform(
                 'size') > 1  # a one-part subcomposition carries no log-ratio and would CLR to an all-zero row
             df_org, sites = df_org[keep], sites[keep]
@@ -207,7 +208,7 @@ def preprocess_data(
                     raise ValueError("No glycosite has two or more glycoforms measured in at least two samples per group, so there is no within-site log-ratio to test; run without glycoproteomics = True to compare the glycopeptides as whole-sample features.")
                 df = pd.concat(parts).loc[df_org.index]
             if motif_dag:
-                df_org.attrs['motif_dag'] = get_composition_dag(df_org.index.tolist(), abundances = df_org)
+                df_org.attrs['motif_dag'] = get_motif_dag(df_org.index.tolist()) if motifs else get_composition_dag(df_org.index.tolist(), abundances = df_org)
     df_org.attrs['dataset'], df_org.attrs['provenance'] = prov
     return df, df_org, group1, group2
 
@@ -984,7 +985,7 @@ def get_differential_expression(
         # Column indices/names for first group; default: from the frame's contrasts
         group2: list[str | int] | None = None,
         # Column indices/names for second group; default: from the frame's contrasts
-        motifs: bool = False,  # Analyze motifs instead of sequences
+        motifs: bool = False,  # Analyze motifs instead of sequences; per glycosite (protein_site_motif) for glycoproteomics data
         feature_set: list[str] = ['exhaustive', 'known'],
         # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
         paired: bool | None = None,  # Whether samples are paired; default: from the frame
@@ -1001,7 +1002,7 @@ def get_differential_expression(
         # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
         moderate_variance: bool = True,
         # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
-        glycoproteomics: bool = False,  # Whether data is from glycoproteomics
+        glycoproteomics: bool | None = None,  # Whether data is from glycoproteomics (rows protein_site_glycan); default: whenever every row label is protein_site_glycan
         level: str = 'peptide',  # Analysis level for glycoproteomics
         monte_carlo: bool = False,  # Use Monte Carlo for technical variation
         random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
@@ -1009,7 +1010,7 @@ def get_differential_expression(
 ) -> GlycoDataFrame:  # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes
     "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets) with multiple testing correction on glycomics abundance data"
     df = read_abundances(df) if isinstance(df, (str, Path)) else df
-    glycoproteomics = glycoproteomics or df.attrs.get('glycoproteomics', False)  # read_glycoproteomics output is per-glycosite data whatever the flag says
+    glycoproteomics = len(df) > 0 and all(GLYCOFORM_ID.fullmatch(str(k)) for k in df.iloc[:, 0]) if glycoproteomics is None else glycoproteomics  # decided on the labels, which survive pd.DataFrame(), to_csv, and a reader; attrs did not, and outlived a collapse to compositions
     grouped_BH = ((motifs or glycoproteomics) and not sets) if grouped_BH is None else grouped_BH
     if glycoproteomics and monte_carlo:
         raise ValueError(
@@ -1354,7 +1355,7 @@ def get_glycanova(
         df: pd.DataFrame | str | Path,  # DataFrame with glycans in rows (col 1) and abundance values in columns
         groups: list[Any] | None = None,  # Group labels for samples (e.g., [1,1,1,2,2,2,3,3,3]); inferred from a GlycoDataFrame's contrasts if omitted
         impute: bool = True,  # Replace zeros with impute_biosynthetic predictions
-        motifs: bool = False,  # Analyze motifs instead of sequences
+        motifs: bool = False,  # Analyze motifs instead of sequences; per glycosite (protein_site_motif) for glycoproteomics data
         feature_set: list[str] = ['exhaustive', 'known'],
         # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
         min_samples: float = 0.1,  # Min fraction (0-1) of non-zero samples required
@@ -1367,7 +1368,7 @@ def get_glycanova(
         # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
         moderate_variance: bool = True,
         # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
-        glycoproteomics: bool = False,  # Whether rows are glycoforms from glycoproteomics instead of glycans
+        glycoproteomics: bool | None = None,  # Whether rows are glycoforms from glycoproteomics instead of glycans; default: whenever every row label is protein_site_glycan
         random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
         top_explained: int | None = 5  # How many child motifs to name in 'Explained by'; None names all of them
 ) -> tuple[GlycoDataFrame, dict[
@@ -1375,7 +1376,7 @@ def get_glycanova(
     "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
     from scipy.stats import studentized_range
     df = read_abundances(df) if isinstance(df, (str, Path)) else df
-    glycoproteomics = glycoproteomics or df.attrs.get('glycoproteomics', False)  # read_glycoproteomics output is per-glycosite data whatever the flag says
+    glycoproteomics = len(df) > 0 and all(GLYCOFORM_ID.fullmatch(str(k)) for k in df.iloc[:, 0]) if glycoproteomics is None else glycoproteomics  # decided on the labels, which survive pd.DataFrame(), to_csv, and a reader; attrs did not, and outlived a collapse to compositions
     grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     if groups is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         groups = list(df.groups)
@@ -1595,13 +1596,16 @@ def get_time_series(
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
         custom_scale: float | dict = 0,
         # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
-        glycoproteomics: bool = False, # Whether rows are glycoforms, ordered by composition containment instead of substructure containment
+        glycoproteomics: bool | None = None, # Whether rows are glycoforms, ordered by composition containment instead of substructure containment; default: whenever every row label is protein_site_glycan
         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> GlycoDataFrame:  # DataFrame with regression coefficients and FDR-corrected p-values
     "Analyzes time series glycomics data using polynomial regression"
-    grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     if isinstance(df, (str, Path)):
         df = read_abundances(df)
+    if glycoproteomics is None:  # decided on the labels, which survive pd.DataFrame(), to_csv, and a reader; attrs did not, and outlived a collapse to compositions
+        labels = df.iloc[:, 0] if isinstance(df.iloc[0, 0], str) else df.index
+        glycoproteomics = len(labels) > 0 and all(GLYCOFORM_ID.fullmatch(str(k)) for k in labels)
+    grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     df = df.fillna(0)
     if isinstance(df.iloc[0, 0], str):
         df = df.set_index(df.columns[0])
@@ -1691,12 +1695,13 @@ def get_jtk(
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
         correction_method: str = "two-stage",  # Multiple testing correction method
         grouped_BH: bool | None = None,  # Family-grouped two-stage Benjamini-Hochberg via the motif DAG; None infers True for motifs and False for sequences
-        glycoproteomics: bool = False,  # Whether rows are glycoforms, ordered by composition containment instead of substructure containment
+        glycoproteomics: bool | None = None,  # Whether rows are glycoforms, ordered by composition containment instead of substructure containment; default: whenever every row label is protein_site_glycan
         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> GlycoDataFrame:  # DataFrame with JTK results: adjusted p-values, period length, lag phase, amplitude
     "Identifies rhythmically expressed glycans using Jonckheere-Terpstra-Kendall algorithm for time series analysis"
-    grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     df = read_abundances(df_in) if isinstance(df_in, (str, Path)) else df_in.copy(deep = True)
+    glycoproteomics = len(df) > 0 and all(GLYCOFORM_ID.fullmatch(str(k)) for k in df.iloc[:, 0]) if glycoproteomics is None else glycoproteomics  # decided on the labels, which survive pd.DataFrame(), to_csv, and a reader; attrs did not, and outlived a collapse to compositions
+    grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     if (df.shape[1] - 1) % timepoints:
         raise ValueError(
             f"{df.shape[1] - 1} sample columns cannot be split into {timepoints} timepoints with the same number of replicates each; check timepoints and that the first column holds the glycans.")
@@ -1777,18 +1782,19 @@ def get_cosinor(
         correction_method: str = "two-stage",  # Multiple testing correction method
         grouped_BH: bool | None = None,
         # Family-grouped two-stage Benjamini-Hochberg via the motif DAG; None infers True for motifs and False for sequences
-        glycoproteomics: bool = False,
-        # Whether rows are glycoforms, ordered by composition containment instead of substructure containment
+        glycoproteomics: bool | None = None,
+        # Whether rows are glycoforms, ordered by composition containment instead of substructure containment; default: whenever every row label is protein_site_glycan
         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> GlycoDataFrame:  # DataFrame with cosinor results: best period, mesor, amplitude, acrophase (peak time, on the time axis of timepoints), R2, raw and adjusted p-values
     "Identifies rhythmically expressed glycans or motifs with single-harmonic cosinor regression, reporting amplitude and acrophase (peak time) next to an F-test against no rhythm; unlike get_jtk, timepoints may be unevenly spaced or unevenly replicated"
-    grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     feature_set = [feature_set] if isinstance(feature_set, str) else feature_set
     custom_motifs = [custom_motifs] if isinstance(custom_motifs, str) else custom_motifs
     periods = [periods] if isinstance(periods, (int, float, np.number)) else list(periods)
     if not periods or min(periods) <= 0:
         raise ValueError(f"periods have to be positive cycle lengths in time units, got {periods}.")
     df = read_abundances(df_in) if isinstance(df_in, (str, Path)) else df_in.copy(deep = True)
+    glycoproteomics = len(df) > 0 and all(GLYCOFORM_ID.fullmatch(str(k)) for k in df.iloc[:, 0]) if glycoproteomics is None else glycoproteomics  # decided on the labels, which survive pd.DataFrame(), to_csv, and a reader; attrs did not, and outlived a collapse to compositions
+    grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     n = df.shape[1] - 1
     if isinstance(timepoints, (int, np.integer)):
         if n % timepoints:
@@ -1887,20 +1893,26 @@ def get_biodiversity(
         timepoints: int | None = None,  # number of timepoints, columns ordered by ascending timepoint (required if circadian)
         interval: int = 1,  # time units between timepoints (only relevant if circadian)
         periods: list[int] = [12, 24],  # cycle lengths to test (only relevant if circadian)
+        glycoproteomics: bool | None = None,  # Whether rows are glycoforms (protein_site_glycan): alpha diversity becomes each glycosite's microheterogeneity (rows protein_site_metric) and beta diversity the Aitchison distance over glycosites; default: whenever every row label is protein_site_glycan
 ) -> tuple:  # First DataFrame with diversity indices and test statistics, second with beta-diversity distance matrix
-    "Calculates alpha (Shannon/Simpson) and beta (ANOSIM/PERMANOVA) diversity measures from glycomics data"
+    "Calculates alpha (Shannon/Simpson) and beta (ANOSIM/PERMANOVA) diversity measures from glycomics data, or per-glycosite microheterogeneity from glycoproteomics data"
     if isinstance(df, (str, Path)):
         df = read_abundances(df)
+    glycoproteomics = len(df) > 0 and all(GLYCOFORM_ID.fullmatch(str(k)) for k in df.iloc[:, 0]) if glycoproteomics is None else glycoproteomics  # decided on the labels, which survive pd.DataFrame(), to_csv, and a reader; attrs did not, and outlived a collapse to compositions
     if group1 is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         group1, group2 = list(df.group1), list(df.group2)
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
     experiment = "diff" if group2 else "anova"
     if circadian and not timepoints:
         raise ValueError("circadian = True needs timepoints: pass the number of timepoints your columns are ordered by (e.g., timepoints = 6 for 6 timepoints x replicates), so that replicates per timepoint can be derived.")
+    if paired and group2 and len(group1) != len(group2):
+        raise ValueError(
+            f"For paired samples, group1 and group2 have to be the same size; got {len(group1)} and {len(group2)}.")
+    raw, gcol = df, GlycoDataFrame(df)._glycan_col or df.columns[0]
     df, df_org, group1, group2 = preprocess_data(df, group1 = group1, group2 = group2, experiment = experiment, motifs = motifs,
                                                  impute = False, transform = transform, feature_set = feature_set, paired = paired,
                                                  gamma = gamma, custom_scale = custom_scale, custom_motifs = custom_motifs,
-                                                 random_state = random_state,
+                                                 random_state = random_state, glycoproteomics = glycoproteomics,
                                                  motif_dag = False)  # rows are diversity metrics, not motifs, so a containment DAG has nothing to group here
     shopping_cart = []
     distance_matrix = pd.DataFrame()
@@ -1909,8 +1921,39 @@ def get_biodiversity(
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(len(group_sizes))
     if 'alpha' in metrics:
+        # impute = False still floors a glycan that is zero in a whole group (for the log-ratios), so richness counts what the input measured; it counted every floored glycan or motif as present
+        raw = raw[[gcol] + df_org.columns.tolist()].fillna(0)
+        measured = (quantify_motifs(raw, feature_set = feature_set, custom_motifs = custom_motifs, remove_redundant = False) if motifs else raw.set_index(gcol).groupby(level = 0).sum()).gt(0).reindex(df_org.index, fill_value = False)
+    if 'alpha' in metrics and glycoproteomics:
+        # Glycoforms of different glycosites never compete, so whole-sample diversity over glycopeptides mixes protein abundance and coverage into it; a site's diversity is computed on its within-site shares wherever it was measured, NaN elsewhere
+        sites = pd.Series([split_glycoform_id(k)[0] for k in df_org.index], index = df_org.index)
+        a_df = pd.DataFrame({f'{site}_{name}': [np.nan if np.isnan(v).all() else fn(np.nan_to_num(v) * (m if name == 'species_richness' else 1)) for v, m in zip(g.to_numpy(dtype = float).T, measured.loc[g.index].to_numpy().T)]
+                             for site, g in df_org.groupby(sites, sort = False) for name, fn in (('species_richness', sequence_richness), ('shannon_diversity', shannon_diversity_index),
+                                                                                                   ('simpson_diversity', simpson_diversity_index))}, index = df_org.columns).T
+        garr, jtk = np.asarray(group_sizes), JTKTest(timepoints, periods, interval, df_org.shape[1] // timepoints) if circadian else None
+        for metric, row in a_df.iterrows():
+            v = row.to_numpy(dtype = float)
+            obs = np.isfinite(v)
+            if circadian:
+                if obs.all():  # JTK needs every timepoint replicate
+                    p_val, period, phase, tau = jtk.test(v)
+                    shopping_cart.append(pd.DataFrame({'Metric': f'{metric} (JTK)', 'p-val': p_val, 'Period length': period, 'Lag phase': phase, 'Amplitude': abs(tau)}, index = [0]))
+            elif len(group_counts) == 2 and group2:
+                a, b = v[:len(group1)], v[len(group1):]
+                keep_a, keep_b = (np.isfinite(a) & np.isfinite(b),) * 2 if paired else (np.isfinite(a), np.isfinite(b))
+                a, b = a[keep_a], b[keep_b]
+                if min(len(a), len(b)) < 2:
+                    continue  # a site measured in fewer than two samples of a group has no variance to test against
+                same = np.allclose(np.r_[a, b], a[0], rtol = 1e-5, atol = 1e-8) or (len(a) == len(b) and np.allclose(a, b, rtol = 1e-5, atol = 1e-8))  # e.g., a richness every sample shares, which has no variance to test
+                pval = 1.0 if same else (ttest_rel(b, a)[1] if paired else ttest_ind(b, a, equal_var = False)[1])
+                shopping_cart.append(pd.DataFrame({'Metric': metric, 'Group1 mean': a.mean(), 'Group2 mean': b.mean(), 'p-val': float(np.clip(pval, np.nextafter(0, 1), 1.0)) if np.isfinite(pval) else 1.0,
+                                                   'Effect size': 0.0 if same else cohen_d(b, a, paired = paired)[0]}, index = [0]))
+            elif not metric.endswith('species_richness') and len(group_counts) > 2 and all(c > 1 for c in Counter(garr[obs]).values()) and len(set(garr[obs])) > 2:
+                f_stat, pval = alpha_biodiversity_stats(pd.Series(v[obs]), garr[obs].tolist())
+                shopping_cart.append(pd.DataFrame({'Metric': f'{metric} (ANOVA)', 'p-val': pval, 'Effect size': f_stat}, index = [0]))
+    elif 'alpha' in metrics:
         per_sample = np.ascontiguousarray(df_org.to_numpy(dtype = float).T)  # one contiguous row per sample, so each index sees exactly the column DataFrame.apply handed it, minus a Series construction per sample
-        unique_counts = pd.Series([sequence_richness(v) for v in per_sample], index = df_org.columns)
+        unique_counts = pd.Series([sequence_richness(v) for v in np.ascontiguousarray(df_org.where(measured, 0).to_numpy(dtype = float).T)], index = df_org.columns)
         shan_div = pd.Series([shannon_diversity_index(v) for v in per_sample], index = df_org.columns)
         simp_div = pd.Series([simpson_diversity_index(v) for v in per_sample], index = df_org.columns)
         a_df = pd.DataFrame({'species_richness': unique_counts,
@@ -1926,9 +1969,6 @@ def get_biodiversity(
         elif len(group_counts) == 2 and group2:
             df_a, df_b = a_df[group1], a_df[group2]
             mean_a, mean_b = [np.mean(row_a) for row_a in df_a.values], [np.mean(row_b) for row_b in df_b.values]
-            if paired and len(group1) != len(group2):
-                raise ValueError(
-                    f"For paired samples, group1 and group2 have to be the same size; got {len(group1)} and {len(group2)}.")
             pvals = []
             effect_sizes = []
             for row_a, row_b in zip(df_a.values, df_b.values):
@@ -1955,6 +1995,10 @@ def get_biodiversity(
     if 'beta' in metrics:
         if not isinstance(df.index[0], str):
             df = df.set_index(df.columns[0])
+        if glycoproteomics:
+            df = df.dropna()  # within-site log-ratios exist only where a site was measured, so the distance runs over the glycoforms of sites seen in every sample
+            if df.empty:  # pdist would return all zeros, which a permutation test then calls significant
+                raise ValueError("No glycosite was measured in every sample, so there are no shared within-site log-ratios to compute beta diversity on; use metrics = ['alpha'] for per-glycosite microheterogeneity.")
         distance_matrix = pd.DataFrame(squareform(pdist(df.values.T, metric = dist_func or (
             'braycurtis' if transform == "Nothing" else 'euclidean'))), index = df.columns, columns = df.columns)
         if circadian:
@@ -2377,15 +2421,19 @@ def get_glycoshift_per_site(
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
         custom_scale: float | dict = 0,
         # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
-        random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
+        random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
+        glycan_class: str | None = None  # Glycan class of the glycoforms ('N', 'O', ...); N-glycan type features (complex, high_Man, hybrid, core/antennary fucose, bisecting) only enter the model for 'N'; default: the dataset's glycan_class metadata, else 'N'
 ) -> pd.DataFrame:  # DataFrame with GLM coefficients and FDR-corrected p-values
     "Analyzes site-specific glycosylation changes in glycoproteomics data using generalized linear models (GLM) with compositional data normalization"
+    df = read_abundances(df) if isinstance(df, (str, Path)) else df
+    meta = (getattr(df, '_provenance', None) or {}).get('glycan_class')
+    glycan_class = glycan_class or (meta if isinstance(meta, str) else 'N')  # shipped datasets know their class; the composition rules for N-glycan types would call an O-glycan N2F1 high_Man and H1N4 complex
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
     df, _, group1, group2 = preprocess_data(df, group1 = group1, group2 = group2, experiment = "diff", motifs = False, impute = impute,
                                             min_samples = min_samples, transform = "Nothing", paired = paired,
                                             random_state = random_state)
     alpha = get_alphaN(len(group1 + group2))
-    df, glycan_features = process_for_glycoshift(df)
+    df, glycan_features = process_for_glycoshift(df, glycan_class = glycan_class)
     necessary_columns = ['Glycoform'] + glycan_features
     preserved_data = df[necessary_columns]
     df = df.drop(necessary_columns, axis = 1)

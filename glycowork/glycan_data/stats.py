@@ -1072,9 +1072,10 @@ def get_glycoform_diff(df_res: pd.DataFrame, # result from .motif.analysis.get_d
                        level: str = 'peptide' # analyze at 'peptide' or 'protein' level
                        ) -> pd.DataFrame: # df with differential expression results, p-vals (Fisher’s Combined Probability Test), significance, effect sizes (Cohen's d)
     "Calculates differential expression of glycoforms from either a peptide or a whole protein"
+    from glycowork.motif.processing import split_glycoform_id
     label_col = 'Glycosite' if 'Glycosite' in df_res.columns else 'Glycan'
-    labels = [k.split('_')[0] for k in df_res[label_col]] if level == 'protein' else ['_'.join(k.split('_')[:-1]) for k
-                                                                                      in df_res[label_col]]
+    labels = [split_glycoform_id(k)[0] for k in df_res[label_col]]  # per-glycosite motifs keep the underscores of their names out of the site
+    labels = [s.rpartition('_')[0] or s for s in labels] if level == 'protein' else labels  # the accession is everything in front of the site, which can hold underscores itself (A1AG1_HUMAN)
     grouped = df_res['p-val'].groupby(labels).agg(lambda p: combine_pvalues(p)[1])  # Fisher’s Combined Probability Test
     mean_effect_size = df_res['Effect size'].groupby(labels).mean()
     pvals, sig = correct_multiple_testing(grouped, alpha)

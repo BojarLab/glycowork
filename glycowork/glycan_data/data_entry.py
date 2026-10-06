@@ -6,7 +6,7 @@ import pandas as pd
 from pathlib import Path
 from typing import Callable
 from glycowork.glycan_data.loader import GlycoDataFrame, glycomics_data_loader, glycoproteomics_data_loader, lectin_array_data_loader
-from glycowork.motif.processing import check_nomenclature, canonicalize_composition, canonicalize_iupac, is_composition, _CODE_TO_NAME, _NAME_TO_CODE, _STRUCGP_CODE
+from glycowork.motif.processing import check_nomenclature, canonicalize_composition, canonicalize_iupac, is_composition, _STRUCGP_CODE
 from glycowork.motif.tokenization import glycan_to_composition
 from glycowork.motif.graph import glycan_to_nxGraph, compare_glycans
 
@@ -180,9 +180,7 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
     if bad := [g for g, v in canon.items() if v is None]:
         warnings.warn(f"Skipped glycoforms with {len(bad)} unparseable compositions, e.g., {bad[:3]}.", stacklevel = 2)
     df = df.assign(ID = df['protein'] + '_' + df['site'] + '_' + df['comp'].map(canon)).dropna(subset = ['ID'])
-    out = _abundance_matrix(df[['run', 'ion', 'ID', 'value']], sample_map)
-    out.attrs['glycoproteomics'] = True  # lets get_differential_expression and get_glycanova switch to the per-glycosite analysis on their own
-    return out
+    return _abundance_matrix(df[['run', 'ion', 'ID', 'value']], sample_map)  # the protein_site_composition labels are what switches the analysis functions to the per-glycosite analysis
 
 
 def _glycomics_layout(df: pd.DataFrame # a glycomics table as read from file
@@ -259,7 +257,7 @@ def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataF
     if not recs:
         raise ValueError("No abundances found; expected a Skyline report, a LaCyTools or MassyTools Summary.txt, a GlycoWorkbench workspace, or a Compound Discoverer, GlycoGenius, GlyHunter, GlycReSoft, or CandyCrunch table with glycans and positive abundances.")
     df = pd.DataFrame(recs, columns = ['run', 'ion', 'label', 'value', 'sia'])
-    valid, canon = set(_CODE_TO_NAME.values()) | set(_NAME_TO_CODE), {}
+    canon = {}
     for g, sia in df[['label', 'sia']].drop_duplicates().itertuples(index = False):
         try:
             iupac = canonicalize_iupac(g.strip())
@@ -267,8 +265,7 @@ def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataF
         except Exception:
             iupac = None
         try:
-            comp = canonicalize_composition(re.sub(r'S(?=\d)', 'A', g.strip()) if sia else g.strip(), as_string = True) if iupac is None and is_composition(g.strip()) else ''
-            comp = comp if comp and set(canonicalize_composition(comp)) <= valid else ''  # a label like 'IgGI1H5N4F1' parses into a nonsense residue
+            comp = canonicalize_composition(re.sub(r'S(?=\d)', 'A', g.strip()) if sia else g.strip(), as_string = True, strict = True) if iupac is None and is_composition(g.strip()) else ''  # strict: a label like 'IgGI1H5N4F1' parses into a nonsense residue
         except ValueError:
             comp = ''
         canon[(g, sia)] = iupac or comp or None

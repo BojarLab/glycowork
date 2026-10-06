@@ -45,7 +45,7 @@ from glycowork.motif.processing import (
     presence_to_matrix, process_for_glycoshift, linearcode_to_iupac, iupac_extended_to_condensed,
     in_lib, get_class, enforce_class, equal_repeats, get_matching_indices, is_composition,
     bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono, iupac_to_smiles,
-    max_specify_glycan, parse_floating_bit, rescue_compositions
+    max_specify_glycan, parse_floating_bit, rescue_compositions, split_glycoform_id
 )
 from glycowork.motif.smiles import (SKELETONS, ALDITOLS, SUBSTITUENTS, ENANTIOMER, CERAMIDE, GlycanSMILESError,
                                     glycan_to_smiles, glycan_to_molecule, smiles_to_iupac, looks_like_smiles,
@@ -1691,6 +1691,14 @@ def test_composition_to_mass():
         composition_to_mass(comp, modification = 'nonexistent')
     with pytest.raises(ValueError):
         composition_to_mass({'Hex': 5, 'HexNAc': 4, 'Fuc': 1})
+    # Glycopeptides: IgG1 EEQYNSTYR with G0F is 2633.0386 Da ([M+2H]2+ 1317.527); the peptide alone is 1188.5047
+    assert abs(composition_to_mass('H3N4F1', peptide = 'EEQYNSTYR') - 2633.0386) < 1e-3
+    assert abs(composition_to_mass({}, peptide = 'EEQYNSTYR') - 1188.5047) < 1e-3
+    assert abs(glycan_to_mass('Gal(b1-3)GalNAc', peptide = 'TPAPGS') - composition_to_mass('H1N1', peptide = 'TPAPGS')) < 1e-9
+    assert composition_to_mass('H5N4A2', peptide = 'NC[+C2H3NO]SK') == composition_to_mass('H5N4A2', peptide = 'NC[+57.021464]SK')
+    for bad in (dict(peptide = 'PEPTIDEB'), dict(peptide = 'N[57.02]K'), dict(peptide = 'NK', sample_prep = 'permethylated'), dict(peptide = 'NK', modification = 'reduced')):
+        with pytest.raises(ValueError, match = 'glycopeptide'):
+            composition_to_mass('H5N4', **bad)
     # Permethylated reduced should add extra methyl (ring-opening creates methylatable OH at C5)
     comp = {'Hex': 5, 'HexNAc': 2}
     base_perm = composition_to_mass(comp, sample_prep = 'permethylated')
@@ -2069,6 +2077,15 @@ def test_canonicalize_composition():
     # A whole glycoproteomics label is rejected instead of being read as 533352 phosphates
     with pytest.raises(ValueError, match = "composition part"):
         canonicalize_composition("P00533_352_H5N2")
+    # strict = True only lets glycowork composition components (and formula keys) through, e.g., to tell glycans from peptide modifications
+    for bad in ('Oxidation', 'Deamidated', 'IgGI1H5N4F1', 'Gal(b1-3)GalNAc', 'Hex5HexNAc4Acetate1'):
+        assert canonicalize_composition(bad)  # the default still parses any word as a residue
+        with pytest.raises(ValueError, match = 'glycowork mass'):
+            canonicalize_composition(bad, strict = True)
+    assert canonicalize_composition('HexNAc(4)Hex(5)Fuc(1)', strict = True) == {'HexNAc': 4, 'Hex': 5, 'dHex': 1}
+    assert canonicalize_composition('Phospho', strict = True) == {'P': 1}
+    assert canonicalize_composition('H5N4F1E1L1', as_string = True, strict = True) == 'H5N4F1A2'
+    assert canonicalize_composition({'Hex': 1, 'PCho': 1, '+N3': 1, '-H2O': 1}, strict = True) == {'Hex': 1, 'PCho': 1, '+N3': 1, '-H2O': 1}
 
 
 def test_parse_glycoform():
@@ -2091,6 +2108,9 @@ def test_parse_glycoform():
     assert parse_glycoform("Hex5HexNAc4dHex1NeuAc2") == parse_glycoform("H5N4F1A2")
     # The composition rules approximate process_for_glycoshift's structural definitions: Man5 is high-mannose, H5N4 complex, H6N3 hybrid
     assert [(r['high_Man'], r['complex'], r['hybrid']) for r in map(parse_glycoform, ("H5N2", "H5N4", "H6N3"))] == [(1, 0, 0), (0, 1, 0), (0, 0, 1)]
+    # N-glycan type rules are not applied to other classes: an O-glycan N2F1 is no high-mannose glycan
+    assert parse_glycoform("N2F1")['high_Man'] == 1
+    assert parse_glycoform("N2F1", glycan_class = 'O') == {'H': 0, 'N': 2, 'A': 0, 'F': 1, 'G': 0}
 
 
 def test_presence_to_matrix():
@@ -2125,6 +2145,10 @@ def test_process_for_glycoshift():
     assert result.Glycoform.tolist() == [{'HexNAc': 4, 'Hex': 5, 'dHex': 1, 'Neu5Ac': 2},
                                          {'HexNAc': 3, 'Hex': 3, 'dHex': 1}]
     assert result.complex.tolist() == [1, 1]  # H3N3F1 is a monoantennary complex glycan, as the structural definition calls it
+    df = pd.DataFrame(index = ['PROT1_12_Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc', 'PROT1_12_Gal(b1-3)GalNAc'], data = {'abundance': [1.0, 2.0]})
+    assert 'high_Man' in process_for_glycoshift(df)[1]
+    result, features = process_for_glycoshift(df, glycan_class = 'O')
+    assert features == ['Hex', 'HexNAc', 'Neu5Ac']  # an O-glycan has no GlcNAc(b1-2)Man antenna, so it was called high_Man
 
 
 def test_linearcode_to_iupac():
@@ -3097,6 +3121,21 @@ def test_get_glycoform_diff():
     tagged.attrs['alpha'] = 0.03
     out = get_glycoform_diff(tagged, alpha = 0.03, level = 'peptide')
     assert out.name == 'demo' and out.paired and out.provenance == {'doi': 'x'} and out.attrs['alpha'] == 0.03
+    # Accessions and motif names can hold underscores; the site is the last all-numeric field
+    entry = pd.DataFrame({'Glycan': ['IGHG1_HUMAN_180_H5N4', 'IGHG1_HUMAN_180_Terminal_LacNAc_type2', 'IGHG1_MOUSE_176_H5N4', 'IGHG1_MOUSE_201_H5N4'],
+                          'p-val': [0.01, 0.02, 0.03, 0.04], 'Effect size': [1.0, 2.0, 3.0, 4.0]})
+    assert sorted(get_glycoform_diff(entry, level = 'peptide')['Glycosite']) == ['IGHG1_HUMAN_180', 'IGHG1_MOUSE_176', 'IGHG1_MOUSE_201']
+    assert sorted(get_glycoform_diff(entry, level = 'protein')['Glycosite']) == ['IGHG1_HUMAN', 'IGHG1_MOUSE']
+
+
+def test_split_glycoform_id():
+    assert split_glycoform_id('P02763_33_H5N2') == ('P02763_33', 'H5N2')
+    assert split_glycoform_id('P02763_31+40_H10N8') == ('P02763_31+40', 'H10N8')
+    assert split_glycoform_id('O43866_226/229_H4N5') == ('O43866_226/229', 'H4N5')
+    assert split_glycoform_id('A1AG1_HUMAN_93_Neu5Ac(a2-3)Gal(b1-4)GlcNAc') == ('A1AG1_HUMAN_93', 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc')
+    assert split_glycoform_id('P01857_180_Terminal_LacNAc_type2') == ('P01857_180', 'Terminal_LacNAc_type2')
+    assert split_glycoform_id('P1_N93_H5N4') == ('P1_N93', 'H5N4')  # without a numeric site, the last underscore splits as before
+    assert split_glycoform_id('Gal(b1-4)Glc') == ('', 'Gal(b1-4)Glc')
 
 
 def test_get_glm():
@@ -5763,6 +5802,40 @@ def test_get_biodiversity_paired_needs_equal_groups():
         get_biodiversity(df, group1 = ['a1', 'a2', 'a3'], group2 = ['b1', 'b2'], paired = True)
     with pytest.raises(ValueError, match = "No diversity test could be run"):
         get_biodiversity(df, group1 = ['a1', 'a2', 'a3'], group2 = ['b1', 'b2'], metrics = ['shannon'])
+    with pytest.raises(ValueError, match = 'same size'):  # checked up front, so the glycoproteomics path raises it too instead of a numpy broadcast error
+        get_biodiversity(glycoproteomics_data_loader.human_serum_igg_liverdisease_N_PMID36879659, paired = True)
+
+
+def test_get_biodiversity_richness_ignores_floors():
+    # impute = False floors a glycan that is zero in a whole group; richness must not count it as present
+    df = pd.DataFrame({'glycan': ['Gal(b1-4)Glc', 'Man(a1-3)Man', 'Gal(b1-3)GalNAc', 'Fuc(a1-2)Gal', 'GlcNAc(b1-4)GlcNAc'],
+                       'a1': [1.0, 2.0, 3.0, 4.0, 0.0], 'a2': [1.5, 2.5, 3.5, 4.0, 0.0], 'a3': [1.2, 2.2, 3.2, 4.0, 0.0],
+                       'b1': [2.0, 1.0, 4.0, 1.0, 1.0], 'b2': [2.5, 1.5, 4.5, 1.0, 1.0], 'b3': [2.0, 1.0, 4.0, 1.0, 1.0]})
+    res = get_biodiversity(df, group1 = ['a1', 'a2', 'a3'], group2 = ['b1', 'b2', 'b3'], metrics = ['alpha'])[0].set_index('Metric')
+    assert res.loc['species_richness', ['Group1 mean', 'Group2 mean']].tolist() == [4.0, 5.0]
+    res = get_biodiversity(df, group1 = ['a1', 'a2', 'a3'], group2 = ['b1', 'b2', 'b3'], metrics = ['alpha'], motifs = True, feature_set = ['exhaustive'])[0].set_index('Metric')
+    assert res.loc['species_richness', 'Group1 mean'] < res.loc['species_richness', 'Group2 mean']  # GlcNAc only occurs in group 2
+
+
+def test_get_biodiversity_glycoproteomics():
+    df = glycoproteomics_data_loader.human_serum_igg_liverdisease_N_PMID36879659
+    out, dist = get_biodiversity(df, random_state = 42)
+    # alpha diversity is each glycosite's microheterogeneity, not whole-sample diversity over glycopeptides
+    alpha = out[~out['Metric'].str.startswith('Beta')]
+    assert set(alpha['Metric']) == {f'{s}_{m}' for s in ('P01857_180', 'P01859_176', 'P01860_227', 'P01861_177') for m in ('species_richness', 'shannon_diversity', 'simpson_diversity')}
+    assert alpha[['Group1 mean', 'Group2 mean', 'p-val', 'corr p-val']].notna().all().all()
+    assert (alpha.loc[alpha['Metric'].str.endswith('shannon_diversity'), 'Group1 mean'] < np.log(45)).all()  # bounded by a site's glycoforms (at most 44 here), unlike the whole-sample index over all 162
+    assert dist.shape == (len(df.group1) + len(df.group2),) * 2 and np.isfinite(dist.to_numpy()).all()
+    sites = ['P1_10_H5N4', 'P1_10_H5N4F1', 'P1_10_H4N4', 'P2_20_H3N4', 'P2_20_H5N2']
+    gp = pd.DataFrame({'ID': sites, 'a1': [5.0, 3.0, 2.0, 1.0, 1.0], 'a2': [6.0, 2.0, 2.0, 1.0, 2.0], 'a3': [5.0, 3.0, 1.0, 2.0, 1.0],
+                       'b1': [9.0, 0.5, 0.5, 1.0, 1.0], 'b2': [10.0, 0.4, 0.6, 2.0, 1.0], 'b3': [9.0, 0.6, 0.4, 1.0, 2.0]})
+    res = get_biodiversity(gp, group1 = ['a1', 'a2', 'a3'], group2 = ['b1', 'b2', 'b3'], metrics = ['alpha'], glycoproteomics = True)[0].set_index('Metric')
+    assert res.loc['P1_10_shannon_diversity', 'Group2 mean'] < res.loc['P1_10_shannon_diversity', 'Group1 mean']  # site P1_10 collapses onto one glycoform in group 2
+    # a site missing in some sample leaves no glycoform for the beta distance; that raises instead of an all-zero matrix that PERMANOVA calls significant
+    gp.loc[gp['ID'].str.startswith('P1_'), 'b1'] = 0.0
+    gp.loc[gp['ID'].str.startswith('P2_'), 'a1'] = 0.0
+    with pytest.raises(ValueError, match = r"metrics = \['alpha'\]"):
+        get_biodiversity(gp, group1 = ['a1', 'a2', 'a3'], group2 = ['b1', 'b2', 'b3'], metrics = ['beta'])
 
 
 def test_get_time_series(sample_time_series_data):
@@ -6704,6 +6777,14 @@ def test_multi_feature_scoring_no_group2(sample_df):
         assert 0 <= roc_auc <= 1
         assert roc_auc > 0.5
         assert 0 in selected_features
+
+
+def test_get_glycoshift_per_site_glycan_class():
+    # the shipped O-glycoproteomics dataset carries its class, so no site gets N-glycan type terms (106 of its 258 glycoforms were high_Man before)
+    df = glycoproteomics_data_loader.schistosoma_mansoni_sex_O_PMID41545360
+    out = get_glycoshift_per_site(df, random_state = 42)
+    assert not [c for c in out.columns if c.startswith(('high_Man', 'hybrid', 'complex', 'antennary_Fuc'))]
+    assert 'complex_Condition_corr_pval' in get_glycoshift_per_site(df, glycan_class = 'N', random_state = 42).columns
 
 
 def test_get_glycoshift_per_site_basic(sample_glycoshift_df):
@@ -8176,7 +8257,7 @@ def test_read_abundances(tmp_path):
             for pep, prot, site in (('EJGTR', 'sp|P19652|A1AG2_HUMAN', '103'), ('JITR', 'sp|P02763|A1AG1_HUMAN', '33')) for g in ('H(5)N(4)A(2)', 'H(5)N(4)A(1)', 'H(5)N(4)F(1)A(2)', 'H(6)N(5)A(3)')]
     pd.DataFrame(rows).to_csv(tmp_path / 'pglycoquant.list', sep = '\t', index = False)
     gp = read_abundances(tmp_path / 'pglycoquant.list')
-    assert gp.attrs['glycoproteomics'] and gp['ID'].str.startswith(('P19652_103_', 'P02763_33_')).all()
+    assert gp['ID'].str.startswith(('P19652_103_', 'P02763_33_')).all()
     res = get_differential_expression(tmp_path / 'pglycoquant.list', group1 = ['S1', 'S2', 'S3'], group2 = ['S4', 'S5', 'S6'])
     assert 'Glycosite' in res.columns  # the per-glycosite analysis switched on by itself
 
@@ -8195,6 +8276,13 @@ def test_read_abundances_dataset_names():
         read_abundances('not_a_shipped_dataset.csv')
     assert not get_differential_expression(
         'human_serum_bacteremia_N_PMID33535571').empty  # analysis functions take dataset names, with their contrasts
+    # protein_site_glycan labels switch on the per-glycosite analysis, also for a dataset name or a plain DataFrame; explicit False wins, and labels collapsed to compositions are glycomics again
+    igg = glycoproteomics_data_loader.human_serum_igg_liverdisease_N_PMID36879659
+    assert 'Glycosite' in get_differential_expression('human_serum_igg_liverdisease_N_PMID36879659', random_state = 42).columns
+    assert 'Glycosite' in get_differential_expression(pd.DataFrame(igg), group1 = igg.group1, group2 = igg.group2, random_state = 42).columns
+    assert 'Glycosite' not in get_differential_expression(igg, glycoproteomics = False, random_state = 42).columns
+    comps = igg.assign(ID = [split_glycoform_id(k)[1] for k in igg['ID']]).groupby('ID', as_index = False).sum(numeric_only = True)
+    assert 'Glycosite' not in get_differential_expression(comps, group1 = igg.group1, group2 = igg.group2, random_state = 42).columns
 
 
 def test_glycoworkbench_sulfates():
@@ -9730,6 +9818,31 @@ def test_glycoproteomics_decomposition_is_reachable():
         vals = glycoforms[col].dropna()
         assert ((vals > 0) & (vals <= 1)).all(), (col, vals.min(), vals.max())
     assert np.isfinite(glycoforms[['Effect size', 'Residual effect size']].dropna().to_numpy()).all()
+
+
+def test_glycoproteomics_motifs_per_glycosite():
+    df = pd.DataFrame({'ID': ['P1_10_Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
+                              'P1_10_Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
+                              'A1AG1_HUMAN_33_Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'], 's1': [1.0, 2.0, 3.0], 's2': [np.nan, np.nan, 1.0]})
+    q = quantify_motifs(df, feature_set = ['exhaustive', 'known'], remove_redundant = False)
+    # motifs are summed per glycosite, never across sites, and a site never measured in a sample stays NaN instead of becoming 0
+    assert q.loc['P1_10_Man', 's1'] == 9.0 and q.loc['A1AG1_HUMAN_33_Man'].tolist() == [9.0, 3.0]
+    assert q.loc['P1_10_GlcNAc', 's1'] == 12.0 and np.isnan(q.loc['P1_10_GlcNAc', 's2'])
+    # measured is decided per site: a measured site without a carrier of the motif has it at 0, not NaN
+    q2 = quantify_motifs(pd.DataFrame({'ID': ['P1_10_H5N4', 'P1_10_H5N4F1', 'P1_10_H5N4A1'], 's1': [1.0, 2.0, 3.0], 's2': [1.0, 2.0, np.nan]}))
+    assert q2.loc['P1_10_Neu5Ac'].tolist() == [3.0, 0.0] and q2.loc['P1_10_Hex', 's2'] == 15.0
+    assert 'P1_10_core_fucose' in q.index and 'A1AG1_HUMAN_33_core_fucose' not in q.index
+    dag = get_motif_dag(q.index.tolist())
+    for site in ('P1_10', 'A1AG1_HUMAN_33'):  # each glycosite gets exactly the DAG of its own motifs, and containment never crosses glycosites
+        own = [split_glycoform_id(m)[1] for m in q.index if split_glycoform_id(m)[0] == site]
+        assert {(f'{site}_{p}', f'{site}_{c}') for p, c in get_motif_dag(own).edges()} == {e for e in dag.edges() if split_glycoform_id(e[0])[0] == site}
+    assert all(split_glycoform_id(p)[0] == split_glycoform_id(c)[0] for p, c in dag.edges())
+    # protein_site_composition glycoforms give per-site monosaccharide motifs, tested within each site
+    gp = glycoproteomics_data_loader.human_serum_igg_liverdisease_N_PMID36879659
+    out = get_differential_expression(gp, motifs = True, random_state = 42)
+    assert 'Glycosite' in out.columns and sorted(out['Glycosite']) == ['P01857_180', 'P01859_176', 'P01860_227', 'P01861_177']
+    motifs = out.attrs['glycoforms']
+    assert set(motifs['Glycan']) >= {'P01857_180_Neu5Ac', 'P01857_180_dHex'} and motifs[['p-val', 'corr p-val']].notna().all().all()
 
 
 def test_glycanova_glycoproteomics_decomposition():

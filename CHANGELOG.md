@@ -62,12 +62,16 @@
 - Universal Input/`canonicalize_composition` now also supports composition nomenclatures from Byonic, FragPipe, GlycoMod, GlyHunter, GlyCombo, LaCyTools, MassyTools, GlycoGenius, and GlycReSoft (e1c807a, f936c23)
 - Expanded GlyTouCan ID coverage (dc0e740)
 - Support heptoses in WURCS conversion (dc0e740)
+- Added `strict` keyword argument to `canonicalize_composition` to raise an error if any non-valid component is present ()
+- Added `glycan_class` keyword argument to `parse_glycoform` and `process_for_glycoshift`, to prevent annotating O-glycoproteomics data with N-glycan features by `infer_features_from_composition` ()
+- Added `peptide` keyword argument to `composition_to_mass` and `glycan_to_mass`, to calculate glycopeptide masses ()
 
 ##### Changed 🔄
 - `canonicalize_composition` now also accepts dictionary compositions as inputs (0967d8a)
 - `canonicalize_iupac` is more robust to nomenclature variations (e1c807a)
 - Moved `PDB_TO_IUPAC` from `glycontact` up into `glycowork` to facilitate atom-coloring in `.draw.draw_chem3d` without `glycontact` dependencies (0a28132)
 - Refined `infer_features_from_composition` output (342a605)
+- `get_motif_dag` and `quantify_motifs` now also support glycoproteomics data, if glycan sequences are available ()
 
 ##### Fixed 🐛
 - `sanitize_iupac` no longer flags phosphodiesters (e1c807a)
@@ -95,6 +99,8 @@
 #### analysis
 ##### Added ✨
 - Added `get_cosinor` to analyze circadian glycomics data via Cosinor analysis (6252915)
+- `get_biodiversity` on glycoproteomics data (using its new `glycoproteomics` keyword argument) now reports per-glycosite microheterogeneity ()
+- Added `glycan_class` keyword argument to `get_glycoshift_per_site`, to prevent annotating O-glycoproteomics data with N-glycan features by `processing.infer_features_from_composition` ()
 
 ##### Changed 🔄
 - `get_glycanova` is now faster (eac80ee)

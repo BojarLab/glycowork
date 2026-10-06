@@ -43,6 +43,9 @@ HYDROGEN_MASS = 1.007825
 ELECTRON_MASS = 0.000548580
 PROTON_MASS = HYDROGEN_MASS - ELECTRON_MASS  # charge carrier; the H atom is 0.55 mDa heavier
 modification_formula_dict = {'reduced': 'H2', '2AA': 'C7H7NO', '2AB': 'C7H8N2', 'procainamide': 'C13H21N3'}  # net gain at the reducing end: H2 by reduction, label minus O by reductive amination
+AMINO_ACID_FORMULAS = {'G': 'C2H3NO', 'A': 'C3H5NO', 'S': 'C3H5NO2', 'P': 'C5H7NO', 'V': 'C5H9NO', 'T': 'C4H7NO2', 'C': 'C3H5NOS', 'L': 'C6H11NO', 'I': 'C6H11NO', 'N': 'C4H6N2O2',
+                       'D': 'C4H5NO3', 'Q': 'C5H8N2O2', 'K': 'C6H12N2O', 'E': 'C5H7NO3', 'M': 'C5H9NOS', 'H': 'C6H7N3O', 'F': 'C9H9NO', 'R': 'C6H12N4O', 'Y': 'C9H9NO2', 'W': 'C11H10N2O'}  # amino acid residues in a chain (free amino acid minus H2O)
+_PEPTIDE = re.compile(r'(?:[A-Z](?:\[[+-][^\[\]]+\])*)+')  # one-letter peptide with signed mass or formula deltas after residues, e.g., 'NC[+C2H3NO]SK', 'M[+15.9949]NGTK'
 
 
 def constrain_prot(proteins: str | list[str], # Protein sequence(s)
@@ -519,9 +522,12 @@ def composition_to_mass(dict_comp_in: dict[str, int], # Composition dictionary o
                         mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
                         sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/peracetylated
                         adduct: str | float | None = None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
-                        modification: str | None = None # Reducing end modification: reduced/2AA/2AB/procainamide
+                        modification: str | None = None, # Reducing end modification: reduced/2AA/2AB/procainamide
+                        peptide: str | None = None # Peptide carrying the glycan(s), in one-letter code with optional signed mass or formula deltas after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK' for carbamidomethylation, 'M[+15.9949]NGTK'), to get the glycopeptide mass; several glycans on one peptide are passed as their total composition
                         ) -> float: # Theoretical mass
-    """Calculate theoretical mass from composition"""
+    """Calculate theoretical mass from composition, optionally as a glycopeptide"""
+    if peptide is not None and (sample_prep != 'underivatized' or modification or not _PEPTIDE.fullmatch(peptide) or set(re.sub(r'\[[^\]]*\]', '', peptide)) - AMINO_ACID_FORMULAS.keys()):
+        raise ValueError(f"Cannot calculate a glycopeptide mass for peptide {peptide!r}: it has to be underivatized and unlabelled, written in one-letter code from {''.join(AMINO_ACID_FORMULAS)}, with signed deltas such as 'C[+C2H3NO]' or 'M[+15.9949]' after a residue.")
     dict_comp = dict_comp_in.copy()
     if (mass_key := f"{sample_prep}_{mass_value}") not in _MASS_DICTS:
         raise ValueError(f"No masses for sample_prep {sample_prep!r} with mass_value {mass_value!r}; sample_prep is underivatized/permethylated/peracetylated, mass_value monoisotopic/average.")
@@ -546,6 +552,9 @@ def composition_to_mass(dict_comp_in: dict[str, int], # Composition dictionary o
         total_mass += calculate_adduct_mass(modification_formula_dict[modification], mass_value = mass_value)
         if modification == 'reduced' and sample_prep != 'underivatized':  # ring-opening creates one additional free OH (at C5, previously the ring oxygen) that gets methylated or acetylated
             total_mass += calculate_adduct_mass('CH2' if sample_prep == 'permethylated' else 'C2H2O', mass_value = mass_value)
+    if peptide:  # each glycan loses its reducing-end water on attachment and the peptide keeps one, so residues plus the one water counted above are the whole glycopeptide, however many glycans it carries
+        total_mass += sum(calculate_adduct_mass(AMINO_ACID_FORMULAS[aa], mass_value = mass_value) for aa in re.sub(r'\[[^\]]*\]', '', peptide)) + sum(
+            float(d) if re.fullmatch(r'[+-]\d*\.?\d+', d) else calculate_adduct_mass(d, mass_value = mass_value) for d in re.findall(r'\[([^\]]+)\]', peptide))
     return total_mass
 
 
@@ -554,9 +563,10 @@ def glycan_to_mass(glycan: str, # Glycan in IUPAC-condensed format
                    sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/peracetylated
                    stem_libr: dict[str, str] | None = None, # Modified to core monosaccharide mapping
                    adduct: str | float | None = None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
-                   modification: str | None = None # Reducing end modification: reduced/2AA/2AB/procainamide
+                   modification: str | None = None, # Reducing end modification: reduced/2AA/2AB/procainamide
+                   peptide: str | None = None # Peptide carrying the glycan, in one-letter code with optional signed mass or formula deltas after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK'), to get the glycopeptide mass
                    ) -> float: # Theoretical mass
-    """Calculate theoretical mass from glycan"""
+    """Calculate theoretical mass from glycan, optionally as a glycopeptide"""
     if stem_libr is None:
         stem_libr = stem_lib
     comp = glycan_to_composition(glycan, stem_libr = stem_libr)
@@ -564,7 +574,7 @@ def glycan_to_mass(glycan: str, # Glycan in IUPAC-condensed format
         raise ValueError(
             f"No valid composition could be derived from '{glycan}' (it contains components outside {sorted(_VALID_COMPONENTS)}), so no mass can be calculated.")
     return composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep, adduct = adduct,
-                               modification = modification)
+                               modification = modification, peptide = peptide)
 
 
 @rescue_compositions

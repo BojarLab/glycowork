@@ -127,6 +127,7 @@ _STRUCGP_TOKEN = {'1': 'H', '2': 'N', '3': 'A', '4': 'G', '5': 'F'}  # StrucGP's
 _CSDB_AC_12 = re.compile(r'^Ac\(\??1-2\)')
 _CSDB_N_TO_NAC = re.compile(r'N(?=[^A-Za-z]|$)')
 FLOATY_ALT = re.compile(r'\{([^{}]*)\}')
+GLYCOFORM_ID = re.compile(r'(.*_\d+(?:[+/]\d+)*)_(.+)', re.S)  # protein_site_glycan with the last all-numeric field (joint '31+40', ambiguous '226/229') as the site, so a motif name with underscores ('Terminal_LacNAc_type2') stays whole after it
 # PDB Chemical Component Dictionary codes (plus glycontact's merged codes for modified residues, e.g., NAG6SO3) to IUPAC monosaccharide with anomeric state, used by glycontact and draw_chem3d
 PDB_TO_IUPAC = {'NDG':'GlcNAc(a','NAG':'GlcNAc(b','MAN':'Man(a', 'BMA':'Man(b', 'AFL':'Fuc(a', 'MBG':'Gal1Me(b', 'AMG':'Gal1Me(a', 'MMA':'Man1Me(a', '2F8':'GlcNAc1Me(a',
                 'FUC':'Fuc(a', 'FUL':'Fuc(b', 'FCA':'D-Fuc(a', 'FCB':'D-Fuc(b', '0FA':'D-Fuc(a', 'GYE':'D-Fucf(b', 'M6P':'Man6P(a', 'MAG':'GlcNAc1Me(b', 'SGA': 'Gal3S(b', 'SEJ':'D-Ara(b', '64K':'D-Ara(a',
@@ -374,7 +375,8 @@ def get_class(glycan: str # Glycan in IUPAC-condensed nomenclature
 
 
 def canonicalize_composition(comp: str | dict[str, int], # Composition in Hex5HexNAc4Fuc1Neu5Ac2 or H5N4F1A2 format, or as a dict (e.g., {'Hex': 5})
-                             as_string: bool = False # Whether to return canonical shorthand string (e.g., "H5N4F1A2") instead of dictionary
+                             as_string: bool = False, # Whether to return canonical shorthand string (e.g., "H5N4F1A2") instead of dictionary
+                             strict: bool = False # Whether to raise a ValueError for any residue that is no glycowork composition component with a mass (e.g., a peptide modification like 'Oxidation', or 'Galb' from a sequence)
                              ) -> dict[str, int] | str: # Dictionary of monosaccharide:count, or canonical shorthand string if as_string
     "Converts composition from any common format to standardized dictionary or canonical shorthand string"
     if isinstance(comp, dict):
@@ -419,6 +421,10 @@ def canonicalize_composition(comp: str | dict[str, int], # Composition in Hex5He
             comp_dict['Neu5Ac'] = sialic + comp_dict.get('Neu5Ac', 0)
         comp_dict['S'] = total_sulfate
     comp_dict = {k: v for k, v in comp_dict.items() if v}
+    if strict:  # any word parses as a residue ('Oxidation' -> {'Oxidation': 1}); formula keys ('-H2O', '+N3') are valid, a bare '-' from a sequence is not
+        from glycowork.motif.tokenization import _VALID_COMPONENTS  # tokenization imports this module at load time, so a module-level import is circular
+        if unknown := [k for k in comp_dict if k not in _VALID_COMPONENTS and not re.fullmatch(r'[+-](?:[A-Z][a-z]?\d*)+', k)]:
+            raise ValueError(f"{comp!r} contains {unknown}, which are no monosaccharides or substituents with a glycowork mass ({sorted(_VALID_COMPONENTS)}).")
     if as_string:
         return ''.join(f"{_NAME_TO_CODE.get(k, k)}{v}" for k, v in sorted(comp_dict.items(), key = lambda x: (_COMP_ORDER.get(x[0], len(_COMP_ORDER)), x[0])))
     return comp_dict
@@ -1739,7 +1745,8 @@ def infer_features_from_composition(comp: dict[str, int] # Composition dictionar
 
 @rescue_compositions
 def parse_glycoform(glycoform: str | dict[str, int], # Composition in H5N4F1A2 format or dict
-                    glycan_features: list[str] = ['H', 'N', 'A', 'F', 'G'] # Features to extract
+                    glycan_features: list[str] = ['H', 'N', 'A', 'F', 'G'], # Features to extract
+                    glycan_class: str = 'N' # Glycan class of the glycoform; the N-glycan type features of infer_features_from_composition (complex, high_Man, hybrid, antennary_Fuc) are only added for 'N'
                     ) -> dict[str, int]: # Dictionary of feature counts
     "Convert composition like H5N4F1A2 into monosaccharide counts"
     if isinstance(glycoform, str) and not re.fullmatch(r'(?:[HNAFG]\d+)+', glycoform):
@@ -1749,15 +1756,25 @@ def parse_glycoform(glycoform: str | dict[str, int], # Composition in H5N4F1A2 f
             mapping = {'Hex': 'H', 'HexNAc': 'N', 'dHex': 'F', 'Neu5Ac': 'A', 'Neu5Gc': 'G'}
             glycoform = {mapping.get(k, k): v for k, v in glycoform.items()}
         components = {k: glycoform.get(k, 0) for k in glycan_features}
-        return components | infer_features_from_composition(components)
+        return components | (infer_features_from_composition(components) if glycan_class == 'N' else {})
     components = {c: 0 for c in glycan_features}
     matches = re.finditer(r'([HNAFG])(\d+)', glycoform)
     for match in matches:
         components[match.group(1)] = int(match.group(2))
-    return components | infer_features_from_composition(components)
+    return components | (infer_features_from_composition(components) if glycan_class == 'N' else {})  # the composition rules are N-glycan rules: an O-glycan N2F1 would be high_Man, H1N4 complex
 
 
-def process_for_glycoshift(df: pd.DataFrame # Dataset with protein_site_composition or protein_site_glycan index
+def split_glycoform_id(label: str # Glycoproteomics row label protein_site_glycan, e.g., 'P02763_33_H5N2', 'P02763_31+40_H10N8' (joint site), 'O43866_226/229_H4N5' (ambiguous site), or a per-glycosite motif from quantify_motifs, e.g., 'P01857_180_Terminal_LacNAc_type2'
+                       ) -> tuple[str, str]: # (glycosite as protein_site, glycan or motif); a label without a numeric site field is split at its last underscore
+    "Splits a glycoform or per-glycosite motif label into its glycosite and its glycan or motif, keeping underscores of accessions and motif names where they belong"
+    if m := GLYCOFORM_ID.fullmatch(str(label)):
+        return m[1], m[2]
+    head, _, tail = str(label).rpartition('_')
+    return head, tail
+
+
+def process_for_glycoshift(df: pd.DataFrame, # Dataset with protein_site_composition or protein_site_glycan index
+                           glycan_class: str = 'N' # Glycan class of the glycoforms; N-glycan type features (complex, high_Man, hybrid, core/antennary fucose, bisecting) are only derived for 'N'
                            ) -> tuple[pd.DataFrame, list[str]]: # (Modified dataset with new columns for protein_site, composition, and composition counts, glycan features)
     "Extract and format compositions in glycoproteomics dataset, deriving glycan features from the structure wherever one is given"
     from glycowork.motif.graph import subgraph_isomorphism
@@ -1780,8 +1797,8 @@ def process_for_glycoshift(df: pd.DataFrame # Dataset with protein_site_composit
         df['Glycoform'] = [canonicalize_composition(t) for t in tails]
         glycan_features = sorted(set(unwrap([list(c.keys()) for c in df.Glycoform])))
     org_cols = df.columns.tolist()
-    df = pd.concat([df, pd.DataFrame([parse_glycoform(g, glycan_features = glycan_features) for g in df['Glycoform']], index = df.index)], axis = 1)  # positional, so a duplicated index does not multiply rows
-    if seqs is not None:
+    df = pd.concat([df, pd.DataFrame([parse_glycoform(g, glycan_features = glycan_features, glycan_class = glycan_class) for g in df['Glycoform']], index = df.index)], axis = 1)  # positional, so a duplicated index does not multiply rows
+    if seqs is not None and glycan_class == 'N':
         # the composition heuristics are only a stand-in for these, and core versus antennary fucose has no composition-level expression at all
         ant = [subgraph_isomorphism(s, 'GlcNAc(b1-2)Man') for s in seqs]
         arm = [subgraph_isomorphism(s, 'Man(a1-?)Man(a1-?)Man') for s in seqs]

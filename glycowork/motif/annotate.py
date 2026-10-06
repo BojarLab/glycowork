@@ -10,7 +10,7 @@ from weakref import WeakKeyDictionary
 from glycowork.glycan_data import loader
 from glycowork.glycan_data.loader import lib, linkages, motif_list, unwrap, Hex, dHex, HexNAc, HexA, Pen, Sia, resolve_motif_name
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, get_possible_topologies, compare_glycans, graph_to_string_int, expand_termini_list, build_wildcard_cache, _sl, _has_o, categorical_node_match_wildcard, PTM_REGEX, LINKAGE_LABEL
-from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, rescue_glycans, is_composition, canonicalize_composition
+from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, rescue_glycans, is_composition, canonicalize_composition, split_glycoform_id, GLYCOFORM_ID
 from glycowork.motif.regex import get_match, compile_pattern, compile_component
 
 
@@ -438,10 +438,24 @@ def annotate_dataset(
 
 
 def get_motif_dag(
-        motifs: list[str], # Motif labels as produced by annotate_dataset/quantify_motifs
-        abundances: pd.DataFrame | None = None # Motifs x samples abundances, used as an exact prefilter for containment
+        motifs: list[str], # Motif labels as produced by annotate_dataset/quantify_motifs, optionally per glycosite as protein_site_motif
+        abundances: pd.DataFrame | None = None # Motifs x samples abundances, used as an exact prefilter for containment (not needed for per-glycosite motifs)
 ) -> nx.DiGraph: # Transitively reduced containment DAG; edge parent -> child means parent is a substructure of child
-    "Builds the containment DAG of a motif set, in which a parent motif is a substructure of each of its children"
+    "Builds the containment DAG of a motif set, in which a parent motif is a substructure of each of its children; per-glycosite motifs are only ordered within their glycosite"
+    if any(GLYCOFORM_ID.fullmatch(str(m)) for m in motifs):
+        # Containment is decided once between the distinct motifs and holds at every glycosite carrying both; the closure keeps a relation whose intermediate motif is missing at a site
+        split = [split_glycoform_id(m) if GLYCOFORM_ID.fullmatch(str(m)) else ('', m) for m in motifs]
+        closure = nx.transitive_closure_dag(get_motif_dag(list(dict.fromkeys(b for _, b in split))))
+        by_site = {}
+        for m, (site, b) in zip(motifs, split):
+            if b in closure:
+                by_site.setdefault(site, []).append((m, b))
+        dag = nx.DiGraph()
+        dag.add_nodes_from(m for members in by_site.values() for m, _ in members)
+        dag.add_edges_from((p, c) for members in by_site.values() for p, bp in members for c, bc in members if closure.has_edge(bp, bc))
+        tr = nx.transitive_reduction(dag)
+        dag.remove_edges_from([e for e in dag.edges() if not tr.has_edge(*e)])
+        return dag
     pat, tgt, spec, amb, regexy = {}, {}, {}, {}, set()
     for m in motifs:
         s, sp = _motif_sequence(m)
@@ -559,12 +573,12 @@ def deduplicate_motifs(
 
 def quantify_motifs(
         df: str | pd.DataFrame, # DataFrame or filepath with samples as columns, abundances as values
-        glycans: list[str] | None = None, # List of IUPAC-condensed glycan sequences; auto-detected from first column if None
+        glycans: list[str] | None = None, # List of IUPAC-condensed glycan sequences or compositions, or glycoproteomics glycoforms as protein_site_glycan; auto-detected from first column if None
         feature_set: list[str] = ['known', 'exhaustive'], # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical, size_branch
         custom_motifs: list = [], # Custom motifs when using 'custom' feature set
         remove_redundant: bool = True  # Remove redundant motifs via deduplicate_motifs
-) -> pd.DataFrame:  # DataFrame with motif abundances (motifs as rows, samples as columns)
-    "Extracts and quantifies motif abundances from glycan abundance data by weighting motif occurrences"
+) -> pd.DataFrame:  # DataFrame with motif abundances (motifs as rows, samples as columns); for glycoforms, one row per glycosite and motif as protein_site_motif
+    "Extracts and quantifies motif abundances from glycan abundance data by weighting motif occurrences; glycoproteomics glycoforms are quantified per glycosite"
     if not isinstance(df, pd.DataFrame):
         from glycowork.glycan_data.data_entry import read_abundances
         df = read_abundances(df)
@@ -574,12 +588,29 @@ def quantify_motifs(
             df = df.iloc[:, 1:]
         else:
             raise ValueError("glycans must be provided if the first column is not glycan strings")
+    # Glycoforms of one glycosite compete for that site only, so a motif is summed per site instead of over the whole run; before, protein_site_glycan labels were annotated as one unknown monosaccharide each and came back unchanged as 'motifs'
+    sites = [split_glycoform_id(g) for g in glycans] if len(glycans) and all(GLYCOFORM_ID.fullmatch(str(g)) for g in glycans) else None
     # Motif extraction
-    df_motif = annotate_dataset(glycans, feature_set = feature_set,
+    df_motif = annotate_dataset([g for _, g in sites] if sites else glycans, feature_set = feature_set,
                                 condense = True, custom_motifs = custom_motifs)
     collect_dic = {}
     df = df.T
     log2 = (df.select_dtypes(include = 'number') < 0).any().any()
+    if sites:
+        X, W = df.to_numpy(dtype = float), df_motif.to_numpy(dtype = float)
+        X = np.power(2, X) if log2 else X
+        site_of = pd.Series([s for s, _ in sites])
+        vals, labels, owner = [], [], []
+        for site, idx in site_of.groupby(site_of, sort = False).indices.items():
+            cols = np.flatnonzero((W[idx] > 0).any(axis = 0))
+            v = np.nan_to_num(X[:, idx]) @ W[np.ix_(idx, cols)]
+            seen = ~np.isnan(X[:, idx]).all(axis = 1, keepdims = True)  # per site, not per motif: a measured site without any carrier of the motif has it at 0
+            vals.append(np.where(seen, np.log2(np.where(seen, v, 1)) if log2 else v, np.nan).T)  # a site never measured in a sample has no motif abundance there either, not a zero
+            labels.extend(df_motif.columns[cols])
+            owner.extend([site] * len(cols))
+        out = pd.DataFrame(np.vstack(vals) if vals else np.empty((0, len(df))), index = labels, columns = df.index).assign(_site = owner)
+        out = deduplicate_motifs(out) if remove_redundant else out  # the site column is part of the grouping key, so only identical motifs of the same site are merged
+        return out.set_axis([f'{s}_{m}' for s, m in zip(out['_site'], out.index)]).drop(columns = '_site')
     # Motif quantification
     for col in df_motif.columns:
         indices = [i for i, x in enumerate(df_motif[col]) if x > 0]
