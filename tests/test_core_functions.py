@@ -41,7 +41,7 @@ from glycowork.motif.processing import (
     min_process_glycans, get_lib, expand_lib, get_possible_linkages, looks_like_linearcode,
     get_possible_monosaccharides, de_wildcard_glycoletter, canonicalize_iupac, looks_like_oxford,
     glycoct_to_iupac, glycoctxml_to_iupac, wurcs_to_iupac, oxford_to_iupac, glytoucan_to_glycan,
-    canonicalize_composition, parse_glycoform, glycoworkbench_to_iupac, pglyco_to_iupac,
+    canonicalize_composition, parse_glycoform, glycoworkbench_to_iupac, pglyco_to_iupac, strucgp_to_iupac,
     presence_to_matrix, process_for_glycoshift, linearcode_to_iupac, iupac_extended_to_condensed,
     in_lib, get_class, enforce_class, equal_repeats, get_matching_indices, is_composition,
     bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono, iupac_to_smiles,
@@ -974,6 +974,19 @@ LIN
     assert canonicalize_iupac(
         "(N(F)(F)(N(H(H(N(H(A(A)))))(H(N(H))))))") == "Neu5Ac(a2-8)Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)][Fuc(a1-6)]GlcNAc"
     assert pglyco_to_iupac("(N(N(H)))") == "Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    # Test StrucGP structure codes, whose child order gives the Man(a1-3) arm before the Man(a1-6) arm
+    assert strucgp_to_iupac("A2B2C1cba") == "Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("A2B2C1D1E1F1fedD1E1F1feE1F1fedcba") == "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("A2B2C1D1E2edD1E1eE1edcba") == "GlcNAc(b1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac(
+        "A2B2C1D1E2F1G3gfF3fedD1E2F1G3gfeE2F1G3gfedcbB5ba") == "Neu5Ac(a2-3/6)Gal(b1-3/4)[Neu5Ac(a2-6)]GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)[Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac(
+        "A2B2C1D1E2F2G3gfedD2dD1E2F1fF5fedcba") == "Neu5Ac(a2-3/6)GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("A2B2C1D1dcbB5ba") == "Man(a1-3/6)Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"  # a lone arm stays open
+    for bad in ["A2B2C1cb", "A2B2C1cbaA2a", "A2C1ca"]:
+        with pytest.raises(ValueError, match = 'StrucGP'):
+            strucgp_to_iupac(bad)
+    assert canonicalize_iupac("G00606LX") == "G00606LX"  # backup_gids.json entries without a sequence leave the ID unresolved instead of returning ''
     # Test SMILES, written by other toolkits so that atom order, ring digits and branch order differ from our own writer
     assert canonicalize_iupac(
         "O1[C@H](CO)[C@@H](O)[C@H](O)[C@@H](O)[C@H]1O[C@@]2(O[C@@H]([C@@H](O)[C@@H]2O)CO)CO") == "Glc(a1-2)Fruf"  # sucrose
@@ -2495,6 +2508,9 @@ def test_glycomics_data_loader():
         glycomics_data_loader.filter(not_a_column = 'x')
     with pytest.raises(AttributeError, match = r"prefix glycomics_$"):
         glycomics_data_loader.not_a_dataset
+    # datasets above 1 MB ship as .csv.xz and load like any other
+    assert 'mouse_tissues_N_PMID39930009' in dir(glycoproteomics_data_loader)
+    assert glycoproteomics_data_loader.mouse_tissues_N_PMID39930009.shape == (38816, 19) and glycoproteomics_data_loader.mouse_tissues_N_PMID39930009._contrasts
 
 
 def test_count_nested_brackets():
@@ -8028,6 +8044,10 @@ def test_read_glycoproteomics_other_engines():
     assert read_glycoproteomics(metamorpheus).to_dict('list') == {'ID': ['A2AS86_109_H1N1A2'], 'frac3': [1.0]}
     strucgp = pd.DataFrame({'FileName': ['run1'], 'ProteinID': ['P01857'], 'Glycosite_Position': ['180'], 'GlycanComposition': ['N4H5F1S1+Ammonium(+17)'], 'Peptide': ['EEQYNSTYR']})
     assert read_glycoproteomics(strucgp)['ID'].tolist() == ['P01857_180_H5N4F1A1']
+    coded = pd.DataFrame({'FileName': ['run1', 'run1'], 'ProteinID': ['P01857', 'P01857'], 'Glycosite_Position': ['180', '180'], 'GlycanComposition': ['N4H5F1S1+Ammonium(+17)', 'N4H4F1'],
+                          'Peptide': ['EEQYNSTYR', 'EEQYNSTYR'], 'Structure_coding': ['A2B2C1D1E2F1G3gfedD1E2F1fedcbB5ba', None]})
+    assert sorted(read_glycoproteomics(coded)['ID']) == ['P01857_180_H4N4F1', 'P01857_180_Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-3/4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc']  # a structure code gives the full sequence, a row without one keeps its composition
+    assert read_glycoproteomics(strucgp.drop(columns = 'FileName')).columns.tolist() == ['ID', 'sample1']  # published StrucGP tables drop the file column
     decipher = pd.DataFrame({'Site': ['O43866@226;O43866@229', 'P00738@211;P00739@153', 'O75882@1073'], 'Glycan': ['Hex(4)HexNAc(5)', 'Hex(5)HexNAc(4)NeuAc(2)', 'Hex(5)HexNAc(3)NeuAc(2)+225.06'],
                              'H_1': ['3.8e6', '2e6', '1e7'], 'H_2': ['', '1e6', '1e7']})
     with pytest.warns(UserWarning, match = 'unparseable'):
@@ -9646,6 +9666,12 @@ def test_redistribution_is_invariant_to_renormalization():
     shared = a.index.intersection(b.index)
     assert len(shared) > 0
     assert np.allclose(a[shared].values, b[shared].values, atol = 1e-8)
+
+
+def test_glycoproteomics_single_glycoform_sites():
+    df = pd.DataFrame({'ID': ['P1_10_H1N1', 'P2_20_H2N2', 'P3_5_H1N1'], 'A1': [1.0, 2.0, 1.0], 'A2': [1.5, 2.5, 2.0], 'B1': [3.0, 1.0, 1.2], 'B2': [2.0, 1.5, 0.8]})
+    with pytest.raises(ValueError, match = 'No glycosite'):
+        get_differential_expression(df, group1 = ['A1', 'A2'], group2 = ['B1', 'B2'], glycoproteomics = True)
 
 
 def test_glycoproteomics_decomposition_is_reachable():

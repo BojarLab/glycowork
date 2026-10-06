@@ -57,7 +57,7 @@ include = ["glycowork*"]
 exclude = ["index_files*"]
 
 [tool.setuptools.package-data]
-"*" = ["*.csv", "*.pkl", "*.jpg", "*.pt", "*.json"]
+"*" = ["*.csv", "*.xz", "*.pkl", "*.jpg", "*.pt", "*.json"]
 
 [tool.nbdev]
 lib_path = "glycowork"

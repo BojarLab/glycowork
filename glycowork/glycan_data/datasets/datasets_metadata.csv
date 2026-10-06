@@ -67,6 +67,17 @@ human_keratinocytes_N_PMID37956981,PMID:37956981,10.1021/acs.analchem.3c03626,,,
 human_lipoproteins_PMC9218963,PMC9218963,10.1039/d2ra02294j,,,Homo sapiens,plasma,body fluid,,N/O,positive,none,RP-LC
 human_milk_N_PMID34087070,PMID:34087070,10.1021/acs.jafc.0c07998,,,Homo sapiens,milk,body fluid,,N,positive,none,RP-LC
 sorghum_N_PMID39137587,PMID:39137587,10.1016/j.bbrc.2024.150509,,,Sorghum bicolor,,plant tissue,,N,positive,none,RP-LC
+tomato_fruit_mnsI1_N_PMID41017156,PMID:41017156,10.1016/j.xplc.2025.101537,ProteomeXchange,PXD059300,Solanum lycopersicum,fruit,plant tissue,,N,positive,none,RP-LC
+human_hek293_stt3_N_PMID36139350,PMID:36139350,10.3390/cells11182775,ProteomeXchange,PXD031276,Homo sapiens,kidney,cell line,,N,positive,none,RP-LC
+human_hek293_surface_N_PMID39930009,PMID:39930009,10.1038/s41594-025-01485-w,ProteomeXchange,PXD052447,Homo sapiens,kidney,cell line,,N,positive,TMT,RP-LC
+human_fibroblasts_ngly1cddg_N_PMID36102038,PMID:36102038,10.1002/jimd.12557,ProteomeXchange,PXD034364,Homo sapiens,skin,primary cells,,N,positive,TMT,RP-LC
+human_fibroblasts_srd5a3cdg_N_PMID39360848,PMID:39360848,10.1093/glycob/cwae076,ProteomeXchange,PXD055397,Homo sapiens,skin,primary cells,,N,positive,TMT,RP-LC
+human_serum_igg_liverdisease_N_PMID36879659,PMID:36879659,10.1093/nsr/nwac059,ProteomeXchange,PXD027379,Homo sapiens,serum,body fluid,hepatocellular carcinoma,N,positive,TMT,RP-LC
+mouse_brain_neurodegeneration_N_PMID40593524,PMID:40593524,10.1038/s41467-025-60437-6,iProX,IPX001109900052,Mus musculus,brain,primary tissue,,N,positive,none,RP-LC
+mouse_macrophages_infection_N_PMC8416091,PMC8416091,10.3389/fimmu.2021.722293,ProteomeXchange,PXD026629,Mus musculus,peritoneal macrophages,primary cells,,N,positive,none,RP-LC
+mouse_tissues_N_PMID39930009,PMID:39930009,10.1038/s41594-025-01485-w,ProteomeXchange,PXD052447,Mus musculus,liver; kidney; brain,primary tissue,,N,positive,TMT,RP-LC
+schistosoma_mansoni_sex_N_PMID41545360,PMID:41545360,10.1038/s41467-026-68400-9,MassIVE,MSV000097695,Schistosoma mansoni,whole worm,whole organism,,N,positive,none,RP-LC
+schistosoma_mansoni_sex_O_PMID41545360,PMID:41545360,10.1038/s41467-026-68400-9,MassIVE,MSV000097695,Schistosoma mansoni,whole worm,whole organism,,O,positive,none,RP-LC
 A549_influenza_PMID33046650,PMID:33046650,10.1073/pnas.2008203117,Synapse,syn21975628,Homo sapiens,lung,cell line,lung adenocarcinoma,,,,
 HEK_XBP1_PMID30305426,PMID:30305426,10.1073/pnas.1805425115,,,Homo sapiens,kidney,cell line,,,,,
 bacteria_PMID20973590,PMID:20973590,10.1021/ac1022309,,,Escherichia coli; Enterobacter cloacae; Staphylococcus aureus; Bacillus subtilis,,bacteria,,,,,

@@ -256,16 +256,22 @@ def _partner_fit(L: np.ndarray, # log2 abundances, glycans as rows and samples a
     n, m = L.shape
     Oi = O.astype(float)
     Lz = np.where(O, L, 0)
-    # co-observed sums of each pairwise log-ratio and its square, as matrix products instead of an n x n x samples tensor
-    Q = Oi @ Oi.T
-    S1 = Lz @ Oi.T - Oi @ Lz.T
-    S2 = (Lz ** 2) @ Oi.T + Oi @ (Lz ** 2).T - 2 * Lz @ Lz.T
-    with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        mean = S1 / Q
-        var = (S2 - S1 * mean) / (Q - 1)
-    var[(Q < 3) | np.eye(n, dtype = bool) | ~np.isfinite(var)] = np.inf
-    K = np.argsort(var, axis = 1, kind = 'stable')[:, :k]
-    w, R = 1 / (np.take_along_axis(var, K, axis = 1) + 0.05), np.take_along_axis(mean, K, axis = 1)
+    Lz2 = Lz ** 2
+    K, var_k, R = np.zeros((n, min(k, n)), dtype = int), np.zeros((n, min(k, n))), np.zeros((n, min(k, n)))
+    step = max(1, int(1e7 // n))  # rows per block, so the n x n pairwise statistics of large glycoproteomics tables (tens of thousands of glycoforms) never sit in memory at once
+    for s in range(0, n, step):
+        b = slice(s, min(s + step, n))
+        # co-observed sums of each pairwise log-ratio and its square, as matrix products instead of an n x n x samples tensor
+        Q = Oi[b] @ Oi.T
+        S1 = Lz[b] @ Oi.T - Oi[b] @ Lz.T
+        S2 = Lz2[b] @ Oi.T + Oi[b] @ Lz2.T - 2 * Lz[b] @ Lz.T
+        with np.errstate(divide = 'ignore', invalid = 'ignore'):
+            mean = S1 / Q
+            var = (S2 - S1 * mean) / (Q - 1)
+        var[(Q < 3) | (np.arange(b.start, b.stop)[:, None] == np.arange(n)) | ~np.isfinite(var)] = np.inf
+        K[b] = np.argsort(var, axis = 1, kind = 'stable')[:, :k]
+        var_k[b], R[b] = np.take_along_axis(var, K[b], axis = 1), np.take_along_axis(mean, K[b], axis = 1)
+    w = 1 / (var_k + 0.05)
     R[w == 0] = 0
     mu = Lz.sum(axis = 1) / np.maximum(Oi.sum(axis = 1), 1)
     Z, P = np.where(O, L, mu[:, None]), np.repeat(mu[:, None], m, axis = 1)

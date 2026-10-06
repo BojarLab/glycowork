@@ -57,22 +57,24 @@
 #### processing
 ##### Added ✨
 - The LINUCS nomenclature is now also supported in Universal Input/`canonicalize_iupac` via the new `linucs_to_iupac` parser (e1c807a)
+- StrucGP structure codes (e.g., `A2B2C1D1E2F1fedD1E2edcbB5ba`) are now also supported in Universal Input/`canonicalize_iupac` via the new `strucgp_to_iupac` parser, which infers monosaccharides and linkages from N-glycan position and StrucGP's arm order ()
 - Universal Input/`canonicalize_composition` now also supports composition nomenclatures from Byonic, FragPipe, GlycoMod, GlyHunter, GlyCombo, LaCyTools, MassyTools, GlycoGenius, and GlycReSoft (e1c807a, f936c23)
 
 ##### Changed 🔄
 - `canonicalize_composition` now also accepts dictionary compositions as inputs (0967d8a)
 - `canonicalize_iupac` is more robust to nomenclature variations (e1c807a)
 - Moved `PDB_TO_IUPAC` from `glycontact` up into `glycowork` to facilitate atom-coloring in `.draw.draw_chem3d` without `glycontact` dependencies (0a28132)
-- Refined `infer_features_from_composition` output ()
+- Refined `infer_features_from_composition` output (342a605)
 
 ##### Fixed 🐛
 - `sanitize_iupac` no longer flags phosphodiesters (e1c807a)
 - Fixed handling of variantly capitalized monosaccharides in KCF (e1c807a)
 - Fixed handling of `NS` in GlycoWorkbench parsing (43d7a40)
-- Fixed `glycoctxml_to_iupac` dropping substituent positions such as in GlcNAc6S ()
+- Fixed `glycoctxml_to_iupac` dropping substituent positions such as in GlcNAc6S (342a605)
+- Fixed `canonicalize_iupac` returning an empty string for 288 GlyTouCan IDs whose backup mapping holds no sequence ()
 
 ##### Deprecated ⚠️
-- Removed the `degrees` keyword argument from `glycoct_build_iupac`; handled automatically ()
+- Removed the `degrees` keyword argument from `glycoct_build_iupac`; handled automatically (342a605)
 
 #### annotate
 ##### Added ✨
@@ -149,5 +151,10 @@
 
 #### data_entry
 ##### Added ✨
-- Added `read_glycoproteomics`, which reads the native output of FragPipe/MSFragger-Glyco and O-Pair, pGlyco3 and pGlycoQuant, Byonic and Byologic, GlycReSoft, MetaMorpheus O-Pair, Glyco-Decipher, StrucGP, and PEAKS GlycanFinder into a `protein_site_composition` x sample `GlycoDataFrame`, ready for `get_differential_expression(glycoproteomics = True)` and `get_glycoshift_per_site` (f936c23)
+- Added `read_glycoproteomics`, which reads the native output of FragPipe/MSFragger-Glyco and O-Pair, pGlyco3 and pGlycoQuant, Byonic and Byologic, GlycReSoft, MetaMorpheus O-Pair, Glyco-Decipher, StrucGP (at structure level via its structure codes), and PEAKS GlycanFinder into a `protein_site_composition` x sample `GlycoDataFrame`, ready for `get_differential_expression(glycoproteomics = True)` and `get_glycoshift_per_site` (f936c23)
 - Added `read_glycomics`, which reads Skyline reports, LaCyTools and MassyTools summaries, and GlycoGenius, GlyHunter, GlycReSoft, GlycoWorkbench workspaces (.gwp) and annotated peak lists (.gwa), Thermo Compound Discoverer compound tables, and CandyCrunch tables into a glycan x sample `GlycoDataFrame`, with every label turned into a canonical sequence or composition and GlycoGenius groups kept as contrasts (f936c23, 43d7a40)
+
+#### loader
+##### Added ✨
+- Datasets above 1 MB now ship as xz-compressed CSV (`.csv.xz`), which all data loaders read without special treatment ()
+- Added new curated glycoproteomics datasets: `tomato_fruit_mnsI1_N_PMID41017156`, `human_hek293_stt3_N_PMID36139350`, `human_hek293_surface_N_PMID39930009`, `mouse_tissues_N_PMID39930009`, `mouse_brain_neurodegeneration_N_PMID40593524`, `mouse_macrophages_infection_N_PMC8416091`, `human_serum_igg_liverdisease_N_PMID36879659`, `human_fibroblasts_srd5a3cdg_N_PMID39360848`, `human_fibroblasts_ngly1cddg_N_PMID36102038`, `schistosoma_mansoni_sex_N_PMID41545360`, and `schistosoma_mansoni_sex_O_PMID41545360` to `glycoproteomics_data_loader` ()

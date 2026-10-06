@@ -154,3 +154,61 @@ glycomics_human_influenza_N_10_648982026_02_02_703422,A/X-31,"x31_1,x31_2,x31_3,
 glycomics_human_influenza_O_10_648982026_02_02_703422,mock,"mock_1,mock_2,mock_3,mock_4",FALSE
 glycomics_human_influenza_O_10_648982026_02_02_703422,A/Puerto Rico/8/1934,"PR8_1,PR8_2,PR8_3,PR8_4",FALSE
 glycomics_human_influenza_O_10_648982026_02_02_703422,A/X-31,"x31_1,x31_2,x31_3,x31_4",FALSE
+glycoproteomics_tomato_fruit_mnsI1_N_PMID41017156,mock,"Mock_1,Mock_2,Mock_3",FALSE
+glycoproteomics_tomato_fruit_mnsI1_N_PMID41017156,kifunensine,"Kif_1,Kif_2,Kif_3",FALSE
+glycoproteomics_tomato_fruit_mnsI1_N_PMID41017156,WT,"WT_1,WT_2,WT_3",FALSE
+glycoproteomics_tomato_fruit_mnsI1_N_PMID41017156,slmnsI1_KO,"slmnsI1_1,slmnsI1_2,slmnsI1_3",FALSE
+glycoproteomics_human_milk_N_PMID34087070,Colostrum,"Colostrum1,Colostrum2,Colostrum3",FALSE
+glycoproteomics_human_milk_N_PMID34087070,Mature,"Mature1,Mature2,Mature3",FALSE
+glycoproteomics_sorghum_N_PMID39137587,Low_salinity,"Low_salinity_1_Log2FC,Low_salinity_2_Log2FC,Low_salinity_3_Log2FC",FALSE
+glycoproteomics_sorghum_N_PMID39137587,Medium_salinity,"Med_salinity_1_Log2FC,Med_salinity_2_Log2FC,Med_salinity_3_Log2FC",FALSE
+glycoproteomics_sorghum_N_PMID39137587,High_salinity,"High_salinity_1_Log2FC,High_salinity_2_Log2FC,High_salinity_3_Log2FC",FALSE
+glycoproteomics_human_keratinocytes_N_PMID37956981,Surface,"Surf1_rel,Surf2_rel",FALSE
+glycoproteomics_human_keratinocytes_N_PMID37956981,Lysate,"TCL1_rel,TCL2_rel",FALSE
+glycoproteomics_human_hek293_stt3_N_PMID36139350,WT,"WT_1,WT_2,WT_3,WT_4,WT_5",FALSE
+glycoproteomics_human_hek293_stt3_N_PMID36139350,STT3A_KO,"STT3AKO_1,STT3AKO_2,STT3AKO_3,STT3AKO_4,STT3AKO_5",FALSE
+glycoproteomics_human_hek293_stt3_N_PMID36139350,STT3B_KO,"STT3BKO_1,STT3BKO_2,STT3BKO_3,STT3BKO_4,STT3BKO_5",FALSE
+glycoproteomics_human_hek293_surface_N_PMID39930009,control_PNGase,"ctrl_pngase_1,ctrl_pngase_2,ctrl_pngase_3,ctrl_pngase_4",FALSE
+glycoproteomics_human_hek293_surface_N_PMID39930009,PNGase F,"PNGase_1,PNGase_2,PNGase_3,PNGase_4",FALSE
+glycoproteomics_human_hek293_surface_N_PMID39930009,control_proteinase K,"ctrl_proteinasek_1,ctrl_proteinasek_2,ctrl_proteinasek_3,ctrl_proteinasek_4",FALSE
+glycoproteomics_human_hek293_surface_N_PMID39930009,proteinase K,"ProteinaseK_1,ProteinaseK_2,ProteinaseK_3,ProteinaseK_4",FALSE
+glycoproteomics_human_fibroblasts_ngly1cddg_N_PMID36102038,control,"control_1,control_2,control_3,control_4",FALSE
+glycoproteomics_human_fibroblasts_ngly1cddg_N_PMID36102038,NGLY1-CDDG,"NGLY1CDDG_1,NGLY1CDDG_2,NGLY1CDDG_3,NGLY1CDDG_4",FALSE
+glycoproteomics_human_fibroblasts_srd5a3cdg_N_PMID39360848,SRD5A3-CDG,"SRD5A3CDG_1,SRD5A3CDG_2,SRD5A3CDG_3,SRD5A3CDG_4,SRD5A3CDG_5",FALSE
+glycoproteomics_human_fibroblasts_srd5a3cdg_N_PMID39360848,control,"control_1,control_2,control_3,control_4,control_5",FALSE
+glycoproteomics_human_serum_igg_liverdisease_N_PMID36879659,healthy,"HC_1,HC_2,HC_3,HC_4,HC_5,HC_6,HC_7,HC_8,HC_9,HC_10,HC_11,HC_12,HC_13,HC_14,HC_15,HC_16,HC_17,HC_18,HC_19,HC_20,HC_21,HC_22,HC_23",FALSE
+glycoproteomics_human_serum_igg_liverdisease_N_PMID36879659,HBV,"HBV_1,HBV_2,HBV_3,HBV_4,HBV_5,HBV_6,HBV_7,HBV_8,HBV_9,HBV_10,HBV_11,HBV_12,HBV_13,HBV_14,HBV_15,HBV_16,HBV_17,HBV_18,HBV_19,HBV_20,HBV_21,HBV_22,HBV_23,HBV_24",FALSE
+glycoproteomics_human_serum_igg_liverdisease_N_PMID36879659,cirrhosis,"CIR_1,CIR_2,CIR_3,CIR_4,CIR_5,CIR_6,CIR_7,CIR_8,CIR_9,CIR_10,CIR_11,CIR_12,CIR_13,CIR_14,CIR_15,CIR_16,CIR_17,CIR_18,CIR_19,CIR_20,CIR_21,CIR_22",FALSE
+glycoproteomics_human_serum_igg_liverdisease_N_PMID36879659,HCC,"HCC_1,HCC_2,HCC_3,HCC_4,HCC_5,HCC_6,HCC_7,HCC_8,HCC_9,HCC_10,HCC_11,HCC_12,HCC_13,HCC_14,HCC_15,HCC_16,HCC_17,HCC_18,HCC_19,HCC_20,HCC_21",FALSE
+glycoproteomics_mouse_brain_neurodegeneration_N_PMID40593524,APP/PS1 9mo hippocampus,"AD_Hipp_1,AD_Hipp_2,AD_Hipp_3",FALSE
+glycoproteomics_mouse_brain_neurodegeneration_N_PMID40593524,APP/PS1 9mo mPFC,"AD_PFC_1,AD_PFC_2,AD_PFC_3",FALSE
+glycoproteomics_mouse_brain_neurodegeneration_N_PMID40593524,APP/PS1 9mo substantia nigra,"AD_SN_1,AD_SN_2,AD_SN_3",FALSE
+glycoproteomics_mouse_brain_neurodegeneration_N_PMID40593524,APP/PS1 9mo striatum,"AD_Str_1,AD_Str_2,AD_Str_3",FALSE
+glycoproteomics_mouse_brain_neurodegeneration_N_PMID40593524,WT 9mo hippocampus,"Old_Hipp_1,Old_Hipp_2,Old_Hipp_3",FALSE
+glycoproteomics_mouse_brain_neurodegeneration_N_PMID40593524,WT 9mo mPFC,"Old_PFC_1,Old_PFC_2,Old_PFC_3",FALSE
+glycoproteomics_mouse_brain_neurodegeneration_N_PMID40593524,WT 9mo substantia nigra,"Old_SN_1,Old_SN_2,Old_SN_3",FALSE
+glycoproteomics_mouse_brain_neurodegeneration_N_PMID40593524,WT 9mo striatum,"Old_Str_1,Old_Str_2,Old_Str_3",FALSE
+glycoproteomics_mouse_brain_neurodegeneration_N_PMID40593524,MPTP 3mo hippocampus,"PD_Hipp_1,PD_Hipp_2,PD_Hipp_3",FALSE
+glycoproteomics_mouse_brain_neurodegeneration_N_PMID40593524,MPTP 3mo mPFC,"PD_PFC_1,PD_PFC_2,PD_PFC_3",FALSE
+glycoproteomics_mouse_brain_neurodegeneration_N_PMID40593524,MPTP 3mo substantia nigra,"PD_SN_1,PD_SN_2,PD_SN_3",FALSE
+glycoproteomics_mouse_brain_neurodegeneration_N_PMID40593524,MPTP 3mo striatum,"PD_Str_1,PD_Str_2,PD_Str_3",FALSE
+glycoproteomics_mouse_brain_neurodegeneration_N_PMID40593524,WT 3mo hippocampus,"Young_Hipp_1,Young_Hipp_2,Young_Hipp_3",FALSE
+glycoproteomics_mouse_brain_neurodegeneration_N_PMID40593524,WT 3mo mPFC,"Young_PFC_1,Young_PFC_2,Young_PFC_3",FALSE
+glycoproteomics_mouse_brain_neurodegeneration_N_PMID40593524,WT 3mo substantia nigra,"Young_SN_1,Young_SN_2,Young_SN_3",FALSE
+glycoproteomics_mouse_brain_neurodegeneration_N_PMID40593524,WT 3mo striatum,"Young_Str_1,Young_Str_2,Young_Str_3",FALSE
+glycoproteomics_mouse_macrophages_infection_N_PMC8416091,HSV-1 0h,"H0h_1,H0h_2,H0h_3",FALSE
+glycoproteomics_mouse_macrophages_infection_N_PMC8416091,HSV-1 4h,"H4h_1,H4h_2,H4h_3",FALSE
+glycoproteomics_mouse_macrophages_infection_N_PMC8416091,HSV-1 6h,"H6h_1,H6h_2,H6h_3",FALSE
+glycoproteomics_mouse_macrophages_infection_N_PMC8416091,LPS 0h,"L0h_1,L0h_2,L0h_3",FALSE
+glycoproteomics_mouse_macrophages_infection_N_PMC8416091,LPS 4h,"L4h_1,L4h_2,L4h_3",FALSE
+glycoproteomics_mouse_macrophages_infection_N_PMC8416091,LPS 8h,"L8h_1,L8h_2,L8h_3",FALSE
+glycoproteomics_mouse_macrophages_infection_N_PMC8416091,VSV 0h,"V0h_1,V0h_2,V0h_3",FALSE
+glycoproteomics_mouse_macrophages_infection_N_PMC8416091,VSV 4h,"V4h_1,V4h_2,V4h_3",FALSE
+glycoproteomics_mouse_macrophages_infection_N_PMC8416091,VSV 6h,"V6h_1,V6h_2,V6h_3",FALSE
+glycoproteomics_mouse_tissues_N_PMID39930009,liver,"liver_mouse1_rep1,liver_mouse1_rep2,liver_mouse1_rep3,liver_mouse2_rep1,liver_mouse2_rep2,liver_mouse2_rep3",FALSE
+glycoproteomics_mouse_tissues_N_PMID39930009,kidney,"kidney_mouse1_rep1,kidney_mouse1_rep2,kidney_mouse1_rep3,kidney_mouse2_rep1,kidney_mouse2_rep2,kidney_mouse2_rep3",FALSE
+glycoproteomics_mouse_tissues_N_PMID39930009,brain,"brain_mouse1_rep1,brain_mouse1_rep2,brain_mouse1_rep3,brain_mouse2_rep1,brain_mouse2_rep2,brain_mouse2_rep3",FALSE
+glycoproteomics_schistosoma_mansoni_sex_N_PMID41545360,female,"Female_1,Female_2,Female_3",FALSE
+glycoproteomics_schistosoma_mansoni_sex_N_PMID41545360,male,"Male_1,Male_2,Male_3",FALSE
+glycoproteomics_schistosoma_mansoni_sex_O_PMID41545360,female,"Female_1,Female_2,Female_3",FALSE
+glycoproteomics_schistosoma_mansoni_sex_O_PMID41545360,male,"Male_1,Male_2,Male_3",FALSE

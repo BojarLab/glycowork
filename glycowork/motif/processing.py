@@ -19,7 +19,7 @@ with open(_parent / "common_names.json") as f:
 with open(_parent / "wurcs_tokens.json") as f:
     monosaccharide_mapping = json.load(f)
 with open(_parent / "backup_gids.json") as f:
-    BACKUP_G_IDS = json.load(f)
+    BACKUP_G_IDS = {k: v for k, v in json.load(f).items() if v}  # 288 IDs map to '', which canonicalize_iupac would otherwise return as the glycan
 with open(_parent / "glyconnect_to_glytoucan.json") as f:
     GLYCONNECT_TO_GLYTOUCAN = json.load(f)
 
@@ -122,6 +122,8 @@ _PGLYCO_RULES = {('core0', 'N'): ('GlcNAc', 'b1-4', 'core1'), ('core0', 'F'): ('
                  ('gal', 'A'): ('Neu5Ac', 'a2-3/6', 'sia'), ('gal', 'G'): ('Neu5Gc', 'a2-3/6', 'sia'),
                  ('sia', 'A'): ('Neu5Ac', 'a2-8', 'sia'), ('sia', 'G'): ('Neu5Gc', 'a2-8', 'sia')}
 _PGLYCO_REPEAT = {('core0', 'F'): 'a1-3', ('arm', 'N'): 'b1-4/6'}  # linkage for the second occurrence of a token in the same position
+_STRUCGP_CODE = re.compile(r'A[1-5](?:[B-Z][1-5]|[a-y])*a')  # StrucGP structure coding: an uppercase letter opens a residue at that depth (A = reducing end), its digit names it, the lowercase letter closes it
+_STRUCGP_TOKEN = {'1': 'H', '2': 'N', '3': 'A', '4': 'G', '5': 'F'}  # StrucGP's 1 Hex, 2 HexNAc, 3 NeuAc, 4 NeuGc, 5 dHex as the pGlyco tokens whose position rules they share
 _CSDB_AC_12 = re.compile(r'^Ac\(\??1-2\)')
 _CSDB_N_TO_NAC = re.compile(r'N(?=[^A-Za-z]|$)')
 FLOATY_ALT = re.compile(r'\{([^{}]*)\}')
@@ -1113,6 +1115,46 @@ def pglyco_to_iupac(glycan: str # Glycan in pGlyco nested-tree nomenclature
     return render(root, 'GlcNAc' if root[0] == 'N' else _PGLYCO_MONO[root[0]], 'core0' if root[0] == 'N' else 'end')
 
 
+def strucgp_to_iupac(glycan: str # Glycan in StrucGP structure coding, such as A2B2C1D1E2F1fedD1E2edcbB5ba
+                     ) -> str: # Basic IUPAC-condensed format
+    "Convert glycan from StrucGP structure coding to barebones IUPAC-condensed format, inferring monosaccharides and linkages from their position in the N-glycan as pglyco_to_iupac does, and the Man(a1-3)/Man(a1-6) arms and their branches from StrucGP's child order"
+    nodes, stack = [], []
+    for t in re.findall(r'[A-Z][1-5]|[a-z]', glycan) if _STRUCGP_CODE.fullmatch(glycan) else ['?']:
+        if t[0].isupper() and ord(t[0]) - 65 == len(stack) and (stack or not nodes):
+            nodes.append((_STRUCGP_TOKEN[t[1]], []))
+            if stack:
+                nodes[stack[-1]][1].append(nodes[-1])
+            stack.append(len(nodes) - 1)
+        elif t.islower() and stack and ord(t) - 97 == len(stack) - 1:
+            stack.pop()
+        else:
+            stack = None
+            break
+    if stack != []:
+        raise ValueError(f"'{glycan}' is not a well-formed StrucGP structure code; expected one tree in which each uppercase letter (depth) with a digit 1-5 is closed by its lowercase letter, such as 'A2B2C1cba'")
+
+    def render(node, mono, ctx):  # StrucGP lists children in a fixed order: the first Man on the core Man is the a1-3 arm, the second the a1-6 arm (716 of 716 hybrids in published StrucGP tables carry their GlcNAc on the first arm), and so on down the arms
+        branches, seen = [], {}
+        for kid in node[1]:
+            i = seen[kid[0]] = seen.get(kid[0], -1) + 1
+            pair = sum(k[0] == kid[0] for k in node[1]) == 2
+            kid_mono, link, kid_ctx = _PGLYCO_RULES.get(('arm' if ctx.startswith('arm') else ctx, kid[0]), (_PGLYCO_MONO[kid[0]], f"?{'2' if kid[0] in 'AG' else '1'}-?", 'end'))
+            if ctx == 'bman' and kid[0] == 'H':
+                link, kid_ctx = (('a1-3', 'arm3'), ('a1-6', 'arm6'))[i] if pair else (link, 'arm')
+            elif ctx in ('arm3', 'armx') and kid[0] == 'H':
+                link, kid_ctx = 'a1-2', 'armx'
+            elif ctx == 'arm6' and kid[0] == 'H':
+                link, kid_ctx = ('a1-3', 'a1-6')[i] if pair else 'a1-3/6', 'armx'
+            elif ctx.startswith('arm') and kid[0] == 'N' and i:
+                link = {'arm3': 'b1-4', 'arm6': 'b1-6'}.get(ctx, 'b1-4/6') if i == 1 else 'b1-?'
+            branches.append(f"{render(kid, kid_mono, kid_ctx)}({link})")
+        branches.sort(key = lambda b: (-b.count('('), b))
+        return (branches[0] if branches else '') + ''.join(f"[{b}]" for b in branches[1:]) + mono
+
+    root = nodes[0]
+    return render(root, 'GlcNAc' if root[0] == 'N' else _PGLYCO_MONO[root[0]], 'core0' if root[0] == 'N' else 'end')
+
+
 def linucs_to_iupac(linucs: str # Glycan in LINUCS format, as used by GLYCOSCIENCES.de
                     ) -> str: # Basic IUPAC-condensed format
     "Convert glycan from LINUCS, such as [][b-D-GlcpNAc]{[(4+1)][b-D-Manp]{}}, to barebones IUPAC-condensed format"
@@ -1332,7 +1374,7 @@ def _sort_mono_mods(m):
 @lru_cache(maxsize = None)
 def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                        ) -> str: # Standardized IUPAC-condensed format
-    "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, pGlyco, CSDB-linear, KCF, SMILES, LINUCS, GlyConnect IDs, and GlyTouCanIDs to standardized IUPAC-condensed format"
+    "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, pGlyco, StrucGP, CSDB-linear, KCF, SMILES, LINUCS, GlyConnect IDs, and GlyTouCanIDs to standardized IUPAC-condensed format"
     if isinstance(glycan, int):
         glycan = str(glycan)
         glycan = GLYCONNECT_TO_GLYTOUCAN.get(glycan, glycan)
@@ -1389,6 +1431,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
         glycan = nglycan_stub_to_iupac(glycan)
     elif _PGLYCO_TREE.fullmatch(glycan):
         glycan = pglyco_to_iupac(glycan)
+    elif _STRUCGP_CODE.fullmatch(glycan):
+        glycan = strucgp_to_iupac(glycan)
     elif looks_like_linearcode(glycan):
         glycan = linearcode_to_iupac(glycan)
     elif looks_like_oxford(glycan):

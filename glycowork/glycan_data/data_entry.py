@@ -6,7 +6,7 @@ import pandas as pd
 from pathlib import Path
 from typing import Callable
 from glycowork.glycan_data.loader import GlycoDataFrame, glycomics_data_loader, glycoproteomics_data_loader, lectin_array_data_loader
-from glycowork.motif.processing import check_nomenclature, canonicalize_composition, canonicalize_iupac, is_composition, _CODE_TO_NAME, _NAME_TO_CODE
+from glycowork.motif.processing import check_nomenclature, canonicalize_composition, canonicalize_iupac, is_composition, _CODE_TO_NAME, _NAME_TO_CODE, _STRUCGP_CODE
 from glycowork.motif.tokenization import glycan_to_composition
 from glycowork.motif.graph import glycan_to_nxGraph, compare_glycans
 
@@ -65,7 +65,7 @@ def _abundance_matrix(df: pd.DataFrame, # columns run, ion, label, and value, on
 def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataFrame], # result file(s) of FragPipe/MSFragger-Glyco or O-Pair (psm.tsv), pGlyco3 or pGlycoQuant, Byonic or Byologic, GlycReSoft, MetaMorpheus O-Pair (.psmtsv), Glyco-Decipher, StrucGP, or PEAKS GlycanFinder
                          max_q: float = 0.01, # highest q-value/FDR a match may have, wherever the engine reports one
                          sample_map: dict[str, str] | Callable[[str], str] | None = None # renames runs (raw files, or FragPipe experiments) into samples; runs sharing a sample, e.g., fractions, are summed
-                         ) -> GlycoDataFrame: # glycoforms as 'protein_site_composition' in column 'ID', samples as columns; ready for get_differential_expression(glycoproteomics = True) or get_glycoshift_per_site
+                         ) -> GlycoDataFrame: # glycoforms as 'protein_site_composition' in column 'ID' ('protein_site_sequence' for StrucGP structure codes), samples as columns; ready for get_differential_expression(glycoproteomics = True) or get_glycoshift_per_site
     "Reads the native output of glycoproteomics search engines into a site-specific glycoform x sample table, quantified by intensity where the engine reports one and by spectral counts otherwise"
     recs, skipped = [], 0  # (run, ion, protein, site, composition, abundance); an ion has one abundance per run, so its repeated matches must not add up
     for fi, f in enumerate(files if isinstance(files, list) else [files]):
@@ -140,10 +140,10 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
             pairs = [_pair_sites(int(re.search(r'\d+', str(se))[0]), [p for p, _ in m], [t.split(':', 1)[-1].rsplit(' on ', 1)[0] for _, t in m]) for m, se in zip(mods, col('startandendresiduesinprotein'))]
             ions = list(col('fullsequence'))
         elif sig in ('decipher', 'strucgp'):
-            runs = list(col('file' if sig == 'decipher' else 'filename'))
+            runs = list(col(k)) if (k := 'file' if sig == 'decipher' else 'filename') in c else runs  # published tables often drop the file column, so a DataFrame or file without it is one sample
             prots = [re.split(r'[;,]', str(p))[0] for p in col('protein' if sig == 'decipher' else 'proteinid')]
-            pairs = [[(re.sub(r'\.0+$', '', re.split(r'[;,]', str(s))[0]), re.sub(r'S(?=\d)', 'A', g.split('+')[0]) if sig == 'strucgp' else g)] if isinstance(g, str) and pd.notna(s) else [] for s, g in
-                     zip(col('glycosite' if sig == 'decipher' else 'glycosite_position'), col('glycancomposition'))]  # StrucGP writes NeuAc as S and appends adducts like '+Ammonium(+17)'
+            pairs = [[(re.sub(r'\.0+$', '', re.split(r'[;,]', str(s))[0]), (sc.strip() if isinstance(sc, str) and _STRUCGP_CODE.fullmatch(sc.strip()) else re.sub(r'S(?=\d)', 'A', g.split('+')[0])) if sig == 'strucgp' else g)] if isinstance(g, str) and pd.notna(s) else [] for s, g, sc in
+                     zip(col('glycosite' if sig == 'decipher' else 'glycosite_position'), col('glycancomposition'), col('structure_coding'))]  # StrucGP's structure code becomes the full sequence wherever it is given; otherwise its composition, in which StrucGP writes NeuAc as S and appends adducts like '+Ammonium(+17)'
             ions = list(col('peptide'))
         elif sig == 'glycanfinder':
             prots, ends = col('proteinaccession'), list(df.columns).index(c['sampleprofile(ratio)']) if 'sampleprofile(ratio)' in c else len(df.columns)
@@ -174,7 +174,7 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
     canon = {}
     for g in df['comp'].unique():
         try:
-            canon[g] = None if re.search(r'[+\[]', g) else canonicalize_composition(g, as_string = True) or None  # a residual mass delta such as '+225.06' has no composition
+            canon[g] = canonicalize_iupac(g) if _STRUCGP_CODE.fullmatch(g) else None if re.search(r'[+\[]', g) else canonicalize_composition(g, as_string = True) or None  # a residual mass delta such as '+225.06' has no composition
         except ValueError:
             canon[g] = None
     if bad := [g for g, v in canon.items() if v is None]:

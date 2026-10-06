@@ -339,10 +339,11 @@ class LazyLoader:
         if name.startswith('_'):  # a private lookup on a not-yet-populated instance (unpickling, copy) must not re-enter this method through self._datasets
             raise AttributeError(name)
         if name not in self._datasets:
-            filename = f"{self.prefix}{name}.csv"
+            folder = resources.files(f"{self.package}.{self.directory}")
+            filename = next((f"{self.prefix}{name}{ext}" for ext in ('.csv', '.csv.xz') if folder.joinpath(f"{self.prefix}{name}{ext}").is_file()), f"{self.prefix}{name}.csv")  # datasets above 1 MB ship as xz-compressed CSV
             try:
-                with resources.files(f"{self.package}.{self.directory}").joinpath(filename).open(encoding = 'utf-8-sig') as f:
-                    _df = pd.read_csv(f)
+                with folder.joinpath(filename).open('rb') as f:
+                    _df = pd.read_csv(f, encoding = 'utf-8-sig', compression = 'xz' if filename.endswith('.xz') else None)
                     cols = list(_df.columns)
                     cleaned = [re.sub(r'\.\d+$', '', c) for c in cols]
                     _df.columns = [cleaned[i] if cleaned[i] in cleaned[:i] + cleaned[i + 1:] else cols[i] for i in range(len(cols))]
@@ -361,8 +362,8 @@ class LazyLoader:
 
     def __dir__(self):
         files = resources.files(f"{self.package}.{self.directory}").iterdir()
-        dataset_names = [file.name[len(self.prefix):-4] for file in files if
-                         file.name.startswith(self.prefix) and file.suffix.lower() == '.csv']
+        dataset_names = [re.sub(r'\.csv(\.xz)?$', '', file.name[len(self.prefix):], flags = re.I) for file in files if
+                         file.name.startswith(self.prefix) and re.search(r'\.csv(\.xz)?$', file.name, flags = re.I)]
         return dataset_names
 
     def filter(self, **criteria

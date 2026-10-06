@@ -203,6 +203,8 @@ def preprocess_data(
                     parts.append(clr_transformation(g + 0.0000001, cols, grp2, gamma = gamma,
                                                     custom_scale = 0 if paired else custom_scale,
                                                     random_state = random_state, reference = ref))
+                if not parts:
+                    raise ValueError("No glycosite has two or more glycoforms measured in at least two samples per group, so there is no within-site log-ratio to test; run without glycoproteomics = True to compare the glycopeptides as whole-sample features.")
                 df = pd.concat(parts).loc[df_org.index]
             if motif_dag:
                 df_org.attrs['motif_dag'] = get_composition_dag(df_org.index.tolist(), abundances = df_org)
