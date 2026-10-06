@@ -57,8 +57,10 @@
 #### processing
 ##### Added ✨
 - The LINUCS nomenclature is now also supported in Universal Input/`canonicalize_iupac` via the new `linucs_to_iupac` parser (e1c807a)
-- StrucGP structure codes (e.g., `A2B2C1D1E2F1fedD1E2edcbB5ba`) are now also supported in Universal Input/`canonicalize_iupac` via the new `strucgp_to_iupac` parser, which infers monosaccharides and linkages from N-glycan position and StrucGP's arm order ()
+- StrucGP structure codes (e.g., `A2B2C1D1E2F1fedD1E2edcbB5ba`) are now also supported in Universal Input/`canonicalize_iupac` via the new `strucgp_to_iupac` parser, which infers monosaccharides and linkages from N-glycan position and StrucGP's arm order (99ad40e)
 - Universal Input/`canonicalize_composition` now also supports composition nomenclatures from Byonic, FragPipe, GlycoMod, GlyHunter, GlyCombo, LaCyTools, MassyTools, GlycoGenius, and GlycReSoft (e1c807a, f936c23)
+- Expanded GlyTouCan ID coverage ()
+- Support heptoses in WURCS conversion ()
 
 ##### Changed 🔄
 - `canonicalize_composition` now also accepts dictionary compositions as inputs (0967d8a)
@@ -71,7 +73,8 @@
 - Fixed handling of variantly capitalized monosaccharides in KCF (e1c807a)
 - Fixed handling of `NS` in GlycoWorkbench parsing (43d7a40)
 - Fixed `glycoctxml_to_iupac` dropping substituent positions such as in GlcNAc6S (342a605)
-- Fixed `canonicalize_iupac` returning an empty string for 288 GlyTouCan IDs whose backup mapping holds no sequence ()
+- Fixed `wurcs_to_iupac` leaving `|` in its output for attachment alternatives spanning several residues (e.g., `d4|d6|g4|g6`), which now give a floating part ()
+- Fixed lone residues with positioned substituents (e.g., `Man2F6P`) being read as Oxford nomenclature by `canonicalize_iupac` ()
 
 ##### Deprecated ⚠️
 - Removed the `degrees` keyword argument from `glycoct_build_iupac`; handled automatically (342a605)
@@ -156,5 +159,5 @@
 
 #### loader
 ##### Added ✨
-- Datasets above 1 MB now ship as xz-compressed CSV (`.csv.xz`), which all data loaders read without special treatment ()
-- Added new curated glycoproteomics datasets: `tomato_fruit_mnsI1_N_PMID41017156`, `human_hek293_stt3_N_PMID36139350`, `human_hek293_surface_N_PMID39930009`, `mouse_tissues_N_PMID39930009`, `mouse_brain_neurodegeneration_N_PMID40593524`, `mouse_macrophages_infection_N_PMC8416091`, `human_serum_igg_liverdisease_N_PMID36879659`, `human_fibroblasts_srd5a3cdg_N_PMID39360848`, `human_fibroblasts_ngly1cddg_N_PMID36102038`, `schistosoma_mansoni_sex_N_PMID41545360`, and `schistosoma_mansoni_sex_O_PMID41545360` to `glycoproteomics_data_loader` ()
+- Datasets above 1 MB now ship as xz-compressed CSV (`.csv.xz`), which all data loaders read without special treatment (99ad40e)
+- Added new curated glycoproteomics datasets: `tomato_fruit_mnsI1_N_PMID41017156`, `human_hek293_stt3_N_PMID36139350`, `human_hek293_surface_N_PMID39930009`, `mouse_tissues_N_PMID39930009`, `mouse_brain_neurodegeneration_N_PMID40593524`, `mouse_macrophages_infection_N_PMC8416091`, `human_serum_igg_liverdisease_N_PMID36879659`, `human_fibroblasts_srd5a3cdg_N_PMID39360848`, `human_fibroblasts_ngly1cddg_N_PMID36102038`, `schistosoma_mansoni_sex_N_PMID41545360`, and `schistosoma_mansoni_sex_O_PMID41545360` to `glycoproteomics_data_loader` (99ad40e)

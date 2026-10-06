@@ -4,6 +4,7 @@ import re
 import ast
 import gc
 import json
+import lzma
 import pickle
 import pandas as pd
 import networkx as nx
@@ -291,7 +292,7 @@ def __getattr__(name):
         globals()[name] = df_species  # Cache it to avoid reloading
         return df_species
     elif name == "df_glycan":
-        data_path = this_dir / 'v12_sugarbase.json'
+        data_path = this_dir / 'v12_sugarbase.json.xz'
         df_glycan = GlycoDataFrame(serializer.deserialize(data_path))
         globals()[name] = df_glycan  # Cache it to avoid reloading
         return df_glycan
@@ -715,7 +716,7 @@ class DataFrameSerializer:
         for _, row in df.iterrows():
             serialized_row = [cls._serialize_cell(val) for val in row]
             data['data'].append(serialized_row)
-        with open(path, 'w') as f:
+        with (lzma.open if str(path).endswith('.xz') else open)(path, 'wt') as f:
             json.dump(data, f)
 
     @classmethod
@@ -725,7 +726,7 @@ class DataFrameSerializer:
         gc_was_enabled = gc.isenabled()
         gc.disable()  # the load allocates >1M small containers that can never form cycles, and the collector rescanning all of them over and over took ~80% of df_glycan's load time
         try:
-            with open(path, 'r') as f:
+            with (lzma.open if str(path).endswith('.xz') else open)(path, 'rt') as f:
                 data = json.load(f)
             deserialized_data = [[cls._deserialize_cell(cell) for cell in row] for row in data['data']]
             return pd.DataFrame(data = deserialized_data, columns = data['columns'], index = data['index'])

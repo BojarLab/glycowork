@@ -614,7 +614,16 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("G96417BZ") == "Man(a1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("G26039ES") == "Gal(b1-4)Glc-ol"
     assert canonicalize_iupac("G02923VP") == "GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
-    assert canonicalize_iupac("G59643LR") == "G59643LR"
+    assert canonicalize_iupac("G59643LR") == "{Fuc(a1-?)[Gal(b1-?)]GlcNAc(?1-?)}{Neu5Ac(a2-3)Gal(b1-?)GlcNAc(?1-?)}Fuc(a1-?)[Gal(b1-?)]GlcNAc(b1-3)Gal(b1-?)GlcNAc(b1-3)Gal(b1-?)GlcNAc(b1-3)Gal(b1-4)Glc-ol"
+    assert canonicalize_iupac("G03833LE") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"  # a glycosidic topology takes the linkages every N-glycan core has
+    assert canonicalize_iupac("G00381YD") == "{Man(a1-?)}{Man(a1-?)}{Man(a1-?)}Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc-ol"
+    assert canonicalize_iupac("G48814DZ") == "Fruf(b2-1)Gal"  # archived, replaced by G31454ZO
+    assert canonicalize_iupac("G00088CJ") == "G00088CJ"  # compositions stay unresolved
+    assert canonicalize_iupac("WURCS=2.0/5,5,4/[Aad1122h-2x_2-?][a11221h-1a_1-5][a11221h-1a_1-5_7*OP^XOCCN/3O/3=O][a2122h-1a_1-5_2*NCC/3=O][a2122h-1b_1-5]/1-2-3-4-5/a5-b1_b3-c1_b4-e1_c2-d1") == "GlcNAc(a1-2)LDManHep7PEtN(a1-3)[Glc(b1-4)]LDManHep(a1-5)Kdo"
+    assert canonicalize_iupac("WURCS=2.0/6,11,10/[a2122h-1x_1-5_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a2112h-1b_1-5][a1221m-1a_1-5]/1-2-3-4-2-5-4-2-6-2-5/a4-b1_a6-i1_b4-c1_c3-d1_c6-g1_d2-e1_e4-f1_g2-h1_j4-k1_j1-d4|d6|g4|g6}") == "{Gal(b1-4)GlcNAc(b1-?)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"  # attachment alternatives across residues leave the part floating
+    assert canonicalize_iupac("Man2F6P") == "Man2F6P"  # not Oxford
+    with pytest.raises(ValueError, match = 'repeating units'):
+        canonicalize_iupac("WURCS=2.0/3,3,3/[a2211m-1a_1-5][a2122h-1a_1-5][a1122h-1b_1-5_2*NCC/3=O]/1-2-3/a2-b1_b4-c1_a1-c?~n")
     assert canonicalize_iupac(782) == "Gal(?1-?)[GlcNAcOS(?1-?)]GalNAc"
     assert canonicalize_iupac(72) == "Fuc(a1-2)Gal(b1-3/4)GlcNAc(b1-?)[Fuc(a1-2)Gal(b1-3/4)GlcNAc(b1-?)]Gal(b1-3)[GlcNAc(b1-6)]GalNAc"
     assert canonicalize_iupac(
@@ -986,7 +995,7 @@ LIN
     for bad in ["A2B2C1cb", "A2B2C1cbaA2a", "A2C1ca"]:
         with pytest.raises(ValueError, match = 'StrucGP'):
             strucgp_to_iupac(bad)
-    assert canonicalize_iupac("G00606LX") == "G00606LX"  # backup_gids.json entries without a sequence leave the ID unresolved instead of returning ''
+    assert canonicalize_iupac("G00606LX") == "Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-4)]Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     # Test SMILES, written by other toolkits so that atom order, ring digits and branch order differ from our own writer
     assert canonicalize_iupac(
         "O1[C@H](CO)[C@@H](O)[C@H](O)[C@@H](O)[C@H]1O[C@@]2(O[C@@H]([C@@H](O)[C@@H]2O)CO)CO") == "Glc(a1-2)Fruf"  # sucrose

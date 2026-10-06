@@ -1,5 +1,6 @@
 import pandas as pd
 import json
+import lzma
 import re
 import warnings
 from random import choice
@@ -18,8 +19,6 @@ with open(_parent / "common_names.json") as f:
         f).items()}  # keyed separator-free, so 'LNFP-VI', 'LNFP VI' and 'lnfp_vi' all hit one entry
 with open(_parent / "wurcs_tokens.json") as f:
     monosaccharide_mapping = json.load(f)
-with open(_parent / "backup_gids.json") as f:
-    BACKUP_G_IDS = {k: v for k, v in json.load(f).items() if v}  # 288 IDs map to '', which canonicalize_iupac would otherwise return as the glycan
 with open(_parent / "glyconnect_to_glytoucan.json") as f:
     GLYCONNECT_TO_GLYTOUCAN = json.load(f)
 
@@ -68,6 +67,7 @@ _WILDCARD_MONO = {'Hex': Hex, 'HexNAc': HexNAc, 'dHex': dHex, 'Sia': Sia, 'HexA'
 OXFORD_MANN_ONLY = re.compile(r"\A(?:M|Man)-?\d+\Z", re.IGNORECASE)
 OXFORD_HAS_NONZERO_DIGIT = re.compile(r"[1-9]")
 OXFORD_FORBIDDEN_IUPAC = re.compile(r"\([a-z]?\d-\d\)")
+OXFORD_LONE_RESIDUE = re.compile(r"(?:L-)?(?:Man|Gal|Glc)(?:NAc|NS|N)?A?N?(?:\d(?:Ac|Me|SH|P|S|F|N|Cl|Br|I))+")  # Man2F6P, ManNAcA3Ac4Ac: one residue with positioned substituents
 OXFORD_FORBIDDEN_LINKAGE = re.compile(r"(?<!G)[ab]\d")  # Ga2 is Oxford's count of alpha-Gal, not a linkage
 OXFORD_REQ_TOKEN = re.compile(r"(?:A\d+|G(?:\(\d\))?\d+|Sg?(?:\([368](?:,[368])*\))?\d+|F(?:\(\d\))?|F\d+|Bi?|M\d+|H\d+|N\d+|E\d+|L\d+|Lac(?:DiNAc)?\d+|GalNAc\d+|GlcNAc\d+|GlcN\d+|Gluc\d+|Sulf)")
 OXFORD_BODY = re.compile(r"\A(?:[A-Za-z0-9-]+|\((?:[3468](?:,[3468]){0,5}|2,[36]|Ac1?|s)\)|\[(?:[368](?:,[368]){0,3}|SO4-2)\]|,)+\Z", re.VERBOSE)
@@ -769,15 +769,15 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
                    ) -> str: # Basic IUPAC-condensed format
     "Convert glycan from WURCS to barebones IUPAC-condensed format"
     wurcs = wurcs[wurcs.index('/') + 1:]
-    pattern = r'\b([a-z])\d(?:\|\1\d)+\}?|\b[a-z](\d)(?:\|[a-z]\2)+\}?'
-    additional_pattern = r'\b([a-z])\?(?:\|\w\?)+\}?'
+    pattern = r'(?<!\|)\b([a-z])\d(?:\|\1\d)+\}?(?!\|)|(?<!\|)\b[a-z](\d)(?:\|[a-z]\2)+\}?(?!\|)'  # whole alternative groups only, so d4|d6|g4|g6 is not read as d4|d6
+    additional_pattern = r'\b[a-z][\d?](?:\|\w[\d?])+\}?'  # alternatives across residues and positions (d4|d6|g4|g6) leave the part floating
 
     def replacement(match):
         text = match.group(0)
         if '|' in text and text[-1].isdigit():  # Case like r3|r6
             letter = text[0]
             nums = [c for c in text if c.isdigit()]
-            return f'{letter}{nums[0]}*{nums[1]}'
+            return letter + '*'.join(nums)
         return f'{match.group(1)}?' if match.group(1) else f'?{match.group(2)}'
 
     wurcs = re.sub(pattern, replacement, wurcs)
@@ -788,6 +788,8 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
     monosaccharides = wurcs[wurcs.index('['):res_end].strip('[]').split('][')
     connectivity, _, topology = wurcs[res_end + 1:].partition('/')
     topology, connectivity = topology.split('_'), connectivity.split('-')
+    if any('~' in link or link.count('-') > 1 for link in topology):
+        raise ValueError(f"'{wurcs}' has repeating units or linkages bridging more than two residues, which IUPAC-condensed cannot express.")
     connectivity = {chr(97 + i) if i < 26 else chr(65 + i - 26) if i < 52 else chr(97) + chr(97 + i - 52) if i < 78 else chr(97) + chr(65 + i - 78): int(num) for i, num in enumerate(connectivity)}
     if len(connectivity) > 1 and not any(link.split('-')[0][:-1] in connectivity for link in topology if '-' in link):
         monos = [get_mono(monosaccharides[i - 1]) for i in
@@ -816,7 +818,9 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
             monosaccharides[connectivity[node] - 1])
 
     attached = {c for kid in kids.values() for _, c in kid}.union(n for n, _ in floaty)
-    root = next(n for n in connectivity if n not in attached)
+    root = next((n for n in connectivity if n not in attached), None)
+    if root is None:
+        raise ValueError(f"'{wurcs}' is cyclic (every residue is attached to another), which IUPAC-condensed cannot express.")
     floating_part = ''.join('{' + f"{subtree(n, {n})}(1-{pos})" + '}' for n, pos in
                             floaty)  # a floating bit can be a whole subtree, not just its attachment residue
     iupac = (floating_part + subtree(root, {root}))[:-1]
@@ -1178,7 +1182,10 @@ def glytoucan_to_glycan(ids: str | list[str], # GlyTouCan ID(s) or glycan(s)
     "Convert between GlyTouCan IDs and IUPAC-condensed glycans"
     if not hasattr(glytoucan_to_glycan, 'glycan_dict'):
         has_id = loader.df_glycan.dropna(subset = ['glytoucan_id'])  # a glycan without a GlyTouCan ID would otherwise map to NaN instead of being reported as missing
-        glytoucan_to_glycan.glycan_dict = dict(zip(has_id.glytoucan_id, has_id.glycan))
+        glycan_dict = dict(zip(has_id.glytoucan_id, has_id.glycan))
+        with lzma.open(_parent / "glytoucan_ids.json.xz", 'rt') as f:  # IDs outside df_glycan (bin/build_glytoucan_ids.py): their sequence, or the ID whose sequence they take
+            extra = json.load(f)
+        glytoucan_to_glycan.glycan_dict = glycan_dict | {k: glycan_dict.get(v) or extra.get(v, v) for k, v in extra.items()}
         glytoucan_to_glycan.id_dict = dict(zip(has_id.glycan, has_id.glytoucan_id))
     lookup = glytoucan_to_glycan.id_dict if revert else glytoucan_to_glycan.glycan_dict
     result, not_found = [], []
@@ -1340,6 +1347,8 @@ def looks_like_oxford(glycan: str # Glycan string in any nomenclature
         return True
     if OXFORD_MANN_ONLY.fullmatch(glycan):
         return True
+    if OXFORD_LONE_RESIDUE.fullmatch(glycan):
+        return False
     if not OXFORD_HAS_NONZERO_DIGIT.search(glycan):
         return False
     if re.search(r'(?<![A-Za-z])[HN]\d', glycan):  # Hex/HexNAc counts mark a composition (H9N2, H5N4F1A2); oxford_to_iupac has no reading for them and would silently return a bare core
@@ -1404,7 +1413,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
         raise ValueError(f"'{glycan}' is a composition, not a glycan sequence; use canonicalize_composition instead.")
     if bool(re.match(r'^G\d{5}[A-Z]{2}$', glycan)):  # GlyTouCan ID hook
         glytoucan_in = glycan
-        glycan = glytoucan_to_glycan([BACKUP_G_IDS.get(glycan, glycan)], verbose = False)[0]
+        glycan = glytoucan_to_glycan(glycan, verbose = False)
         if glycan == glytoucan_in:
             return glytoucan_in
     # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, GlyTouCanIDs
