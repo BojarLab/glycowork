@@ -42,6 +42,7 @@ _MASS_DICTS = {col: dict(zip(mapping_file.composition, mapping_file[col])) for c
 HYDROGEN_MASS = 1.007825
 ELECTRON_MASS = 0.000548580
 PROTON_MASS = HYDROGEN_MASS - ELECTRON_MASS  # charge carrier; the H atom is 0.55 mDa heavier
+NEUTRAL_ADDUCTS = {'Acetonitrile', 'Trifluoroacetic acid'}  # mz_to_composition.csv entries that are neutral molecules, so their adduct ions still need the protons of [M+H]+/[M-H]-
 modification_formula_dict = {'reduced': 'H2', '2AA': 'C7H7NO', '2AB': 'C7H8N2', 'procainamide': 'C13H21N3'}  # net gain at the reducing end: H2 by reduction, label minus O by reductive amination
 AMINO_ACID_FORMULAS = {'G': 'C2H3NO', 'A': 'C3H5NO', 'S': 'C3H5NO2', 'P': 'C5H7NO', 'V': 'C5H9NO', 'T': 'C4H7NO2', 'C': 'C3H5NOS', 'L': 'C6H11NO', 'I': 'C6H11NO', 'N': 'C4H6N2O2',
                        'D': 'C4H5NO3', 'Q': 'C5H8N2O2', 'K': 'C6H12N2O', 'E': 'C5H7NO3', 'M': 'C5H9NOS', 'H': 'C6H7N3O', 'F': 'C9H9NO', 'R': 'C6H12N4O', 'Y': 'C9H9NO2', 'W': 'C11H10N2O'}  # amino acid residues in a chain (free amino acid minus H2O)
@@ -196,7 +197,7 @@ def stemify_dataset(df: pd.DataFrame, # DataFrame with glycan column
 
 def get_ion_mzs(mass: float | np.ndarray, # Neutral mass(es), including any reducing-end modification or label
                 max_charge: int = -2, # Signed charge ceiling: sign sets ion mode (negative/positive), magnitude the highest charge state z considered
-                adducts: list[str] | None = None, # Adduct ions as named in mz_to_composition.csv, e.g., ['Acetate', 'Formate'] or ['Na+', 'K+', 'NH4+']; default: protonated ions only
+                adducts: list[str] | None = None, # Adducts as named in mz_to_composition.csv, e.g., ['Acetate', 'Formate'] or ['Na+', 'K+', 'NH4+']; neutral ones (NEUTRAL_ADDUCTS) ride on the protonated/deprotonated ion; default: protonated ions only
                 min_mass: dict[int, float] | None = None # Smallest neutral mass that can carry charge z, e.g., {2: 900, 3: 1500}; default: no limit
                 ) -> dict[str, float | np.ndarray]: # Ion name (e.g., '[M-H]-', '[M+Acetate-H]2-', '[M+2Na]2+') : theoretical m/z (NaN where min_mass excludes the ion); by charge, then z protons, one adduct with z-1 protons, z adducts
     "Theoretical m/z of every ion species of a neutral mass"
@@ -207,6 +208,9 @@ def get_ion_mzs(mass: float | np.ndarray, # Neutral mass(es), including any redu
         out[f"[M{sign}{z if z > 1 else ''}H]{charge}"] = np.where(ok, (m + z * (s * PROTON_MASS)) / z, np.nan)
         for adduct in adducts or []:
             a, name = mass_dict[adduct], adduct.rstrip('+-')
+            if adduct in NEUTRAL_ADDUCTS:
+                out[f"[M+{name}{sign}{z if z > 1 else ''}H]{charge}"] = np.where(ok, (m + a + z * (s * PROTON_MASS)) / z, np.nan)
+                continue
             out[f"[M+{name}{h}]{charge}"] = np.where(ok, (m + (z - 1) * (s * PROTON_MASS) + a) / z, np.nan)
             if z > 1:
                 out[f"[M+{z}{name}]{charge}"] = np.where(ok, (m + z * a) / z, np.nan)

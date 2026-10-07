@@ -35,7 +35,7 @@ from glycowork.motif.tokenization import (
     glycan_to_composition, calculate_adduct_mass, structure_to_basic, map_to_basic,
     compositions_to_structures, match_composition_relaxed, stemify_dataset, composition_to_mass,
     condense_composition_matching, get_unique_topologies, mz_to_structures, glycan_to_mass,
-    get_random_glycan, HYDROGEN_MASS, mass_dict
+    get_random_glycan, get_ion_mzs, PROTON_MASS, mass_dict
 )
 from glycowork.motif.processing import (
     min_process_glycans, get_lib, expand_lib, get_possible_linkages, looks_like_linearcode,
@@ -1597,7 +1597,7 @@ def test_mz_to_composition():
     # Test doubly-charged mixed ion: [M-H+Acetate]2- in negative mode
     comp = {'Neu5Ac': 1, 'Hex': 1, 'HexNAc': 1}
     neutral = composition_to_mass(comp, modification = 'reduced')
-    mixed_mz = (neutral - HYDROGEN_MASS + mass_dict['Acetate']) / 2
+    mixed_mz = (neutral - PROTON_MASS + mass_dict['Acetate']) / 2
     result = mz_to_composition(
         mixed_mz,
         max_charge=-2,
@@ -1609,6 +1609,11 @@ def test_mz_to_composition():
         extras = ["adduct"]
     )
     assert result == [comp]
+    # A neutral adduct (CH3CN) needs the charge carrier, a 1- anion carries its electron
+    ions = get_ion_mzs(neutral, max_charge = -2, adducts = ['Acetonitrile', 'Cl-'])
+    assert abs(ions['[M+Acetonitrile-H]-'] - (neutral + mass_dict['Acetonitrile'] - PROTON_MASS)) < 1e-9
+    assert abs(ions['[M+Acetonitrile-2H]2-'] - (neutral + mass_dict['Acetonitrile'] - 2 * PROTON_MASS) / 2) < 1e-9
+    assert '[M+2Acetonitrile]2-' not in ions and abs(ions['[M+Cl]-'] - neutral - calculate_adduct_mass('Cl') - 0.00054858) < 1e-6
     # Test custom df_use
     result = mz_to_composition(
         675,

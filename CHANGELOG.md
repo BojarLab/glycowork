@@ -49,6 +49,7 @@
 - `map_to_basic` is now cached, making functions that call it repeatedly (e.g., `structure_to_basic`) about 2x faster (e1c807a)
 - `mz_to_composition` and related functions are now faster (eac80ee)
 - `condense_composition_matching` now condenses better (cac1c78)
+- Acetonitrile and Trifluoroacetic Acid are now correctly handled as neutral adducts in composition matching ()
 
 ##### Fixed 🐛
 - Fixed handling of `adduct` and `mass_tag` with multiply-charged glycans in `mz_to_composition` (a34092c)
