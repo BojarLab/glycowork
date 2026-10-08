@@ -1678,6 +1678,7 @@ def GlycoDraw(
         restrict_vocab: bool = False,  # Whether only tokens present in libr can be drawn
         shadow: bool = False,  # Draw a soft drop shadow under the monosaccharide symbols
         sticker: bool = False,  # Cut the whole structure out as a die-cut sticker: flat border hugging the outline, with a drop shadow
+        highlight_residues: list[int] | None = None,  # Residues to highlight (indices, starting from 0, of the monosaccharides in glycan, as per_residue); the others, and linkages not between two highlighted residues or in highlight_linkages, are faded as outside highlight_motif
 ) -> Any:  # Drawing object
     "Renders glycan structure using SNFG symbols or chemical structure representation"
     if isinstance(glycan, dict):
@@ -1727,6 +1728,7 @@ def GlycoDraw(
     # Values often arrive as an array or Series (attributions, a dataframe column), whose truth value is ambiguous
     per_residue = list(per_residue)
     highlight_linkages = [] if highlight_linkages is None else list(highlight_linkages)
+    highlight_residues = None if highlight_residues is None else {int(k) for k in highlight_residues}
     if repeat and not repeat_range:
         _backbone = re.findall(r'.*\((?!.*\()', glycan)[0]
         _conn = re.sub(r'\)(.*)', '', re.sub(r'.*\((?!.*\()', '', glycan))
@@ -1747,6 +1749,10 @@ def GlycoDraw(
         per_residue_by_node = process_per_residue(draw_this, per_residue, glycan)
     if highlight_linkages:
         per_linkage_by_node = process_per_linkage(draw_this, highlight_linkages, glycan)
+    if highlight_residues is not None:
+        # Mapped like per_residue, with the leading repeat placeholder and the trailing blank as residues that are never highlighted
+        shift = 1 if repeat and not repeat_range else 0
+        shown_by_node = process_per_residue(draw_this, [k - shift in highlight_residues for k in range((len(glycan_to_nxGraph(glycan)) + 1) // 2)], glycan)
     if compact:
         show_linkage = False
     if isinstance(highlight_motif, str):
@@ -1803,6 +1809,20 @@ def GlycoDraw(
     node_at = {v: k + node_shift for k, v in node_positions.items()}
     lv_sugar, lv_x_pos, lv_y_pos, lv_sugar_modification, lv_bond, lv_connection, lv_conf, lv_sugar_label, lv_bond_label = map(
         list, zip(*data[1:-1]))
+    if highlight_residues is not None:
+        tree, shown = glycan_to_nxGraph(draw_this), {node for node, flag in shown_by_node.items() if flag}
+
+        def bond_label(child):
+            # A drawn residue's linkage stays visible when both of its residues are highlighted, or when it is one of highlight_linkages
+            parent = next(iter(tree.pred[next(iter(tree.pred[child - node_shift]))])) + node_shift
+            return 'show' if (child in shown and parent in shown) or (highlight_linkages and per_linkage_by_node.get(child + 1, False)) else 'hide'
+
+        main_sugar_label = ['show' if node_at[(0, 0, k)] in shown else 'hide' for k in range(len(main_sugar))]
+        main_bond_label = [bond_label(node_at[(0, 0, k + 1)]) for k in range(len(main_sugar) - 1)]
+        lv_sugar_label = [[['show' if node_at[(lvl + 1, b, s)] in shown else 'hide' for s in range(len(sugars))] for b, sugars in enumerate(level)]
+                          for lvl, level in enumerate(lv_sugar)]
+        lv_bond_label = [[[bond_label(node_at[(lvl + 1, b, s)]) for s in range(len(sugars))] for b, sugars in enumerate(level)] for lvl, level in
+                         enumerate(lv_sugar)]
     if not show_linkage:
         main_bond = ['-'] * len(main_bond)
         lv_bond = [[['-' for _ in y] for y in level] for level in lv_bond]
@@ -2019,7 +2039,7 @@ def GlycoDraw(
             draw_bracket(bracket_open, bracket_y_open, d, direction = 'right', dim = dim, highlight = highlight, deg = open_deg)
             draw_bracket(bracket_close, bracket_y_close, d, direction = 'left', dim = dim, highlight = highlight, deg = 0)
             add_sugar('text', d, x_pos = text_x, y_pos = text_y, modification = repeat_annot, compact = compact, dim = dim, text_anchor = 'start', highlight = highlight)
-    return _finish_drawing(d, in_glycan, alt_text, (in_glycan, highlight_motif, highlight_termini_list, compact, vertical, dim, per_residue, repeat, reducing_end_label, show_linkage, highlight_linkages, reverse_highlight, repeat_range), vertical = vertical, dim = dim, filepath = filepath, suppress = suppress, shadow = shadow, sticker = sticker)
+    return _finish_drawing(d, in_glycan, alt_text, (in_glycan, highlight_motif, highlight_termini_list, compact, vertical, dim, per_residue, repeat, reducing_end_label, show_linkage, highlight_linkages, reverse_highlight, repeat_range, None if highlight_residues is None else sorted(highlight_residues)), vertical = vertical, dim = dim, filepath = filepath, suppress = suppress, shadow = shadow, sticker = sticker)
 
 
 def _drawable(glycan: str, # Candidate label

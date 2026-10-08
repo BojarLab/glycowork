@@ -4946,6 +4946,18 @@ def test_glycodraw_per_residue_and_linkage_placement():
         GlycoDraw(branched, highlight_linkages = [branched.count('(')], suppress = True)
 
 
+def test_glycodraw_highlight_residues():
+    # Residues outside highlight_residues and linkages not between two highlighted residues are faded as outside highlight_motif, a highlighted
+    # linkage stays visible in red, and the canvas is the plain one, so a highlighted drawing can replace the plain one without moving anything
+    g = "Fuc(a1-2)Gal(b1-4)GlcNAc(b1-6)[GlcNAc(a1-4)Gal(b1-3)]GalNAc"
+    plain, svg = GlycoDraw(g, suppress = True).as_svg(), GlycoDraw(g, highlight_residues = [0, 1, 2], highlight_linkages = [2], suppress = True).as_svg()
+    assert re.search(r'viewBox="[^"]*"', plain).group(0) == re.search(r'viewBox="[^"]*"', svg).group(0) and svg != plain
+    assert len([p for p in re.findall(r'<path[^>]*>', svg) if 'snfg-linkage' in p and '#C23537' in p]) == 1
+    assert svg.count('#FFF6DE') > plain.count('#FFF6DE')  # faded yellow: the core GalNAc and the 3-arm Gal
+    # Arrays work too, and an empty list fades everything
+    assert GlycoDraw(g, highlight_residues = np.array([0, 1]), suppress = True).as_svg() != GlycoDraw(g, highlight_residues = [], suppress = True).as_svg()
+
+
 def test_glycodraw_label_crowding():
     # (font size, anchor, startOffset, text) of every linkage and modification label
     label = re.compile(

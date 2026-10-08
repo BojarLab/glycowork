@@ -27,10 +27,10 @@ dependencies = [
     "numpy",
     "matplotlib",
     "scikit-learn",
-    "networkx>=3.0",
+    "networkx>=3.4",
     "scipy>=1.16",
     "seaborn",
-    "pandas>=2.1",
+    "pandas>=2.2.2",
     "drawSvg~=2.0",
     "openpyxl",
     "glycorender~=0.4.2"
