@@ -1,5 +1,6 @@
 import ast
 import networkx as nx
+from pathlib import Path
 import pandas as pd
 import numpy as np
 import re
@@ -87,7 +88,7 @@ def _count_chains(
 
 def annotate_glycan(
         glycan: str | nx.DiGraph, # IUPAC-condensed glycan sequence or NetworkX graph
-        motifs: pd.DataFrame | None = None, # Motif dataframe (name + sequence); defaults to motif_list
+        motifs: pd.DataFrame | str | list[str] | None = None, # Motif dataframe (motif_name + motif columns), or motif sequence(s); defaults to motif_list
         termini_list: list = [], # Monosaccharide positions: 'terminal', 'internal', or 'flexible'
         gmotifs: list[nx.DiGraph] | None = None, # Precalculated motif graphs for speed
         condense: bool = False # Remove columns with only zeros
@@ -106,8 +107,8 @@ def annotate_glycan(
         # r-prefixed rows are glyco-regular expressions, pre-compiled into chunk lists that the counting step tells apart from motif graphs
         gmotifs = [compile_pattern(mo[1:]) if mo.startswith('r') else partial_glycan_to_nxGraph(mo, termini_list = termini_list[i] if termini_list else None)
                    for i, mo in enumerate(motifs.motif if isinstance(motifs, pd.DataFrame) else motifs)]
-    # Count the number of times each motif occurs in a glycan
-    ggraph = ensure_graph(glycan, termini = 'calc' if termini_list else 'ignore')
+    # Count the number of times each motif occurs in a glycan; as in annotate_dataset, a reducing-end alditol is its sugar, its position being what termini specs express
+    ggraph = ensure_graph(glycan[:-3] if isinstance(glycan, str) and glycan.endswith('-ol') and not _STRUCTURAL_ALDITOL.search(glycan) else glycan, termini = 'calc' if termini_list else 'ignore')
     res = [len(get_match(g, ggraph)) if isinstance(g, list) else
            subgraph_isomorphism(ggraph, g, termini_list = termini_list[i] if termini_list else termini_list,
                                 count = True)
@@ -121,7 +122,7 @@ def annotate_glycan(
 def annotate_glycan_topology_uncertainty(
         glycan: str | nx.DiGraph, # IUPAC-condensed glycan sequence or NetworkX graph
         feasibles: set[str] | None = None, # Set of potential full topology glycans; defaults to mammalian glycans
-        motifs: pd.DataFrame | None = None, # Motif dataframe (name + sequence); defaults to motif_list
+        motifs: pd.DataFrame | str | list[str] | None = None, # Motif dataframe (motif_name + motif columns), or motif sequence(s); defaults to motif_list
         termini_list: list = [], # Monosaccharide positions: 'terminal', 'internal', or 'flexible'
         gmotifs: list[nx.DiGraph] | None = None # Precalculated motif graphs for speed
 ) -> pd.DataFrame: # DataFrame with motif counts considering topology uncertainty
@@ -285,8 +286,8 @@ def get_molecular_properties(
 
 def get_size_branching_features(
         glycans: str | list[str],  # Glycan(s) in IUPAC-condensed nomenclature
-        n_bins: int = 3  # Number of bins/features to create for size and branching level
-) -> pd.DataFrame:
+        n_bins: int = 3  # Number of bins/features to create for size and branching level; 0 for the raw counts
+) -> pd.DataFrame:  # Glycans x one-hot Size_<bin> and Branch_<bin> columns, or Size and Branching counts if n_bins = 0
     "Generate binned features for glycan size (parentheses count) and branching (bracket count)"
     glycans = [glycans] if isinstance(glycans, str) else glycans
     # Calculate size and branching for each glycan
@@ -329,6 +330,9 @@ def annotate_dataset(
 ) -> pd.DataFrame: # DataFrame mapping glycans to motif counts and other features
     "Comprehensive glycan annotation combining multiple feature types: structural motifs, graph properties, terminal sequences"
     glycans = [glycans] if isinstance(glycans, str) else glycans
+    if glycans is None or isinstance(glycans, dict) or not len(glycans):
+        # an empty list failed in pandas ('Shape of passed values is (0, 1)'), and a composition dict was annotated as the glycans 'Hex', 'HexNAc', ...
+        raise ValueError(f"annotate_dataset needs one or more glycans as strings, got {glycans!r:.80}; a composition is passed as a string such as 'H5N4F1'.")
     if any(k in ''.join(glycans) for k in (';', 'β', 'α', 'RES', '=')):
         raise Exception
     # Repeated sequences, common in glycomics tables, have identical rows, so each is annotated once and the rows are expanded at the end
@@ -572,10 +576,10 @@ def deduplicate_motifs(
 
 
 def quantify_motifs(
-        df: str | pd.DataFrame, # DataFrame or filepath with samples as columns, abundances as values
-        glycans: list[str] | None = None, # List of IUPAC-condensed glycan sequences or compositions, or glycoproteomics glycoforms as protein_site_glycan; auto-detected from first column if None
-        feature_set: list[str] = ['known', 'exhaustive'], # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical, size_branch
-        custom_motifs: list = [], # Custom motifs when using 'custom' feature set
+        df: pd.DataFrame | str | Path, # DataFrame, filepath, or shipped dataset name, with samples as columns, abundances as values
+        glycans: list[str] | None = None, # List of IUPAC-condensed glycan sequences or compositions, or glycoproteomics glycoforms as protein_site_glycan; auto-detected from the first column, or the index, if None
+        feature_set: str | list[str] = ['known', 'exhaustive'], # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical, size_branch
+        custom_motifs: str | list[str] = [], # Custom motifs (sequences, r-prefixed glyco-regexes, or motif_list names) when using 'custom' feature set
         remove_redundant: bool = True  # Remove redundant motifs via deduplicate_motifs
 ) -> pd.DataFrame:  # DataFrame with motif abundances (motifs as rows, samples as columns); for glycoforms, one row per glycosite and motif as protein_site_motif
     "Extracts and quantifies motif abundances from glycan abundance data by weighting motif occurrences; glycoproteomics glycoforms are quantified per glycosite"
@@ -586,6 +590,8 @@ def quantify_motifs(
         if pd.api.types.is_string_dtype(df.iloc[:, 0]):
             glycans = df.iloc[:, 0].tolist()
             df = df.iloc[:, 1:]
+        elif len(df) and isinstance(df.index[0], str):
+            glycans = df.index.tolist()  # glycans held in the index, as after set_index('glycan')
         else:
             raise ValueError("glycans must be provided if the first column is not glycan strings")
     # Glycoforms of one glycosite compete for that site only, so a motif is summed per site instead of over the whole run; before, protein_site_glycan labels were annotated as one unknown monosaccharide each and came back unchanged as 'motifs'
@@ -690,7 +696,7 @@ def count_unique_subgraphs_of_size_k(
 def get_minimal_ksaccharide_ambiguity(
         glycans: str | list,  # Glycan(s) in IUPAC-condensed nomenclature
         size: int = 2,  # Number of monosaccharides per fragment
-        motifs: list = None  # Pre-computed motifs (for terminal structures)
+        motifs: list[str] | None = None  # Pre-computed motifs (for terminal structures); default: the glycans' k-saccharides
 ) -> dict:  # Dictionary of precise-k-saccharide : ideal wildcarded k-saccharide
     "Maps each k-saccharide to the form that merges every linkage variant of its backbone seen in the input, plus Sia forms where both Neu5Ac and Neu5Gc versions occur"
     glycans = [glycans] if isinstance(glycans, str) else glycans
@@ -1072,7 +1078,7 @@ def get_glycan_similarity(
         glycan1: str | nx.DiGraph, # IUPAC-condensed glycan sequence or NetworkX graph
         glycan2: str | nx.DiGraph, # IUPAC-condensed glycan sequence or NetworkX graph
         motifs: pd.DataFrame | None = None, # Motif dataframe (name + sequence); defaults to motif_list
-        feature_set: list = ['known', 'exhaustive', 'terminal'] # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical, size_branch
+        feature_set: str | list[str] = ['known', 'exhaustive', 'terminal'] # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical, size_branch
 ) -> float: # Cosine similarity between glycan1 and glycan2
     "Calculates cosine similarity between two glycans based on their motif count fingerprints"
     from scipy.spatial.distance import cosine

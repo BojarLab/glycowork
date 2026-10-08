@@ -1,7 +1,7 @@
 import re
 import sys
 from copy import deepcopy
-from typing import Callable, Iterator
+from typing import Any, Callable, Iterator
 from glycowork.glycan_data.loader import unwrap, modification_map, HashableDict
 from glycowork.motif.processing import min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans, parse_floating_bit
 import numpy as np
@@ -12,6 +12,7 @@ from functools import lru_cache, wraps
 from itertools import permutations
 
 PTM_REGEX = re.compile(r"(?<=[A-Za-z{])(?<!Neu)(\d+/\d+|\d+)(?=\D)(?![^()]*\))")
+PTM_UNIT = re.compile(r"(?<=[A-Za-z{])(?<!Neu)(?:\d+/\d+|\d+)(?=\D)|O")  # in a residue label, one hit per 'O' of its PTM-wildcarded form: the stated position, or 'O' where none is stated
 NEGATION_REGEX = re.compile(r'(?<!\()(!\w+(?:\([^)]+\))?)')
 MONO_PATTERN = re.compile(r"^(Hex|HexOS|HexNAc|HexNAcOS|dHex|Sia|HexA|Pen|Monosaccharide)$")
 LINKAGE_PATTERN = re.compile(r'[ab\?][12]-(\d+|\?)')
@@ -103,7 +104,8 @@ def _with_ptm(g, orig):  # copy of g, built from the PTM-wildcarded string of or
     return g
 
 
-def build_wildcard_cache(proc: set) -> dict:
+def build_wildcard_cache(proc: set[str] # Node labels (monosaccharides and linkages) of the graphs to match
+                         ) -> dict[str, frozenset[str]]: # Wildcard label : the labels it can stand for, for every wildcard in proc
     """Precompute all possible wildcard expansions, cached per label set"""
     if (hit := _WILDCARD_CACHE.get(key := frozenset(proc))) is None:
         hit = _WILDCARD_CACHE[key] = {k: get_possible_linkages(k) for k in proc if '?' in k or ('/' in k and '-' in k)} | {k: get_possible_monosaccharides(k) for k in proc if MONO_PATTERN.match(k) or k.startswith('!') or ('/' in k and '-' not in k)}
@@ -159,7 +161,7 @@ def glycan_to_nxGraph_int(glycan: str, # Glycan in IUPAC-condensed format
                           libr: dict[str, int] | HashableDict[str, int] | None = None, # Dictionary of form glycoletter:index
                           termini: str = 'ignore', # How to encode terminal/internal position; options: ignore, calc, provided
                           termini_list: tuple[str] | None = None # List of positions from terminal/internal/flexible
-                          ) -> nx.DiGraph: # NetworkX graph object of glycan
+                          ) -> nx.DiGraph: # NetworkX graph object of glycan; cached and shared between calls, so copy it before modifying
     "Convert glycans into networkx graphs"
     # This allows to make glycan graphs of motifs ending in a linkage
     appended_hex = glycan.endswith(')')
@@ -189,8 +191,8 @@ def glycan_to_nxGraph_int(glycan: str, # Glycan in IUPAC-condensed format
 def glycan_to_nxGraph(glycan: str, # Glycan in IUPAC-condensed format
                       libr: HashableDict[str, int] | None = None, # Dictionary of form glycoletter:index
                       termini: str = 'ignore', # How to encode terminal/internal position; options: ignore, calc, provided
-                      termini_list: tuple[str] | None = None # List of positions from terminal/internal/flexible
-                      ) -> nx.DiGraph: # NetworkX graph object of glycan
+                      termini_list: tuple[str] | None = None  # List of positions from terminal/internal/flexible
+                      ) -> nx.DiGraph:  # NetworkX graph object of glycan; cached and shared between calls, so copy it before modifying (a changed label would change every later result for that glycan)
     "Wrapper for converting glycans into networkx graphs; also works with floating substituents"
     if not glycan:
         return nx.DiGraph()
@@ -223,11 +225,22 @@ def glycan_to_nxGraph(glycan: str, # Glycan in IUPAC-condensed format
     return g1
 
 
+def _check_glycans(*glycans: Any # Inputs that have to be single glycans
+                   ) -> None:
+    "Raises an actionable TypeError for anything that is no glycan string or graph, which otherwise failed deep inside with \"'dict' object has no attribute 'nodes'\""
+    for glycan in glycans:
+        if not isinstance(glycan, (str, nx.Graph)):
+            raise TypeError(f"Expected one glycan as an IUPAC-condensed string or networkx graph, got {type(glycan).__name__} {glycan!r:.80}; a composition has no structure to match, and several glycans are passed one at a time.")
+
+
 def ensure_graph(glycan: str | nx.DiGraph, # Glycan in IUPAC-condensed format or as networkx graph
                  **kwargs # Keyword arguments passed to glycan_to_nxGraph
-                 ) -> nx.DiGraph: # NetworkX graph object of glycan
+                 ) -> nx.DiGraph: # NetworkX graph object of glycan; for a string, the cached graph glycan_to_nxGraph returns
     "Ensures function compatibility with string glycans and graph glycans"
-    return glycan_to_nxGraph(glycan, **kwargs) if isinstance(glycan, str) else glycan
+    if isinstance(glycan, str):
+        return glycan_to_nxGraph(glycan, **kwargs)
+    _check_glycans(glycan)
+    return glycan
 
 
 def categorical_node_match_wildcard(attr: str | tuple[str, ...], # Attribute or tuple of attributes to match
@@ -241,8 +254,8 @@ def categorical_node_match_wildcard(attr: str | tuple[str, ...], # Attribute or 
         data1_labels2, data2_labels2 = data1.get(attr2, default2), data2.get(attr2, default2)
         if data1_labels2 != data2_labels2 and data1_labels2 != 'flexible' and data2_labels2 != 'flexible':
             return False
-        # 'ptm' holds the label before PTM wildcarding, so two residues that both state their PTM positions (Gal3S, Gal6S) still have to agree on them
-        if (p1 := data1.get('ptm')) and (p2 := data2.get('ptm')) and len(f1 := PTM_REGEX.findall(p1)) == len(f2 := PTM_REGEX.findall(p2)) and not all(set(x.split('/')) & set(y.split('/')) for x, y in zip(f1, f2)):
+        # 'ptm' holds the label before PTM wildcarding, so two residues have to agree on every PTM position both of them state (Gal3S vs Gal6S, but also Glc3Ac4PGro vs Glc6AcOPGro), paired modification by modification
+        if (p1 := data1.get('ptm')) and (p2 := data2.get('ptm')) and len(f1 := PTM_UNIT.findall(p1)) == len(f2 := PTM_UNIT.findall(p2)) and not all('O' in (x, y) or set(x.split('/')) & set(y.split('/')) for x, y in zip(f1, f2)):
             return False
         data1_labels, data2_labels = data1.get(attr, default), data2.get(attr, default)
         if data1_labels == data2_labels:
@@ -264,9 +277,9 @@ def categorical_node_match_wildcard(attr: str | tuple[str, ...], # Attribute or 
     return match
 
 
-def ptm_wildcard_for_graph(graph: nx.DiGraph # Input graph
-                           ) -> nx.DiGraph: # Modified graph with PTM wildcards
-    "Standardize PTM wildcards in graph"
+def ptm_wildcard_for_graph(graph: nx.DiGraph # Input graph, modified in place
+                           ) -> nx.DiGraph: # The same graph with PTM wildcards, written labels kept as 'ptm' node attributes
+    "Standardize PTM wildcards in graph, in place"
     _SL_CACHE.pop(graph, None)
     _PTM_CACHE.pop(graph, None)
     _HAS_O_CACHE.pop(graph, None)
@@ -309,6 +322,7 @@ def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
     "Check whether two glycans are identical, or whether glycan_a subsumes glycan_b"
     if glycan_a == glycan_b:
         return (True, {n: n for n in glycan_a.nodes} if isinstance(glycan_a, nx.DiGraph) else None) if return_matches else True
+    _check_glycans(glycan_a, glycan_b)
     if subsumes:
         expand = lambda l: (frozenset(k for k in get_possible_linkages(l) if '?' not in k and '/' not in k) if IS_LINKAGE(l) else get_possible_monosaccharides(l)) or frozenset([l])
 
@@ -467,6 +481,7 @@ def subgraph_isomorphism(glycan: str | nx.DiGraph, # Glycan sequence or graph
         if ptm:
             g1, g2 = _with_ptm(g1, orig[0]), _with_ptm(g2, orig[1])
     else:
+        _check_glycans(glycan, motif)
         glycan = glycan_to_nxGraph(glycan, termini = 'calc' if termini_list else 'ignore') if isinstance(glycan,
                                                                                                          str) else glycan
         motif = glycan_to_nxGraph(motif, termini = 'provided' if termini_list else 'ignore',
@@ -653,7 +668,10 @@ def generate_graph_features(glycan: str | nx.DiGraph, # Glycan sequence or netwo
     return pd.DataFrame(features, index = [glycan])
 
 
-def get_linkage_number(node, graph):
+def get_linkage_number(node: int, # Linkage node
+                       graph: nx.DiGraph # Glycan graph
+                       ) -> float: # Acceptor position for ordering branches: the number, +100 for a slash wildcard (3/6), inf for '?' or a non-linkage node
+    "Sort key of a linkage node by the acceptor position it links to"
     link_label = graph.nodes[node].get("string_labels", "")
     match = LINKAGE_PATTERN.search(link_label)
     if match:  # Extract the second number in the linkage (e.g., from "a1-3" get "3")
@@ -664,7 +682,9 @@ def get_linkage_number(node, graph):
     return float('inf')
 
 
-def glycan_graph_memoize(maxsize: int = 128):
+def glycan_graph_memoize(maxsize: int = 128 # Maximum number of cached results
+                         ) -> Callable: # Decorator for a function taking a glycan graph first
+    "Memoizes a function of a glycan graph on its labels, out-degrees and edges, so equal graphs built separately share one result; graphs below 4 nodes are not cached"
     cache = OrderedDict()
     def decorator(func):
         @wraps(func)

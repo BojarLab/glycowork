@@ -57,7 +57,7 @@ def calculate_distance_matrix(to_compare: dict[str, list] | list, # Objects to c
 
 
 def distance_from_embeddings(df: pd.DataFrame, # DataFrame with glycans (rows) and taxonomic info (columns)
-                             embeddings: pd.DataFrame, # DataFrame with glycans (rows) and embeddings (columns) (e.g., from glycans_to_emb)
+                             embeddings: pd.DataFrame, # DataFrame with glycans (rows, indexed like df) and embeddings (columns); the 0..n-1 rows of glycans_to_emb(df.glycan) pair up with df by position
                              cut_off: int = 10, # Minimum glycans per rank to be included; default:10
                              rank: str = 'Species', # Taxonomic rank for grouping; default:Species
                              averaging: str = 'median' # How to average embeddings: median/mean
@@ -66,6 +66,9 @@ def distance_from_embeddings(df: pd.DataFrame, # DataFrame with glycans (rows) a
     from scipy.spatial.distance import cosine
     if averaging not in ['mean', 'median']:
         raise ValueError(f"averaging = '{averaging}' is not supported; please use 'mean' or 'median'.")
+    # glycans_to_emb numbers its rows 0..n-1 in input order, which cannot be looked up in a filtered frame such as a df_species subset, so such rows pair up by position
+    if len(embeddings) == len(df) and embeddings.index.equals(pd.RangeIndex(len(df))) and not df.index.isin(embeddings.index).all():
+        embeddings = embeddings.set_axis(df.index)
     # Subset df to only contain ranks with a minimum number of data points
     value_counts = df[rank].value_counts()
     valid_ranks = value_counts.index[value_counts >= cut_off]
@@ -90,8 +93,7 @@ def jaccard(list1: list | nx.Graph, # First list/network to compare
 
 
 def distance_from_metric(df: pd.DataFrame, # DataFrame with glycans (rows) and taxonomic info (columns)
-                         networks: list[nx.Graph] | dict[str, nx.Graph],
-                         # Networks, ideally as {rank value: network} so they cannot be mispaired
+                         networks: list[nx.Graph] | dict[str, nx.Graph],  # Networks, ideally as {rank value: network} so they cannot be mispaired
                          metric: str = "Jaccard", # Distance metric to use
                          cut_off: int = 10, # Minimum glycans per rank to be included; default:10
                          rank: str = "Species" # Taxonomic rank for grouping; default:Species
@@ -114,7 +116,7 @@ def distance_from_metric(df: pd.DataFrame, # DataFrame with glycans (rows) and t
 
 def dendrogram_from_distance(dm: pd.DataFrame, # Rank x rank distance matrix (e.g., from distance_from_embeddings)
                              ylabel: str = 'Mammalia', # Y-axis label
-                             filepath: str = '' # Path to save plot including filename
+                             filepath: str | Path = '' # Path to save plot including filename
                              ) -> None: # Displays or saves dendrogram plot
     "Plot dendrogram from distance matrix"
     from scipy.cluster.hierarchy import dendrogram, linkage
@@ -137,8 +139,8 @@ def dendrogram_from_distance(dm: pd.DataFrame, # Rank x rank distance matrix (e.
         leaf_font_size = 11.,
         show_contracted = True,  # To get a distribution impression in truncated branches
     )
-    if len(filepath) > 1:
-        plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
+    if filepath:
+        plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
 
 
 def check_conservation(glycan: str, # Glycan or motif in IUPAC-condensed format

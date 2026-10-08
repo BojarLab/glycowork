@@ -16,12 +16,39 @@ _GP_SIGNATURES = [('fragpipe', ('totalglycancomposition', 'proteinstart')), ('pg
                   ('metamorpheus', ('plausibleglycancomposition', 'fullsequence')), ('decipher', ('glycosite', 'glycancomposition')), ('strucgp', ('glycosite_position', 'glycancomposition')),
                   ('glycanfinder', ('proteinaccession', 'glycantype')), ('decipher_site', ('site', 'glycan'))]  # columns (whitespace removed, lowercased) that identify each glycoproteomics engine
 _SUMMARY_HEAD = re.compile(r'Absolute Intensity|Analyte Area(?: - Background Area)?\tCalibrated')  # an abundance block of a LaCyTools or MassyTools Summary.txt
+_DECOY = re.compile(r'>?\s*(?:rev_|reverse|decoy|#decoy#|xxx_)', flags = re.IGNORECASE)  # decoy protein labels: 'REV_sp|...' (pGlyco, MaxQuant), 'rev_sp|...' (FragPipe), '>Reverse sp|...' (Byonic), 'DECOY_P02763' (MetaMorpheus), '#DECOY#P02763' (PEAKS)
+
+
+def _read_table(f: str | Path, # an Excel workbook, a .csv separated by commas, semicolons, or tabs, or any other text table separated by tabs
+                dtype: type | None = str # passed to pd.read_csv or pd.read_excel
+                ) -> list[pd.DataFrame]: # one frame per sheet
+    "Reads a table file, including the CSV of European Excel or Skyline (';' between fields, ',' as decimal mark, Windows code page)"
+    if Path(f).suffix.lower() in ('.xlsx', '.xlsm', '.xlsb', '.xls', '.ods'):
+        return list(pd.read_excel(f, sheet_name = None, dtype = dtype).values())
+    sep = '\t'
+    if Path(f).suffix.lower() == '.csv':
+        with open(f, encoding = 'utf-8-sig', errors = 'replace') as fh:
+            head = fh.readline()
+        sep = max((',', ';', '\t'), key = head.count)
+    try:
+        df = pd.read_csv(f, sep = sep, dtype = dtype, decimal = ',' if sep == ';' else '.')
+    except UnicodeDecodeError:  # Excel on Windows writes CSV in its code page, e.g., 'Müller' as cp1252
+        df = pd.read_csv(f, sep = sep, dtype = dtype, decimal = ',' if sep == ';' else '.', encoding = 'cp1252', encoding_errors = 'replace')
+    return [df.replace(r'^([-+]?\d+),(\d+(?:[eE][-+]?\d+)?)$', r'\1.\2', regex = True) if sep == ';' and dtype is str else df]  # values read as text keep their decimal comma otherwise
+
+
+def _gp_engine(df: pd.DataFrame # a table as read from file
+               ) -> tuple[str | None, dict]: # (engine, or None if none matches; header map with whitespace removed and lowercased)
+    "Recognizes the output of a glycoproteomics search engine by its columns"
+    c = {re.sub(r'\s+', '', str(k)).lower(): k for k in df.columns}
+    ok = {'decipher_site': lambda: df[c['site']].astype(str).str.contains('@').any(), 'byonic': lambda: any(k.startswith('peptide') for k in c)}  # a Glyco-Decipher site is 'P00738@211' and Byonic always reports the peptide, whereas a table of one's own may well have 'Site' and 'Glycan', or 'Protein Name', 'Position', and 'Composition' columns
+    return next((s for s, ks in _GP_SIGNATURES if all(k in c for k in ks) and ok.get(s, lambda: True)()), None), c
 
 
 def _accession(protein: str # protein label as a search engine writes it, e.g., '>sp|P02763|A1AG1_HUMAN Alpha-1-acid glycoprotein 1' or 'Q9P0K1(pre=R,post=L)'
                ) -> str: # bare accession, '_' turned into '-' so that it cannot be mistaken for a separator of protein_site_composition
     "Extracts the accession from a protein label"
-    parts = str(protein).strip().lstrip('>').split()[0].split('(')[0].split('|')
+    parts = re.sub(r'^(?:contam_|CON__)', '', str(protein).strip().lstrip('>'), flags = re.IGNORECASE).split()[0].split('(')[0].split('|')  # contaminants: 'contam_sp|P02768|ALBU_HUMAN' (FragPipe), 'CON__P02768' (MaxQuant)
     return (parts[1] if len(parts) > 2 and parts[0] in ('sp', 'tr') else parts[0]).replace('_', '-')
 
 
@@ -68,13 +95,12 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
                          ) -> GlycoDataFrame: # glycoforms as 'protein_site_composition' in column 'ID' ('protein_site_sequence' for StrucGP structure codes), samples as columns; ready for get_differential_expression(glycoproteomics = True) or get_glycoshift_per_site
     "Reads the native output of glycoproteomics search engines into a site-specific glycoform x sample table, quantified by intensity where the engine reports one and by spectral counts otherwise"
     recs, skipped = [], 0  # (run, ion, protein, site, composition, abundance); an ion has one abundance per run, so its repeated matches must not add up
-    for fi, f in enumerate(files if isinstance(files, list) else [files]):
-        ext, stem = ('', f'sample{fi + 1}') if isinstance(f, pd.DataFrame) else (Path(f).suffix.lower(), Path(f).stem)
-        frames = [f] if isinstance(f, pd.DataFrame) else list(pd.read_excel(f, sheet_name = None, dtype = str).values()) if ext in ('.xlsx', '.xls') else [
-            pd.read_csv(f, sep = ',' if ext == '.csv' else '\t', dtype = str)]
+    for fi, f in enumerate([files] if isinstance(files, (str, Path, pd.DataFrame)) else list(files)):  # a list, or any iterable such as Path.glob('*/psm.tsv')
+        stem = f'sample{fi + 1}' if isinstance(f, pd.DataFrame) else Path(f).stem
+        frames = [f] if isinstance(f, pd.DataFrame) else _read_table(f)
         for df in frames:
-            c = {re.sub(r'\s+', '', str(k)).lower(): k for k in df.columns}
-            if (sig := next((s for s, ks in _GP_SIGNATURES if all(k in c for k in ks)), None)) is not None:
+            sig, c = _gp_engine(df)
+            if sig is not None:
                 break
         else:
             raise ValueError(f"'{stem}' is not a recognized search engine output; expected FragPipe/MSFragger-Glyco or O-Pair, pGlyco3 or pGlycoQuant, Byonic or Byologic, GlycReSoft, MetaMorpheus O-Pair, Glyco-Decipher, StrucGP, or PEAKS GlycanFinder, but its columns are {list(frames[0].columns)[:8]}")
@@ -111,20 +137,20 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
                 pairs.append(_pair_sites(int(float(start)), pos, [x for _, x in loc] or [comp.strip()]) if pd.notna(start) else [])
             vals = num('intensity') if 'intensity' in c and num('intensity').gt(0).any() else None
         elif sig == 'pglyco':
-            runs, prots = list(col('rawname')), [str(p).split(';')[0] for p in col('proteins')]
+            runs, prots = list(col('rawname')) if 'rawname' in c else runs, [p.split(';')[0] if isinstance(p, str) else p for p in col('proteins')]  # an empty protein cell, e.g., of merged cells in a published table, must not become the accession 'nan'
             pairs = [[(re.sub(r'\.0+$', '', str(s).split(';')[0]), g)] if isinstance(g, str) and pd.notna(s) else [] for s, g in zip(col('prosites'), col('glycancomposition'))]
             wide = {k: m[1] for k in df.columns if (m := re.fullmatch(r'ReportIon\s*\((.+)\)', str(k)))}  # pGlycoQuant TMT: one reporter ion column per channel, named by its m/z
             ions = [f'{r}/{s}' for r, s in zip(runs, col('glyspec'))] if wide else [f'{p}/{m}/{z}/{g}' for p, m, z, g in zip(col('peptide'), col('mod'), col('charge'), col('glycancomposition'))]  # reporter ions come from each spectrum, so every PSM adds up, whereas an LFQ intensity belongs to the ion and is repeated on each of its PSMs
             vals = num('monoarea') if 'monoarea' in c and num('monoarea').gt(0).any() else None
         elif sig in ('byonic', 'byologic'):
             pep, comp, start = [c[next(k for k in c if k.startswith(x))] for x in (('sequence', 'glycans', 'startaa') if sig == 'byologic' else ('peptide', 'glycansnhfagna' if 'glycansnhfagna' in c else 'composition', 'startingposition' if 'startingposition' in c else 'position'))]
-            prots = [None if str(p).lstrip('>').lower().startswith(('reverse', 'decoy')) else p for p in col('proteinname')]
+            prots = col('proteinname')
             pos = [[int(p) for p, t in re.findall(r'[A-Z](\d+)\(([^)]*)\)', str(ms)) if 'glycan' in t.lower()] for ms in col('mod.summary')] if sig == 'byologic' else [
                 [p for p, _ in _glycan_mods(str(s))] for s in df[pep]]
             pairs = [(_pair_sites(int(float(st)), p, [x.strip() for x in g.split(',')]) if pd.notna(st) else []) if isinstance(g, str) else None for p, g, st in zip(pos, df[comp], df[start])]
             ions = [f'{r}/{s}/{z}/{g}' for r, s, z, g in zip(col('row#'), df[pep], col('z'), df[comp])]
             if sig == 'byologic':
-                runs, vals = [str(a).split(';')[0].strip() for a in col('msaliasname')], num('xicareasummed')
+                runs, vals = [str(a).split(';')[0].strip() for a in col('msaliasname')] if 'msaliasname' in c else runs, num('xicareasummed')
             elif 'comment' in c:
                 runs = [str(m).split('.ScanId')[0] if '.ScanId' in str(m) else stem for m in col('comment')]
         elif sig == 'glycresoft':
@@ -136,13 +162,13 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
             ions = [f'{g}/{z}' for g, z in zip(col('glycopeptide'), col('charge'))]
             vals = next((num(k) for k in ('total_signal', 'precursor_abundance') if k in c), None)
         elif sig == 'metamorpheus':
-            runs, prots = [re.split(r'[\\/]', str(fl))[-1].rsplit('.', 1)[0] for fl in col('filename')], col('proteinaccession')
+            runs, prots = [re.split(r'[\\/]', str(fl))[-1].rsplit('.', 1)[0] for fl in col('filename')] if 'filename' in c else runs, col('proteinaccession')
             mods = [_glycan_mods(str(s)) for s in col('fullsequence')]  # 'LQT[O-linked glycosylation:H1N1A2 on X]LAL'
             pairs = [_pair_sites(int(re.search(r'\d+', str(se))[0]), [p for p, _ in m], [t.split(':', 1)[-1].rsplit(' on ', 1)[0] for _, t in m]) for m, se in zip(mods, col('startandendresiduesinprotein'))]
             ions = list(col('fullsequence'))
         elif sig in ('decipher', 'strucgp'):
             runs = list(col(k)) if (k := 'file' if sig == 'decipher' else 'filename') in c else runs  # published tables often drop the file column, so a DataFrame or file without it is one sample
-            prots = [re.split(r'[;,]', str(p))[0] for p in col('protein' if sig == 'decipher' else 'proteinid')]
+            prots = [re.split(r'[;,]', p)[0] if isinstance(p, str) else p for p in col('protein' if sig == 'decipher' else 'proteinid')]
             pairs = [[(re.sub(r'\.0+$', '', re.split(r'[;,]', str(s))[0]), (sc.strip() if isinstance(sc, str) and _STRUCGP_CODE.fullmatch(sc.strip()) else re.sub(r'S(?=\d)', 'A', g.split('+')[0])) if sig == 'strucgp' else g)] if isinstance(g, str) and pd.notna(s) else [] for s, g, sc in
                      zip(col('glycosite' if sig == 'decipher' else 'glycosite_position'), col('glycancomposition'), col('structure_coding'))]  # StrucGP's structure code becomes the full sequence wherever it is given; otherwise its composition, in which StrucGP writes NeuAc as S and appends adducts like '+Ammonium(+17)'
             ions = list(col('peptide'))
@@ -152,13 +178,13 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
             ions, wide = [f'{s}/{g}' for s, g in zip(col('peptide'), col('glycan'))], {k: k[5:] for k in df.columns[:ends] if str(k).startswith('Area ')}  # the per-group 'Area' columns follow the sample profile
         else:  # Glyco-Decipher site table: 'P00738@211;P00739@153' maps to the first protein, 'O43866@226;O43866@229' to the ambiguous site '226/229'
             sites = [str(s).split(';') for s in col('site')]
-            prots = [s[0].split('@')[0] for s in sites]
+            prots = [s[0].split('@')[0] if '@' in s[0] else None for s in sites]
             pairs = [[('/'.join(x.split('@')[-1] for x in s if x.split('@')[0] == p), g)] for s, p, g in zip(sites, prots, col('glycan'))]
             ions, wide = list(range(len(df))), {k: k for k in df.columns[2:]}
         wide = wide or {k: m[1] for k in df.columns if (m := re.fullmatch(r'Intensity\((.+)\)', str(k)))}  # pGlycoQuant appends one column per run to pGlyco3 or Byonic results
         abund = df[list(wide)].apply(pd.to_numeric, errors = 'coerce').fillna(0).to_numpy() if wide else None
         for i, (prot, pr, ion) in enumerate(zip(prots, pairs, ions)):
-            if pr is None or prot is None:  # no glycan, or a decoy
+            if pr is None or (isinstance(prot, str) and _DECOY.match(prot)):  # no glycan, or a decoy
                 continue
             if not pr or pd.isna(prot):
                 skipped += 1
@@ -202,7 +228,7 @@ def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataF
                    ) -> GlycoDataFrame: # glycans (IUPAC-condensed, canonical composition, or the label as written if it is neither) in column 'glycan', samples as columns; ready for get_differential_expression and the rest of glycowork
     "Reads the native output of glycomics software into a glycan x sample table, quantified by the tool's abundance where it reports one and by feature counts otherwise"
     recs, groups = [], {}  # (run, ion, label, abundance, S is NeuAc); Skyline, LaCyTools, MassyTools, and GlycoGenius write NeuAc as S, which glycowork reads as sulfate
-    for fi, f in enumerate(files if isinstance(files, list) else [files]):
+    for fi, f in enumerate([files] if isinstance(files, (str, Path, pd.DataFrame)) else list(files)):  # a list, or any iterable such as Path.glob('*.csv')
         ext, stem = ('', f'sample{fi + 1}') if isinstance(f, pd.DataFrame) else (Path(f).suffix.lower(), Path(f).stem)
         if ext in ('.gwp', '.gwa'):  # GlycoWorkbench workspace, one top-level Scan per sample, or one annotated peak list; MS/MS scans are skipped
             root = ET.parse(f).getroot()
@@ -228,7 +254,8 @@ def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataF
                     recs.extend((row[0], (fi, h, j), lab.strip(), v, True) for j, (lab, v) in enumerate(zip(head[off:], pd.to_numeric(pd.Series(row[off:off + len(head) - off]), errors = 'coerce'))) if lab.strip() and v > 0)
         if heads:
             continue
-        df = f if isinstance(f, pd.DataFrame) else pd.read_excel(f, dtype = str) if ext in ('.xlsx', '.xls') else pd.read_csv(f, sep = ',' if ext == '.csv' else '\t', dtype = str)
+        frames = [f] if isinstance(f, pd.DataFrame) else _read_table(f)
+        df = next((d for d in frames if _glycomics_layout(d)[0] is not None), frames[0])  # a tool's export may sit on any sheet of a workbook, a plain table of glycans x samples is its first sheet
         tool, c, mol, rep, area, wide = _glycomics_layout(df)
         num = lambda k: pd.to_numeric(df[k].astype(str).str.lstrip('*'), errors = 'coerce')  # Skyline writes some values as '*2.4246E+7'
         if tool == 'glycresoft':  # one analysis per file; unidentified chromatograms have the composition 'None'
@@ -256,7 +283,7 @@ def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataF
             for k in df.columns[1:]:
                 recs.extend((k, (fi, i), g, v, gg) for i, (g, v) in enumerate(zip(labs, num(k))) if isinstance(g, str) and v > 0)
     if not recs:
-        raise ValueError("No abundances found; expected a Skyline report, a LaCyTools or MassyTools Summary.txt, a GlycoWorkbench workspace, or a Compound Discoverer, GlycoGenius, GlyHunter, GlycReSoft, or CandyCrunch table with glycans and positive abundances.")
+        raise ValueError("No abundances found; expected a Skyline report, a LaCyTools or MassyTools Summary.txt, a GlycoWorkbench workspace, or a Compound Discoverer, GlycoGenius, GlyHunter, GlycReSoft, or CandyCrunch table with glycans and positive abundances, or any table with glycans in its first column (not the index; use df.reset_index()) and samples in the others.")
     df = pd.DataFrame(recs, columns = ['run', 'ion', 'label', 'value', 'sia'])
     canon = {}
     for g, sia in df[['label', 'sia']].drop_duplicates().itertuples(index = False):
@@ -278,7 +305,7 @@ def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataF
     return _abundance_matrix(df[['run', 'ion', 'glycan', 'value']], sample_map, groups = groups)
 
 
-def read_abundances(file: str | Path # glycowork table (.csv, .tsv, .xlsx) with glycans in the first column and samples in the others, the export of a tool that read_glycomics or read_glycoproteomics supports, or the name of a dataset shipped with glycowork (e.g., 'human_serum_bacteremia_N_PMID33535571')
+def read_abundances(file: str | Path # glycowork table (.csv with commas or semicolons, .tsv, .xlsx) with glycans in the first column and samples in the others, the export of a tool that read_glycomics or read_glycoproteomics supports, or the name of a dataset shipped with glycowork (e.g., 'human_serum_bacteremia_N_PMID33535571')
                     ) -> pd.DataFrame: # the table as written, the read_glycomics or read_glycoproteomics output for a recognized tool export, or a copy of the shipped dataset with its contrasts
     "Reads the input of glycowork's analysis functions: shipped dataset names load with their contrasts, tool exports recognized by their columns go through read_glycomics or read_glycoproteomics, every other table is read exactly as written"
     if not Path(file).exists():
@@ -288,14 +315,13 @@ def read_abundances(file: str | Path # glycowork table (.csv, .tsv, .xlsx) with 
     ext = Path(file).suffix.lower()
     if ext in ('.gwp', '.gwa') or (ext == '.txt' and any(_SUMMARY_HEAD.match(l) for l in Path(file).read_text(encoding = 'utf-8-sig', errors = 'replace').splitlines())):
         return read_glycomics(file)
-    sheets = {'': pd.read_csv(file)} if ext == '.csv' else {'': pd.read_csv(file, sep = '\t')} if ext in ('.tsv', '.txt', '.psmtsv', '.list') else pd.read_excel(file, sheet_name = None)
-    for df in sheets.values():
-        c = {re.sub(r'\s+', '', str(k)).lower(): k for k in df.columns}
-        if any(all(k in c for k in ks) for _, ks in _GP_SIGNATURES):
+    sheets = _read_table(file, dtype = None)
+    for df in sheets:
+        if _gp_engine(df)[0] is not None:
             return read_glycoproteomics(file)
         if _glycomics_layout(df)[0] is not None:
             return read_glycomics(file)
-    return next(iter(sheets.values()))
+    return sheets[0]
 
 
 def check_presence(glycan: str, # IUPAC-condensed glycan sequence

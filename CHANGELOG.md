@@ -4,7 +4,7 @@
 - Removed the `bokeh` dependency from `glycowork`; handled within-package instead (81a910f)
 - The installed package is ~50 MB smaller: `v12_sugarbase.json` now ships xz-compressed and `v12_glycan_binding.csv` with four significant digits (dc0e740)
 - `df_glycan` loads considerably faster (eac80ee)
-- Raised the `pandas` requirement to 2.2.2 (`pandas` 2.1 crashed `get_differential_biosynthesis(longitudinal = True)` and `distance_from_embeddings`, 2.2.0/2.2.1 flooded `GlycoDataFrame` operations with DeprecationWarnings) and the `networkx` requirement to 3.4 (earlier versions crash `generate_graph_features` and `annotate_dataset(feature_set = ['graph'])` with `scipy>=1.16`) ()
+- Raised the `pandas` requirement to 2.2.2 (`pandas` 2.1 crashed `get_differential_biosynthesis(longitudinal = True)` and `distance_from_embeddings`, 2.2.0/2.2.1 flooded `GlycoDataFrame` operations with DeprecationWarnings) and the `networkx` requirement to 3.4 (earlier versions crash `generate_graph_features` and `annotate_dataset(feature_set = ['graph'])` with `scipy>=1.16`) (7bc927b)
 - Fixed shipped data files (e.g., `common_names.json`) being read in the system encoding, which on Windows broke non-ASCII names such as `GD1α` ()
 - `import glycowork` no longer fails without installed package metadata (source checkout, frozen app) ()
 - Fixed the `glycoworkGUI` build script still bundling the replaced `v12_sugarbase.json` and `backup_gids.json` ()
@@ -40,6 +40,7 @@
 - `GlycoDraw` drawing objects have a new `.save()` method, to save them as `.svg`, `.pdf`, or `.png` (0967d8a)
 - Added SNFG symbols for the furanoses `Hexf`, `Penf`, `Rhaf`, `6dTalf`, `Parf`, `Sorf`, and `Psif` (0967d8a)
 - `glycan_col_num` in `plot_glycans_excel` can now also be a column name (0967d8a)
+- Added the `highlight_residues` keyword argument to `GlycoDraw` to have `highlight_motif` behavior for manually specified residues (7bc927b)
 
 ##### Changed 🔄
 - Black elements in `.svg` `GlycoDraw` outputs are now also charcoal (`#1C1917`), just like any other format (0967d8a)

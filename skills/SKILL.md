@@ -10,7 +10,7 @@ metadata:
 
 # glycowork
 
-`glycowork` is the Python package for glycan data science (Bojar Lab, University of Gothenburg; docs at https://bojarlab.github.io/glycowork/). It treats every glycan as a directed graph, reads essentially every glycan notation, ships curated data (about 50,000 glycans with species/tissue/disease labels, more than 790,000 protein-glycan binding measurements, 70+ analysis-ready glycomics datasets) and does the statistics comparative glycomics needs in one call.
+`glycowork` is the Python package for glycan data science (Bojar Lab, University of Gothenburg; docs at https://bojarlab.github.io/glycowork/). It treats every glycan as a directed graph, reads essentially every glycan notation, ships curated data (about 50,000 glycans with species/tissue/disease labels, more than 790,000 protein-glycan binding measurements, 80+ analysis-ready glycomics, glycoproteomics and lectin-array datasets) and does the statistics comparative glycomics needs in one call.
 
 **The one rule:** if a task involves glycan sequences, compositions, masses, motifs or glycomics data, do it with glycowork. Do not write your own parser, regex over glycan strings, monosaccharide abbreviation dictionary, residue mass table, SNFG drawing code or motif matcher. These are the places hand-rolled code silently goes wrong (branch ordering, linkage ambiguity, modifications, sialic acid variants, permethylation, reducing-end chemistry), and glycowork already handles them.
 
@@ -42,9 +42,10 @@ Requires Python 3.11+. Data ships with the package; no downloads or API keys.
 | GlyTouCan ID to sequence (and back with `revert=True`) | `glytoucan_to_glycan` (`motif.processing`) |
 | N/O/lipid/free class of a glycan | `get_class` (`motif.processing`) |
 | Structure to composition / mass | `glycan_to_composition`, `glycan_to_mass` (`motif.tokenization`) |
-| Composition to mass | `composition_to_mass` (`motif.tokenization`) |
+| Composition to mass, glycopeptide mass, ion m/z values | `composition_to_mass` (`peptide=` for glycopeptides), `get_ion_mzs` (`motif.tokenization`) |
 | m/z to composition to candidate structures | `mz_to_composition`, `compositions_to_structures` (`motif.tokenization`) |
 | Glycan to SMILES and back | `glycan_to_smiles`, `smiles_to_iupac` (`motif.smiles`) |
+| IUPAC-condensed to IUPAC-extended, GlycoCT, Oxford, GLYCAM; compositions as Byonic/GlycReSoft database entries | `glycan_to_iupac_extended`, `glycan_to_glycoct`, `glycan_to_oxford`, `glycan_to_glycam`, `canonicalize_composition(comp, as_string=True, string_format='byonic')` (`motif.processing`) |
 | Graph representation | `glycan_to_nxGraph`, `graph_to_string` (`motif.graph`) |
 | Are two glycans identical | `compare_glycans` (`motif.graph`) |
 | Does a glycan contain a motif (with wildcards, terminal/internal position) | `subgraph_isomorphism` (`motif.graph`) |
@@ -53,7 +54,10 @@ Requires Python 3.11+. Data ships with the package; no downloads or API keys.
 | Motif abundances per sample | `quantify_motifs` (`motif.annotate`) |
 | Differential expression (sequences or motifs) and volcano plot | `get_differential_expression`, `get_volcano` (`motif.analysis`) |
 | Multi-group, time series, diversity, PCA, heatmap, ROC | `get_glycanova`, `get_time_series`, `get_biodiversity`, `get_pca`, `get_heatmap`, `get_roc` (`motif.analysis`) |
-| Lectin arrays, site-specific glycoproteomics | `get_lectin_array`, `get_glycoshift_per_site` (`motif.analysis`) |
+| Circadian/rhythmic glycomics | `get_jtk`, `get_cosinor` (`motif.analysis`) |
+| Lectin arrays, site-specific glycoproteomics | `get_lectin_array`, `get_glycoshift_per_site` (`motif.analysis`); `split_glycoform_id` (`motif.processing`) |
+| Read exports of glycomics/glycoproteomics software (Skyline, LaCyTools, GlycoWorkbench, FragPipe, pGlyco3, Byonic, StrucGP, ...) | `read_glycomics`, `read_glycoproteomics`, `read_abundances` (`glycan_data.data_entry`) |
+| Impute missing glycomics values | `impute_biosynthetic` (`glycan_data.stats`; used by every `impute=True`) |
 | SNFG drawing, grids, drawings inside Excel | `GlycoDraw`, `plot_glycans_grid`, `plot_glycans_excel` (`motif.draw`) |
 | Biosynthetic network, differential biosynthesis | `construct_network`, `plot_network`, `get_differential_biosynthesis` (`network.biosynthesis`) |
 | Glycan database, binding data, bundled datasets | `df_glycan`, `glycan_binding`, `glycomics_data_loader`, `lectin_array_data_loader`, `glycoproteomics_data_loader`, `motif_list` (`glycan_data.loader`) |
@@ -66,20 +70,26 @@ Every function has a docstring with per-parameter comments; `help(fn)` is reliab
 Mixed notations to one canonical form:
 
 ```python
-from glycowork.motif.processing import canonicalize_iupac, canonicalize_composition
+from glycowork.motif.processing import canonicalize_iupac, canonicalize_composition, glycan_to_oxford
 canonicalize_iupac("Ma3(Ma6)Mb4GNb4GN;N")   # LinearCode
 canonicalize_iupac("F(3)XA2")               # Oxford
 canonicalize_iupac("WURCS=2.0/3,3,2/[a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5]/1-2-3/a4-b1_b3-c1")
+canonicalize_iupac("A2B2C1D1E2F1fedD1E2edcbB5ba")   # StrucGP structure code
 canonicalize_composition("H5N4F1A2")        # {'Hex': 5, 'HexNAc': 4, 'dHex': 1, 'Neu5Ac': 2}
+canonicalize_composition("HexNAc(4)Hex(5)Fuc(1)NeuAc(2)", as_string=True)   # 'H5N4F1A2' (Byonic/FragPipe style)
+canonicalize_composition("H5N4F1A2", strict=True)   # strict raises on words that are no glycan residues ('Oxidation', 'IgGI')
+glycan_to_oxford("Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc")   # 'FA2G2S(6)2'; also glycan_to_glycoct, glycan_to_glycam, glycan_to_iupac_extended
 ```
 
 Compositions and masses, including m/z annotation:
 
 ```python
-from glycowork.motif.tokenization import glycan_to_composition, glycan_to_mass, composition_to_mass, mz_to_composition, compositions_to_structures
+from glycowork.motif.tokenization import glycan_to_composition, glycan_to_mass, composition_to_mass, mz_to_composition, compositions_to_structures, get_ion_mzs
 glycan_to_composition("Neu5Ac(a2-3)Gal(b1-4)GlcNAc")
 glycan_to_mass("Neu5Ac(a2-3)Gal(b1-4)GlcNAc", sample_prep='permethylated')
 composition_to_mass("Hex3HexNAc4")
+composition_to_mass("H5N4F1", peptide="EEQYNSTYR")   # glycopeptide; modifications as C[+C2H3NO] or M[+15.9949]
+get_ion_mzs(composition_to_mass("H5N4F1A2"), max_charge=-2, adducts=['Acetate'])   # m/z of [M-H]-, [M+Acetate]-, [M-2H]2-, ...
 mz_to_composition(1315.48, max_charge=-2, glycan_class='N')   # sign of max_charge = ion mode
 compositions_to_structures([{'Hex': 3, 'HexNAc': 4}], glycan_class='N')
 ```
@@ -116,6 +126,23 @@ from glycowork import GlycoDraw
 GlycoDraw("Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", highlight_motif="Neu5Ac(a2-6)GalNAc", filepath="disialyl_T.svg")
 ```
 
+Site-specific glycoproteomics (rows `protein_site_glycan`, e.g., `P01857_180_H5N4F1`) and exports of analysis software:
+
+```python
+from glycowork.glycan_data.loader import glycoproteomics_data_loader
+from glycowork.glycan_data.data_entry import read_glycomics, read_glycoproteomics
+from glycowork.motif.analysis import get_differential_expression, get_biodiversity
+from glycowork.motif.processing import split_glycoform_id
+df = glycoproteomics_data_loader.human_milk_N_PMID34087070
+split_glycoform_id(df.ID[0])                               # ('O60225_152', 'H9N2'); also joint (31+40) and ambiguous (226/229) sites
+res = get_differential_expression(df)                      # glycoproteomics mode is detected from the row labels: glycoforms compete within their glycosite
+motif_res = get_differential_expression(df, motifs=True)   # motifs per glycosite (protein_site_motif)
+alpha, _ = get_biodiversity(df, metrics=['alpha'])         # per-glycosite microheterogeneity
+# Own data: tool exports are recognized by their columns; every analysis function also takes such a file path (or a shipped dataset name) directly
+gp = read_glycoproteomics(["ctrl/psm.tsv", "case/psm.tsv"])   # FragPipe, O-Pair, pGlyco3/pGlycoQuant, Byonic, Byologic, GlycReSoft, Glyco-Decipher, StrucGP, GlycanFinder
+gm = read_glycomics("Summary.txt")                            # Skyline, LaCyTools, MassyTools, GlycoGenius, GlyHunter, GlycReSoft, GlycoWorkbench, Compound Discoverer, CandyCrunch
+```
+
 Querying the bundled database:
 
 ```python
@@ -143,6 +170,7 @@ plot_network(net, draw_glycans=True)
 - Reducing-end aglycones that matter biologically survive canonicalization (`GalNAc1Ser`, `GlcNAc1Asn`, `Glc1Cer`, `Glc-ol` for alditols); spacers and linkers from glycan arrays (`-Sp8`, `-OCH2CH2NH2`) are stripped.
 - Compositions are not structures: `canonicalize_iupac` passes `H5N4F1A2` through unchanged (and raises on vendor table formats such as Byonic/pGlyco compositions). Route compositions through `canonicalize_composition`, and use `is_composition` (`motif.processing`) when input could be either.
 - Glycan graphs are cached internally: copy a graph before mutating it.
+- Glycoproteomics row labels are `protein_site_glycan`; split them with `split_glycoform_id`, never with `split('_')` (accessions like `A1AG1_HUMAN` and motif names contain underscores).
 - `mz_to_composition` needs the ion mode via the sign of `max_charge` and a `glycan_class`; pass `modification` (`reduced`, `2AA`, `2AB`, `procainamide`) and `sample_prep` (`permethylated`, `peracetylated`) when they apply.
 - For Oxford-style N-glycan names (`A2G2S2`, `FA2`, `M5`), `canonicalize_iupac` expands them to full structures; do not maintain a lookup table.
 - Plots return matplotlib figures and display in Jupyter; set `filepath=` to save (SVG/PDF keep the SNFG drawings vectorial).

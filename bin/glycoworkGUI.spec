@@ -11,13 +11,13 @@ data_files = [
     (str(PKG / 'glycan_data' / 'v12_lib.pkl'), 'glycowork/glycan_data'),
     (str(PKG / 'glycan_data' / 'v12_df_species.csv'), 'glycowork/glycan_data'),
     (str(PKG / 'glycan_data' / 'v12_glycan_binding.csv'), 'glycowork/glycan_data'),
-    (str(PKG / 'glycan_data' / 'v12_sugarbase.json'), 'glycowork/glycan_data'),
+    (str(PKG / 'glycan_data' / 'v12_sugarbase.json.xz'), 'glycowork/glycan_data'),
     (str(PKG / 'glycan_data' / 'lectin_specificity.json'), 'glycowork/glycan_data'),
     (str(PKG / 'glycan_data' / 'datasets'), 'glycowork/glycan_data/datasets'),
     (str(PKG / 'motif' / 'mz_to_composition.csv'), 'glycowork/motif'),
     (str(PKG / 'motif' / 'common_names.json'), 'glycowork/motif'),
     (str(PKG / 'motif' / 'wurcs_tokens.json'), 'glycowork/motif'),
-    (str(PKG / 'motif' / 'backup_gids.json'), 'glycowork/motif'),
+    (str(PKG / 'motif' / 'glytoucan_ids.json.xz'), 'glycowork/motif'),
     (str(PKG / 'motif' / 'glyconnect_to_glytoucan.json'), 'glycowork/motif'),
     (str(ICON), '.')
 ]

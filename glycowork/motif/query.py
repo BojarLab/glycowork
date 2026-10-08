@@ -5,12 +5,17 @@ from glycowork.glycan_data import loader
 from glycowork.glycan_data.loader import motif_list
 from glycowork.motif.graph import compare_glycans
 from glycowork.motif.annotate import annotate_glycan
+from glycowork.motif.processing import canonicalize_iupac
 
 
-def get_insight(glycan: str, # Glycan in IUPAC-condensed format
+def get_insight(glycan: str, # Glycan in any format canonicalize_iupac reads (IUPAC-condensed/extended, WURCS, GlyTouCan ID, ...)
                 motifs: pd.DataFrame | None = None # DataFrame of glycan motifs; default:motif_list
                ) -> None: # Prints glycan meta-information
     "Print meta-information about a glycan"
+    if not isinstance(glycan, str):
+        raise TypeError(f"get_insight takes one glycan as a string, got {type(glycan).__name__} {glycan!r:.80}.")
+    # every other notation used to end in a futile compare_glycans against all of df_glycan and a 'not in our database'
+    glycan = canonicalize_iupac(glycan)
     if motifs is None:
         motifs = motif_list
     print("Let's get rolling! Give us a few moments to crunch some numbers.")

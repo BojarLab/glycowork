@@ -10,10 +10,10 @@ from glycowork.motif.graph import graph_to_string, subgraph_isomorphism, glycan_
 
 PREPROCESS_SPLIT = re.compile(r'(-?\s*(?:\((?:\?<=|\?<!)[^()]*\))?\s*\(?\[.*?\]\)?\s*(?:\{,?\d*,?\d*\}\?|\{,?\d*,?\d*\}|\*\?|\+\?|\?|\*|\+)\s*(?:\((?:\?=|\?!)[^()]*\))?\s*-?)')
 LINKAGE_SHORTHAND = re.compile(r'[\d\?]\(|\d$')
-LINKAGE_EXPAND = re.compile(r'([ab\?])(\d+/\d+|\d|\?)\(\?1-\?\)')
+LINKAGE_EXPAND = re.compile(r'([ab\?])(\d+/\d+|\d+|\?)\(\?1-\?\)')  # \d+, as the glycolyl O11 of Neu5Gc takes Fuc(a1-11)
 SIA_LINKAGE_FIX = re.compile(r'(5Ac|5Gc|Kdn|Sia)\([a\?]1')
 CONTRACT_LINKAGE = re.compile(r'\((\w)1-(\d+/\d+|\d+|\?)\)')
-COMPONENT_DASH = re.compile(r'(?<![DL])-(?![^(]*\))')
+COMPONENT_DASH = re.compile(r'(?<![DL])-(?![^(]*\))(?!ol\b|onic|aric|ulos|uronic|Anhydro)(?<!Anhydro-)')  # the dashes inside a residue name (Glc-ol, 3,6-Anhydro-Gal, D-Fuc) are no linkages
 LOOKAROUND = re.compile(r'\((\?<=|\?<!|\?=|\?!)([^()]*)\)')
 QUANTIFIER = re.compile(r'\{([^}]*)\}')
 ALTERNATIVES = re.compile(r'\[([^\]]*)\]')
@@ -376,7 +376,7 @@ def explain_match(pattern: str, # Glyco-regular expression, e.g., "Hex-HexNAc-([
 
 
 def get_match_batch(pattern: str | list[str], # Expression or pre-compiled pattern; e.g., "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
-                    glycan_list: list[str | nx.DiGraph], # List of glycans
+                    glycan_list: str | nx.DiGraph | list[str | nx.DiGraph], # Glycan(s) as strings or graphs
                     return_matches: bool = True # Whether to return matches vs boolean
                     ) -> list[bool] | list[list[str]]: # Match results for each glycan
     "Find glyco-regular expression matches in list of glycans"

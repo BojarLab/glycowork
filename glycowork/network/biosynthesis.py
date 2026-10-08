@@ -326,8 +326,7 @@ def construct_network(glycans: str | list[str] | pd.DataFrame, # Glycan(s), or a
                       edge_type: str = 'monolink', # Edge label type: monolink/monosaccharide/enzyme
                       permitted_roots: str | frozenset[str] | None = None, # Allowed root node(s)
                       abundances: list[float] = [], # Glycan abundances in the same order as glycans; default:empty
-                      constraints: bool | list[dict] | pd.DataFrame = True
-                      # Apply established biochemical constraints on reaction order; False to disable, or pass custom rules
+                      constraints: bool | list[dict] | pd.DataFrame = True  # Apply established biochemical constraints on reaction order; False to disable, or pass custom rules
                       ) -> nx.DiGraph: # Biosynthetic network
     "Construct glycan biosynthetic network"
     if isinstance(glycans, pd.DataFrame):
@@ -340,7 +339,10 @@ def construct_network(glycans: str | list[str] | pd.DataFrame, # Glycan(s), or a
     allowed_ptms = frozenset([allowed_ptms]) if isinstance(allowed_ptms, str) else allowed_ptms
     # Canonicalize all input strings upfront
     glycans = [canonicalize_iupac(g) for g in glycans]
-    abundance_mapping = dict(zip(glycans, abundances)) if abundances else {}  # zipped in the caller's order, before sorting and deduplication
+    # zipped in the caller's order, before sorting and deduplication; rows of one structure (isomer peaks, or two spellings of one sequence) add up instead of the last one overwriting the others
+    abundance_mapping = defaultdict(float)
+    for g, a in zip(glycans, abundances):
+        abundance_mapping[g] += a
     glycans = sorted(set(glycans))
     stem_lib = {k: k if sia_re.match(k) else v for k, v in get_stem_lib(get_lib(glycans)).items()}
     if permitted_roots is None:
@@ -430,7 +432,7 @@ def construct_network(glycans: str | list[str] | pd.DataFrame, # Glycan(s), or a
     if edge_type != 'monolink':
         df_enzyme, net_class = None, None
         if edge_type == 'enzyme':
-            with resources.files("glycowork.network").joinpath("monolink_to_enzyme.csv").open() as f:
+            with resources.files("glycowork.network").joinpath("monolink_to_enzyme.csv").open(encoding = 'utf-8-sig') as f:
                 df_enzyme = pd.read_csv(f, sep = ',')
             net_class = get_class(glycans[0])  # glycans sorted desc by len, [0] is a real observed glycan
         for u, v in network.edges():
@@ -614,7 +616,7 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
         rows = Counter(round(y, 6) for y in node_data['y'])
         if (f := {'small': 1, 'medium': 2, 'large': 3}.get(glycan_size) if draw_glycans else 1) is None:
             raise ValueError(f"glycan_size has to be 'small', 'medium', or 'large' (got '{glycan_size}').")
-        w, h = (1.5 * f * max(rows.values()), 1.8 * f * len(rows)) if max(rows.values()) > 1 else (1.5 * f * len(
+        w, h = (1.5 * f * max(rows.values()), 1.8 * f * len(rows)) if max(rows.values(), default = 0) > 1 else (1.5 * f * len(
             network) ** 0.5,) * 2
         fig, ax = plt.subplots(figsize = (min(60, max(12, w)), min(60, max(9, h))))
         # gids tag each arrow and node in the SVG, so the Jupyter display can attach hover text to them
@@ -1101,8 +1103,7 @@ def highlight_network(network: nx.DiGraph, # Biosynthetic network
 
 
 def get_edge_weight_by_abundance(network_in: nx.DiGraph, # Biosynthetic network
-                                 root: str | None = None,
-                                 # Root node; default: inferred from the network's glycan class
+                                 root: str | None = None,  # Root node; default: inferred from the network's glycan class
                                  root_default: float = 10.0,  # Root abundance
                                  virtual_damping: float = 0.5  # Per-hop abundance decay for undetected intermediates
                                  ) -> nx.DiGraph:  # Network with edge capacities
@@ -1138,8 +1139,7 @@ def get_edge_weight_by_abundance(network_in: nx.DiGraph, # Biosynthetic network
 def get_maximum_flow(network: nx.DiGraph, # Biosynthetic network
                      source: str | None = None,  # Source node; default: inferred from the network's glycan class
                      sinks: str | list[str] | None = None  # Target node(s); default:all terminal nodes
-                     ) -> dict[str, dict[
-    str, float | dict[str, dict[str, float]]]]:  # Flow results; sink: {maximum flow value, flow path dictionary}
+                     ) -> dict[str, dict[str, float | dict[str, dict[str, float]]]]:  # Flow results; sink: {maximum flow value, flow path dictionary}
     "Estimate maximum flow and flow paths between source and sinks"
     source = source or infer_network_root(network)
     if not nx.get_edge_attributes(network, 'capacity'):
@@ -1210,7 +1210,7 @@ def get_reaction_flow(network: nx.DiGraph, # Biosynthetic network
     return reaction_flows
 
 
-def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance data (first column: glycan sequences)
+def get_differential_biosynthesis(df: pd.DataFrame | str | Path, # Glycan abundance data (first column: glycan sequences), filepath, or shipped dataset name
                                   group1: list[str | int] | None = None, # First group column indices/names (or time points in longitudinal analysis); default: from the frame's contrasts
                                   group2: list[str | int] | None = None, # Second group column indices/names (or time points in longitudinal analysis)
                                   analysis: str = "reaction",  # Type: reaction/flow/branchpoint
@@ -1272,6 +1272,8 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
         df_analysis = df_analysis.T
     # Network analysis
     df_analysis = df_analysis.set_axis([canonicalize_iupac(g) for g in df_analysis.index])  # construct_network canonicalizes its node names, so the abundance keys have to be canonical too
+    # Rows of one structure (isomer peaks, or two spellings of one sequence) add up, as the node abundance lookup below would keep only the last of them
+    df_analysis = df_analysis.groupby(level = 0, sort = False).sum()
     core_net = construct_network(df_analysis.index.tolist(), edge_type = edge_type)
     root = infer_network_root(core_net)
     nets, features = {}, []
@@ -1587,17 +1589,20 @@ def extend_network(network: nx.DiGraph, # Biosynthetic network
 
 
 def get_biosynthetic_coherence(
-        df: pd.DataFrame, # Glycan abundances (glycans as index or first column, samples as columns)
+        df: pd.DataFrame | str | Path, # Glycan abundances (glycans as index or first column, samples as columns), or a filepath or shipped dataset name as read_abundances takes it
         group1: list[str] | None = None,  # First group column names; default: from the frame's contrasts
         group2: list[str] | None = None,  # Second group column names; default: from the frame's contrasts
         network: nx.DiGraph | None = None,  # Pre-built network; built from df if not provided
         paired: bool | None = None,  # Whether samples are paired; default: from the frame
         n_permutations: int = 20000,  # Label permutations for the exact shared-model null; 0 to skip
         random_state: int = 42  # Seed for permutation reproducibility
-) -> tuple[
-    pd.DataFrame, pd.DataFrame]:  # (Group-level results under both models, per-glycan coherence and its group difference)
+) -> tuple[pd.DataFrame, pd.DataFrame]:  # (Group-level results under both models, per-glycan coherence and its group difference)
     "Quantify how strongly each condition's glycome follows its own biosynthetic network, and which glycans decouple from it"
     from scipy.stats import ttest_ind, ttest_rel, t as tdist
+    # read before anything looks at the frame, since a shipped dataset name brings its contrasts and pairing, as in every other analysis function
+    if isinstance(df, (str, Path)):
+        from glycowork.glycan_data.data_entry import read_abundances
+        df = read_abundances(df)
     names = ('group1', 'group2')
     if group1 is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         group1, group2 = list(df.group1), list(df.group2)
@@ -1608,7 +1613,8 @@ def get_biosynthetic_coherence(
         df = df.set_index(df.columns[0])
     if network is None:
         network = construct_network(df.index.tolist())
-    df = df.set_axis([canonicalize_iupac(g) for g in df.index])
+    # Rows of one structure (isomer peaks, or two spellings of one sequence) add up, or each would be fitted and counted as a glycan of its own
+    df = df.set_axis([canonicalize_iupac(g) for g in df.index]).groupby(level = 0, sort = False).sum()
     glycans = [g for g in df.index if network.nodes.get(g, {}).get('virtual', 1) == 0]
     gidx = {g: i for i, g in enumerate(glycans)}
     cols = list(group1) + list(group2)

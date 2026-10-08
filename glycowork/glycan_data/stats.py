@@ -70,9 +70,8 @@ def mahalanobis_distance(x: np.ndarray | pd.DataFrame, # comparison group contai
 
 def mahalanobis_variance(x: np.ndarray | pd.DataFrame, # comparison group containing numerical data
                          y: np.ndarray | pd.DataFrame, # comparison group containing numerical data
-                         paired: bool = False,  # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
-                         random_state: int | np.random.Generator | None = None
-                         # optional random state for reproducibility
+                         paired: bool = False,  # whether samples are paired (e.g., tumor & tumor-adjacent tissue)
+                         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
                          ) -> float:  # variance of Mahalanobis distance
     "Estimates variance of Mahalanobis distance via bootstrapping"
     local_rng = np.random.default_rng(random_state) if random_state is not None else rng
@@ -366,12 +365,9 @@ def impute_biosynthetic(df: pd.DataFrame, # glycans as rows, samples as columns;
 def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences in first col and abundances in subsequent cols
                          groups: list[list[str]], # nested list of column name lists, one list per group
                          impute: bool = True,  # replaces zeroes with predictions from impute_biosynthetic
-                         min_samples: float = 0.1,
-                         # fraction (0-1) of samples that need non-zero values for glycan to be kept
-                         protect: pd.DataFrame | None = None,
-                         # boolean frame in the shape/order of the abundance block, marking cells that were never measured and must stay NaN
-                         circadian: bool = False,
-                         # data for a rhythm test: every imputed value gets a draw of the prediction error, so imputed replicates keep the spread of measured ones
+                         min_samples: float = 0.1,  # fraction (0-1) of samples that need non-zero values for glycan to be kept
+                         protect: pd.DataFrame | None = None,  # boolean frame in the shape/order of the abundance block, marking cells that were never measured and must stay NaN
+                         circadian: bool = False,  # data for a rhythm test: every imputed value gets a draw of the prediction error, so imputed replicates keep the spread of measured ones
                          random_state: int | np.random.Generator | None = None # optional random state for reproducibility
                          ) -> pd.DataFrame:  # normalized dataframe in same style as input
     "discards rows with too many missings, imputes the rest, and normalizes"
@@ -431,7 +427,8 @@ def variance_based_filtering(df: pd.DataFrame, # dataframe with glycans as index
 
 
 class JTKTest:
-    def __init__(self, timepoints: int, periods: list[int], interval: int = 1, replicates: int = 1):
+    def __init__(self, timepoints: int, periods: int | list[int], interval: int = 1, replicates: int = 1):
+        periods = [periods] if np.isscalar(periods) else list(periods)  # a single period, as get_cosinor takes it, was iterated as an int
         self.group_sizes = np.full(timepoints, replicates)
         self.n = self.group_sizes.sum()
         squared_sizes = np.square(self.group_sizes)
@@ -927,6 +924,8 @@ def get_additive_logratio_transformation(df: pd.DataFrame, # dataframe with feat
     local_rng = np.random.default_rng(random_state) if random_state is not None else rng
     if group1 and isinstance(group1[0], int):
         group1, group2 = [df.columns[k] for k in group1], [df.columns[k] for k in group2]
+    # A zero left by impute = False has no log; it gets the floor the CLR route adds, instead of an -inf that made the Procrustes search raise
+    df = pd.concat([df.iloc[:, :1], df.iloc[:, 1:].astype(float).replace(0, 0.0000001)], axis = 1)
     scores, procrustes_corr, variances = get_procrustes_scores(df, group1, group2, paired = paired,
                                                                custom_scale = custom_scale, random_state = local_rng)
     ref_component = np.argmax(scores)
@@ -965,12 +964,9 @@ def correct_multiple_testing(pvals: list[float] | np.ndarray, # list of raw p-va
 
 
 def moderated_variance(residual_var: np.ndarray, # per-feature within-group variance
-                       df_resid: float | np.ndarray,
-                       # residual degrees of freedom of the design; per-feature when missingness makes it vary
-                       neighbors: list[list[int]] | None = None
-                       # per-feature indices of containment neighbors, for a local prior
-                       ) -> tuple[
-    np.ndarray, np.ndarray]:  # (posterior variance per feature, posterior degrees of freedom per feature)
+                       df_resid: float | np.ndarray,  # residual degrees of freedom of the design; per-feature when missingness makes it vary
+                       neighbors: list[list[int]] | None = None  # per-feature indices of containment neighbors, for a local prior
+                       ) -> tuple[np.ndarray, np.ndarray]:  # (posterior variance per feature, posterior degrees of freedom per feature)
     "Empirical-Bayes moderation of feature variances; the prior is the geometric mean over each feature's containment neighborhood, or over all features when no graph is given"
     s2 = np.maximum(np.asarray(residual_var, dtype = float), 1e-12)
     d = np.maximum(np.broadcast_to(np.asarray(df_resid, dtype = float), s2.shape),
@@ -1090,7 +1086,7 @@ def get_glycoform_diff(df_res: pd.DataFrame, # result from .motif.analysis.get_d
 
 def get_glm(group: pd.DataFrame, # longform data of glycoform abundances for a glycosite
             glycan_features: list[str] = ['H', 'N', 'A', 'F', 'G'] # extracted glycan features to consider as variables
-            ) -> tuple[str | str, list[str]]: # (fitted GLM or failure message, list of variables)
+            ) -> tuple[tuple[pd.Series, pd.Series] | str, list[str]]: # ((coefficients, p-values) per term, or a failure message; retained variables)
     "given glycoform data from a glycosite, constructs & fits a GLM formula for main+interaction effects"
     retained_vars = [c for c in glycan_features if c in group.columns and max(group[c]) > 0]
     if not retained_vars:
@@ -1169,8 +1165,7 @@ def estimate_technical_variance(df: pd.DataFrame, # dataframe with abundances in
                                 num_instances: int = 128, # number of Monte Carlo instances to sample
                                 gamma: float = 0.1, # uncertainty parameter for CLR transformation scale
                                 custom_scale: float | dict = 0,  # ratio total signal group2/group1 for scale model
-                                random_state: int | np.random.Generator | None = None
-                                # optional random state for reproducibility
+                                random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
                                 ) -> pd.DataFrame:  # transformed df (features, samples*num_instances) with CLR-transformed Monte Carlo instances
     "Monte Carlo sampling from Dirichlet distribution with relative abundances as concentration, followed by CLR transformation"
     local_rng = np.random.default_rng(random_state) if random_state is not None else rng
@@ -1203,8 +1198,7 @@ def perform_tests_monte_carlo(group_a: pd.DataFrame, # rows as features, columns
                               num_instances: int = 128,  # number of Monte Carlo instances to sample
                               paired: bool = False,  # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
                               alpha: float = 0.05  # error rate the within-instance FDR correction is calibrated to
-                              ) -> tuple[
-    list[float], list[float], list[float]]:  # (uncorrected p-vals, corrected p-vals, effect sizes)
+                              ) -> tuple[list[float], list[float], list[float]]:  # (uncorrected p-vals, corrected p-vals, effect sizes)
     "Perform tests on each Monte Carlo instance, apply Benjamini-Hochberg correction, calculate effect sizes"
     num_features, _ = group_a.shape
     avg_uncorrected_p_values, avg_corrected_p_values, avg_effect_sizes = np.zeros(num_features), np.zeros(num_features), np.zeros(num_features)

@@ -1125,6 +1125,13 @@ def display_svg_with_matplotlib(
     plt.close(fig)
 
 
+def _written_positions(graph: nx.DiGraph # Glycan graph from glycan_to_nxGraph
+                       ) -> dict[int, int]: # Node: its position in the sequence as written
+    "glycan_to_nxGraph numbers the main part from 0 and the floating parts after it, although they are written before it"
+    main = nx.node_connected_component(graph.to_undirected(as_view = True), 0)
+    return {n: i for i, n in enumerate(sorted(graph, key = lambda n: (n in main, n)))}
+
+
 def process_per_residue(
         draw_this: str, # reordered IUPAC-condensed glycan sequence
         per_residue: list[float], # Scalar values per residue
@@ -1136,10 +1143,10 @@ def process_per_residue(
         raise ValueError(
             f"per_residue has {len(per_residue)} values but {glycan} has {n_residues} monosaccharides to color")
     if glycan != draw_this:
-        g1 = glycan_to_nxGraph(glycan)
-        g2 = glycan_to_nxGraph(draw_this)
+        g1, g2 = glycan_to_nxGraph(glycan), glycan_to_nxGraph(draw_this)
         _, mappy = compare_glycans(g2, g1, return_matches = True)
-        per_residue = [per_residue[mappy[i * 2] // 2] for i in range(len(per_residue))]
+        pos1, at2 = _written_positions(g1), {i: n for n, i in _written_positions(g2).items()}
+        per_residue = [per_residue[pos1[mappy[at2[i * 2]]] // 2] for i in range(len(per_residue))]
     return {i * 2: v for i, v in enumerate(per_residue)}
 
 
@@ -1155,10 +1162,11 @@ def process_per_linkage(
             f"highlight_linkages {highlight_linkages} has to index the {n_linkages} linkages of {glycan}, starting from 0")
     per_linkage = [i in highlight_linkages for i in range(n_linkages)]
     if glycan != draw_this:
-        g1 = glycan_to_nxGraph(glycan)
-        g2 = glycan_to_nxGraph(draw_this)
+        g1, g2 = glycan_to_nxGraph(glycan), glycan_to_nxGraph(draw_this)
         _, mappy = compare_glycans(g2, g1, return_matches = True)
-        per_linkage = [per_linkage[mappy[i * 2] // 2] for i in range(len(per_linkage))]
+        # A linkage moves with the residue it leaves, which precedes it in the written sequence
+        pos1, at2 = _written_positions(g1), {i: n for n, i in _written_positions(g2).items()}
+        per_linkage = [per_linkage[pos1[mappy[at2[i * 2]]] // 2] for i in range(len(per_linkage))]
     return {i * 2 + 1: v for i, v in enumerate(per_linkage)}
 
 
@@ -1783,19 +1791,19 @@ def GlycoDraw(
         bit = draw_this[openpos:closepos]
         if '^' in bit:
             fragment, bit_anchors = parse_floating_bit(bit)
-            anchored_bits.append((f"{fragment}blank", bit_anchors))
+            anchored_bits.append((f"{fragment}blank", bit_anchors, node_shift))
         else:
             fragment = bit
-            floaty_bits.append(f"{bit}blank")
+            floaty_bits.append((f"{bit}blank", node_shift))  # with the node its per-residue and per-linkage values start at
         # The values were indexed against the string that still carried these bits, so the nodes they contributed have to be added back when reading them; an anchored bit contributes its merged fragment, not every alternative
         node_shift += 2 * fragment.count('(')
         draw_this = draw_this[:openpos-1] + len(draw_this[openpos-1:closepos+1])*'*' + draw_this[closepos+1:]
     draw_this = draw_this.replace('*', '')
     if anchored_bits:  # An anchor matching nothing must not silently delete its residue from the drawing
         anchor_graph = glycan_to_nxGraph(draw_this)
-        placeable = [any(resolve_anchor(anchor_graph, anchor) for anchor in bit_anchors.values()) for _, bit_anchors in
+        placeable = [any(resolve_anchor(anchor_graph, anchor) for anchor in bit_anchors.values()) for _, bit_anchors, _ in
                      anchored_bits]
-        floaty_bits += [bit for (bit, _), ok in zip(anchored_bits, placeable) if not ok]
+        floaty_bits += [(bit, off) for (bit, _, off), ok in zip(anchored_bits, placeable) if not ok]
         anchored_bits = [entry for entry, ok in zip(anchored_bits, placeable) if ok]
     if restrict_vocab and not _drawable(draw_this, libr):
         if "!" in draw_this:
@@ -1921,8 +1929,14 @@ def GlycoDraw(
     # Floating bits, brackets, and repeat labels are never part of the motif, so reverse_highlight shows them
     highlight = 'show' if highlight_motif is None or reverse_highlight else 'hide'
     if floaty_bits != []:
-        fb_count = {i: floaty_bits.count(i) for i in floaty_bits}
-        floaty_bits = list(dict.fromkeys(floaty_bits))
+        # Identical bits are drawn once with a count, unless their per-residue values or linkage highlights tell them apart
+        fb_keys = [(bit, tuple((per_residue_by_node.get(off + n, 0) if per_residue else 0, per_linkage_by_node.get(off + n + 1, False) if highlight_linkages else False)
+                               for n in range(0, 2 * bit.count('('), 2))) for bit, off in floaty_bits]
+        fb_count, fb_offset = {i: fb_keys.count(i) for i in fb_keys}, {}
+        for key, (_, off) in zip(fb_keys, floaty_bits):
+            fb_offset.setdefault(key, off)
+        fb_keys = list(fb_offset)
+        floaty_bits = [key[0] for key in fb_keys]
         floaty_data = []
         for k, k_val in enumerate(floaty_bits):
             if in_lib(min_process_glycans([k_val])[0][0], libr):
@@ -1937,6 +1951,11 @@ def GlycoDraw(
                  [j_val[0][2] + unwrap(unwrap([lv[2] for lv in j_val[1:-1]]))]]
         for j, j_val in enumerate(floaty_data):
             floaty_sugar, floaty_sugar_x_pos, floaty_sugar_y_pos, floaty_sugar_modification, floaty_bond, floaty_conf, _, _ = j_val[0]
+            # Nodes of the bit as drawn on its own, moved to where the bit sits in the sequence; its trailing blank stands in for the acceptor and carries no value
+            off, n_bit = fb_offset[fb_keys[j]], 2 * floaty_bits[j].count('(')
+            at = {v: off + n if n < n_bit else None for n, v in j_val[-1].items()}
+            scalar = lambda pos: per_residue_by_node.get(at[pos], 0) if per_residue else 0
+            linked = lambda pos: per_linkage_by_node.get(at[pos] + 1, False) if highlight_linkages and at[pos] is not None else False
             floaty_sugar_label = [highlight] * len(floaty_sugar)
             floaty_bond_label = [highlight] * len(floaty_bond)
             floaty_sugar_x_pos = [k + max_x + 1 for k in floaty_sugar_x_pos]
@@ -1950,27 +1969,27 @@ def GlycoDraw(
                                                                         [[k + shift for k in ys] for ys in lv[2]])
                                                                        for lv in j_val[1:-1]]
             if floaty_sugar != ['blank', 'blank']:
-                [add_bond(floaty_sugar_x_pos[k + 1], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k + 1], floaty_sugar_y_pos[k], d, label = floaty_bond[k] if show_linkage else '-', dim = dim, compact = compact, highlight = floaty_bond_label[k]) for k in range(len(floaty_sugar) - 1)]
+                [add_bond(floaty_sugar_x_pos[k + 1], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k + 1], floaty_sugar_y_pos[k], d, label = floaty_bond[k] if show_linkage else '-', dim = dim, compact = compact, highlight = floaty_bond_label[k], color_highlight = linked((0, 0, k + 1))) for k in range(len(floaty_sugar) - 1)]
                 for lvl, lv in enumerate(j_val[1:-1]):
                     (xs, ys), (pxs, pys) = lanes[lvl + 1], lanes[lvl]
                     for b, (conn, bonds) in enumerate(zip(lv[5], lv[4])):
                         parent = conn[0] if lvl else 0
                         add_bond(xs[b][0], pxs[parent][conn[1]], ys[b][0], pys[parent][conn[1]], d,
                                  label = bonds[0] if show_linkage else '-', dim = dim, compact = compact,
-                                 highlight = highlight)
+                                 highlight = highlight, color_highlight = linked((lvl + 1, b, 0)))
                         [add_bond(xs[b][k + 1], xs[b][k], ys[b][k + 1], ys[b][k], d,
                                   label = bonds[k + 1] if show_linkage else '-', dim = dim, compact = compact,
-                                  highlight = highlight) for k in range(len(bonds) - 1)]
-                [add_sugar(floaty_sugar[k], d, x_pos = floaty_sugar_x_pos[k], y_pos = floaty_sugar_y_pos[k], modification = floaty_sugar_modification[k], conf = floaty_conf[k], compact = compact, dim = dim, highlight = floaty_sugar_label[k]) for k in range(len(floaty_sugar))]
+                                  highlight = highlight, color_highlight = linked((lvl + 1, b, k + 1))) for k in range(len(bonds) - 1)]
+                [add_sugar(floaty_sugar[k], d, x_pos = floaty_sugar_x_pos[k], y_pos = floaty_sugar_y_pos[k], modification = floaty_sugar_modification[k], conf = floaty_conf[k], compact = compact, dim = dim, highlight = floaty_sugar_label[k], scalar = scalar((0, 0, k))) for k in range(len(floaty_sugar))]
                 for lvl, lv in enumerate(j_val[1:-1]):
                     [add_sugar(lv[0][b][k], d, x_pos = lanes[lvl + 1][0][b][k], y_pos = lanes[lvl + 1][1][b][k],
                                modification = lv[3][b][k], conf = lv[6][b][k], compact = compact, dim = dim,
-                               highlight = highlight) for b in range(len(lv[0])) for k in range(len(lv[0][b]))]
+                               highlight = highlight, scalar = scalar((lvl + 1, b, k))) for b in range(len(lv[0])) for k in range(len(lv[0][b]))]
             else:
                 add_sugar('text', d, x_pos = min(floaty_sugar_x_pos) - 0.3, y_pos = floaty_sugar_y_pos[-1], modification = floaty_bits[j].replace('blank', ''), compact = compact, dim = dim, text_anchor = 'end', highlight = highlight)
-            if fb_count[floaty_bits[j]] > 1:
+            if fb_count[fb_keys[j]] > 1:
                 x_offset = 0.5 if not compact else 0.75
-                add_sugar('text', d, x_pos = max(floaty_sugar_x_pos) + x_offset, y_pos = current_y, modification = f"{fb_count[floaty_bits[j]]}x", compact = compact, dim = dim, highlight = highlight)
+                add_sugar('text', d, x_pos = max(floaty_sugar_x_pos) + x_offset, y_pos = current_y, modification = f"{fb_count[fb_keys[j]]}x", compact = compact, dim = dim, highlight = highlight)
         bracket_x = max_x * (2 if not compact else 1.2) + 1
         bracket_y = (min_y, max_y) if not compact else ((min_y * 0.5) * 1.2, (max_y * 0.5) * 1.2)
         draw_bracket(bracket_x, bracket_y, d, direction = 'right', dim = dim, highlight = highlight)
@@ -1981,9 +2000,13 @@ def GlycoDraw(
         occupied = {(round(x), round(y)) for x, y in zip(main_sugar_x_pos, main_sugar_y_pos)}
         occupied |= {(round(x), round(y)) for xs, ys in
                      zip(unwrap(lv_x_pos), unwrap(lv_y_pos)) for x, y in zip(xs, ys)}
-        for bit, bit_anchors in anchored_bits:
-            a_sugar, a_x_pos, _, a_modification, a_bond, a_conf, _, _ = \
-                get_coordinates_and_labels(bit, highlight_motif = None)[0]
+        for bit, bit_anchors, off in anchored_bits:
+            a_data = get_coordinates_and_labels(bit, highlight_motif = None)
+            a_sugar, a_x_pos, _, a_modification, a_bond, a_conf, _, _ = a_data[0]
+            # Every ghost copy carries the values of the residues it stands for; index 0 is the trailing blank
+            a_at = {v: off + n for n, v in a_data[-1].items()}
+            a_scalar = [per_residue_by_node.get(a_at[(0, 0, k)], 0) if per_residue and k else 0 for k in range(len(a_sugar))]
+            a_linked = [per_linkage_by_node.get(a_at[(0, 0, k)] + 1, False) if highlight_linkages and k else False for k in range(len(a_sugar))]
             for linkage, anchor in bit_anchors.items():
                 for n in resolve_anchor(anchor_graph, anchor):
                     lane, b, i = node_positions[n]
@@ -1998,13 +2021,13 @@ def GlycoDraw(
                     occupied.update((round(target_x + a_x_pos[k]), round(ghost_y)) for k in range(1, len(a_sugar)))
                     [add_bond(target_x + a_x_pos[k + 1], target_x + a_x_pos[k], ghost_y, ghost_y, d,
                               label = a_bond[k] if show_linkage else '-', dim = dim,
-                              compact = compact, highlight = highlight) for k in range(1, len(a_sugar) - 1)]
+                              compact = compact, highlight = highlight, color_highlight = a_linked[k + 1]) for k in range(1, len(a_sugar) - 1)]
                     [add_sugar(a_sugar[k], d, x_pos = target_x + a_x_pos[k], y_pos = ghost_y, modification = a_modification[k],
                                conf = a_conf[k],
-                               compact = compact, dim = dim, highlight = highlight) for k in range(1, len(a_sugar))]
+                               compact = compact, dim = dim, highlight = highlight, scalar = a_scalar[k]) for k in range(1, len(a_sugar))]
                     add_bond(target_x + a_x_pos[1], target_x, ghost_y, target_y, anchor_layer,
                              label = process_bonds([linkage])[0] if show_linkage else '-', dim = dim, compact = compact,
-                             highlight = highlight, dashed = True)
+                             highlight = highlight, dashed = True, color_highlight = a_linked[1])
         d.children.insert(0, anchor_layer)
     # add brackets around repeating unit
     if repeat:
@@ -2267,7 +2290,7 @@ def annotate_figure(
 
 
 def plot_glycans_excel(
-        df: pd.DataFrame | str | Path, # DataFrame or filepath with glycans
+        df: pd.DataFrame | pd.Series | list[str] | str | Path, # DataFrame or filepath with glycans, or the glycans themselves
         folder_filepath: str | Path, # Output folder path
         glycan_col_num: int | str = 0, # Glycan column index, or its name
         scaling_factor: float = 0.2, # Image scaling
@@ -2296,6 +2319,9 @@ def plot_glycans_excel(
     if isinstance(df, (str, Path)):
         df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
             df).suffix.lower() == ".tsv" else pd.read_excel(df)
+    elif not isinstance(df, pd.DataFrame):
+        # A bare column or list of glycans becomes a one-column sheet; a Series would otherwise gain 'SNFG' as a row
+        df = pd.DataFrame({getattr(df, 'name', None) or 'glycan': list(df)})
     else:
         df = df.copy()
     df["SNFG"] = np.nan

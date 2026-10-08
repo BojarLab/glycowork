@@ -16,7 +16,7 @@ import re
 from functools import lru_cache
 from typing import NamedTuple
 import networkx as nx
-from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string, glycan_graph_memoize
+from glycowork.motif.graph import graph_to_string, glycan_graph_memoize, ensure_graph
 
 CERAMIDE = 'OC[C@H](NC(=O)CCCCCCCCCCCCCCC)[C@H](O)/C=C/CCCCCCCCCCCCC'  # d18:1/16:0, the placeholder used whenever a sequence just says 'Cer'
 UNKNOWN_POSITION = 'lowest'  # where a modification without a position number goes; 'lowest' free slot reproduces what GlyLES did
@@ -365,6 +365,8 @@ def graph_to_smiles(graph: nx.DiGraph, # Glycan graph, as produced by glycan_to_
                     strict: bool = False # Raise on an unknown linkage or modification position instead of taking the lowest free one
                     ) -> str | tuple: # Isomeric SMILES, or (SMILES, atom-to-node list) when mapping
     "Assemble the isomeric SMILES of a glycan graph by splicing monosaccharide templates into each other"
+    if not len(graph):  # an empty string or None became an empty graph, on which networkx raised 'Connectivity is undefined for the null graph'
+        raise GlycanSMILESError('glycan graph is empty')
     if not nx.is_weakly_connected(graph):
         raise GlycanSMILESError('glycan graph is disconnected; a floating substituent has no defined attachment point')
     labels = {n: graph.nodes[n]['string_labels'] for n in graph.nodes}
@@ -435,7 +437,7 @@ def glycan_to_smiles(glycan: str | nx.DiGraph, # Glycan in IUPAC-condensed forma
                      strict: bool = False # Raise on an unknown linkage or modification position instead of taking the lowest free one
                      ) -> str | tuple: # Isomeric SMILES, or (SMILES, atom-to-node list) when mapping
     "Convert a glycan in IUPAC-condensed format into an isomeric SMILES string"
-    return graph_to_smiles(glycan if isinstance(glycan, nx.Graph) else glycan_to_nxGraph(glycan), mapping = mapping, strict = strict)
+    return graph_to_smiles(ensure_graph(glycan), mapping = mapping, strict = strict)
 
 
 _TOKEN_RE = re.compile(r'\[[^\]]*\]|Br|Cl|[BCNOPSFI]|%\d\d|\d|[()=#/\\.\-+]')
@@ -523,7 +525,7 @@ def glycan_to_molecule(glycan: str | nx.DiGraph, # Glycan in IUPAC-condensed for
                        strict: bool = False # Raise on an unknown linkage or modification position instead of taking the lowest free one
                        ) -> Molecule: # Atoms, bonds, rings, and the graph node every atom and bond came from
     "Build a glycan's molecular graph without a cheminformatics toolkit, keeping every atom's monosaccharide of origin"
-    smiles, owners = graph_to_smiles(glycan if isinstance(glycan, nx.Graph) else glycan_to_nxGraph(glycan), mapping = True, strict = strict)
+    smiles, owners = graph_to_smiles(ensure_graph(glycan), mapping = True, strict = strict)
     atoms, bonds, rings, neighbors = parse_smiles(smiles)
     if len(atoms) != len(owners):
         raise GlycanSMILESError('atom mapping does not line up with the parsed SMILES')
@@ -931,9 +933,12 @@ def smiles_to_iupac(smiles: str, # SMILES string of a glycan
         residue['skeleton'], residue['anomer'], implied, residue['fixed'] = _match_residue(
             residue['positions'], residue['ring_size'], residue['anomeric'], residue['chirality'], residue['fragments'])
         residue['mods'] += implied
+        own = {residue['holders'][position] for position in residue['fragments']}
+        ketal = {position: atom for position in residue['fragments'] for atom in adjacency[residue['holders'][position]] if atom != residue['carbons'][position]
+                 and _fragment_key(atom, None, atoms, adjacency, orders, set(own)) == 'C(C)(C(=O)(O))(R)(R)'}  # a pyruvate ketal bridges two positions (Gal4Pyr6Pyr), so neither side alone reads as a named group
         for position in sorted(residue['fragments']):
             if position not in residue['fixed']:  # a group the skeleton's own name already covers, such as the lactyl of muramic acid
-                residue['mods'].append(_name_modification(residue, position, elements, adjacency))
+                residue['mods'].append((position, 'Pyr') if list(ketal.values()).count(ketal.get(position)) == 2 else _name_modification(residue, position, elements, adjacency))
                 if not residue['mods'][-1][
                     1]:  # whatever hangs off an unnamed position has to pass the coverage check on its own
                     residue['holders'].pop(position)

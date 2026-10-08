@@ -160,11 +160,10 @@ class GlycoDataFrame(pd.DataFrame):
         elif not hasattr(self, '_glyco_name'):
             self._glyco_name = ''
 
-    def glyco_filter(self, motif: str | nx.DiGraph,
-                     # Motif sequence, motif name (e.g., 'Internal_LewisX'), glyco-regular expression, or graph
-                     termini_list: list = [],  # List of monosaccharide positions from terminal/internal/flexible
+    def glyco_filter(self, motif: str | nx.DiGraph,  # Motif sequence, motif name (e.g., 'Internal_LewisX'), glyco-regular expression, or graph
+                     termini_list: str | list = [],  # Monosaccharide position(s) from terminal/internal/flexible; default: the motif name's termini spec
                      min_count: int | None = 1  # Minimum number of times motif needs to be present to pass
-                     ) -> 'GlycoDataFrame':
+                     ) -> 'GlycoDataFrame':  # Records whose glycans contain the motif at least min_count times
         "Keeps only the records whose glycans contain the motif, by subgraph isomorphism rather than string matching"
         from glycowork.motif.graph import subgraph_isomorphism  # Lazy import to avoid circular dependencies
         if isinstance(motif, str) and (hit := resolve_motif_name(motif)) is not None:
@@ -181,12 +180,10 @@ class GlycoDataFrame(pd.DataFrame):
             return self.iloc[indices, :]  # the glycans live in the index here, so resetting it would discard the very labels that were filtered on
         return self.iloc[indices, :].reset_index(drop = True)
 
-    def meta_filter(self, narrow: bool = True,
-                    # Restrict positionally aligned metadata lists (e.g., Species/Family/ref) to the matching records
+    def meta_filter(self, narrow: bool = True,  # Restrict positionally aligned metadata lists (e.g., Species/Family/ref) to the matching records
                     match_all: bool = False,  # Require all values of a criterion to be present, instead of any of them
-                    **criteria
-                    # column = value, list of values (OR), or callable; multiple columns are combined with AND
-                    ) -> 'GlycoDataFrame':
+                    **criteria  # column = value, list of values (OR), or callable; multiple columns are combined with AND
+                    ) -> 'GlycoDataFrame':  # Matching records, with aligned metadata lists narrowed if narrow
         "Keeps only the records matching all metadata criteria, e.g., df_species.meta_filter(Order = 'Fabales', Kingdom = 'Plantae')"
         norm = lambda v: v.strip().lower().replace(' ', '_') if isinstance(v, str) else v
         specs = {}
@@ -242,7 +239,8 @@ class GlycoDataFrame(pd.DataFrame):
 
     def meta_values(self, column: str,  # Column whose (list or scalar) entries should be tallied
                     top: int | None = None  # Only return the n most frequent values
-                    ) -> pd.Series:
+                    ) -> pd.Series:  # Value counts over all records, list entries counted element-wise, most frequent first
+        "Tallies the values of a metadata column whose cells are lists or scalars, e.g., df_species.meta_values('Species', top = 10)"
         vals = [v.strip() if isinstance(v, str) else v for val in self[column] for v in
                 (val if isinstance(val, list) else ([] if val is None or val != val else [val]))]
         return pd.Series(vals, dtype = object).value_counts().head(top)
@@ -367,8 +365,7 @@ class LazyLoader:
                          file.name.startswith(self.prefix) and re.search(r'\.csv(\.xz)?$', file.name, flags = re.I)]
         return dataset_names
 
-    def filter(self, **criteria
-               # column = value, list of values (OR), or callable; multiple columns are combined with AND
+    def filter(self, **criteria  # column = value, list of values (OR), or callable; multiple columns are combined with AND
                ) -> list[str]:  # names of datasets whose metadata matches all criteria
         "Select datasets by their metadata, e.g., glycomics_data_loader.filter(glycan_class = 'O', source_type = ['primary tissue', 'body fluid'])"
         self._load_contrasts()
@@ -716,7 +713,7 @@ class DataFrameSerializer:
         for _, row in df.iterrows():
             serialized_row = [cls._serialize_cell(val) for val in row]
             data['data'].append(serialized_row)
-        with (lzma.open if str(path).endswith('.xz') else open)(path, 'wt') as f:
+        with (lzma.open if str(path).endswith('.xz') else open)(path, 'wt', encoding = 'utf-8') as f:
             json.dump(data, f)
 
     @classmethod
@@ -726,7 +723,7 @@ class DataFrameSerializer:
         gc_was_enabled = gc.isenabled()
         gc.disable()  # the load allocates >1M small containers that can never form cycles, and the collector rescanning all of them over and over took ~80% of df_glycan's load time
         try:
-            with (lzma.open if str(path).endswith('.xz') else open)(path, 'rt') as f:
+            with (lzma.open if str(path).endswith('.xz') else open)(path, 'rt', encoding = 'utf-8') as f:
                 data = json.load(f)
             deserialized_data = [[cls._deserialize_cell(cell) for cell in row] for row in data['data']]
             return pd.DataFrame(data = deserialized_data, columns = data['columns'], index = data['index'])
@@ -738,9 +735,10 @@ class DataFrameSerializer:
 serializer = DataFrameSerializer()
 
 
-def count_nested_brackets(s: str,
-                          length: bool = False
-                          ) -> int:
+def count_nested_brackets(s: str, # Glycan in IUPAC-condensed nomenclature
+                          length: bool = False # Whether to count the linkages ('(') two or more branch levels deep instead of the nested branches
+                          ) -> int: # Number of branches opened inside another branch, or of deeply nested linkages if length
+    "Counts how deeply a glycan string nests its branches"
     count = 0
     depth = 0
     nested_content = 0
@@ -756,7 +754,11 @@ def count_nested_brackets(s: str,
     return nested_content if length else count
 
 
-def share_neighbor(edges, node1, node2):
+def share_neighbor(edges: list[tuple], # Undirected edges as node pairs
+                   node1: Any, # First node
+                   node2: Any # Second node
+                   ) -> bool: # Whether the two nodes have a common neighbor
+    "Checks whether two nodes of an edge list share a neighbor"
     neighbors1 = set(v2 for v1, v2 in edges if v1 == node1) | set(v1 for v1, v2 in edges if v2 == node1)
     neighbors2 = set(v2 for v1, v2 in edges if v1 == node2) | set(v1 for v1, v2 in edges if v2 == node2)
     return bool(neighbors1 & neighbors2)
@@ -773,5 +775,6 @@ class HashableDict(dict):
 
 def parse_lines(excel_column_content: list | str # content of an Excel column pasted into a list and bookended by triple quotes
                 ) -> list:  # proper list of strings
+    "Splits a pasted Excel column into one string per line"
     inp = excel_column_content[0] if isinstance(excel_column_content, list) else excel_column_content
     return inp.strip().split('\n')
