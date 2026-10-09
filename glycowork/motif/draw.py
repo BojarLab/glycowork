@@ -1326,7 +1326,9 @@ def draw_chem3d(
             from_pdb = True
         else:
             mol = AddHs(smiles_mol)
-            EmbedMolecule(mol)
+            if EmbedMolecule(mol, randomSeed = 42) == -1 and EmbedMolecule(mol, randomSeed = 42,
+                                                                           useRandomCoords = True) == -1:
+                raise ValueError(f"RDKit could not embed a 3D conformer for {draw_this}")
             MMFFOptimizeMolecule(mol)
             mol = RemoveHs(mol)
             print("Disclaimer: The conformer generated using RDKit and MMFFOptimizeMolecule is not intended to be a replacement for a 'real' conformer analysis tool. Install glycontact and run this again for improved conformers.")
