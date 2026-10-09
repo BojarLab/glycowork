@@ -218,7 +218,7 @@ def _glycomics_layout(df: pd.DataFrame # a glycomics table as read from file
     rep = next((c[k] for k in ('replicatename', 'replicate') if k in c), None)
     area = next((c[k] for k in ('totalareams1', 'totalarea', 'area') if k in c), None)
     wide = {k: m[1] for k in df.columns if (m := re.fullmatch(r'(.+) Total Area MS1', str(k)))} or {k: m[1] for k in df.columns if (m := re.fullmatch(r'(.+) Total Area', str(k)))}
-    tool = 'glycresoft' if all(k in c for k in ('composition', 'total_signal', 'neutral_mass')) else 'candycrunch' if 'num_spectra' in c and 'composition' in c else 'compound_discoverer' if 'name' in c and any(
+    tool = 'glycresoft' if all(k in c for k in ('composition', 'total_signal', 'neutral_mass')) else 'candycrunch' if ('num_spectra' in c or 'n_files_ms2' in c) and 'composition' in c else 'compound_discoverer' if 'name' in c and any(
         str(k).startswith('Area: ') for k in df.columns) else 'skyline' if mol is not None and ((rep is not None and area is not None) or wide) else 'glycogenius' if str(df.columns[0]) == 'Sample' and len(df) > 0 and str(df.iloc[0, 0]) == 'Group' else None
     return tool, c, mol, rep, area, wide
 
@@ -260,11 +260,14 @@ def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataF
         num = lambda k: pd.to_numeric(df[k].astype(str).str.lstrip('*'), errors = 'coerce')  # Skyline writes some values as '*2.4246E+7'
         if tool == 'glycresoft':  # one analysis per file; unidentified chromatograms have the composition 'None'
             recs.extend((stem, (fi, i), g, v, False) for i, (g, v) in enumerate(zip(df[c['composition']], num(c['total_signal']))) if isinstance(g, str) and g != 'None' and v > 0)
-        elif tool == 'candycrunch':  # one table per raw file; peaks without a predicted structure keep their composition
-            vals = num(c['rel_abundance']) if 'rel_abundance' in c else pd.Series(1.0, index = df.index)
+        elif tool == 'candycrunch':  # one table per raw file, or a wrap_inference_batch feature table with one abundance column per raw file (each with its evidence_<file> column); peaks without a predicted structure keep their composition
             tops = df[c['top1_pred']] if 'top1_pred' in c else pd.Series(None, index = df.index, dtype = object)
-            recs.extend((stem, (fi, i), t if isinstance(t, str) and t.strip() else canonicalize_composition(ast.literal_eval(g) if isinstance(g, str) else g, as_string = True), v, False)
-                        for i, (t, g, v) in enumerate(zip(tops, df[c['composition']], vals)) if v > 0 and (isinstance(t, str) or isinstance(g, (str, dict))))
+            runs = [(k, num(k)) for k in df.columns if f'evidence_{k}' in df.columns] or [
+                (stem, num(c['rel_abundance']) if 'rel_abundance' in c else pd.Series(1.0, index = df.index))]
+            recs.extend((run, (fi, i), t if isinstance(t, str) and t.strip() else canonicalize_composition(
+                ast.literal_eval(g) if isinstance(g, str) else g, as_string = True), v, False)
+                        for run, vals in runs for i, (t, g, v) in enumerate(zip(tops, df[c['composition']], vals)) if
+                        v > 0 and (isinstance(t, str) or isinstance(g, (str, dict))))
         elif tool == 'compound_discoverer':  # Thermo Compound Discoverer compounds table: one 'Area: <file>.raw (F<n>)' column per raw file, unnamed features skipped
             for k in df.columns:
                 if m := re.fullmatch(r'Area: (.+?)(?:\.raw)?(?: \(F\d+\))?', str(k)):

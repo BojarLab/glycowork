@@ -1555,8 +1555,12 @@ def test_glycan_to_mass():
     assert abs(glycan_to_mass("Neu4Ac5Ac9Ac(a2-3)Gal(b1-4)Glc") - 717.2325546) < 0.1
     assert abs(glycan_to_mass(
         "{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") - 1421.5179) < 0.1
-    with pytest.raises(ValueError, match = 'No valid composition'):  # Kdo is outside the composition vocabulary, so there is no mass to report
-        glycan_to_mass("Kdo(a2-4)Kdo")
+    # Kdo is outside the composition vocabulary, so it is weighed from its molecule: C16H26O15, 10 groups permethylated (8 OH, 2 COOH), 8 peracetylated (alcohols only)
+    assert abs(glycan_to_mass("Kdo(a2-4)Kdo") - 458.1272) < 0.001
+    assert abs(glycan_to_mass("Kdo(a2-4)Kdo", sample_prep = 'permethylated') - 598.2837) < 0.001
+    assert abs(glycan_to_mass("Kdo(a2-4)Kdo", sample_prep = 'peracetylated') - 794.2117) < 0.001
+    with pytest.raises(ValueError, match = 'No valid composition'):  # neither a composition nor a defined structure, so there is no mass to report
+        glycan_to_mass("Kdo(a2-?)Monosaccharide")
     # an alditol is reduced already: lactitol is C12H24O11, 344.1319, and permethylated it carries 9 methyls
     assert abs(glycan_to_mass("Gal(b1-4)Glc-ol") - 344.1319) < 0.001
     assert glycan_to_mass("Gal(b1-4)Glc-ol") == glycan_to_mass("Gal(b1-4)Glc", modification = 'reduced') == glycan_to_mass("Gal(b1-4)Glc-ol", modification = 'reduced')

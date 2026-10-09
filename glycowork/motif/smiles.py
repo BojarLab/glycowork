@@ -376,7 +376,8 @@ def _residue(token: str, # Monosaccharide token
     template, alpha, hetero, default = _skeleton(skeleton, form)
     if anhydro and not form and any(p not in hetero and p != _anomeric_position(token) for bridged in anhydro for p in bridged):  # 2,5-Anhydro-Man: a bridge to the ring-closing carbon leaves the open-chain aldehyde
         template, alpha, hetero, default = _skeleton(skeleton, '-ol')
-        template = 'O=' + template[1:]
+        if not any(_anomeric_position(token) in bridged for bridged in anhydro):  # 1,5-Anhydro-Glc bridges C1 itself and is the anhydroalditol 1,5-Anhydro-Glc-ol, not an aldehyde whose oxygen also closes the ring
+            template = 'O=' + template[1:]
     hetero, pending, acid = dict(hetero), [], None
     if enantiomer and enantiomer != default:
         template, alpha = _mirror(template), '@' if alpha == '' else ''
@@ -439,7 +440,7 @@ def _residue(token: str, # Monosaccharide token
             continue
         if position == anomeric and '{p%d}' % position not in template:
             replacement = ANOMERIC.get(mod)
-            if replacement is None:
+            if replacement is None or template.startswith('O='):  # the aldehyde of 2,5-Anhydro-Man has no oxygen at C1 to carry a group
                 raise GlycanSMILESError(f"'{mod}' cannot sit on the anomeric oxygen of '{token}'")
             template = replacement + template[1:]
             continue

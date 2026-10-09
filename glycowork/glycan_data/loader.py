@@ -321,6 +321,8 @@ class LazyLoader:
                     for _, row in ct.iterrows():
                         sample_map = self._contrasts_map.setdefault(row['dataset'], {})
                         for sample in row['samples'].split(','):
+                            if sample_map.get(sample, row['group']) != row['group']:  # one group per sample, otherwise the last row would silently win
+                                raise ValueError(f"{row['dataset']}: sample '{sample}' is in both '{sample_map[sample]}' and '{row['group']}' in contrasts.csv; give combined perturbations their own group")
                             sample_map[sample] = row['group']
                         self._paired_map[row['dataset']] = str(row['paired']).strip().lower() == 'true'
             except FileNotFoundError:

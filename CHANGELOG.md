@@ -14,11 +14,11 @@
 - Added support for phospho-/sulfodiester in SMILES conversion (e5e8631)
 - Added support for acyl chain modifications (01253cb)
 - Added support for wildcard alditols such as `HexNAc-ol` (01253cb)
-- `glycan_to_smiles` now writes anhydro sugars (e.g., `3,6-Anhydro-L-Gal`, `2,5-Anhydro-Man-ol`, `2,7-Anhydro-Kdo`), heptoses (e.g., `DDGalHep`, `LDIdoHep`, `D-6dAltHep`, `Hep`), aldonic, aldaric, and ulosonic acids (e.g., `Glc-onic`, `Glc2NAc3NAc-aric`, `D-3dThrHex-ulosonic`), and systematic deoxy, keto, and unsaturated names (e.g., `D-4dAraHex`, `D-6dXylHexNAc4Ulo`, `L-4dThrHexA4en`, `8eLeg5Ac7Ac`) ()
-- `smiles_to_iupac` now reads open-chain alditols and aldonic acids, anhydro sugars, inositol, pyrophospho- and glycerol phosphodiesters, N-glycosidic linkages, glycosyl halides, and keto groups ()
+- `glycan_to_smiles` now writes anhydro sugars (e.g., `3,6-Anhydro-L-Gal`, `2,5-Anhydro-Man-ol`, `2,7-Anhydro-Kdo`), heptoses (e.g., `DDGalHep`, `LDIdoHep`, `D-6dAltHep`, `Hep`), aldonic, aldaric, and ulosonic acids (e.g., `Glc-onic`, `Glc2NAc3NAc-aric`, `D-3dThrHex-ulosonic`), and systematic deoxy, keto, and unsaturated names (e.g., `D-4dAraHex`, `D-6dXylHexNAc4Ulo`, `L-4dThrHexA4en`, `8eLeg5Ac7Ac`) (3a21ba6)
+- `smiles_to_iupac` now reads open-chain alditols and aldonic acids, anhydro sugars, inositol, pyrophospho- and glycerol phosphodiesters, N-glycosidic linkages, glycosyl halides, and keto groups (3a21ba6)
 
 ##### Changed 🔄
-- `smiles_to_iupac` now returns each residue in the spelling glycowork uses (e.g., `D-Rha4NFo` instead of `Per4Fo`, `Neu5Ac9NAc` instead of `Kdn5NAc9NAc`, `D-Apif` instead of `D-Api`) ()
+- `smiles_to_iupac` now returns each residue in the spelling glycowork uses (e.g., `D-Rha4NFo` instead of `Per4Fo`, `Neu5Ac9NAc` instead of `Kdn5NAc9NAc`, `D-Apif` instead of `D-Api`) (3a21ba6)
 
 ##### Fixed 🐛
 - Fixed `(2R,3R) L-threo` to `D-erythro (2S,3R)` sphingosine as a default for ceramide (01253cb)
@@ -31,8 +31,8 @@
 - Fixed `glycan_to_smiles` placing a glycosidic bond with unknown position onto the amine of an amino sugar instead of a hydroxyl (a34092c)
 - Fixed `smiles_to_iupac` dropping (or, with `strict = True`, refusing) pyruvate ketals bridging two positions, such as `Gal4Pyr6Pyr` (ba8b5f7)
 - Fixed `IUPAC_to_SMILES` crashing on an empty cell (now `''`); `glycan_to_smiles`/`glycan_to_molecule` raise an informative error for a list (ba8b5f7)
-- Fixed `DDAltHep` and `LDAltHep` being built on L-altrose, the swapped anomers of `Abef`, and the alpha anomers of `Pse`, `Aci`, and `Fus`, which IUPAC's reference atom puts on the other side for an L ring; `Aci` is now L ()
-- Fixed `glycan_to_smiles` putting an O-prefixed group of unknown position (`GlcNOMyr`, `GalOAcN`) onto the amine ()
+- Fixed `DDAltHep` and `LDAltHep` being built on L-altrose, the swapped anomers of `Abef`, and the alpha anomers of `Pse`, `Aci`, and `Fus`, which IUPAC's reference atom puts on the other side for an L ring; `Aci` is now L (3a21ba6)
+- Fixed `glycan_to_smiles` putting an O-prefixed group of unknown position (`GlcNOMyr`, `GalOAcN`) onto the amine (3a21ba6)
 
 #### draw
 ##### Added ✨
@@ -74,7 +74,8 @@
 - Added the new `adduct_ions` keyword argument to `mz_to_composition` to specify a list of permitted adduct ions (a512f5d)
 - `calculate_adduct_mass` now also supports F/Br/I halogen atom masses (a34092c)
 - `match_composition_relaxed`, `compositions_to_structures`, and `mz_to_structures` now also take `glycan_class = 'all'` (a34092c)
-- `glycan_to_mass` now also takes compositions (dicts, or strings such as `'H5N4F1'`) ()
+- `glycan_to_mass` now also takes compositions (dicts, or strings such as `'H5N4F1'`) (3a21ba6)
+- `glycan_to_mass` now also weighs glycans whose residues no composition can currently express (e.g., `Kdo`, heptoses, furanoses, `QuiNAc`) atom by atom from their molecule, including permethylated and peracetylated masses ()
 
 ##### Changed 🔄
 - `get_core` and `get_modification` can now better deal with cases such as `Neu5,9Ac2` (0967d8a)
@@ -85,7 +86,7 @@
 - `mz_to_composition` with `extras = ['adduct']` now also considers ions carrying one adduct per charge, such as `[M+2Na]2+` (a512f5d)
 - `calculate_adduct_mass` and `composition_to_mass` now raise an error for malformed formulas, unknown elements, or unknown `sample_prep`/`mass_value` instead of silently ignoring them (a34092c, cac1c78)
 - More precise element masses in `calculate_adduct_mass` (cac1c78)
-- `glycan_to_composition` now returns `{}` instead of a bare-core composition when a residue carries a substituent it cannot count (e.g., `Pyr`, amino `N`, `Aep`, `Gro`, `Lac`, acyl chains, `-onic`, anhydro), so `glycan_to_mass` raises instead of returning a wrong mass (ba8b5f7)
+- `glycan_to_composition` now returns `{}` instead of a bare-core composition when a residue carries a substituent it cannot count (e.g., `Pyr`, amino `N`, `Aep`, `Gro`, `Lac`, acyl chains, `-onic`, anhydro), so `glycan_to_mass` no longer returns a wrong mass for them (ba8b5f7)
 - `glycan_to_composition` now says when it was given a composition (dict or string like `'H5N4'`) instead of a sequence (ba8b5f7)
 - `get_ion_mzs`, `mz_to_composition`, and `mz_to_structures` now accept a single adduct, `filter_out`, or `deprioritized` string and a single m/z (ba8b5f7)
 
@@ -102,6 +103,8 @@
 - Fixed `glycan_to_composition` raising on linkages that `canonicalize_iupac` writes but `lib` lacks (e.g., `Kdo(?2-4)`), on floating substituents (e.g., `{OS}`, `{6P}`), and on modified residues with an aglycone (e.g., `GalNAc1Thr6S`) (ba8b5f7)
 - Fixed `glycan_to_mass` giving glycans with alditols (`-ol`, at the reducing end or inside the chain such as the `Rib5P-ol` of teichoic acids) the mass of the free sugar (ba8b5f7)
 - Fixed `composition_to_mass` overestimating permethylated and peracetylated masses of O-acetylated and methylated glycans, and permethylated/peracetylated `glycan_to_mass` of inositol-containing glycans (ba8b5f7)
+- Fixed `get_modification` dropping `5Ac`/`5Gc` from residues other than sialic acids (e.g., `Kdn5Ac`, `Galf3Ac5Ac`, `Pse5Ac7Ac`), which made `GlycoDraw` draw `Kdn5Ac` as a plain Kdn
+- Fixed `glycan_to_composition` missing the N-acetyl of `PEtNAc` (e.g., `GlcNAc6PEtNAc`)
 
 #### processing
 ##### Added ✨
@@ -326,6 +329,7 @@
 ##### Fixed 🐛
 - Fixed `groupby(...).apply` failing on `GlycoDataFrame`s such as `df_species` (eac80ee)
 - Removed a blank trailing row from `lectin_array_bacteria_PMID20973590` (ba8b5f7)
+- Regenerated the stored `Composition` column of `df_glycan`, which was outdated for 2,999 glycans (e.g., `GalN2Suc` counted as sulfated, `Neu5GcOLac` as plain Neu5Gc) and made `mz_to_composition` return compositions no glycan has ()
 
 ##### Deprecated ⚠️
 - Removed `human_lipoproteins_PMC9218963` glycoproteomics dataset (no per-sample values) (69d0a3e)

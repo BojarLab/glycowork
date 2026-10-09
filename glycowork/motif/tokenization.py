@@ -11,6 +11,7 @@ from glycowork.glycan_data import loader
 from glycowork.glycan_data.loader import lib, unwrap, Hex, dHex, HexA, HexN, HexNAc, Pen, linkages, multireplace
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, rescue_compositions, parse_floating_bit, FLOATY_ALT, is_composition
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, IS_LINKAGE
+from glycowork.motif.smiles import glycan_to_molecule
 
 chars = {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7, 'H': 8, 'I': 9, 'J': 10, 'K': 11,
          'L': 12, 'M': 13, 'N': 14, 'P': 15, 'Q': 16, 'R': 17, 'S': 18, 'T': 19, 'V': 20, 'W': 21, 'Y': 22, 'X': 23, 'Z': 24, 'z': 25}
@@ -132,7 +133,8 @@ def get_modification(sugar: str # Monosaccharide or linkage
     """Retrieve modification from modified monosaccharide"""
     sugar = _expand_position_lists(sugar)
     core = get_core(sugar)
-    return multireplace(sugar, {core: '', 'Neu': '', '5Ac': '', '5Gc': ''})
+    # 5Ac and 5Gc are part of the core only on a sialic acid (Neu4Ac5Ac, whose core Neu5Ac is no substring of it); elsewhere they are substituents (Kdn5Ac, Galf3Ac5Ac, Pse5Ac7Ac)
+    return multireplace(sugar, {core: '', 'Neu': '', '5Ac': '', '5Gc': ''} if core.startswith('Neu') else {core: ''})
 
 
 def get_stem_lib(libr: dict[str, int] # Dictionary mapping glycoletters to indices
@@ -504,8 +506,8 @@ def glycan_to_composition(glycan: str, # Glycan in IUPAC-condensed format
         composition['P'] = n_p
     if n_s := len(re.findall(r'S(?!ia|or|ed|er|te|uc)', glycan)):
         composition['S'] = n_s
-    # every O-acetyl (OAc, 1Ac to 9Ac) except the N-acetyl that makes each Neu5Ac
-    if n_ac := len(re.findall(r'[\dO]Ac', glycan)) - composition.get('Neu5Ac', 0):
+    # every O-acetyl (OAc, 1Ac to 9Ac) and the N-acetyl of an N-acetylphosphoethanolamine (PEtNAc), except the N-acetyl that makes each Neu5Ac
+    if n_ac := len(re.findall(r'(?:[\dO]|PEtN)Ac', glycan)) - composition.get('Neu5Ac', 0):
         composition['Ac'] = n_ac
     composition.pop('?1-?', None)
     return dict(composition) if all(k in _VALID_COMPONENTS for k in composition) else {}
@@ -592,8 +594,31 @@ def glycan_to_mass(glycan: str | dict[str, int], # Glycan in IUPAC-condensed for
         stem_libr = stem_lib
     comp = glycan_to_composition(glycan, stem_libr = stem_libr)
     if not comp:
-        raise ValueError(
-            f"No valid composition could be derived from '{glycan}' (it contains components outside {sorted(_VALID_COMPONENTS)}), so no mass can be calculated.")
+        # residues no composition expresses (Kdo, heptoses, furanoses, QuiNAc, ...) are weighed atom by atom from the glycan's molecule, its aglycone
+        # stripped as glycan_to_composition does, with hydrogens from the standard valences as in get_molecular_properties; permethylation caps every
+        # O-H and N-H but a sulfate's (a charged phosphate oxygen counts as its OH), peracetylation every alcohol and free amine once
+        try:
+            mol = glycan_to_molecule(re.sub(r'1(?:Ser|Thr|Asn|Cer)(?![a-z])', '', glycan))
+        except ValueError:
+            raise ValueError(
+                f"No valid composition could be derived from '{glycan}' (it contains components outside {sorted(_VALID_COMPONENTS)}), and it has no defined structure to weigh it by, so no mass can be calculated.") from None
+        valence, neighbors = [0] * len(mol.atoms), [[] for _ in mol.atoms]
+        for i, j, o in mol.bonds:
+            valence[i] += o
+            valence[j] += o
+            neighbors[i].append((j, o))
+            neighbors[j].append((i, o))
+        hydrogens = [max({'C': 4, 'N': 3, 'O': 2, 'S': 2, 'P': 3, 'F': 1, 'Cl': 1, 'Br': 1, 'I': 1}.get(el, 0) - valence[k] + charge, 0) for k, (el, charge, _) in enumerate(mol.atoms)]
+        acyl = {k for k in range(len(mol.atoms)) if any(mol.atoms[j][0] in 'CSP' and any(mol.atoms[q][0] == 'O' and q != k and o == 2 for q, o in neighbors[j]) for j, _ in neighbors[k])}
+        if sample_prep == 'permethylated':
+            caps = sum(hydrogens[k] + (charge < 0) for k, (el, charge, _) in enumerate(mol.atoms) if el in 'ON' and not (el == 'O' and any(mol.atoms[j][0] == 'S' for j, _ in neighbors[k])))
+        else:
+            caps = sum(min(hydrogens[k], 1) for k, (el, charge, _) in enumerate(mol.atoms) if el in 'ON' and k not in acyl and not charge)
+        formula = Counter(atom[0] for atom in mol.atoms) + Counter({'H': sum(hydrogens)})
+        cap = {'permethylated': 'CH2', 'peracetylated': 'C2H2O'}.get(sample_prep)
+        modification = None if glycan.endswith('-ol') and modification == 'reduced' else modification  # the molecule of an alditol is reduced already
+        return calculate_adduct_mass(''.join(f'{el}{n}' for el, n in formula.items()), mass_value = mass_value) + (caps * calculate_adduct_mass(cap, mass_value = mass_value) if cap else 0) + composition_to_mass(
+            {}, mass_value = mass_value, sample_prep = sample_prep, adduct = adduct, modification = modification, peptide = peptide) - composition_to_mass({}, mass_value = mass_value, sample_prep = sample_prep)
     mass = composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep, adduct = adduct,
                                modification = modification or ('reduced' if glycan.endswith('-ol') else None), peptide = peptide)  # the composition of Gal(b1-4)Glc-ol is that of Gal(b1-4)Glc, but the alditol carries two more H (and one more OH to derivatize)
     if inner := glycan.count('-ol') - glycan.endswith('-ol'):  # so does every alditol inside the chain, as the ribitol phosphates of teichoic acids
