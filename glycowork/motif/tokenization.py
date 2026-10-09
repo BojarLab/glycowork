@@ -483,7 +483,8 @@ def glycan_to_composition(glycan: str, # Glycan in IUPAC-condensed format
         if n := glycan.count(mod):  # every occurrence counts, as replace swaps them all at once
             diff_moieties.update({moiety: n for moiety in info['diff_moiety']})
             glycan = glycan.replace(mod, info['replacement'])
-    letters = min_process_glycans([glycan])[0]
+    # an alditol of a lib residue (GalNAc-ol, the reduced end of most O-glycans, is not in lib) has the residue's composition
+    letters = [k[:-3] if k.endswith('-ol') and k not in stem_libr and k[:-3] in stem_libr else k for k in min_process_glycans([glycan])[0]]
     if unknown := [k for k in letters if '/' not in k and k not in stem_libr and not IS_LINKAGE(k)]:  # a linkage needs no core, and canonicalize_iupac writes ones lib may lack (Kdo(?2-4), Glc(?1-1))
         raise ValueError(f"Cannot map the glycoletter(s) {unknown} of glycan '{glycan}' onto a core monosaccharide; " + (
             f"'{glycan}' is a composition, which canonicalize_composition reads and composition_to_mass weighs." if is_composition(glycan) else
