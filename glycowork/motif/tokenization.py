@@ -577,7 +577,7 @@ def composition_to_mass(dict_comp_in: dict[str, int] | str, # Composition dictio
     return total_mass
 
 
-def glycan_to_mass(glycan: str, # Glycan in IUPAC-condensed format
+def glycan_to_mass(glycan: str | dict[str, int], # Glycan in IUPAC-condensed format, or a composition (dict, or a string canonicalize_composition reads, such as "H5N4F1")
                    mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
                    sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/peracetylated
                    stem_libr: dict[str, str] | None = None, # Modified to core monosaccharide mapping
@@ -585,7 +585,9 @@ def glycan_to_mass(glycan: str, # Glycan in IUPAC-condensed format
                    modification: str | None = None, # Reducing end modification: reduced/2AA/2AB/procainamide; a glycan ending in an alditol (-ol) is reduced already
                    peptide: str | None = None # Peptide carrying the glycan, in one-letter code with optional signed mass or formula deltas after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK'), to get the glycopeptide mass
                    ) -> float: # Theoretical mass
-    """Calculate theoretical mass from glycan, optionally as a glycopeptide"""
+    """Calculate theoretical mass from glycan or composition, optionally as a glycopeptide"""
+    if isinstance(glycan, dict) or is_composition(glycan):  # a composition has no sequence to read, so it goes straight to composition_to_mass
+        return composition_to_mass(glycan, mass_value = mass_value, sample_prep = sample_prep, adduct = adduct, modification = modification, peptide = peptide)
     if stem_libr is None:
         stem_libr = stem_lib
     comp = glycan_to_composition(glycan, stem_libr = stem_libr)

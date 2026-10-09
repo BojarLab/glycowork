@@ -34,7 +34,8 @@ SPEC = {  # skeleton: (source table and key, edits applied to it)
     'Xyl': ('P:XYL', {}), 'Ara': ('P:ARA', {}), 'Rib': ('P:RIB', {}), 'Lyx': ('P:LYX', {}), 'Api': ('P:API', {}),
     'Fru': ('P:FRU', {}), 'Tag': ('P:TAG', {}), 'Sor': ('P:SOR', {}), 'Psi': ('P:PSI', {}), 'Neu': ('P:NEU', {}),
     'Kdn': ('P:KDN', {}), 'Kdo': ('P:KDO', {}), 'Ko': ('P:KO', {}), 'Dha': ('P:DHA', {}), 'Leg': ('P:LEG', {}),
-    'Pse': ('P:PSE', {}), 'Aci': ('P:ACI', {}), 'Fus': ('P:FUS', {}), 'Bac': ('P:BAC', {}), 'Mur': ('P:MUR', {}),
+    'Pse': ('P:PSE', {'swapped': True}), 'Aci': ('P:ACI', {'swapped': True, 'isomer': 'L'}), 'Fus': ('P:FUS', {'swapped': True}),  # GlyLES gives these L-ring nonulosonic acids the anomers of D ones, where IUPAC's reference atom (C7) flips them, and calls Aci (L-glycero-L-altro) D
+    'Bac': ('P:BAC', {}), 'Mur': ('P:MUR', {}),
     'Tyv': ('P:TYV', {}), 'Abe': ('P:ABE', {}), 'Par': ('P:PAR', {}), 'Col': ('P:COL', {}), 'Asc': ('P:ASC', {}),
     'Dig': ('P:DIG', {}), 'Oli': ('P:OLI', {}), 'Pau': ('P:PAU', {}), 'Yer': ('P:YER', {}), 'Aco': ('P:ACO', {}),
     'Erwiniose': ('P:ERWINIOSE', {}), 'Per': ('P:PER', {}), 'Vio': ('P:VIO', {}), 'Sed': ('P:SED', {}),
@@ -42,7 +43,7 @@ SPEC = {  # skeleton: (source table and key, edits applied to it)
     'Ribf': ('F:RIB', {}), 'Xylf': ('F:XYL', {}), 'Lyxf': ('F:LYX', {}), 'Fruf': ('F:FRU', {}), 'Apif': ('F:API', {}),
     'Kdof': ('F:KDO', {}), 'Sedf': ('F:SED', {}), 'Xluf': ('F:XLU', {}), 'Rulf': ('F:RUL', {}), 'Altf': ('F:ALT', {}),
     'Idof': ('F:IDO', {}), 'Gulf': ('F:GUL', {}), 'Talf': ('F:TAL', {}), 'Quif': ('F:QUI', {}), 'Rhaf': ('F:RHA', {}),
-    'Eryf': ('F:ERY', {}), 'Thref': ('F:THRE', {}), 'Acef': ('F:ACE', {}), 'Abef': ('F:ABE', {}),
+    'Eryf': ('F:ERY', {}), 'Thref': ('F:THRE', {}), 'Acef': ('F:ACE', {}), 'Abef': ('F:ABE', {'swapped': True}),  # GlyLES lists the Abe furanose anomers the other way round from every other D-hexofuranose
     'All': ('P:ALL', {'mirrored': True}),  # glycowork's COMMON_ENANTIOMER treats a bare All as L-All, GlyLES as D-All
     'Allf': ('F:ALL', {'mirrored': True}),
     '6dTal': ('P:TAL', {'deoxy': (6,)}), '6dAlt': ('P:ALT', {'deoxy': (6,)}), '6dGul': ('P:GUL', {'deoxy': (6,)}),
@@ -53,7 +54,6 @@ HEPTOSES = {  # heptose: (hexopyranose ring it extends, configuration of the exo
     'DDAltHep': ('Alt', 'D'), 'LDAltHep': ('Alt', 'L'), 'ManHep': ('Man', None), 'GalHep': ('Gal', None),
     'IdoHep': ('Ido', None), 'GlcHep': ('Glc', None), 'DLGlcHep': ('Glc', 'D'), 'LLGlcHep': ('Glc', 'L'),
 }
-MIRRORED_RING = {'DLGlcHep', 'LLGlcHep'}  # second letter L: the ring sugar itself is the L enantiomer
 ALDITOLS = ['Glc', 'Gal', 'Man', 'All', 'Alt', 'Gul', 'Ido', 'Tal', 'Xyl', 'Ara', 'Rib', 'Lyx', 'Fuc', 'Rha', 'Qui',
             '6dTal', 'Fru', 'Api', 'Glcf', 'Galf', 'Eryf', 'Thref']
 INOSITOL = 'O[C@@H]{r}[C@H]({p2})[C@H]({p3})[C@@H]({p4})[C@H]({p5})[C@H]{r}{p6}'  # 1D-myo, numbered off 1D-myo-inositol 1,4,5-trisphosphate
@@ -178,10 +178,12 @@ def edit(smiles, invert = (), deoxy = ()):
     return Chem.MolToSmiles(editable.GetMol())
 
 
-def anomers(source, invert = (), deoxy = (), mirrored = False):
+def anomers(source, invert = (), deoxy = (), mirrored = False, swapped = False):
     """The alpha and beta base structures for one entry of the SPEC table."""
     table = PYRANOSE if source[0] == 'P' else FURANOSE
     alpha, beta = (table['A_' + source[2:]]['smiles'], table['B_' + source[2:]]['smiles'])
+    if swapped:
+        alpha, beta = beta, alpha
     if mirrored:
         alpha, beta = mirror(alpha), mirror(beta)
     if invert or deoxy:
@@ -230,20 +232,21 @@ def build():
     """The whole table: ring skeletons, heptoses, inositol and the open-chain alditols."""
     skeletons, alditols, enantiomer = {}, {}, {}
     for name, (source, kwargs) in SPEC.items():
-        alpha, beta = anomers(source, **kwargs)
+        alpha, beta = anomers(source, **{key: value for key, value in kwargs.items() if key != 'isomer'})
         skeletons[name] = compact(name, alpha, beta)
         table = PYRANOSE if source[0] == 'P' else FURANOSE
-        default = str(table['A_' + source[2:]]['isomer']).split('.')[-1][0]
+        default = kwargs.get('isomer') or str(table['A_' + source[2:]]['isomer']).split('.')[-1][0]
         if default in ('D', 'L'):
             enantiomer[name] = {'D': 'L', 'L': 'D'}[default] if kwargs.get('mirrored') else default
     for name, (parent, glycero) in HEPTOSES.items():
         template, hetero, tag = skeletons[parent]
-        if name in MIRRORED_RING:
+        ring = name[1] if name[:2] in ('DD', 'DL', 'LD', 'LL') else enantiomer[parent]  # the second letter configures the ring sugar itself: DLGlcHep is D-glycero-L-gluco, DDAltHep D-glycero-D-altro
+        if ring != enantiomer[parent]:
             source, kwargs = SPEC[parent]
             template, hetero, tag = compact(name, *anomers(source, mirrored = True, **kwargs))
         grown, extended = heptose(template, hetero, tag, glycero)
         skeletons[name] = (grown, extended, tag)
-        enantiomer[name] = {'D': 'L', 'L': 'D'}[enantiomer[parent]] if name in MIRRORED_RING else enantiomer[parent]
+        enantiomer[name] = ring
     skeletons['Ins'] = (INOSITOL, {p: 'O' for p in range(2, 7)}, '')
     for name, (template, hetero) in WILDCARD.items():
         skeletons[name] = (template, hetero, '')

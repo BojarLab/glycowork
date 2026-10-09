@@ -68,17 +68,17 @@ def terminal_pairs_for_precursors(ggraph: nx.DiGraph, # Glycan graph
 
 
 @lru_cache(maxsize = 1024)
-def create_neighbors(ggraph: nx.DiGraph, # Glycan graph
-                     min_size: int = 1 # Minimum root size; default:1
-                     ) -> list[nx.Graph]: # List of precursor graphs
+def create_neighbors(ggraph: nx.DiGraph,  # Glycan graph
+                     min_size: int = 1  # Minimum root size; default:1
+                     ) -> tuple[nx.Graph, ...]:  # Precursor graphs
     "Create biosynthetic precursor glycans"
     # Generate all precursors by iteratively cleaving off the non-reducing-end monosaccharides
     nodes = frozenset(ggraph)
     # Cleaving off messes with the node labeling, so they have to be re-labeled
-    return [
+    return tuple(
         nx.relabel_nodes(ggraph.subgraph(nodes - set(pair)), {m: i for i, m in enumerate(sorted(nodes - set(pair)))})
-        for pair in terminal_pairs_for_precursors(ggraph, min_size = min_size)
-    ]
+        for pair in terminal_pairs_for_precursors(ggraph,
+                                                  min_size = min_size))  # a tuple, since the result is lru-cached and a caller editing a list would change it for every later call on that graph
 
 
 @lru_cache(maxsize = 2048)

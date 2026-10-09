@@ -1,3 +1,5 @@
+import inspect
+from functools import wraps
 from pathlib import Path
 import pickle
 import pandas as pd
@@ -48,6 +50,29 @@ def _glycans_to_column(df: pd.DataFrame  # Abundance table, glycans in the first
     return df.copy().reset_index() if len(df) and df.shape[1] and not isinstance(df.iloc[0, 0], str) and isinstance(df.index[0], str) else df  # the deep copy consolidates a one-block-per-column frame, on which inserting the column raised a PerformanceWarning
 
 
+def _abundance_input(*names: str  # Parameters taking an abundance table, a file path, or a shipped dataset name
+                   ) -> Callable:  # Decorator for analysis entry points
+  "Reads paths and dataset names with read_abundances and moves glycans from the index into the first column; a glycoproteomics parameter defaulting to None is then decided on the row labels of the first table"
+  def decorator(func):
+      sig = inspect.signature(func)
+      detect = 'glycoproteomics' in sig.parameters and sig.parameters['glycoproteomics'].default is None
+
+      @wraps(func)
+      def wrapper(*args, **kwargs):
+          bound = sig.bind(*args, **kwargs)
+          for name in names:
+              if name in bound.arguments:
+                  x = bound.arguments[name]
+                  bound.arguments[name] = _glycans_to_column(read_abundances(x) if isinstance(x, (str, Path)) else x)
+          if detect and bound.arguments.get('glycoproteomics') is None:
+              df = bound.arguments[names[0]]
+              bound.arguments['glycoproteomics'] = len(df) > 0 and all(GLYCOFORM_ID.fullmatch(str(k)) for k in df.iloc[:, 0])  # decided on the labels, which survive pd.DataFrame(), to_csv, and a reader; attrs did not, and outlived a collapse to compositions
+          return func(*bound.args, **bound.kwargs)
+      return wrapper
+  return decorator
+
+
+@_abundance_input('df')
 def preprocess_data(
         df: pd.DataFrame | str | Path,  # Input dataframe or filepath (.csv/.xlsx)
         group1: list[str | int] | None = None,  # Column indices/names for first group; default: from the frame's contrasts
@@ -69,7 +94,6 @@ def preprocess_data(
         motif_dag: bool = True # Build the containment DAG; only worth its n^2 isomorphism sweep for callers that read it
 ) -> tuple[pd.DataFrame, pd.DataFrame, list[str | int], list[str | int]]:  # (transformed df, untransformed df, group1 labels, group2 labels)
     "Preprocesses glycomics data by imputing missing values with impute_biosynthetic, applying CLR/ALR transformations to escape compositional bias, and optionally quantifying glycan motifs"
-    df = _glycans_to_column(read_abundances(df) if isinstance(df, (str, Path)) else df)
     if group1 is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         group1, group2 = list(df.group1), list(df.group2)
     if group2 is None:
@@ -715,6 +739,7 @@ def characterize_monosaccharide(
     plt.show()
 
 
+@_abundance_input('df')
 def get_coverage(
         df: pd.DataFrame | str | Path,  # DataFrame with glycans in rows (col 1), abundances in columns
         filepath: str = '',  # Path to save plot
@@ -722,7 +747,6 @@ def get_coverage(
 ) -> None:
     "Visualizes glycan detection frequency across samples with intensity-based ordering"
     import seaborn as sns
-    df = _glycans_to_column(read_abundances(df) if isinstance(df, (str, Path)) else df)
     d = df.iloc[:, 1:]
     # arrange by mean intensity across all samples
     order = d.mean(axis = 1).sort_values().index
@@ -737,6 +761,7 @@ def get_coverage(
     plt.show()
 
 
+@_abundance_input('df')
 def get_pca(
         df: pd.DataFrame | str | Path,  # DataFrame with glycans in rows (col 1), abundances in columns
         groups: list[int] | pd.DataFrame | None = None,  # Group labels (e.g., [1,1,1,2,2,2,3,3,3]) or metadata DataFrame with 'id' column
@@ -758,7 +783,7 @@ def get_pca(
     import seaborn as sns
     from sklearn.decomposition import PCA
     from sklearn.preprocessing import StandardScaler
-    df = _glycans_to_column(read_abundances(df) if isinstance(df, (str, Path)) else df).fillna(0)
+    df = df.fillna(0)
     if groups is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         groups = list(df.groups)
         df = df[[df._glycan_col or df.columns[0]] + [c for c in df.columns if c in df._contrasts]]  # the labels only cover the contrast columns, and X pairs them with columns by position
@@ -972,6 +997,7 @@ def select_grouping(
     return {"group1": glycans}, {"group1": p_values}
 
 
+@_abundance_input('df')
 def get_differential_expression(
         df: pd.DataFrame | str | Path,  # DataFrame with glycans in rows (col 1) and abundance values in subsequent columns
         group1: list[str | int] | None = None,  # Column indices/names for first group; default: from the frame's contrasts
@@ -997,8 +1023,6 @@ def get_differential_expression(
         top_explained: int | None = 5  # How many child motifs to name in 'Explained by'; None names all of them
 ) -> GlycoDataFrame:  # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes
     "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets) with multiple testing correction on glycomics abundance data"
-    df = _glycans_to_column(read_abundances(df) if isinstance(df, (str, Path)) else df)
-    glycoproteomics = len(df) > 0 and all(GLYCOFORM_ID.fullmatch(str(k)) for k in df.iloc[:, 0]) if glycoproteomics is None else glycoproteomics  # decided on the labels, which survive pd.DataFrame(), to_csv, and a reader; attrs did not, and outlived a collapse to compositions
     grouped_BH = ((motifs or glycoproteomics) and not sets) if grouped_BH is None else grouped_BH
     if glycoproteomics and monte_carlo:
         raise ValueError(
@@ -1349,6 +1373,7 @@ def get_volcano(
     plt.close()
 
 
+@_abundance_input('df')
 def get_glycanova(
         df: pd.DataFrame | str | Path,  # DataFrame with glycans in rows (col 1) and abundance values in columns
         groups: list[Any] | None = None,  # Group labels for samples (e.g., [1,1,1,2,2,2,3,3,3]); inferred from a GlycoDataFrame's contrasts if omitted
@@ -1369,8 +1394,6 @@ def get_glycanova(
 ) -> tuple[GlycoDataFrame, dict[str, pd.DataFrame]]:  # (ANOVA results with F-stats and omega-squared effect sizes, post-hoc results)
     "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
     from scipy.stats import studentized_range
-    df = _glycans_to_column(read_abundances(df) if isinstance(df, (str, Path)) else df)
-    glycoproteomics = len(df) > 0 and all(GLYCOFORM_ID.fullmatch(str(k)) for k in df.iloc[:, 0]) if glycoproteomics is None else glycoproteomics  # decided on the labels, which survive pd.DataFrame(), to_csv, and a reader; attrs did not, and outlived a collapse to compositions
     grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     if groups is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         groups = list(df.groups)
@@ -1673,6 +1696,7 @@ def get_time_series(
     return df_out.sort_values(by = 'corr p-val')
 
 
+@_abundance_input('df_in')
 def get_jtk(
         df_in: pd.DataFrame | str | Path,  # DataFrame with glycans in rows (first column), then groups arranged by ascending timepoints
         timepoints: int,  # Number of timepoints (each must have same number of replicates)
@@ -1689,8 +1713,7 @@ def get_jtk(
         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> GlycoDataFrame:  # DataFrame with JTK results: adjusted p-values, period length, lag phase, amplitude
     "Identifies rhythmically expressed glycans using Jonckheere-Terpstra-Kendall algorithm for time series analysis"
-    df = _glycans_to_column(read_abundances(df_in) if isinstance(df_in, (str, Path)) else df_in.copy(deep = True))
-    glycoproteomics = len(df) > 0 and all(GLYCOFORM_ID.fullmatch(str(k)) for k in df.iloc[:, 0]) if glycoproteomics is None else glycoproteomics  # decided on the labels, which survive pd.DataFrame(), to_csv, and a reader; attrs did not, and outlived a collapse to compositions
+    df = df_in.copy(deep = True)
     grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     if (df.shape[1] - 1) % timepoints:
         raise ValueError(
@@ -1755,6 +1778,7 @@ def get_jtk(
     return df_out.sort_values("Adjusted_P_value").reset_index(drop = True)
 
 
+@_abundance_input('df_in')
 def get_cosinor(
         df_in: pd.DataFrame | str | Path,  # DataFrame with glycans in rows (first column) and samples in the other columns
         timepoints: int | list[float] | np.ndarray,  # Number of timepoints, for columns arranged by ascending time with equal replicates (as in get_jtk), or the time of each sample column (any spacing or replication)
@@ -1776,8 +1800,7 @@ def get_cosinor(
     periods = [periods] if isinstance(periods, (int, float, np.number)) else list(periods)
     if not periods or min(periods) <= 0:
         raise ValueError(f"periods have to be positive cycle lengths in time units, got {periods}.")
-    df = _glycans_to_column(read_abundances(df_in) if isinstance(df_in, (str, Path)) else df_in.copy(deep = True))
-    glycoproteomics = len(df) > 0 and all(GLYCOFORM_ID.fullmatch(str(k)) for k in df.iloc[:, 0]) if glycoproteomics is None else glycoproteomics  # decided on the labels, which survive pd.DataFrame(), to_csv, and a reader; attrs did not, and outlived a collapse to compositions
+    df = df_in.copy(deep = True)
     grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     n = df.shape[1] - 1
     if isinstance(timepoints, (int, np.integer)):
@@ -1854,6 +1877,7 @@ def get_cosinor(
     return df_out.sort_values("Adjusted_P_value").reset_index(drop = True)
 
 
+@_abundance_input('df')
 def get_biodiversity(
         df: pd.DataFrame | str | Path,  # DataFrame with glycans in rows (col 1), abundances in columns
         group1: list[str | int] | None = None,  # First group column indices or group labels; default: from the frame's contrasts
@@ -1876,8 +1900,6 @@ def get_biodiversity(
         glycoproteomics: bool | None = None,  # Whether rows are glycoforms (protein_site_glycan): alpha diversity becomes each glycosite's microheterogeneity (rows protein_site_metric) and beta diversity the Aitchison distance over glycosites; default: whenever every row label is protein_site_glycan
 ) -> tuple:  # First DataFrame with diversity indices and test statistics, second with beta-diversity distance matrix
     "Calculates alpha (Shannon/Simpson) and beta (ANOSIM/PERMANOVA) diversity measures from glycomics data, or per-glycosite microheterogeneity from glycoproteomics data"
-    df = _glycans_to_column(read_abundances(df) if isinstance(df, (str, Path)) else df)
-    glycoproteomics = len(df) > 0 and all(GLYCOFORM_ID.fullmatch(str(k)) for k in df.iloc[:, 0]) if glycoproteomics is None else glycoproteomics  # decided on the labels, which survive pd.DataFrame(), to_csv, and a reader; attrs did not, and outlived a collapse to compositions
     if group1 is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         group1, group2 = list(df.group1), list(df.group2)
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
@@ -2024,6 +2046,7 @@ def get_biodiversity(
     return df_out.sort_values(by = ['corr p-val', 'p-val']).reset_index(drop = True), distance_matrix
 
 
+@_abundance_input('df1', 'df2')
 def get_SparCC(
         df1: pd.DataFrame | str | Path,  # First DataFrame with glycans in rows (col 1) and abundances in columns
         df2: pd.DataFrame | str | Path,  # Second DataFrame with same format as df1
@@ -2036,8 +2059,6 @@ def get_SparCC(
         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> tuple[pd.DataFrame, pd.DataFrame]:  # (Spearman correlation matrix, FDR-corrected p-value matrix)
     "Calculates SparCC (Sparse Correlations for Compositional Data) between two matching datasets (e.g., glycomics)"
-    df1 = _glycans_to_column(read_abundances(df1) if isinstance(df1, (str, Path)) else df1)
-    df2 = _glycans_to_column(read_abundances(df2) if isinstance(df2, (str, Path)) else df2)
     if df1.columns.tolist()[0] != df2.columns.tolist()[0] and df1.columns.tolist()[0] in df2.columns.tolist():
         common_columns = df1.columns.intersection(df2.columns)
         df1 = df1[common_columns]

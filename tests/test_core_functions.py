@@ -45,7 +45,7 @@ from glycowork.motif.processing import (
     presence_to_matrix, process_for_glycoshift, linearcode_to_iupac, iupac_extended_to_condensed,
     in_lib, get_class, enforce_class, equal_repeats, get_matching_indices, is_composition,
     bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono, iupac_to_smiles,
-    max_specify_glycan, parse_floating_bit, rescue_compositions, split_glycoform_id, glycan_to_oxford,
+    max_specify_glycan, parse_floating_bit, rescue_compositions, rescue_glycans, split_glycoform_id, glycan_to_oxford,
     glycan_to_glycam, glycan_to_iupac_extended, glycan_to_glycoct
 )
 from glycowork.motif.smiles import (SKELETONS, ALDITOLS, SUBSTITUENTS, ENANTIOMER, CERAMIDE, GlycanSMILESError,
@@ -1107,7 +1107,12 @@ KNOWN = [
     ('GlcN(a1-6)Ins', 'O[C@@H]1[C@H](O)[C@H](O)[C@@H](O)[C@H](O)[C@H]1O[C@H]2O[C@H](CO)[C@@H](O)[C@H](O)[C@H]2N'),
     ('Glc-ol', 'OC[C@H](O)[C@@H](O)[C@H](O)[C@H](O)CO'),
     ('Gal(b1-4)Glc-ol', 'OC[C@H](O)[C@@H](O)[C@H](O[C@@H]2O[C@H](CO)[C@H](O)[C@H](O)[C@H]2O)[C@H](O)CO'),
-    ('Pse5Ac7Ac(a2-6)GlcNAc', 'OC1O[C@H](CO[C@]2(C(=O)O)C[C@H](O)[C@H](NC(C)=O)[C@H]([C@@H](NC(C)=O)[C@@H](O)C)O2)[C@@H](O)[C@H](O)[C@H]1NC(C)=O'),
+    ('Pse5Ac7Ac(a2-6)GlcNAc', 'OC1O[C@H](CO[C@@]2(C(=O)O)C[C@H](O)[C@H](NC(C)=O)[C@H]([C@@H](NC(C)=O)[C@@H](O)C)O2)[C@@H](O)[C@H](O)[C@H]1NC(C)=O'),  # L-manno, so alpha is the mirror of Neu5Ac's
+    ('3,6-Anhydro-L-Gal(a1-3)Gal', 'OC1O[C@H](CO)[C@H](O)[C@H](O[C@@H]2O[C@@H](CO%52)[C@@H](O)[C@@H]%52[C@@H]2O)[C@H]1O'),
+    ('L-4dThrHexA4en(a1-4)GlcNAc', 'OC1O[C@H](CO)[C@@H](O[C@@H]2OC(C(=O)O)=C[C@H](O)[C@H]2O)[C@H](O)[C@H]1NC(C)=O'),
+    ('DDGalHep(a1-3)Glc', 'OC1O[C@H](CO)[C@@H](O)[C@H](O[C@H]2O[C@H]([C@H](O)CO)[C@H](O)[C@H](O)[C@H]2O)[C@H]1O'),
+    ('Gal(a1-4)Glc-onic', 'OC(=O)[C@H](O)[C@@H](O)[C@H](O[C@H]2O[C@H](CO)[C@H](O)[C@H](O)[C@H]2O)[C@H](O)CO'),
+    ('GlcN(a1-6)Ins1P', 'OP(=O)(O)O[C@@H]1[C@H](O)[C@H](O)[C@@H](O)[C@H](O)[C@H]1O[C@H]2O[C@H](CO)[C@@H](O)[C@H](O)[C@H]2N'),
     ('QuiNAc4NAc(b1-4)Glc', 'OC1O[C@H](CO)[C@@H](O[C@@H]2O[C@H](C)[C@@H](NC(C)=O)[C@H](O)[C@H]2NC(C)=O)[C@H](O)[C@H]1O'),
     ('Tyv(a1-3)Man', 'OC1O[C@H](CO)[C@@H](O)[C@H](O[C@H]2O[C@H](C)[C@@H](O)C[C@@H]2O)[C@@H]1O'),
     ('D-Fuc(a1-2)Gal', 'OC1O[C@H](CO)[C@H](O)[C@H](O)[C@H]1O[C@H]2O[C@H](C)[C@H](O)[C@H](O)[C@H]2O'),
@@ -1152,6 +1157,15 @@ def test_every_skeleton_builds():
             assert Chem.MolFromSmiles(smiles) is not None, (name, anomer)
     for name in ALDITOLS:
         assert Chem.MolFromSmiles(glycan_to_smiles(f'{name}-ol')) is not None, name
+    same = lambda first, second: Chem.CanonSmiles(glycan_to_smiles(first)) == Chem.CanonSmiles(glycan_to_smiles(second))
+    for anomer in 'ab':  # a systematic name is built from configurations alone, so it has to agree with every named skeleton it equals
+        for config in ['All', 'Alt', 'Glc', 'Man', 'Gul', 'Ido', 'Gal', 'Tal']:
+            assert same(f'L-{config}Hex({anomer}1-4)Glc', f'L-{config}({anomer}1-4)Glc') and same(f'D-{config}Hexf({anomer}1-4)Glc', f'D-{config}f({anomer}1-4)Glc'), config
+        for systematic, named in [('L-6dGalHex', 'Fuc'), ('D-6dAraHex', 'Oli'), ('D-3,6dXylHex', 'Abe'), ('D-3,6dXylHexf', 'Abef'), ('D-6dManHex4N', 'Per'), ('D-AraPenf', 'D-Araf'),
+                                  ('D-3dManOct-ulosonic', 'Kdo'), ('DD-3,9dGalNon5NAc7NAc-ulosonic', 'Leg5Ac7Ac'), ('LL-3,9dManNon5NAc7NAc-ulosonic', 'Pse5Ac7Ac'),
+                                  ('LD-3,9dGalNon5NAc7NAc-ulosonic', '8eLeg5Ac7Ac'), ('D-3dLyxHep-ulosaric', 'Dha'), ('D-6dManHex', 'D-Rha')]:
+            assert same(f'{systematic}({anomer}{_anomeric_position(named)}-4)Glc', f'{named}({anomer}{_anomeric_position(named)}-4)Glc'), systematic
+    assert same('Glc-ol', 'L-Gul-ol') and same('2,5-Anhydro-Tal-ol', '2,5-Anhydro-D-Alt-ol') and same('1,5-Anhydro-Man-ol', '2,6-Anhydro-Man-ol')  # one alditol, numbered from either end
 
 
 def test_every_substituent_builds():
@@ -1198,10 +1212,14 @@ def test_atom_mapping_covers_every_atom():
 
 
 def test_token_splitting():
-    assert _split_token('GlcNAc6S') == ('Glc', [(None, 'NAc'), (6, 'S')], '', False)
-    assert _split_token('LDManHepOPEtN') == ('LDManHep', [(None, 'OPEtN')], '', False)
-    assert _split_token('D-Fuc') == ('Fuc', [], 'D', False)
-    assert _split_token('GlcNAc-ol') == ('Glc', [(None, 'NAc')], '', True)
+    assert _split_token('GlcNAc6S') == ('Glc', [(None, 'NAc'), (6, 'S')], '', '', ())
+    assert _split_token('LDManHepOPEtN') == ('LDManHep', [(None, 'OPEtN')], '', '', ())
+    assert _split_token('D-Fuc') == ('Fuc', [], 'D', '', ())
+    assert _split_token('GlcNAc-ol') == ('Glc', [(None, 'NAc')], '', '-ol', ())
+    assert _split_token('3,6-Anhydro-L-Gal2S') == ('Gal', [(2, 'S')], 'L', '', ((3, 6),))
+    assert _split_token('D-6dXylHexNAc4Ulo') == ('6dXylHex4Ulo', [(None, 'NAc')], 'D', '', ())  # keto and ene positions belong to the skeleton
+    assert _split_token('Glc2NAc3NAc-aric') == ('Glc', [(2, 'NAc'), (3, 'NAc'), (None, 'A')], '', '-onic', ())
+    assert _split_token('DL-3,9dGalNon5NAc7NAc-ulosonic') == ('DL-3,9dGalNon', [(5, 'NAc'), (7, 'NAc')], '', '-ulosonic', ())
     assert _anomeric_position('Neu5Ac') == 2 and _anomeric_position('Glc') == 1 and _anomeric_position('Glc-ol') == 1 and _anomeric_position('Ins') is None
 
 
@@ -1212,6 +1230,11 @@ def test_token_splitting():
     ('{Fuc(a1-?)}Gal(b1-4)Glc', 'disconnected'),
     ('Nonsense-ol', 'no skeleton'),
     ('Ery', 'only exists as an alditol'),
+    ('Sug2Ac(b1-4)Glc', 'wildcard'),
+    ('D-ManPen(b1-4)Glc', 'configures 4 stereocentres but has 3'),
+    ('D-6dLyxPen(b1-4)Glc', 'no position 6'),
+    ('2,7-Anhydro-Kdo(a2-4)Glc', 'anomeric oxygen'),
+    ('Gal(b1-3)3,6-Anhydro-Gal', 'no free positions 3 and 6'),
     ('Gal(b1-3)Ery', 'only exists as an alditol'),
     ('XylA', 'no primary alcohol to oxidize'),
     ('GlcA6S', 'not defined on the carboxyl'),
@@ -1264,7 +1287,12 @@ def test_uronic_derivatives_leave_other_carboxyls_alone():
 
 
 @pytest.mark.parametrize('glycan', ['GlcNAc1N', 'Glc1NAc', 'Gal6F(b1-4)Glc', 'Glc6SH', 'Vio4NBut', 'GlcNPam',
-                                    'Gal(b1-4)GlcNAc1N'])
+                                    'Gal(b1-4)GlcNAc1N', 'Fuc(a1-3)[Gal(b1-4)]Glc-ol', 'Gal(b1-3)GlcNAc1N-ol', 'Gal(b1-1)Rib-ol', 'QuiNAc(b1-2)1dEry-ol',
+                                    'GlcA(b1-4)2,5-Anhydro-Tal-ol', '2,5-Anhydro-Man6S', '1,5-Anhydro-GlcNAc-ol', 'Glc(b1-3)1,5-Anhydro-Glc-onic',
+                                    'Gal(a1-4)Glc-onic', 'L-Xyl1N4Me-onic', 'Glc2NAc3NAc-aric', '2,7-Anhydro-Kdo', '4,8-Anhydro-Kdo', '2,3-Anhydro-Man(b1-4)Glc',
+                                    '6dAltNAc1PP4N(b1-5)Ribf1N', 'Gal1PGro(a1-4)Gal1PGro', 'Ara1P4N(b1-4)GlcN(a1-6)GlcN1P(b1-1)Ara4N', 'Glc(a1-4)Glc1N(a1-4)Qui',
+                                    'Glc4Me(a1-4)Glc1F', 'Man(a1-3)Man(a1-4)GlcN(a1-6)Ins1P', 'Fruf(b2-1)[Gal6ulo(a1-6)]Glc', 'D-6dXylHexNAc4Ulo(a1-4)Glc',
+                                    'D-3dThrHex-ulosonic(b2-2)Rha', 'DL-3,9dGalNon5NAc7NAc-ulosonic(a2-4)Glc', 'GalNAcAN(a1-3)Glc', 'GalA2N(a1-4)GalN'])
 def test_round_trip_of_less_common_groups(glycan):
     smiles = glycan_to_smiles(glycan)
     assert glycan_to_smiles(smiles_to_iupac(
@@ -1278,13 +1306,24 @@ def test_reading_does_not_depend_on_atom_order():
         for _ in range(5):
             shuffled = Chem.MolToSmiles(Chem.MolFromSmiles(smiles), doRandom = True, canonical = False)
             assert smiles_to_iupac(shuffled) == smiles_to_iupac(smiles), shuffled
+    for glycan in ['Gal(b1-3)[Fuc(a1-2)]GalNAc-ol', 'Rib5P-ol(1-5)Rib-ol', 'GlcA(b1-4)2,5-Anhydro-Man6S-ol', '3,6-Anhydro-L-Gal(a1-3)Gal', 'GlcN(a1-6)Ins1P',
+                   'Ara1P4N(b1-4)GlcN(a1-6)GlcN1P(b1-1)Ara4N']:  # open chains, anhydro bridges, inositol and anomeric diesters are numbered from the structure, not the string
+        smiles = glycan_to_smiles(glycan)
+        for _ in range(5):
+            shuffled = Chem.MolToSmiles(Chem.MolFromSmiles(smiles), doRandom = True, canonical = False)
+            assert smiles_to_iupac(shuffled) == smiles_to_iupac(smiles), shuffled
     assert smiles_to_iupac(glycan_to_smiles('Gal4Pyr6Pyr(b1-3)Gal(b1-4)Glc')) == 'Gal4Pyr6Pyr(b1-3)Gal(b1-4)Glc'  # the ketal bridging two positions is one pyruvate, not dropped
+    for glycan in ['D-Rha4NFo(a1-2)D-Rha4NFo', 'Neu5Ac9NAc(a2-6)Gal', 'D-Apif(b1-2)Glc', 'Oli3NAc(b1-3)Qui', 'QuiNAc4NAc(b1-4)Glc', 'GlcN2Myr3Myr4P(b1-6)GlcN1P2Myr3Myr',
+                   'IdoA2S(a1-4)GlcNS6S', 'D-6dAltHep(b1-3)Glc', 'L-4dThrHexA4en(a1-4)GlcNAc', 'Glc(a1-3)1,5-Anhydro-GlcNAc-ol']:  # each comes back in the spelling glycowork uses, not as Per4Fo, Kdn5NAc9NAc, D-Api, OliNAc or BacNAc4Ac
+        assert smiles_to_iupac(glycan_to_smiles(glycan)) == glycan
     assert smiles_to_iupac(glycan_to_smiles('GlcA2Pyr3Pyr(b1-4)Glc'), strict = True) == 'GlcA2Pyr3Pyr(b1-4)Glc'
 
 
 @pytest.mark.parametrize('glycan',
                          ['Gal(b1-1)Rib-ol', '[Glc(b1-2)]Rib5P-ol(1-5)Rib5P-ol', 'Neu5Ac(a2-3)Gal(b1-3)HexNAc-ol',
-                          'D-RhaNAc(a1-2)D-RhaNAc', 'GlcN2Myr3Myr4P(b1-6)GlcN1P2Myr3Myr', 'Fuc2F(a1-2)Gal'])
+                          'D-RhaNAc(a1-2)D-RhaNAc', 'GlcN2Myr3Myr4P(b1-6)GlcN1P2Myr3Myr', 'Fuc2F(a1-2)Gal', 'LDIdoHep(a1-4)GalNAc', 'L-6dGulHepf(a1-2)D-3dThrPen',
+                          'D-6dAraHexOMe(b1-4)DigOMe', 'Hep3Me6Me(a1-3)Penf', '8eLeg5Ac7Ac(a2-3)Gal', '9dNeu5Ac(a2-3)Gal', 'L-2dThrPen4N(a1-6)Glc', 'Ribf-uronic(b1-4)Glc',
+                          'D-3dLyxHep-ulosaric(a2-6)Glc', 'D-7dLyxOct-ulosonic(a2-4)Glc', '6dAll3Me(b1-4)Glc', 'GlcNOMyr(b1-6)GlcN'])
 def test_builds_what_used_to_be_refused(glycan):
     Chem = pytest.importorskip('rdkit.Chem')
     assert Chem.MolFromSmiles(glycan_to_smiles(glycan)) is not None
@@ -1292,11 +1331,12 @@ def test_builds_what_used_to_be_refused(glycan):
 
 def test_refuses_to_drop_an_alditol_it_cannot_name():
     with pytest.raises(GlycanSMILESError):
-        smiles_to_iupac(glycan_to_smiles('Glc-ol(1-6)Gal'))
+        smiles_to_iupac(glycan_to_smiles('Gal(b1-2)Api-ol'))  # a branched chain is no alditol the reader numbers
 
 
 def test_strict_refuses_to_guess_a_position():
     assert glycan_to_smiles('Gal(b1-?)Glc')
+    assert 'NC(=O)' not in glycan_to_smiles('GlcNOMyr') and 'NC(C)=O' not in glycan_to_smiles('GalOAcN')  # an O-prefixed group takes a hydroxyl, never the amine
     with pytest.raises(GlycanSMILESError):
         glycan_to_smiles('Gal(b1-?)Glc', strict = True)
 
@@ -1324,9 +1364,8 @@ def test_molecule_graph_is_self_consistent():
         assert all(0 <= b < len(molecule.bonds) for ring in molecule.rings for b in ring)
 
 
-# reading a SMILES back cannot yet handle an open-chain reducing end, a wildcard residue,
-# or inositol's all-carbon ring, and it names QuiNAc4NAc by its synonym BacNAc4Ac
-UNREADABLE = ('-ol', 'Hex', 'Ins', 'QuiNAc4NAc')
+# a wildcard residue has no anomeric stereochemistry for the reader to recover
+UNREADABLE = ('Hex',)
 ROUND_TRIP = [glycan for glycan, expected in KNOWN if not any(piece in glycan for piece in UNREADABLE)]
 
 
@@ -1343,7 +1382,7 @@ def test_round_trip_keeps_every_residue():
 
 def test_refuses_to_drop_a_residue_it_cannot_name():
     with pytest.raises(GlycanSMILESError):
-        smiles_to_iupac(glycan_to_smiles('Gal(b1-4)Glc-ol'))  # an open-chain reducing end is not perceived yet
+        smiles_to_iupac(glycan_to_smiles('Gal(b1-2)Glc-ol').replace('[C@H](O)CO', '[C@](C)(O)CO'))  # a C-branched alditol matches no chain
 
 
 @pytest.mark.parametrize('text, expected', [
@@ -1467,9 +1506,9 @@ def test_glycan_to_composition():
     assert result == {'Neu5Ac': 1, 'Hex': 1, 'HexNAc': 1}
     # A composition passed by mistake says so, instead of "expected string or bytes-like object, got 'dict'" or only blaming the spelling
     with pytest.raises(TypeError, match = 'composition dict already is one'):
-        glycan_to_mass({'Hex': 5, 'HexNAc': 4})
+        glycan_to_composition({'Hex': 5, 'HexNAc': 4})
     with pytest.raises(ValueError, match = "'H5N4' is a composition"):
-        glycan_to_mass('H5N4')
+        glycan_to_composition('H5N4')
     #result = glycan_to_composition('Neu5Ac(a2-3/6)Gal(b1-3)GalNAc')
     # Test glycan with sulfation
     result = glycan_to_composition("Neu5Ac(a2-3)Gal6S(b1-4)GlcNAc")
@@ -1526,6 +1565,10 @@ def test_glycan_to_mass():
     # inositol has no ring oxygen, so it has one OH more to derivatize than the Hex its composition counts
     assert abs(glycan_to_mass("Man(a1-3)Man(a1-2)Ins", sample_prep = 'permethylated') - 672.3568) < 0.001
     assert glycan_to_mass("Man(a1-3)Man(a1-2)Ins") == glycan_to_mass("Man(a1-3)Man(a1-2)Glc")
+    # a composition, as a dict or in any string format canonicalize_composition reads, is weighed by composition_to_mass
+    assert glycan_to_mass({'Hex': 5, 'HexNAc': 4}) == glycan_to_mass('H5N4') == glycan_to_mass('HexNAc(4)Hex(5)') == composition_to_mass('H5N4')
+    assert glycan_to_mass('H5N4F1', sample_prep = 'permethylated', modification = 'reduced') == composition_to_mass('H5N4F1', sample_prep = 'permethylated', modification = 'reduced')
+    assert glycan_to_mass('H5N4F1', peptide = 'EEQYNSTYR') == composition_to_mass('H5N4F1', peptide = 'EEQYNSTYR')
 
 
 def test_calculate_adduct_mass():
@@ -1924,6 +1967,12 @@ def test_rescue_glycans():
     assert abs(result - 530) < 0.5
     result = glycan_to_mass("Fuca2Galb3GalNac") + 1.0078
     assert abs(result - 530) < 0.5
+    assert glycan_to_composition(glycan = "Fuca2Galb3GalNAc") == {'Hex': 1, 'HexNAc': 1, 'dHex': 1}
+    # Only the glycan(s), which every decorated function takes first, are rescued, positionally or by name; any other string argument stays as given
+    rescued = rescue_glycans(
+        lambda glycans, edge_type: (glycans, edge_type) if all('(' in g for g in glycans) else 1 / 0)
+    assert rescued(('Galb1-4GlcNAc',), 'monolink') == (['Gal(b1-4)GlcNAc'], 'monolink')
+    assert rescued(glycans = ['Galb1-4GlcNAc'], edge_type = 'monolink') == (['Gal(b1-4)GlcNAc'], 'monolink')
 
 
 # Test the rescue_compositions decorator
@@ -1934,6 +1983,7 @@ def test_rescue_compositions():
     assert abs(result - 530) < 0.5
     result = composition_to_mass('H1N1F1') + 1.0078
     assert abs(result - 530) < 0.5
+    assert abs(composition_to_mass(dict_comp_in = 'H1N1F1') + 1.0078 - 530) < 0.5
     # Only the composition, which every decorated function takes first, is rescued; any other string argument stays as given
     rescued = rescue_compositions(lambda comp, label: f"{sorted(comp.items())}{label}")
     assert rescued('Hex1', 'Hex2') == "[('Hex', 1)]Hex2"
@@ -7294,7 +7344,7 @@ def test_create_neighbors():
     assert all(isinstance(n, nx.Graph) for n in neighbors)
     assert len(neighbors[0].nodes()) < len(ggraph.nodes())
     neighbors = create_neighbors(glycan_to_nxGraph("Glc-ol"))
-    assert neighbors == []
+    assert neighbors == ()
     # A floating bit is deferred until the backbone is minimal, so only backbone pairs are cleaved first
     assert create_neighbors(glycan_to_nxGraph("{Fuc(a1-?)}Gal(b1-4)GlcNAc(b1-3)Gal"))
 

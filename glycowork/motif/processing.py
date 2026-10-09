@@ -1,3 +1,4 @@
+import inspect
 import pandas as pd
 import json
 import lzma
@@ -40,7 +41,7 @@ CSDB_COMMENT = re.compile(r'\s*//.*$')
 CSDB_SUBSTITUENT = re.compile(r'\bSubst\b', flags = re.IGNORECASE)
 COMMON_ENANTIOMER = {"L-Fuc": "Fuc", "D-Gal": "Gal", "D-Man": "Man", "D-Glc": "Glc", "L-Alt": "Alt", "L-All": "All", "L-Ara": "Ara", "D-Gul": "Gul", "D-Lyx": "Lyx",
                      "D-Oli": "Oli", "D-Qui": "Qui", "L-Rha": "Rha", "D-Psi": "Psi", "L-Ido": "Ido", "D-Fru": "Fru", "D-Rib": "Rib", "L-Sor": "Sor", "D-Tag": "Tag", "D-Tal": "Tal", "D-6dTal": "6dTal",
-                     "D-Xyl": "Xyl", "D-Mur": "Mur", "D-Neu": "Neu", "D-Kdn": "Kdn", "D-Kdo": "Kdo", "D-Abe": "Abe", "D-Aci": "Aci", "D-Aco": "Aco", "L-Api": "Api",
+                     "D-Xyl": "Xyl", "D-Mur": "Mur", "D-Neu": "Neu", "D-Kdn": "Kdn", "D-Kdo": "Kdo", "D-Abe": "Abe", "L-Aci": "Aci", "D-Aco": "Aco", "L-Api": "Api",
                      "L-Asc": "Asc", "D-Bac": "Bac", "L-Col": "Col", "D-Dha": "Dha", "D-Dig": "Dig", "L-Fus": "Fus", "D-Ko": "Ko", "D-Leg": "Leg", "D-Par": "Par",
                      "L-Pau": "Pau", "D-Per": "Per", "L-Pse": "Pse", "D-Sed": "Sed", "D-Tyv": "Tyv", "D-Vio": "Vio", "L-Yer": "Yer"}  # every trivial name of up to three letters that smiles.ENANTIOMER configures, since glycan_to_iupac_extended states D/L for all of them
 # Named monosaccharides (Man9GlcNAc2, Glc3Man9GlcNAc2, GlcA, Xyl, ...) count as their base residue, like in glycan_to_composition
@@ -166,24 +167,30 @@ PDB_TO_IUPAC = {'NDG':'GlcNAc(a','NAG':'GlcNAc(b','MAN':'Man(a', 'BMA':'Man(b', 
                 '0QB': 'Qui(a', '0PD': 'Psif(a', '0DA': 'Lyx(a', '0kB': 'L-Gul(a', '0tA': 'L-Tal(a', 'NBG': 'GlcNAc(b', 'KDO': 'Kdo(a', '0KO': 'Kdo(a', '4aA': 'Ara(a', "UYS6SO36SO3": "GlcNS6S(a", "IDR2SO32SO3": "IdoA2S(a"}
 
 
-def rescue_glycans(func: Callable # Function to wrap
-                   ) -> Callable: # Wrapped function handling formatting issues
+def rescue_glycans(func: Callable  # Function to wrap, taking its glycan(s) as first parameter
+                   ) -> Callable:  # Wrapped function handling formatting issues
     "Decorator for handling malformed glycan sequences"
+    name = next(iter(inspect.signature(func).parameters))
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         try:
-            # Try running the original function
             return func(*args, **kwargs)
         except Exception:
-            # If an error occurs, attempt to rescue the glycan sequences
-            rescued_args = [
-                canonicalize_iupac(arg) if isinstance(arg, str) else [canonicalize_iupac(a) for a in arg] if isinstance(
-                    arg, list) and arg and isinstance(arg[0], str) else arg for arg in args]
-            if rescued_args == list(
-                    args):  # nothing to rescue, so the error was not a formatting problem and re-running would only hide it behind a chained traceback
+            # Every decorated function takes its glycan(s) first, positionally or by name; other string arguments (edge_type, feature_set, ...) are never glycans
+            x = args[0] if args else kwargs.get(name)
+            if isinstance(x, str):
+                rescued = canonicalize_iupac(x)
+            elif isinstance(x, (list, tuple, set, frozenset)) and x and all(isinstance(a, str) for a in x):
+                rescued = [canonicalize_iupac(a) for a in x]
+            else:
                 raise
-            # After rescuing, attempt to run the function again
-            return func(*rescued_args, **kwargs)
+            if rescued == (
+            x if isinstance(x, str) else list(x)):  # nothing to rescue, so the error was not a formatting problem
+                raise
+        return func(rescued, *args[1:], **kwargs) if args else func(**kwargs | {
+            name: rescued})  # outside the except, so a remaining error is not chained onto the one that was rescued
+
     return wrapper
 
 
@@ -1923,24 +1930,27 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     return glycan
 
 
-def rescue_compositions(func: Callable # Function to wrap
-                        ) -> Callable: # Wrapped function handling composition format issues
+def rescue_compositions(func: Callable  # Function to wrap, taking its composition as first parameter
+                        ) -> Callable:  # Wrapped function handling composition format issues
     "Decorator for handling malformed glycan compositions"
+    name = next(iter(inspect.signature(func).parameters))
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         try:
-            # Try running the original function
             return func(*args, **kwargs)
         except Exception as e:
-            # Every decorated function takes its composition first; other string arguments (mass_value, glycan_class, ...) are never compositions
-            if not args or not isinstance(args[0], str):
+            # Every decorated function takes its composition first, positionally or by name; other string arguments (mass_value, glycan_class, ...) are never compositions
+            x = args[0] if args else kwargs.get(name)
+            if not isinstance(x, str):
                 raise
             try:
-                rescued = canonicalize_composition(args[0])
+                rescued = canonicalize_composition(x)
             except ValueError:
                 raise e from None
-        return func(rescued, *args[1:],
-                    **kwargs)  # outside the except, so a remaining error is not chained onto the one that was rescued
+        return func(rescued, *args[1:], **kwargs) if args else func(**kwargs | {
+            name: rescued})  # outside the except, so a remaining error is not chained onto the one that was rescued
+
     return wrapper
 
 
