@@ -8672,6 +8672,10 @@ def test_read_glycoproteomics_fragpipe(tmp_path):
     assert isinstance(df, GlycoDataFrame)
     # repeated PSMs of one ion count once, the glycan FDR drops the fucosylated match, and the unglycosylated PSM is ignored
     assert df.to_dict('list') == {'ID': ['P19652_103_H5N4A2'], 'ctrl': [100.0], 'case': [300.0]}
+    tmt = pd.read_csv(tmp_path / 'ctrl' / 'psm.tsv', sep = '\t', dtype = str).assign(**{'Mapped Proteins': '', 'Quan Usage': ['true', 'true', 'true', 'false'], '126': ['10', '20', '5', '7'],
+                                                                                      'case_1': ['1', '2', '3', '4'], 'Apex Retention Time': ['30.1'] * 4})  # TMT: one column per channel after 'Quan Usage', named by the annotation file or by the channel
+    tmt.to_csv(tmp_path / 'ctrl' / 'psm.tsv', sep = '\t', index = False)
+    assert read_glycoproteomics(tmp_path / 'ctrl' / 'psm.tsv').to_dict('list') == {'ID': ['P19652_103_H5N4A2'], 'ctrl_126': [30.0], 'case_1': [3.0]}  # every PSM of a glycoform adds up, a bare channel gets its plex
 
 
 def test_read_glycoproteomics_pglyco_quant():

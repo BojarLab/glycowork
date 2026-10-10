@@ -125,7 +125,7 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
             if k in c:
                 keep &= ~(num(k) > max_q)  # an empty q-value, e.g., without a glycan FDR step, does not reject the match
         for k, ok in (('isdecoy', lambda s: s.str.lower() != 'true'), ('glydecoy', lambda s: ~s.isin(('1', '1.0'))), ('pepdecoy', lambda s: ~s.isin(('1', '1.0'))),
-                      ('decoy/contaminant/target', lambda s: s == 'T'), ('is_best_match', lambda s: s.str.lower() == 'true')):
+                      ('decoy/contaminant/target', lambda s: s == 'T'), ('is_best_match', lambda s: s.str.lower() == 'true'), ('quanusage', lambda s: s.str.lower() != 'false')):  # FragPipe marks PSMs failing its reporter ion filters (purity, minimum intensity) Quan Usage 'false'
             if k in c:
                 keep &= ok(df[c[k]].astype(str).str.strip())
         df = df[keep]
@@ -150,6 +150,11 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
                 pos = [int(p) for p, _ in loc] or [int(p) for p, _, m in mods if mass.strip() and abs(float(m) - float(mass)) < 0.05] or [int(p) for p, r, m in mods if r in 'NST' and float(m) >= 200]
                 pairs.append(_pair_sites(int(float(start)), pos, [x for _, x in loc] or [comp.strip()]) if pd.notna(start) else [])
             vals = num('intensity') if 'intensity' in c and num('intensity').gt(0).any() else None
+            if 'quanusage' in c:  # TMT or iTRAQ: 'Quan Usage', then one reporter ion column per channel, named by the plex's annotation file or else by the channel ('126', '127N'), which then gets its plex (experiment folder) in front
+                plex = runs[0][0] if runs else ''
+                wide = {k: f'{plex}_{k}' if plex and re.fullmatch(r'1[1-3]\d[NC]?', str(k)) else str(k) for k in list(df.columns)[list(df.columns).index(c['quanusage']) + 1:] if k not in (
+                    'Parent Scan Number', 'Apex Retention Time', 'Apex Scan Number', 'Retention Time Start', 'Retention Time End', 'Retention Time FWHM', 'Traced Scans')}  # IonQuant's per-PSM columns
+                ions = list(col('spectrum'))  # reporter ions come from each spectrum, so every PSM of a glycoform adds up
         elif sig == 'pglyco':
             runs, prots = list(col('rawname')) if 'rawname' in c else runs, [p.split(';')[0] if isinstance(p, str) else p for p in col('proteins')]  # an empty protein cell, e.g., of merged cells in a published table, must not become the accession 'nan'
             pairs = [[(re.sub(r'\.0+$', '', str(s).split(';')[0]), g)] if isinstance(g, str) and pd.notna(s) else [] for s, g in zip(col('prosites'), col('glycancomposition'))]
@@ -238,7 +243,7 @@ def _glycomics_layout(df: pd.DataFrame # a glycomics table as read from file
 
 
 def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataFrame], # export(s) of Skyline (report, long or pivoted by replicate), LaCyTools or MassyTools (Summary.txt), GlycoWorkbench (.gwp workspace or .gwa annotated peak list), Thermo Compound Discoverer, GlycoGenius, GlyHunter, GlycReSoft, or CandyCrunch, or any table with glycans in its first column and samples in the others
-                   sample_map: dict[str, str] | Callable[[str], str] | None = None # renames runs (replicates, raw files, or sample columns) into samples; runs sharing a sample are summed
+                   sample_map: dict[str, str] | Callable[[str], str] | None = None # renames runs (raw files, FragPipe experiments, or TMT channels) into samples; runs sharing a sample, e.g., fractions, are summed
                    ) -> GlycoDataFrame: # glycans (IUPAC-condensed, canonical composition, or the label as written if it is neither) in column 'glycan', samples as columns; ready for get_differential_expression and the rest of glycowork
     "Reads the native output of glycomics software into a glycan x sample table, quantified by the tool's abundance where it reports one and by feature counts otherwise"
     recs, groups = [], {}  # (run, ion, label, abundance, S is NeuAc); Skyline, LaCyTools, MassyTools, and GlycoGenius write NeuAc as S, which glycowork reads as sulfate
