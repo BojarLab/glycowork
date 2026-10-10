@@ -53,13 +53,15 @@ _CODE_TO_NAME = {m: base for base, pool in (('Hex', Hex), ('HexNAc', HexNAc), ('
                  # Linkage-specific sialic acid derivatives (ethyl ester, lactone, methyl ester, amides) of LaCyTools, MassyTools, GlycoGenius, and GlyCombo; a composition has no linkages, so they are plain sialic acids
                  code: sia for sia, codes in (('Neu5Ac', ('E', 'L', 'M', 'Am', 'eNeuAc', 'lNeuAc', 'dNeuAc', 'amNeuAc')), ('Neu5Gc', ('Ge', 'Gl', 'EG', 'AmG', 'eNeuGc', 'lNeuGc', 'dNeuGc', 'amNeuGc'))) for code in codes}
 _SULFATE_CODES = frozenset({'Su', 's', 'Sul'})
-_COMP_TABLE_FORM = re.compile(r'(?:\s*(?:Neu5[AG]c|[A-Za-z]+)(?:\[[+-]?[\d.]+\])?\(\d+\))+|(?:\s*\([A-Za-z]+\)\d+)+\s*|\{[^{}]*:\s*\d+[^{}]*\}(?:\$\S*)?')  # HexNAc(4)Hex(5) (Byonic), H(5)N(4)A(2)F(1) (pGlyco), NeuAc[+13.0316](2) (GlyHunter), (Hex)5 (HexNAc)2 (GlyCombo; GlycoMod's '+ (Man)3(GlcNAc)2' stays a sequence), {Hex:5; HexNAc:4} (GlycReSoft)
+_COMP_TABLE_FORM = re.compile(r'(?:\s*(?:Neu5[AG]c|NH4|[A-Za-z]+)(?:\[[+-]?[\d.]+\])?\(\d+\))+|(?:\s*\((?:NH4|[A-Za-z]+)\)\d+)+\s*|\{[^{}]*:\s*\d+[^{}]*\}(?:\$\S*)?')  # HexNAc(4)Hex(5) (Byonic), H(5)N(4)A(2)F(1) (pGlyco), NeuAc[+13.0316](2) (GlyHunter), (Hex)5 (HexNAc)2 (GlyCombo; GlycoMod's '+ (Man)3(GlcNAc)2' stays a sequence), {Hex:5; HexNAc:4} (GlycReSoft)
 _NAME_TO_CODE = {'Hex': 'H', 'HexNAc': 'N', 'dHex': 'F', 'Neu5Ac': 'A', 'Neu5Gc': 'G', 'HexA': 'HexA', 'Pen': 'Pen', 'S': 'S', 'P': 'P'}
 _COMP_ORDER = {k: i for i, k in enumerate(_NAME_TO_CODE)}
 _COMP_ENGINE_NAMES = {'byonic': {'HexNAc': 'HexNAc', 'Hex': 'Hex', 'dHex': 'Fuc', 'Neu5Ac': 'NeuAc', 'Neu5Gc': 'NeuGc', 'Kdn': 'KDN', 'HexA': 'HexA', 'HexN': 'HexN', 'Pen': 'Pent', 'S': 'Sulfo', 'P': 'Phospho'},
                       'glycresoft': {'Pen': 'Pen', 'dHex': 'Fuc', 'Hex': 'Hex', 'HexN': 'HexN', 'HexA': 'HexA', 'HexNAc': 'HexNAc', 'Kdn': 'Kdn', 'Neu5Ac': 'Neu5Ac', 'Neu5Gc': 'Neu5Gc',
                                      'Ac': '@acetyl', 'Me': '@methyl', 'P': '@phosphate', 'S': '@sulfate'}}  # composition names in glycan databases of search engines, in their usual order
 _COMP_MASS_SUFFIX = re.compile(r'\s*%.*$')  # "HexNAc(4)Hex(5) % 1702.5814" (MSFragger-Glyco, Byonic) into "HexNAc(4)Hex(5)"
+_COMP_ADDUCT = re.compile(r'\s*\[\d*M(?:[+-]\d*[A-Z][A-Za-z\d]*)+\]\d*[+-]*|(?:\s*\+\s*\d*(?:Na|K|Li|NH4|Ammonium|Fe|Ca|Mg|H)\+*(?:\([+-][\d.]+\))?)+$')  # an ion written after the composition, "H5N4F1 [M+Na]+", "H5N4F1+2Na", or StrucGP's "N4H5F1S1+Ammonium(+17)"
+_ADDUCTS = frozenset({'Na', 'NH4', 'Ammonium', 'Fe', 'Li', 'Ca', 'Mg'})  # adducts written as residues, "HexNAc(4)Hex(5)Na(1)" (MSFragger-Glyco) or {Hex:5; HexNAc:4; Na:1}; K and H only count as adducts after '+', since single letters are residue codes in shorthand (H is Hex)
 _COMP_TOKEN = re.compile(r'(\D+)(\d*)')  # "Hex5HexNAc4Fuc" into (Hex, 5), (HexNAc, 4), (Fuc, '')
 _IUPAC_LINKAGE = re.compile(r'\([ab?]?[\d?]+-[\d?/]+\)')  # "(b1-4)", "(a2-3/6)"; no composition format writes one
 _CLASS_POOLS = {
@@ -413,7 +415,7 @@ def canonicalize_composition(comp: str | dict[str, int], # Composition in Hex5He
         # A dict, e.g., from glycan_to_composition, gets the same key aliases as a string, but a formula key like '-H2O' or '+N3' stays whole
         pairs = [(k, int(v)) for k, v in comp.items()]
     else:
-        comp = re.sub(r'\[[+-]?[\d.]+\]|\^[A-Za-z]+|\$\S*$', '', _COMP_MASS_SUFFIX.sub('', comp)).strip()  # GlyHunter's derivatized NeuAc[+13.0316], GlycReSoft's permethylated Hex^Me and reducing-end $C1H4
+        comp = re.sub(r'\[[+-]?[\d.]+\]|\([+-][\d.]+\)|\^[A-Za-z]+|\$\S*$', '', _COMP_ADDUCT.sub('', _COMP_MASS_SUFFIX.sub('', comp))).strip()  # GlyHunter's derivatized NeuAc[+13.0316], a mass after an adduct as in Ammonium(+17), GlycReSoft's permethylated Hex^Me and reducing-end $C1H4
         fields = re.split(r'[\s_,;]+', comp)
         if comp.isdigit() or (len(fields) > 1 and all(f.isdigit() for f in fields)):
             # Positional: "5421" (one digit per residue), or "5_4_2_1", "5 4 2 0 1" (pGlyco Glycan(H,N,A,G,F)), "5,4,2,1"
@@ -432,7 +434,7 @@ def canonicalize_composition(comp: str | dict[str, int], # Composition in Hex5He
                 f"'{comp}' is neither a positional composition of four or five numbers nor residues each followed by their count (e.g., 'Hex5HexNAc4'); from a glycoproteomics label like 'P00533_352_H5N2', pass only the composition part.")
         else:
             # Byonic HexNAc(4)Hex(5), GlycoMod (Hex)2 + (Man)3(GlcNAc)2, GlycReSoft {Hex:5; HexNAc:4; @sulfate:1}, FragPipe HexNAc-4_Hex-5; a residue without a count occurs once
-            comp = multireplace(re.sub(r'(?<=[A-Za-z)])-(?=\d)', '', comp),
+            comp = multireplace(re.sub(r'(?<=[A-Za-z)])-(?=\d)', '', re.sub(r'NH4(?!\d)', 'Ammonium', comp)),  # NH4(1), (NH4)1, NH4:1, whose 4 is no count
                                 {"Neu5Ac": "NeuAc", "Neu5Gc": "NeuGc", "SO3": "Sulf", "PO3": "Phos", "@sulfate": "Sulf",
                                  "@phosphate": "Phos", "@acetyl": "Ac", "@methyl": "Me",
                                  '(': '', ')': '', ' ': '', '+': '', '{': '', '}': '', ':': '', ';': '', ',': '',
@@ -450,7 +452,7 @@ def canonicalize_composition(comp: str | dict[str, int], # Composition in Hex5He
         if sialic > 0:
             comp_dict['Neu5Ac'] = sialic + comp_dict.get('Neu5Ac', 0)
         comp_dict['S'] = total_sulfate
-    comp_dict = {k: v for k, v in comp_dict.items() if v}
+    comp_dict = {k: v for k, v in comp_dict.items() if v and k not in _ADDUCTS}  # a sodiated or ammoniated ion of a glycan has that glycan's composition
     if strict:  # any word parses as a residue ('Oxidation' -> {'Oxidation': 1}); formula keys ('-H2O', '+N3') are valid, a bare '-' from a sequence is not
         from glycowork.motif.tokenization import _VALID_COMPONENTS  # tokenization imports this module at load time, so a module-level import is circular
         if unknown := [k for k in comp_dict if k not in _VALID_COMPONENTS and not re.fullmatch(r'[+-](?:[A-Z][a-z]?\d*)+', k)]:
@@ -1620,6 +1622,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     if glycan.startswith("ENTRY"):
         glycan = kcf_to_iupac(glycan)
     glycan = re.sub('[\u2010-\u2015\u2212]', '-', glycan.strip()).replace(' ', '')  # hyphen, non-breaking hyphen, figure/en/em dash, and minus sign from PDF copy-paste all mean '-'
+    glycan = _COMP_ADDUCT.sub('', glycan)  # an ion written after the glycan, 'FA2G2S1 [M+Na]+' or 'N4H5F1+Ammonium(+17)', names that glycan
     if '//' in glycan:
         glycan = CSDB_COMMENT.sub('', glycan)
     if 'Subst' in glycan or 'subst' in glycan:
@@ -2044,7 +2047,7 @@ def process_for_glycoshift(df: pd.DataFrame, # Dataset with protein_site_composi
 def is_composition(s: str # Either glycan or composition string
                    ) -> bool: # Whether the input is a composition
     "Checks whether a string is a composition (H5N4F1A2, Hex5HexNAc4, HexNAc(4)Hex(5), {Hex:5; HexNAc:4}) rather than a glycan sequence"
-    s = _COMP_MASS_SUFFIX.sub('', str(s)).strip()
+    s = _COMP_ADDUCT.sub('', _COMP_MASS_SUFFIX.sub('', str(s))).strip()
     return bool(s and ((s.replace(' ', '').isalnum() and s[-1].isdigit()) or _COMP_TABLE_FORM.fullmatch(s)))
 
 

@@ -8717,6 +8717,7 @@ def test_read_glycoproteomics_other_engines():
     with pytest.warns(UserWarning, match = 'unparseable'):
         out = read_glycoproteomics(decipher)
     assert out.set_index('ID').to_dict('index') == {'O43866_226/229_H4N5': {'H_1': 3.8e6, 'H_2': 0.0}, 'P00738_211_H5N4A2': {'H_1': 2e6, 'H_2': 1e6}}
+    assert sorted(read_glycoproteomics(decipher.iloc[1:].assign(Glycan = ['Hex(5)HexNAc(4)NeuAc(2)+Na', 'Hex(5)HexNAc(4)NeuAc(2)Na(1)']))['ID']) == ['O75882_1073_H5N4A2', 'P00738_211_H5N4A2']  # an adduct is dropped, not read as a mass delta
     glycanfinder = pd.DataFrame({'Protein Accession': ['P02749|APOH_HUMAN'], 'Peptide': ['LGN(+2786.96)WSAMPS(+755.30)C(+57.02)K'], 'Glycan': ['(HexNAc)4(Hex)5(NeuAc)4;(HexNAc)3(Fuc)1'],
                                  'Glycan Type': ['N-Link;O-Link'], 'Area C_3': ['10'], 'Area H_1': ['20'], 'Sample Profile (Ratio)': ['1.00:2.00'], 'Area C': ['10'], 'Start': ['251']})
     assert read_glycoproteomics(glycanfinder).set_index('ID').to_dict('index') == {'P02749_253_H5N4A4': {'C_3': 10.0, 'H_1': 20.0}, 'P02749_259_N3F1': {'C_3': 10.0, 'H_1': 20.0}}
@@ -8745,6 +8746,12 @@ def test_canonicalize_composition_glycomics_formats():
     assert canonicalize_composition('H5N4AmG1EG1', as_string = True) == 'H5N4G2'
     assert is_composition('(Hex)5 (HexNAc)2') and is_composition('Hex(6)HexNAc(4)NeuAc[+13.0316](2)')
     assert not is_composition('(Hex)3 (HexNAc)1 (NeuAc)1 + (Man)3(GlcNAc)2')
+    # adducts written into a composition are no residues: MSFragger-Glyco's Na(1) and NH4(1), StrucGP's '+Ammonium(+17)', and ion notation
+    assert canonicalize_composition('HexNAc(4)Hex(5)NeuAc(1)Na(1)', as_string = True, strict = True) == 'H5N4A1'
+    assert {canonicalize_composition(c, as_string = True) for c in ['HexNAc(4)Hex(5)Fuc(1)NH4(1)', '(Hex)5 (HexNAc)4 (dHex)1 (NH4)1', '{Hex:5; HexNAc:4; Fuc:1; Na:1}', 'N4H5F1+Ammonium(+17)', 'H5N4F1+2Na', 'H5N4F1 [M+Na]+']} == {'H5N4F1'}
+    assert is_composition('H5N4F1 [M+Na]+') and is_composition('HexNAc(4)Hex(5)NH4(1)')
+    assert canonicalize_composition('H5N4K1', as_string = True) == 'H5N4K1'  # a bare K is left alone, only '+K' is potassium
+    assert canonicalize_iupac('FA2G2S1 [M+Na]+') == canonicalize_iupac('FA2G2S1')
     # ...and written back in search engine glycan database formats, which canonicalize_composition reads again
     assert canonicalize_composition('H5N4F1A2', as_string = True, string_format = 'byonic') == 'HexNAc(4)Hex(5)Fuc(1)NeuAc(2)'
     assert canonicalize_composition({'Hex': 5, 'HexNAc': 4, 'Neu5Gc': 1, 'S': 1}, as_string = True, string_format = 'glycresoft') == '{Hex:5; HexNAc:4; Neu5Gc:1; @sulfate:1}'
@@ -8799,6 +8806,8 @@ def test_read_glycomics_tables(tmp_path):
     candy = pd.DataFrame({'top1_pred': ['Gal(b1-3)GalNAc', None], 'composition': [{'Hex': 1, 'HexNAc': 1}, {'Hex': 2, 'HexNAc': 2}], 'num_spectra': [3, 1], 'rel_abundance': [90.0, 10.0]},
                          index = pd.Index([384.15, 749.3], name = 'm/z'))
     assert read_glycomics(candy).set_index('glycan')['sample1'].to_dict() == {'Gal(b1-3)GalNAc': 90.0, 'H2N2': 10.0}
+    with pytest.warns(UserWarning, match = 'adducts'):
+        assert read_glycomics(pd.DataFrame({'glycan': ['H5N4F1A1', 'H5N4F1A1+Na', 'HexNAc(4)Hex(5)Fuc(1)NeuAc(1)Na(1)'], 'S1': ['10', '2', '1']})).to_dict('list') == {'glycan': ['H5N4F1A1'], 'S1': [13.0]}
     with pytest.raises(ValueError, match = 'No abundances'):
         read_glycomics(pd.DataFrame({'glycan': ['Gal(b1-4)Glc'], 'note': ['x']}))
     with pytest.raises(ValueError, match = 'reset_index'):  # glycans in the index

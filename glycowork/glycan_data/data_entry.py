@@ -8,7 +8,7 @@ from pathlib import Path
 from pandas.io.common import get_handle
 from typing import Callable
 from glycowork.glycan_data.loader import GlycoDataFrame, glycomics_data_loader, glycoproteomics_data_loader, lectin_array_data_loader
-from glycowork.motif.processing import check_nomenclature, canonicalize_composition, canonicalize_iupac, is_composition, _STRUCGP_CODE
+from glycowork.motif.processing import check_nomenclature, canonicalize_composition, canonicalize_iupac, is_composition, _STRUCGP_CODE, _COMP_ADDUCT
 from glycowork.motif.tokenization import glycan_to_composition
 from glycowork.motif.graph import glycan_to_nxGraph, compare_glycans
 
@@ -215,7 +215,7 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
     canon = {}
     for g in df['comp'].unique():
         try:
-            canon[g] = canonicalize_iupac(g) if _STRUCGP_CODE.fullmatch(g) else None if re.search(r'[+\[]', g) else canonicalize_composition(g, as_string = True) or None  # a residual mass delta such as '+225.06' has no composition
+            canon[g] = canonicalize_iupac(g) if _STRUCGP_CODE.fullmatch(g) else None if re.search(r'[+\[]', _COMP_ADDUCT.sub('', g)) else canonicalize_composition(g, as_string = True) or None  # a residual mass delta such as '+225.06' has no composition, an adduct such as '+Na' or 'Na(1)' is dropped from it
         except ValueError:
             canon[g] = None
     if bad := [g for g, v in canon.items() if v is None]:
@@ -318,7 +318,7 @@ def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataF
         warnings.warn(f"{len(raw)} labels are neither a glycan sequence nor a composition glycowork can read and were kept as written, e.g., {raw[:3]}.", stacklevel = 2)
     df['glycan'] = [canon[(g, s)] or g.strip() for g, s in zip(df['label'], df['sia'])]
     if merged := {k: v for k, v in df.groupby('glycan')['label'].unique().items() if len(v) > 1}:
-        warnings.warn(f"{len(merged)} glycans were written in several ways and summed, e.g., {list(merged.items())[0][1].tolist()} into '{list(merged)[0]}'; sialic acid derivatives (ethyl esters, lactones, amides) become Neu5Ac or Neu5Gc, since compositions carry no linkages.", stacklevel = 2)
+        warnings.warn(f"{len(merged)} glycans were written in several ways and summed, e.g., {list(merged.items())[0][1].tolist()} into '{list(merged)[0]}'; adducts (Na, NH4, [M+Na]+) are dropped, and sialic acid derivatives (ethyl esters, lactones, amides) become Neu5Ac or Neu5Gc, since compositions carry no linkages.", stacklevel = 2)
     return _abundance_matrix(df[['run', 'ion', 'glycan', 'value']], sample_map, groups = groups)
 
 
