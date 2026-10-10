@@ -16,7 +16,7 @@ np.random.seed(0)
 def cohen_d(x: np.ndarray | list[float], # comparison group containing numerical data
             y: np.ndarray | list[float], # comparison group containing numerical data
             paired: bool = False # whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient)
-            ) -> tuple[float, float]: # (Cohen's d, variance) where d: 0.2 small; 0.5 medium; 0.8 large effect size
+            ) -> tuple[float, float]:  # (Cohen's d, variance) where d: 0.2 small; 0.5 medium; 0.8 large effect size; +-inf (variance 0) when both groups, or the paired differences, are constant and differ
     "calculates effect size between two groups, for one feature or for a whole feature x sample frame"
     X, Y = np.atleast_2d(np.asarray(x, dtype = float)), np.atleast_2d(np.asarray(y, dtype = float))
     d, var_d = np.full(X.shape[0], np.nan), np.full(X.shape[0],
@@ -31,9 +31,9 @@ def cohen_d(x: np.ndarray | list[float], # comparison group containing numerical
             n = n[ok]
             dmean, dstd = (np.mean, np.std) if n.min() == dok.shape[1] else (np.nanmean, np.nanstd)
             mean_diff, diff_std = dmean(dok, axis = 1), dstd(dok, axis = 1, ddof = 1)
-            # A degenerate difference has an unbounded standardized effect and no sampling variance left to report
-            degenerate = diff_std == 0
-            d[ok] = np.where(degenerate, np.where(mean_diff == 0, 0.0, np.where(mean_diff > 0, np.inf, -np.inf)),
+            # A degenerate difference has an unbounded standardized effect and no sampling variance left to report; below 1e-6 a standard deviation or mean difference is floating-point noise (CLR values of 0 +- 1e-16), which divided into a mean difference gave d ~ 1e15
+            degenerate = diff_std < 1e-6
+            d[ok] = np.where(degenerate, np.where(np.abs(mean_diff) <= 1e-6, 0.0, np.copysign(np.inf, mean_diff)),
                              mean_diff / np.where(degenerate, 1, diff_std))
             var_d[ok] = np.where(degenerate, 0.0, 1 / n + np.where(degenerate, 0, d[ok]) ** 2 / (2 * n))
     else:
@@ -45,10 +45,16 @@ def cohen_d(x: np.ndarray | list[float], # comparison group containing numerical
             # np.nanstd/np.nanmean copy their entire input via numpy's _replace_nan even when nothing is missing, so the plain versions, which are exact then, are used instead
             xmean, xstd = (np.mean, np.std) if nx.min() == Xok.shape[1] else (np.nanmean, np.nanstd)
             ymean, ystd = (np.mean, np.std) if ny.min() == Yok.shape[1] else (np.nanmean, np.nanstd)
-            sx, sy = np.maximum(xstd(Xok, axis = 1, ddof = 1), 1e-6), np.maximum(ystd(Yok, axis = 1, ddof = 1), 1e-6)
-            d[ok] = (xmean(Xok, axis = 1) - ymean(Yok, axis = 1)) / np.sqrt(
-                ((nx - 1) * sx ** 2 + (ny - 1) * sy ** 2) / (nx + ny - 2))
-            var_d[ok] = (nx + ny) / (nx * ny) + d[ok] ** 2 / (2 * (nx + ny))
+            sx, sy = xstd(Xok, axis = 1, ddof = 1), ystd(Yok, axis = 1, ddof = 1)
+            mean_diff = xmean(Xok, axis = 1) - ymean(Yok, axis = 1)
+            # The 1e-6 floor keeps floating-point noise out of the pooled SD (a site's only glycoform has CLR 0 +- 1e-16 in every sample); with both groups at the floor the effect is unbounded, as for a degenerate paired difference, and the floor reported it as the mean difference x 1e6 (richness 2 vs 3: d = 1e6)
+            degenerate = (sx < 1e-6) & (sy < 1e-6)
+            sx, sy = np.maximum(sx, 1e-6), np.maximum(sy, 1e-6)
+            d[ok] = np.where(degenerate, np.where(np.abs(mean_diff) <= 1e-6, 0.0, np.copysign(np.inf, mean_diff)),
+                             mean_diff / np.sqrt(
+                                 ((nx - 1) * sx ** 2 + (ny - 1) * sy ** 2) / (nx + ny - 2)))
+            var_d[ok] = np.where(degenerate, 0.0,
+                                 (nx + ny) / (nx * ny) + np.where(degenerate, 0, d[ok]) ** 2 / (2 * (nx + ny)))
     return (d, var_d) if np.ndim(x) > 1 else (d[0], var_d[0])
 
 

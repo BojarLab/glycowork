@@ -17,6 +17,7 @@ plt.rcParams.update({
                                   ['#2D6A9F', '#C84B55', '#3A9268', '#E8863A', '#7B5EA7', '#C4843A', '#4AADA8'])
 })
 from collections import Counter
+from math import comb
 from typing import Any, Callable
 from scipy.stats import ttest_ind, ttest_rel, levene, f, f_oneway, spearmanr, t as t_dist
 from scipy.spatial.distance import squareform, pdist
@@ -1877,6 +1878,22 @@ def get_cosinor(
     return df_out.sort_values("Adjusted_P_value").reset_index(drop = True)
 
 
+def _diversity_pval(
+        a: np.ndarray,  # diversity index in group 1
+        b: np.ndarray,  # diversity index in group 2, same order as a if paired
+        paired: bool  # whether samples are paired
+) -> float:  # two-sided p-value
+    "Two-sided t-test p-value of b against a; when each group (paired: the difference) has zero variance, the t statistic is 0/0 or infinite, so this returns 1 for no difference and otherwise the exact rank-test p-value of complete separation (Wilcoxon signed-rank or Mann-Whitney)"
+    if paired:
+        d = b - a
+        if np.ptp(d) == 0:
+            return 1.0 if d[0] == 0 else min(1.0, 2 / 2 ** len(d))
+        return ttest_rel(b, a)[1]
+    if np.ptp(a) == 0 and np.ptp(b) == 0:
+        return 1.0 if a[0] == b[0] else 2 / comb(len(a) + len(b), len(a))
+    return ttest_ind(b, a, equal_var = False)[1]
+
+
 @_abundance_input('df')
 def get_biodiversity(
         df: pd.DataFrame | str | Path,  # DataFrame with glycans in rows (col 1), abundances in columns
@@ -1946,7 +1963,7 @@ def get_biodiversity(
                 if min(len(a), len(b)) < 2:
                     continue  # a site measured in fewer than two samples of a group has no variance to test against
                 same = np.allclose(np.r_[a, b], a[0], rtol = 1e-5, atol = 1e-8) or (len(a) == len(b) and np.allclose(a, b, rtol = 1e-5, atol = 1e-8))  # e.g., a richness every sample shares, which has no variance to test
-                pval = 1.0 if same else (ttest_rel(b, a)[1] if paired else ttest_ind(b, a, equal_var = False)[1])
+                pval = 1.0 if same else _diversity_pval(a, b, paired)
                 shopping_cart.append(pd.DataFrame({'Metric': metric, 'Group1 mean': a.mean(), 'Group2 mean': b.mean(), 'p-val': float(np.clip(pval, np.nextafter(0, 1), 1.0)) if np.isfinite(pval) else 1.0,
                                                    'Effect size': 0.0 if same else cohen_d(b, a, paired = paired)[0]}, index = [0]))
             elif not metric.endswith('species_richness') and len(group_counts) > 2 and all(c > 1 for c in Counter(garr[obs]).values()) and len(set(garr[obs])) > 2:
@@ -1977,7 +1994,7 @@ def get_biodiversity(
                     pvals.append(1.0)
                     effect_sizes.append(0.0)
                 else:
-                    pval = ttest_rel(row_b, row_a)[1] if paired else ttest_ind(row_b, row_a, equal_var = False)[1]
+                    pval = _diversity_pval(row_a, row_b, paired)
                     pvals.append(float(np.clip(pval, np.nextafter(0, 1), 1.0)) if np.isfinite(pval) else 1.0)
                     effect, _ = cohen_d(row_b, row_a, paired = paired)
                     effect_sizes.append(effect)

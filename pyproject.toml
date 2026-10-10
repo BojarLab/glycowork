@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 # Project metadata
 [project]
 name = "glycowork"
-version = "1.10.2"
+version = "1.11.0"
 description = "The Python package for glycan data science: reads any glycan notation, motif search, SNFG drawing, glycomics statistics, curated glycan data"
 readme = "README.md"
 authors = [

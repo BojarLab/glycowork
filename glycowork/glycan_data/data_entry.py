@@ -1,9 +1,11 @@
 import re
 import ast
+import csv
 import warnings
 import xml.etree.ElementTree as ET
 import pandas as pd
 from pathlib import Path
+from pandas.io.common import get_handle
 from typing import Callable
 from glycowork.glycan_data.loader import GlycoDataFrame, glycomics_data_loader, glycoproteomics_data_loader, lectin_array_data_loader
 from glycowork.motif.processing import check_nomenclature, canonicalize_composition, canonicalize_iupac, is_composition, _STRUCGP_CODE
@@ -22,18 +24,30 @@ _DECOY = re.compile(r'>?\s*(?:rev_|reverse|decoy|#decoy#|xxx_)', flags = re.IGNO
 def _read_table(f: str | Path, # an Excel workbook, a .csv separated by commas, semicolons, or tabs, or any other text table separated by tabs
                 dtype: type | None = str # passed to pd.read_csv or pd.read_excel
                 ) -> list[pd.DataFrame]: # one frame per sheet
-    "Reads a table file, including the CSV of European Excel or Skyline (';' between fields, ',' as decimal mark, Windows code page)"
+    "Reads a table file, including the CSV of European Excel or Skyline (';' between fields, ',' as decimal mark, Windows code page) and published supplementary tables with title, caption, or merged group rows above the header"
+
+    def header(rows: list[list]) -> int | None:  # the first of the top rows with at least half as many filled cells as the widest one; None for a single column, read as is
+        filled = [sum(isinstance(x, str) and bool(x.strip()) for x in r) for r in rows]
+        return next((i for i, k in enumerate(filled) if k >= max(2, max(filled) / 2)), None)
+
     if Path(f).suffix.lower() in ('.xlsx', '.xlsm', '.xlsb', '.xls', '.ods'):
-        return list(pd.read_excel(f, sheet_name = None, dtype = dtype).values())
-    sep = '\t'
-    if Path(f).suffix.lower() == '.csv':
-        with open(f, encoding = 'utf-8-sig', errors = 'replace') as fh:
-            head = fh.readline()
-        sep = max((',', ';', '\t'), key = head.count)
+        with pd.ExcelFile(f) as xl:
+            return [xl.parse(s, header = header(xl.parse(s, header = None, nrows = 50, dtype = str).values.tolist()) or 0, dtype = dtype) for s in xl.sheet_names]
+    seps = (',', ';', '\t') if '.csv' in [x.lower() for x in Path(f).suffixes[-2:]] else ('\t',)  # also a compressed '.csv.xz', which pandas decompresses
+    with get_handle(f, 'r', encoding = 'utf-8-sig', errors = 'replace', compression = 'infer') as fh:
+        lines = [l for _, l in zip(range(50), fh.handle)]
+    found = []
+    for s in seps:
+        try:
+            if (h := header(list(csv.reader(lines, delimiter = s)))) is not None:
+                found.append((s, h))
+        except csv.Error:  # a wide line without this separator is one field beyond the csv module's size limit, e.g., the header of v12_glycan_binding.csv with ';'
+            pass
+    sep, skip = min(found, key = lambda t: (t[1], -lines[t[1]].count(t[0])), default = (max(seps, key = (lines or [''])[0].count), 0))  # the separator that puts the header highest, then splits it most often; ties go to the comma
     try:
-        df = pd.read_csv(f, sep = sep, dtype = dtype, decimal = ',' if sep == ';' else '.')
+        df = pd.read_csv(f, sep = sep, dtype = dtype, decimal = ',' if sep == ';' else '.', skiprows = skip)
     except UnicodeDecodeError:  # Excel on Windows writes CSV in its code page, e.g., 'Müller' as cp1252
-        df = pd.read_csv(f, sep = sep, dtype = dtype, decimal = ',' if sep == ';' else '.', encoding = 'cp1252', encoding_errors = 'replace')
+        df = pd.read_csv(f, sep = sep, dtype = dtype, decimal = ',' if sep == ';' else '.', skiprows = skip, encoding = 'cp1252', encoding_errors = 'replace')
     return [df.replace(r'^([-+]?\d+),(\d+(?:[eE][-+]?\d+)?)$', r'\1.\2', regex = True) if sep == ';' and dtype is str else df]  # values read as text keep their decimal comma otherwise
 
 

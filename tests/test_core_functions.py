@@ -2924,6 +2924,12 @@ def test_cohen_d():
     # Test with identical groups
     d, _ = cohen_d(group1, group1)
     assert abs(d) < 1e-10  # Effect size should be approximately 0
+    # Both groups constant: the effect is unbounded, which the 1e-6 SD floor reported as the mean difference x 1e6
+    assert cohen_d([2, 2], [3, 3, 3]) == (-np.inf, 0.0) and cohen_d([2, 2], [2, 2, 2]) == (0.0, 0.0)
+    # SDs below 1e-6 are floating-point noise (a site's only glycoform has CLR 0 +- 1e-16), and one constant group next to a varying one is not degenerate
+    d, _ = cohen_d(np.array([[0, 1e-16, 0], [0.5, 0.2, 0.3]]), np.array([[0, 0, -1e-16], [0, 0, 0]]))
+    assert d[0] == 0 and np.isfinite(d[1]) and d[1] > 0
+    assert cohen_d([1, 2, 3], [1 + 1e-12, 2 + 1e-12, 3 + 1e-12], paired = True)[0] == 0
 
 
 def test_mahalanobis_distance():
@@ -6207,6 +6213,12 @@ def test_get_biodiversity_richness_ignores_floors():
                        'b1': [2.0, 1.0, 4.0, 1.0, 1.0], 'b2': [2.5, 1.5, 4.5, 1.0, 1.0], 'b3': [2.0, 1.0, 4.0, 1.0, 1.0]})
     res = get_biodiversity(df, group1 = ['a1', 'a2', 'a3'], group2 = ['b1', 'b2', 'b3'], metrics = ['alpha'])[0].set_index('Metric')
     assert res.loc['species_richness', ['Group1 mean', 'Group2 mean']].tolist() == [4.0, 5.0]
+    # richness constant within each group has zero variance, so the t statistic is infinite; complete separation gets the exact rank-test p-value instead of ~1e-323
+    assert res.loc['species_richness', 'p-val'] == 2 / 20 and res.loc['species_richness', 'Effect size'] == np.inf
+    res = \
+    get_biodiversity(df, group1 = ['a1', 'a2', 'a3'], group2 = ['b1', 'b2', 'b3'], metrics = ['alpha'], paired = True)[
+        0].set_index('Metric')
+    assert res.loc['species_richness', 'p-val'] == 2 / 8
     res = get_biodiversity(df, group1 = ['a1', 'a2', 'a3'], group2 = ['b1', 'b2', 'b3'], metrics = ['alpha'], motifs = True, feature_set = ['exhaustive'])[0].set_index('Metric')
     assert res.loc['species_richness', 'Group1 mean'] < res.loc['species_richness', 'Group2 mean']  # GlcNAc only occurs in group 2
 
@@ -6218,7 +6230,12 @@ def test_get_biodiversity_glycoproteomics():
     alpha = out[~out['Metric'].str.startswith('Beta')]
     assert set(alpha['Metric']) == {f'{s}_{m}' for s in ('P01857_180', 'P01859_176', 'P01860_227', 'P01861_177') for m in ('species_richness', 'shannon_diversity', 'simpson_diversity')}
     assert alpha[['Group1 mean', 'Group2 mean', 'p-val', 'corr p-val']].notna().all().all()
-    assert (alpha.loc[alpha['Metric'].str.endswith('shannon_diversity'), 'Group1 mean'] < np.log(45)).all()  # bounded by a site's glycoforms (at most 44 here), unlike the whole-sample index over all 162
+    assert (alpha.loc[alpha['Metric'].str.endswith('shannon_diversity'), 'Group1 mean'] < np.log(
+        45)).all()  # bounded by a site's glycoforms (at most 44 here), unlike the whole-sample index over all 162
+    milk = get_biodiversity(glycoproteomics_data_loader.human_milk_N_PMID34087070, metrics = ['alpha'])[0].set_index(
+        'Metric')
+    assert milk.loc[
+               'Q08431_238_species_richness', 'p-val'] == 2 / 10  # richness 2 in both measured colostrum samples, 3 in all mature ones; the t-test gave p = 5e-324
     assert dist.shape == (len(df.group1) + len(df.group2),) * 2 and np.isfinite(dist.to_numpy()).all()
     sites = ['P1_10_H5N4', 'P1_10_H5N4F1', 'P1_10_H4N4', 'P2_20_H3N4', 'P2_20_H5N2']
     gp = pd.DataFrame({'ID': sites, 'a1': [5.0, 3.0, 2.0, 1.0, 1.0], 'a2': [6.0, 2.0, 2.0, 1.0, 2.0], 'a3': [5.0, 3.0, 1.0, 2.0, 1.0],
@@ -8819,12 +8836,20 @@ def test_read_abundances(tmp_path):
     assert read_abundances(tmp_path / 'skyline_de.csv').to_dict('list') == {'glycan': ['H5N4F1A1'], 'Müller': [1.5e7], 'case': [2.25]}  # German Excel or Skyline: semicolons, decimal commas, Windows code page
     (tmp_path / 'plain_de.csv').write_text('glycan;S1;S2\nGal(b1-4)Glc;1,5;2\n')
     assert read_abundances(tmp_path / 'plain_de.csv').to_dict('list') == {'glycan': ['Gal(b1-4)Glc'], 'S1': [1.5], 'S2': [2]}
+    with pd.ExcelWriter(tmp_path / 'supplement.xlsx') as w:  # a published supplementary table: title and caption rows, a blank row, and a group row with merged cells above the header
+        pd.DataFrame([['Table S2. N-glycans'] + [None] * 4, ['Values in % of total'] + [None] * 4, [None] * 5, [None, 'ctrl', None, 'case', None], ['glycan', 'S1', 'S2', 'S3', 'S4'],
+                      ['Gal(b1-4)Glc', 1.5, 2.0, 3.0, 4.0]]).to_excel(w, index = False, header = False)
+    assert read_abundances(tmp_path / 'supplement.xlsx').to_dict('list') == {'glycan': ['Gal(b1-4)Glc'], 'S1': [1.5], 'S2': [2.0], 'S3': [3.0], 'S4': [4.0]}
+    (tmp_path / 'supplement.csv').write_text('"Table S1. Glycans, quantified",,\n,,\nglycan,S1,S2\nGal(b1-4)Glc,1.5,2\n')  # Excel pads every row of its CSV export with separators
+    assert read_abundances(tmp_path / 'supplement.csv').to_dict('list') == {'glycan': ['Gal(b1-4)Glc'], 'S1': [1.5], 'S2': [2]}
     rng = np.random.default_rng(0)
     rows = [{'RawName': 'S1', 'Peptide': pep, 'Mod': '', 'Charge': '3', 'GlycanComposition': g, 'Proteins': prot, 'ProSites': site, 'TotalFDR': '0.001',
              **{f'Intensity(S{i})': str(round(rng.uniform(50, 150) * (3 if i > 3 and g == 'H(5)N(4)A(2)' else 1), 2)) for i in range(1, 7)}}
             for pep, prot, site in (('EJGTR', 'sp|P19652|A1AG2_HUMAN', '103'), ('JITR', 'sp|P02763|A1AG1_HUMAN', '33')) for g in ('H(5)N(4)A(2)', 'H(5)N(4)A(1)', 'H(5)N(4)F(1)A(2)', 'H(6)N(5)A(3)')]
     pd.DataFrame(rows).to_csv(tmp_path / 'pglycoquant.list', sep = '\t', index = False)
     gp = read_abundances(tmp_path / 'pglycoquant.list')
+    (tmp_path / 'pglycoquant_supplement.list').write_text('Table S5. N-glycopeptides quantified by pGlycoQuant\n\n' + (tmp_path / 'pglycoquant.list').read_text())
+    pd.testing.assert_frame_equal(read_abundances(tmp_path / 'pglycoquant_supplement.list'), gp)  # the engine is recognized below a title
     assert gp['ID'].str.startswith(('P19652_103_', 'P02763_33_')).all()
     res = get_differential_expression(tmp_path / 'pglycoquant.list', group1 = ['S1', 'S2', 'S3'], group2 = ['S4', 'S5', 'S6'])
     assert 'Glycosite' in res.columns  # the per-glycosite analysis switched on by itself
