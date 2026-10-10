@@ -123,6 +123,7 @@
 - Added `glycan_to_iupac_extended` to write IUPAC-extended sequences as GlyTouCan does (e.g., `α-D-Neup5Ac-(2→3)-β-D-Galp-(1→4)-?-D-GlcpNAc-(1→`) (ba8b5f7)
 - Added the `string_format` keyword argument to `canonicalize_composition` to write compositions as Byonic/MSFragger-Glyco (`HexNAc(4)Hex(5)Fuc(1)NeuAc(2)`) or GlycReSoft (`{Fuc:1; Hex:5; HexNAc:4; Neu5Ac:2}`) glycan database entries (ba8b5f7)
 - Added the IgG names `G0N`, `G2FS2`, `G2NS2`, `G2FNS2`, and the S1 spellings (e.g., `G2S1`, `G2FS1`, `G1NS1`) to `canonicalize_iupac`, which previously misread or rejected them (ba8b5f7)
+- `canonicalize_iupac` now also takes a list, tuple, array, `pd.Series`, or `pd.Index` of glycans as input (a list for the first three, a Series/Index with the same index for the others) ()
 
 ##### Changed 🔄
 - `canonicalize_composition` now also accepts dictionary compositions as inputs (0967d8a)

@@ -1271,7 +1271,7 @@ def get_differential_biosynthesis(df: pd.DataFrame | str | Path, # Glycan abunda
     else:
         df_analysis = df_analysis.T
     # Network analysis
-    df_analysis = df_analysis.set_axis([canonicalize_iupac(g) for g in df_analysis.index])  # construct_network canonicalizes its node names, so the abundance keys have to be canonical too
+    df_analysis = df_analysis.set_axis(canonicalize_iupac(df_analysis.index))  # construct_network canonicalizes its node names, so the abundance keys have to be canonical too
     # Rows of one structure (isomer peaks, or two spellings of one sequence) add up, as the node abundance lookup below would keep only the last of them
     df_analysis = df_analysis.groupby(level = 0, sort = False).sum()
     core_net = construct_network(df_analysis.index.tolist(), edge_type = edge_type)
@@ -1614,7 +1614,7 @@ def get_biosynthetic_coherence(
     if network is None:
         network = construct_network(df.index.tolist())
     # Rows of one structure (isomer peaks, or two spellings of one sequence) add up, or each would be fitted and counted as a glycan of its own
-    df = df.set_axis([canonicalize_iupac(g) for g in df.index]).groupby(level = 0, sort = False).sum()
+    df = df.set_axis(canonicalize_iupac(df.index)).groupby(level = 0, sort = False).sum()
     glycans = [g for g in df.index if network.nodes.get(g, {}).get('virtual', 1) == 0]
     gidx = {g: i for i, g in enumerate(glycans)}
     cols = list(group1) + list(group2)

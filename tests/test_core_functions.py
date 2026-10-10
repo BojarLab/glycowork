@@ -671,7 +671,19 @@ def test_canonicalize_iupac():
     with pytest.raises(ValueError, match = 'repeating units'):
         canonicalize_iupac("WURCS=2.0/3,3,3/[a2211m-1a_1-5][a2122h-1a_1-5][a1122h-1b_1-5_2*NCC/3=O]/1-2-3/a2-b1_b4-c1_a1-c?~n")
     assert canonicalize_iupac(782) == "Gal(?1-?)[GlcNAcOS(?1-?)]GalNAc"
-    assert canonicalize_iupac(72) == "Fuc(a1-2)Gal(b1-3/4)GlcNAc(b1-?)[Fuc(a1-2)Gal(b1-3/4)GlcNAc(b1-?)]Gal(b1-3)[GlcNAc(b1-6)]GalNAc"
+    assert canonicalize_iupac(
+        72) == "Fuc(a1-2)Gal(b1-3/4)GlcNAc(b1-?)[Fuc(a1-2)Gal(b1-3/4)GlcNAc(b1-?)]Gal(b1-3)[GlcNAc(b1-6)]GalNAc"
+    assert canonicalize_iupac(["Galb4GlcNAc", 782]) == ["Gal(b1-4)GlcNAc", "Gal(?1-?)[GlcNAcOS(?1-?)]GalNAc"]
+    assert canonicalize_iupac(("Galb4GlcNAc",)) == ["Gal(b1-4)GlcNAc"]
+    assert canonicalize_iupac([]) == []
+    assert canonicalize_iupac(np.array([782, 72])) == canonicalize_iupac([782, 72])
+    assert canonicalize_iupac(
+        pd.Series(["Galb4GlcNAc", "Neu9,5Ac(a2-3)Gal(b1-3)GalNAc"], index = ['x', 'y'], name = 'glycan')).equals(
+        pd.Series(["Gal(b1-4)GlcNAc", "Neu5Ac9Ac(a2-3)Gal(b1-3)GalNAc"], index = ['x', 'y'], name = 'glycan'))
+    assert canonicalize_iupac(pd.Series([782])).tolist() == ["Gal(?1-?)[GlcNAcOS(?1-?)]GalNAc"]
+    assert canonicalize_iupac(pd.Index(["Galb4GlcNAc"])).equals(pd.Index(["Gal(b1-4)GlcNAc"]))
+    with pytest.raises(ValueError, match = 'non-empty'):
+        canonicalize_iupac(pd.Series(["Galb4GlcNAc", np.nan]))
     assert canonicalize_iupac(
         "RES\n1b:o-dglc-HEX-0:0|1:aldi\n2b:a-lgal-HEX-1:5|6:d\n3b:b-dgal-HEX-1:5\nLIN\n1:1o(3+1)2d\n2:1o(4+1)3d") == "Fuc(a1-3)[Gal(b1-4)]Glc-ol"
     assert canonicalize_iupac(
