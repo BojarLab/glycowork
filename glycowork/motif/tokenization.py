@@ -202,21 +202,23 @@ def stemify_dataset(df: pd.DataFrame, # DataFrame with glycan column
 def get_ion_mzs(mass: float | np.ndarray, # Neutral mass(es), including any reducing-end modification or label
                 max_charge: int = -2, # Signed charge ceiling: sign sets ion mode (negative/positive), magnitude the highest charge state z considered
                 adducts: str | list[str] | None = None, # Adduct(s) as named in mz_to_composition.csv, e.g., ['Acetate', 'Formate'] or ['Na+', 'K+', 'NH4+']; neutral ones (NEUTRAL_ADDUCTS) ride on the protonated/deprotonated ion; default: protonated ions only
-                min_mass: dict[int, float] | None = None # Smallest neutral mass that can carry charge z, e.g., {2: 900, 3: 1500}; default: no limit
+                min_mass: dict[int, float] | None = None, # Smallest neutral mass that can carry charge z, e.g., {2: 900, 3: 1500}; default: no limit
+                mass_value: str = 'monoisotopic' # Mass type of mass: monoisotopic/average; proton and adduct masses follow it
                 ) -> dict[str, float | np.ndarray]: # Ion name (e.g., '[M-H]-', '[M+Acetate-H]2-', '[M+2Na]2+') : theoretical m/z (NaN where min_mass excludes the ion); by charge, then z protons, one adduct with z-1 protons, z adducts
     "Theoretical m/z of every ion species of a neutral mass"
     m = np.asarray(mass, dtype = float)
     adducts = [adducts] if isinstance(adducts, str) else adducts
     s, sign, out = (1 if max_charge > 0 else -1), ('+' if max_charge > 0 else '-'), {}
+    proton, adduct_masses = calculate_adduct_mass('H', mass_value = mass_value) - ELECTRON_MASS, _MASS_DICTS[f"underivatized_{mass_value}"]
     for z in range(1, abs(max_charge) + 1):
         ok, charge, h = m > (min_mass or {}).get(z, -np.inf), f"{z if z > 1 else ''}{sign}", (f"{sign}{z - 1 if z > 2 else ''}H" if z > 1 else '')
-        out[f"[M{sign}{z if z > 1 else ''}H]{charge}"] = np.where(ok, (m + z * (s * PROTON_MASS)) / z, np.nan)
+        out[f"[M{sign}{z if z > 1 else ''}H]{charge}"] = np.where(ok, (m + z * (s * proton)) / z, np.nan)
         for adduct in adducts or []:
-            a, name = mass_dict[adduct], adduct.rstrip('+-')
+            a, name = adduct_masses[adduct], adduct.rstrip('+-')
             if adduct in NEUTRAL_ADDUCTS:
-                out[f"[M+{name}{sign}{z if z > 1 else ''}H]{charge}"] = np.where(ok, (m + a + z * (s * PROTON_MASS)) / z, np.nan)
+                out[f"[M+{name}{sign}{z if z > 1 else ''}H]{charge}"] = np.where(ok, (m + a + z * (s * proton)) / z, np.nan)
                 continue
-            out[f"[M+{name}{h}]{charge}"] = np.where(ok, (m + (z - 1) * (s * PROTON_MASS) + a) / z, np.nan)
+            out[f"[M+{name}{h}]{charge}"] = np.where(ok, (m + (z - 1) * (s * proton) + a) / z, np.nan)
             if z > 1:
                 out[f"[M+{z}{name}]{charge}"] = np.where(ok, (m + z * a) / z, np.nan)
     return {k: v.item() if v.ndim == 0 else v for k, v in out.items()}
@@ -237,7 +239,7 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
                       extras: str | list[str] = [], # Additional operation(s): 'adduct' also considers the adduct_ions
                       adduct: str | None = None, # Chemical formula of a neutral adduct added to every candidate's mass, e.g., "C2H4O2"
                       adduct_ions: str | list[str] | None = None, # Adduct ion(s) considered with extras = ['adduct'], as named in mz_to_composition.csv (e.g., 'Na+', 'K+', 'NH4+', 'Acetate', 'Formate'); default: Acetate (negative) or Na+ (positive)
-                      mass_tag: float | None = None, # Mass in Da of a reducing-end label (e.g., 137.14 for 2AA, 219.21 for 2AB+procA), added to every candidate's neutral mass
+                      mass_tag: float | None = None, # Mass in Da a reducing-end label adds to the free glycan, i.e., the label minus O (e.g., 121.0528 for 2AA, 120.0687 for 2AB, 219.1735 for procainamide), added to every candidate's neutral mass
                       ) -> list[dict[str, int]]: # List of matching compositions
     """Map m/z value to matching monosaccharide composition"""
     # The pool is filtered once per kingdom/class from SugarBase, or once per class from the last custom database (one slot, so a caller making a
@@ -267,7 +269,7 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
     comps, masses = cached
     fallback = []
     # Compare each composition's theoretical m/z against the observed value, ion by ion in Occam order (lower charge first, protons before adducts); return first non-deprioritized hit, else first deprioritized fallback
-    for observed in get_ion_mzs(masses + shift, max_charge = max_charge, adducts = adduct_ions if "adduct" in extras else None).values():
+    for observed in get_ion_mzs(masses + shift, max_charge = max_charge, adducts = adduct_ions if "adduct" in extras else None, mass_value = mass_value).values():
         diffs = np.abs(observed - mz_value)
         for i in sorted(np.flatnonzero(diffs < tol), key = lambda i: diffs[i]):
             if not deprioritized.isdisjoint(k for k, _ in comps[i]):
@@ -284,12 +286,14 @@ def match_composition_relaxed(composition: dict[str, int] | str, # Composition a
                               df_use: pd.DataFrame | None = None # Custom glycan database
                               ) -> list[str]: # List of matching glycans
     """Map coarse-grained composition to matching glycans"""
-    key, source = ((glycan_class, kingdom), loader.df_glycan) if df_use is None else (id(df_use), df_use)
+    key, source = ((glycan_class, kingdom), loader.df_glycan) if df_use is None else ((id(df_use), glycan_class), df_use)
     # Index the database by composition once; re-index whenever the source frame has been swapped out
     entry = _COMPOSITION_INDEX.get(key)
     if entry is None or entry[0] is not source:
         if df_use is None:  # SugarBase is only filtered when its index has to be (re)built, not on every lookup
             df_use = source[((source.glycan_type == glycan_class) | (glycan_class == 'all')) & (source.Kingdom.apply(lambda x: kingdom in x))]
+        elif glycan_class != 'all' and 'glycan_type' in df_use.columns:  # a custom database is filtered by class as in mz_to_composition, which found the composition
+            df_use = df_use[df_use.glycan_type == glycan_class]
         index = defaultdict(list)
         for glycan in df_use.glycan.values.tolist():
             index[frozenset(glycan_to_composition(glycan).items())].append(glycan)
@@ -356,7 +360,7 @@ def mz_to_structures(mz_list: float | list[float], # Precursor mass(es)
                      filter_out: str | set[str] | None = None,  # Monosaccharide(s) to ignore
                      deprioritized: str | set[str] | None = {"Me", "HexA", "PCho"},  # Monosaccharide(s) to use only as fallback if no other composition matches
                      verbose: bool = False, # Whether to print non-matching compositions
-                     mass_tag: float | None = None # Mass in Da of a reducing-end label (e.g., 137.14 for 2AA), added to every candidate's neutral mass
+                     mass_tag: float | None = None # Mass in Da a reducing-end label adds to the free glycan, i.e., the label minus O (e.g., 121.0528 for 2AA), added to every candidate's neutral mass
                      ) -> pd.DataFrame | list: # DataFrame of structures x intensities or empty list
     """Map precursor masses to structures, supporting accompanying relative intensities"""
     mz_list = [mz_list] if isinstance(mz_list, (int, float)) else mz_list
@@ -558,9 +562,9 @@ def composition_to_mass(dict_comp_in: dict[str, int] | str, # Composition dictio
     # O-acetylation adds acetyl minus H (net +C2H2O = 42.0106 monoisotopic), not full acetate (59 Da); an O-acetyl or a methyl (ether or glycoside) also takes an OH that derivatization would otherwise have capped (CH2 permethylated, C2H2O peracetylated), the rarer methyl ester of a uronic acid aside
     cap = {'permethylated': 'CH2', 'peracetylated': 'C2H2O'}.get(sample_prep)
     ac_count = dict_comp.pop('Ac', 0)
-    if missing := [k for k in dict_comp if pd.isna(mass_dict_in.get(k)) and not k.startswith(('+', '-'))]:
+    if missing := [k for k in dict_comp if (k not in _VALID_COMPONENTS | {'Sulphate', 'Phosphate', 'Methyl'} or pd.isna(mass_dict_in.get(k))) and not k.startswith(('+', '-'))]:  # the ion and adduct rows of mz_to_composition.csv are no residues: a key 'H' (Hex in shorthand) was weighed as a hydrogen atom
         raise ValueError(
-            f"{missing} have no {mass_key} mass in mz_to_composition.csv, so no mass can be calculated for this composition")
+            f"{missing} have no {mass_key} mass as composition components ({sorted(_VALID_COMPONENTS)}), so no mass can be calculated for this composition")
     total_mass = sum(v * (mass_dict_in.get(k) or calculate_adduct_mass(k, mass_value = mass_value, enforce_sign = True))
                      for k, v in dict_comp.items()) + mass_dict_in['red_end'] + ac_count * calculate_adduct_mass('C2H2O', mass_value = mass_value) - (
         ac_count + dict_comp.get('Methyl', 0)) * (calculate_adduct_mass(cap, mass_value = mass_value) if cap else 0)
@@ -571,8 +575,8 @@ def composition_to_mass(dict_comp_in: dict[str, int] | str, # Composition dictio
             raise ValueError(
                 f"Unknown reducing-end modification {modification!r}; choose one of {list(modification_formula_dict)} or pass a label mass via adduct.")
         total_mass += calculate_adduct_mass(modification_formula_dict[modification], mass_value = mass_value)
-        if modification == 'reduced' and sample_prep != 'underivatized':  # ring-opening creates one additional free OH (at C5, previously the ring oxygen) that gets methylated or acetylated
-            total_mass += calculate_adduct_mass('CH2' if sample_prep == 'permethylated' else 'C2H2O', mass_value = mass_value)
+        if cap:  # reduction and reductive amination open the ring, which frees one OH (at C5, previously the ring oxygen); permethylation also caps a label's own acid and amide (2AA's COOH, 2AB's CONH2 twice, procainamide's CONH), which peracetylation spares, while the label's NH takes the place of the C1-OH red_end already caps
+            total_mass += ({'2AA': 2, '2AB': 3, 'procainamide': 2}.get(modification, 1) if sample_prep == 'permethylated' else 1) * calculate_adduct_mass(cap, mass_value = mass_value)
     if peptide:  # each glycan loses its reducing-end water on attachment and the peptide keeps one, so residues plus the one water counted above are the whole glycopeptide, however many glycans it carries
         total_mass += sum(calculate_adduct_mass(AMINO_ACID_FORMULAS[aa], mass_value = mass_value) for aa in re.sub(r'\[[^\]]*\]', '', peptide)) + sum(
             float(d) if re.fullmatch(r'[+-]\d*\.?\d+', d) else calculate_adduct_mass(d, mass_value = mass_value) for d in re.findall(r'\[([^\]]+)\]', peptide))
@@ -593,39 +597,44 @@ def glycan_to_mass(glycan: str | dict[str, int], # Glycan in IUPAC-condensed for
     if stem_libr is None:
         stem_libr = stem_lib
     comp = glycan_to_composition(glycan, stem_libr = stem_libr)
-    if not comp:
-        # residues no composition expresses (Kdo, heptoses, furanoses, QuiNAc, ...) are weighed atom by atom from the glycan's molecule, its aglycone
-        # stripped as glycan_to_composition does, with hydrogens from the standard valences as in get_molecular_properties; permethylation caps every
-        # O-H and N-H but a sulfate's (a charged phosphate oxygen counts as its OH), peracetylation every alcohol and free amine once
-        try:
-            mol = glycan_to_molecule(re.sub(r'1(?:Ser|Thr|Asn|Cer)(?![a-z])', '', glycan))
-        except ValueError:
-            raise ValueError(
-                f"No valid composition could be derived from '{glycan}' (it contains components outside {sorted(_VALID_COMPONENTS)}), and it has no defined structure to weigh it by, so no mass can be calculated.") from None
-        valence, neighbors = [0] * len(mol.atoms), [[] for _ in mol.atoms]
-        for i, j, o in mol.bonds:
-            valence[i] += o
-            valence[j] += o
-            neighbors[i].append((j, o))
-            neighbors[j].append((i, o))
-        hydrogens = [max({'C': 4, 'N': 3, 'O': 2, 'S': 2, 'P': 3, 'F': 1, 'Cl': 1, 'Br': 1, 'I': 1}.get(el, 0) - valence[k] + charge, 0) for k, (el, charge, _) in enumerate(mol.atoms)]
-        acyl = {k for k in range(len(mol.atoms)) if any(mol.atoms[j][0] in 'CSP' and any(mol.atoms[q][0] == 'O' and q != k and o == 2 for q, o in neighbors[j]) for j, _ in neighbors[k])}
-        if sample_prep == 'permethylated':
-            caps = sum(hydrogens[k] + (charge < 0) for k, (el, charge, _) in enumerate(mol.atoms) if el in 'ON' and not (el == 'O' and any(mol.atoms[j][0] == 'S' for j, _ in neighbors[k])))
-        else:
-            caps = sum(min(hydrogens[k], 1) for k, (el, charge, _) in enumerate(mol.atoms) if el in 'ON' and k not in acyl and not charge)
-        formula = Counter(atom[0] for atom in mol.atoms) + Counter({'H': sum(hydrogens)})
-        cap = {'permethylated': 'CH2', 'peracetylated': 'C2H2O'}.get(sample_prep)
-        modification = None if glycan.endswith('-ol') and modification == 'reduced' else modification  # the molecule of an alditol is reduced already
-        return calculate_adduct_mass(''.join(f'{el}{n}' for el, n in formula.items()), mass_value = mass_value) + (caps * calculate_adduct_mass(cap, mass_value = mass_value) if cap else 0) + composition_to_mass(
-            {}, mass_value = mass_value, sample_prep = sample_prep, adduct = adduct, modification = modification, peptide = peptide) - composition_to_mass({}, mass_value = mass_value, sample_prep = sample_prep)
-    mass = composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep, adduct = adduct,
-                               modification = modification or ('reduced' if glycan.endswith('-ol') else None), peptide = peptide)  # the composition of Gal(b1-4)Glc-ol is that of Gal(b1-4)Glc, but the alditol carries two more H (and one more OH to derivatize)
-    if inner := glycan.count('-ol') - glycan.endswith('-ol'):  # so does every alditol inside the chain, as the ribitol phosphates of teichoic acids
-        mass += inner * (composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep, modification = 'reduced') - composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep))
-    if sample_prep != 'underivatized' and (n_ins := len(re.findall(r'(?:^|(?<=[\[\])]))Ins', glycan))):  # inositol has no ring oxygen, so it carries one OH more than the hexose its composition counts
-        mass += n_ins * calculate_adduct_mass('CH2' if sample_prep == 'permethylated' else 'C2H2O', mass_value = mass_value)
-    return mass
+    if comp:
+        mass = composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep, adduct = adduct,
+                                   modification = modification or ('reduced' if glycan.endswith('-ol') else None), peptide = peptide)  # the composition of Gal(b1-4)Glc-ol is that of Gal(b1-4)Glc, but the alditol carries two more H (and one more OH to derivatize)
+        if inner := glycan.count('-ol') - glycan.endswith('-ol'):  # so does every alditol inside the chain, as the ribitol phosphates of teichoic acids
+            mass += inner * (composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep, modification = 'reduced') - composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep))
+        if sample_prep != 'underivatized' and (n_ins := len(re.findall(r'(?:^|(?<=[\[\])]))Ins', glycan))):  # inositol has no ring oxygen, so it carries one OH more than the hexose its composition counts
+            mass += n_ins * calculate_adduct_mass('CH2' if sample_prep == 'permethylated' else 'C2H2O', mass_value = mass_value)
+        # the composition takes every phosphate and methyl to sit on a hydroxyl that peracetylation would otherwise acetylate, which a pyrophosphate (Glc1PP), a phosphodiester between residues (Man1P(a1-6)Man, GlcNAc(b1-6)Man6P), a methyl ester (GlcA6Me, Neu1Me5Ac) or an N-methylamine (GlcN2Me) does not, so those are weighed from the molecule below
+        if sample_prep != 'peracetylated' or {'P', 'Me'}.isdisjoint(comp):
+            return mass
+    # residues no composition expresses (Kdo, heptoses, furanoses, QuiNAc, ...) are weighed atom by atom from the glycan's molecule, its aglycone
+    # stripped as glycan_to_composition does, with hydrogens from the standard valences as in get_molecular_properties; permethylation caps every
+    # O-H and N-H but a sulfate's (a charged phosphate oxygen counts as its OH) and turns a free amine into a trimethylammonium (counted, like PCho, as the neutral molecule minus H), peracetylation every alcohol and free amine once
+    try:
+        mol = glycan_to_molecule(re.sub(r'1(?:Ser|Thr|Asn|Cer)(?![a-z])', '', glycan))
+    except ValueError:
+        if comp:
+            return mass
+        raise ValueError(
+            f"No valid composition could be derived from '{glycan}' (it contains components outside {sorted(_VALID_COMPONENTS)}), and it has no defined structure to weigh it by, so no mass can be calculated.") from None
+    valence, neighbors = [0] * len(mol.atoms), [[] for _ in mol.atoms]
+    for i, j, o in mol.bonds:
+        valence[i] += o
+        valence[j] += o
+        neighbors[i].append((j, o))
+        neighbors[j].append((i, o))
+    hydrogens = [max({'C': 4, 'N': 3, 'O': 2, 'S': 2, 'P': 3, 'F': 1, 'Cl': 1, 'Br': 1, 'I': 1}.get(el, 0) - valence[k] + charge, 0) for k, (el, charge, _) in enumerate(mol.atoms)]
+    acyl = {k for k in range(len(mol.atoms)) if any(mol.atoms[j][0] in 'CSP' and any(mol.atoms[q][0] == 'O' and q != k and o == 2 for q, o in neighbors[j]) for j, _ in neighbors[k])}
+    if sample_prep == 'permethylated':
+        caps = sum(hydrogens[k] + (charge < 0) + (el == 'N' and hydrogens[k] > 0 and k not in acyl) for k, (el, charge, _) in enumerate(mol.atoms) if el in 'ON' and not (el == 'O' and any(mol.atoms[j][0] == 'S' for j, _ in neighbors[k])))
+    else:
+        caps = sum(min(hydrogens[k], 1) for k, (el, charge, _) in enumerate(mol.atoms) if el in 'ON' and k not in acyl and not charge)
+    formula = Counter(atom[0] for atom in mol.atoms) + Counter({'H': sum(hydrogens)})
+    cap = {'permethylated': 'CH2', 'peracetylated': 'C2H2O'}.get(sample_prep)
+    modification = None if glycan.endswith('-ol') and modification == 'reduced' else modification  # the molecule of an alditol is reduced already
+    weighed = calculate_adduct_mass(''.join(f'{el}{n}' for el, n in formula.items()), mass_value = mass_value) + (caps * calculate_adduct_mass(cap, mass_value = mass_value) if cap else 0) + composition_to_mass(
+        {}, mass_value = mass_value, sample_prep = sample_prep, adduct = adduct, modification = modification, peptide = peptide) - composition_to_mass({}, mass_value = mass_value, sample_prep = sample_prep)
+    return mass if comp and abs(weighed - mass) < 21 else weighed  # where both count the same acetyls (42 Da each), the composition's mass stands
 
 
 @rescue_compositions

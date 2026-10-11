@@ -1581,6 +1581,11 @@ def test_glycan_to_mass():
     # inositol has no ring oxygen, so it has one OH more to derivatize than the Hex its composition counts
     assert abs(glycan_to_mass("Man(a1-3)Man(a1-2)Ins", sample_prep = 'permethylated') - 672.3568) < 0.001
     assert glycan_to_mass("Man(a1-3)Man(a1-2)Ins") == glycan_to_mass("Man(a1-3)Man(a1-2)Glc")
+    # peracetylation spares acids and acetylates N-methylamines, so pyrophosphates, phosphodiesters, methyl esters and N-methyls are weighed from the molecule
+    assert abs(glycan_to_mass("Man(b1-4)GlcNAc(b1-4)GlcNAc1PP", sample_prep = 'peracetylated') - 1082.2393) < 0.001
+    assert abs(glycan_to_mass("Gal(b1-2)GlcA6Me", sample_prep = 'peracetylated') - 664.1851) < 0.001
+    # permethylation turns phosphoethanolamine into phosphocholine
+    assert glycan_to_mass("Glc6PEtN", sample_prep = 'permethylated') == glycan_to_mass("Glc6PCho", sample_prep = 'permethylated')
     # a composition, as a dict or in any string format canonicalize_composition reads, is weighed by composition_to_mass
     assert glycan_to_mass({'Hex': 5, 'HexNAc': 4}) == glycan_to_mass('H5N4') == glycan_to_mass('HexNAc(4)Hex(5)') == composition_to_mass('H5N4')
     assert glycan_to_mass('H5N4F1', sample_prep = 'permethylated', modification = 'reduced') == composition_to_mass('H5N4F1', sample_prep = 'permethylated', modification = 'reduced')
@@ -1750,6 +1755,12 @@ def test_mz_to_composition():
     assert abs(ions['[M+Acetonitrile-H]-'] - (neutral + mass_dict['Acetonitrile'] - PROTON_MASS)) < 1e-9
     assert abs(ions['[M+Acetonitrile-2H]2-'] - (neutral + mass_dict['Acetonitrile'] - 2 * PROTON_MASS) / 2) < 1e-9
     assert '[M+2Acetonitrile]2-' not in ions and abs(ions['[M+Cl]-'] - neutral - calculate_adduct_mass('Cl') - 0.00054858) < 1e-6
+    assert abs(get_ion_mzs(neutral, max_charge = 1, adducts = 'Trifluoroacetic acid')['[M+Trifluoroacetic acid+H]+'] - neutral - calculate_adduct_mass('C2HF3O2') - PROTON_MASS) < 1e-6
+    avg = composition_to_mass(comp, mass_value = 'average', modification = 'reduced')
+    assert abs(get_ion_mzs(avg, max_charge = -1, adducts = 'Cl-', mass_value = 'average')['[M+Cl]-'] - avg - calculate_adduct_mass('Cl', mass_value = 'average') - 0.00054858) < 1e-5
+    assert mz_to_composition(avg + 35.45355, max_charge = -1, mass_value = 'average', glycan_class = 'O', mass_tolerance = 0.05, modification = 'reduced', extras = 'adduct', adduct_ions = 'Cl-') == [comp]
+    animal = df_glycan[df_glycan.Kingdom.apply(lambda x: 'Animalia' in x)]
+    assert match_composition_relaxed({'Hex': 1, 'HexNAc': 1}, glycan_class = 'O', df_use = animal) == match_composition_relaxed({'Hex': 1, 'HexNAc': 1}, glycan_class = 'O')
     # A single adduct, extra, or monosaccharide may be passed as a bare string; 'Na+' used to be iterated as 'N', 'a', '+' (KeyError) and a bare filter_out/deprioritized raised AttributeError
     assert get_ion_mzs(neutral, max_charge = 2, adducts = 'Na+') == get_ion_mzs(neutral, max_charge = 2, adducts = ['Na+'])
     assert mz_to_composition(1046.4, max_charge = 1, extras = 'adduct', adduct_ions = 'Na+') == mz_to_composition(1046.4, max_charge = 1, extras = ['adduct'], adduct_ions = ['Na+'])
@@ -1842,7 +1853,7 @@ def test_composition_to_mass():
     mass = composition_to_mass(comp)
     assert mass > composition_to_mass({'Hex': 1, 'HexNAc': 1})
     # a natural methyl sits where permethylation would put one; an O-acetyl blocks one methylation (net CO) and is what peracetylation would add anyway
-    assert composition_to_mass({'Hex': 2, 'Me': 1}, sample_prep = 'permethylated') == composition_to_mass({'Hex': 2}, sample_prep = 'permethylated')
+    assert abs(composition_to_mass({'Hex': 2, 'Me': 1}, sample_prep = 'permethylated') - composition_to_mass({'Hex': 2}, sample_prep = 'permethylated')) < 1e-9
     assert abs(composition_to_mass({'Hex': 2, 'Ac': 1}, sample_prep = 'permethylated') - composition_to_mass({'Hex': 2}, sample_prep = 'permethylated') - 27.9949) < 0.001
     assert composition_to_mass({'Neu5Ac': 1, 'Hex': 2, 'Ac': 1}, sample_prep = 'peracetylated') == composition_to_mass({'Neu5Ac': 1, 'Hex': 2}, sample_prep = 'peracetylated')
     assert abs(composition_to_mass({'Hex': 2, 'Me': 1}, sample_prep = 'peracetylated') - composition_to_mass({'Hex': 2}, sample_prep = 'peracetylated') + 27.9949) < 0.001  # the methyl ether's OH is not acetylated
@@ -1878,6 +1889,13 @@ def test_composition_to_mass():
     assert abs(composition_to_mass(comp, modification = 'reduced', sample_prep = 'peracetylated') - composition_to_mass(comp, sample_prep = 'peracetylated') - 2 * 1.007825 - 42.010565) < 0.01
     # Man5GlcNAc2 permethylated reduced [M+Na]+ should match literature m/z 1595
     assert abs(reduced_perm + 22.989218 - 1595.81) < 0.5
+    # reductive amination opens the ring like reduction does (C5-OH), and permethylation also caps the label's acid or amide
+    assert abs(composition_to_mass('H3N2', modification = '2AB', sample_prep = 'permethylated') - 1310.7096) < 0.001
+    assert abs(composition_to_mass('H3N2', modification = '2AA', sample_prep = 'peracetylated') - 1703.5495) < 0.001
+    assert abs(composition_to_mass({'Kdn': 1, 'Hex': 1}, sample_prep = 'peracetylated', mass_value = 'average') - calculate_adduct_mass('C33H44O23', mass_value = 'average')) < 1e-4
+    assert abs(composition_to_mass('H5N4F1A2', mass_value = 'average') - calculate_adduct_mass('C90H148N6O66', mass_value = 'average')) < 1e-4
+    with pytest.raises(ValueError):  # 'H' is Hex in shorthand, not the hydrogen row of mz_to_composition.csv
+        composition_to_mass({'H': 5})
     with pytest.raises(ValueError, match = 'No masses for sample_prep'):
         composition_to_mass({'Hex': 1}, sample_prep = 'perbenzoylated')
 
@@ -2252,6 +2270,10 @@ def test_canonicalize_composition():
     # A glycan sequence is read as its composition; as residue tokens it became {'Galb': 1, '-': 4, 'GlcNAc': 1}
     assert canonicalize_composition("Gal(b1-4)GlcNAc") == {'Hex': 1, 'HexNAc': 1}
     assert canonicalize_composition("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc", as_string = True) == "H1N1F1A1"
+    assert canonicalize_composition(canonicalize_composition({'Hex': 2, 'Neu5Ac': 1, '+N3': 1, '-H': 1}, as_string = True)) == {'Hex': 2, 'Neu5Ac': 1, '+N3': 1, '-H': 1}
+    for c in ['H5N4+42', 'HexNAc(4)Hex(5)-18', 'HexNAc(4)Hex(5)[+225.06]']:
+        with pytest.raises(ValueError, match = 'mass delta'):
+            canonicalize_composition(c)
     assert composition_to_mass("Gal(b1-4)GlcNAc") == glycan_to_mass("Gal(b1-4)GlcNAc")
     # Test H5N4F1A2 format
     result = canonicalize_composition("H5N4F1A2")

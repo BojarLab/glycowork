@@ -416,7 +416,7 @@ def canonicalize_composition(comp: str | dict[str, int], # Composition in Hex5He
         # A dict, e.g., from glycan_to_composition, gets the same key aliases as a string, but a formula key like '-H2O' or '+N3' stays whole
         pairs = [(k, int(v)) for k, v in comp.items()]
     else:
-        comp = re.sub(r'\[[+-]?[\d.]+\]|\([+-][\d.]+\)|\^[A-Za-z]+|\$\S*$', '', _COMP_ADDUCT.sub('', _COMP_MASS_SUFFIX.sub('', comp))).strip()  # GlyHunter's derivatized NeuAc[+13.0316], a mass after an adduct as in Ammonium(+17), GlycReSoft's permethylated Hex^Me and reducing-end $C1H4
+        comp = re.sub(r'\[[+-]?[\d.]+\](?!\s*$)|\([+-][\d.]+\)|\^[A-Za-z]+|\$\S*$', '', _COMP_ADDUCT.sub('', _COMP_MASS_SUFFIX.sub('', comp))).strip()  # GlyHunter's derivatized NeuAc[+13.0316], a mass after an adduct as in Ammonium(+17), GlycReSoft's permethylated Hex^Me and reducing-end $C1H4
         fields = re.split(r'[\s_,;]+', comp)
         if comp.isdigit() or (len(fields) > 1 and all(f.isdigit() for f in fields)):
             # Positional: "5421" (one digit per residue), or "5_4_2_1", "5 4 2 0 1" (pGlyco Glycan(H,N,A,G,F)), "5,4,2,1"
@@ -435,12 +435,17 @@ def canonicalize_composition(comp: str | dict[str, int], # Composition in Hex5He
                 f"'{comp}' is neither a positional composition of four or five numbers nor residues each followed by their count (e.g., 'Hex5HexNAc4'); from a glycoproteomics label like 'P00533_352_H5N2', pass only the composition part.")
         else:
             # Byonic HexNAc(4)Hex(5), GlycoMod (Hex)2 + (Man)3(GlcNAc)2, GlycReSoft {Hex:5; HexNAc:4; @sulfate:1}, FragPipe HexNAc-4_Hex-5; a residue without a count occurs once
+            if not _IUPAC_LINKAGE.search(comp) and re.search(r'(?:\+|\d\)?\s*-)\s*\d[\d.]*(?![\w.])', comp):  # a signed number is a residual mass, whose digits would otherwise join the last count ('H5N4+42' read as HexNAc 442)
+                raise ValueError(f"'{comp}' carries a mass delta, which no composition expresses; pass the composition without it.")
+            # a formula key is written in parentheses with its count after them, (-H2O)1 or (+N3)2, since a bare -H2O1 or +N32 has no boundary between formula and count
+            formulas = [(f, int(num) if num else 1) for f, num in re.findall(r'\(([+-](?:[A-Z][a-z]?\d*)+)\)(\d*)', comp)]
+            comp = re.sub(r'\([+-](?:[A-Z][a-z]?\d*)+\)\d*', '', comp)
             comp = multireplace(re.sub(r'(?<=[A-Za-z)])-(?=\d)', '', re.sub(r'NH4(?!\d)', 'Ammonium', comp)),  # NH4(1), (NH4)1, NH4:1, whose 4 is no count
                                 {"Neu5Ac": "NeuAc", "Neu5Gc": "NeuGc", "SO3": "Sulf", "PO3": "Phos", "@sulfate": "Sulf",
                                  "@phosphate": "Phos", "@acetyl": "Ac", "@methyl": "Me",
                                  '(': '', ')': '', ' ': '', '+': '', '{': '', '}': '', ':': '', ';': '', ',': '',
                                  '_': ''})
-            pairs = [(code, int(num) if num else 1) for code, num in _COMP_TOKEN.findall(comp)]
+            pairs = [(code, int(num) if num else 1) for code, num in _COMP_TOKEN.findall(comp)] + formulas
     comp_dict, explicit_sulfate = {}, 0
     for code, num in pairs:
         name = _CODE_TO_NAME.get(code, code)
@@ -466,7 +471,7 @@ def canonicalize_composition(comp: str | dict[str, int], # Composition in Hex5He
         parts = [(names[k], comp_dict[k]) for k in names if k in comp_dict]
         return ''.join(f"{n}({v})" for n, v in parts) if string_format == 'byonic' else '{' + '; '.join(f"{n}:{v}" for n, v in parts) + '}'
     if as_string:
-        return ''.join(f"{_NAME_TO_CODE.get(k, k)}{v}" for k, v in sorted(comp_dict.items(), key = lambda x: (_COMP_ORDER.get(x[0], len(_COMP_ORDER)), x[0])))
+        return ''.join(f"{f'({k})' if re.fullmatch(r'[+-](?:[A-Z][a-z]?[0-9]*)+', k) else _NAME_TO_CODE.get(k, k)}{v}" for k, v in sorted(comp_dict.items(), key = lambda x: (_COMP_ORDER.get(x[0], len(_COMP_ORDER)), x[0])))
     return comp_dict
 
 
@@ -2061,7 +2066,7 @@ def process_for_glycoshift(df: pd.DataFrame, # Dataset with protein_site_composi
 def is_composition(s: str # Either glycan or composition string
                    ) -> bool: # Whether the input is a composition
     "Checks whether a string is a composition (H5N4F1A2, Hex5HexNAc4, HexNAc(4)Hex(5), {Hex:5; HexNAc:4}) rather than a glycan sequence"
-    s = _COMP_ADDUCT.sub('', _COMP_MASS_SUFFIX.sub('', str(s))).strip()
+    s = re.sub(r'\([+-](?:[A-Z][a-z]?\d*)+\)\d+', '', _COMP_ADDUCT.sub('', _COMP_MASS_SUFFIX.sub('', str(s)))).strip()  # formula keys as canonicalize_composition writes them, H3N1A3(-H2O)1
     return bool(s and ((s.replace(' ', '').isalnum() and s[-1].isdigit()) or _COMP_TABLE_FORM.fullmatch(s)))
 
 

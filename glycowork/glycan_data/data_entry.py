@@ -69,13 +69,13 @@ def _accession(protein: str # protein label as a search engine writes it, e.g., 
 def _glycan_mods(peptide: str, # peptide with inline modifications, e.g., 'K.N[+203.0794]GTR.G', 'NC(+57.02)GVN(+1913.68)C', 'YN(N-Glycosylation)GTK', or 'LQT[O-linked glycosylation:H1N1A2 on X]LAL'
                  brackets: str = '[]' # delimiters around each modification
                  ) -> list[tuple[int, str]]: # (1-based peptide position, modification text) of every glycan, N- to C-terminal
-    "Locates the glycans in a modified peptide, named as such or as a mass of at least 200 Da on N, S, or T"
+    "Locates the glycans in a modified peptide, named as such or as a mass of at least 130 Da on N, S, or T that is no isobaric tag"
     o, c = map(re.escape, brackets)
     pos, res, out = 0, '', []
     for tok in re.findall(rf'{o}[^{c}]*{c}|[A-Za-z]', re.sub(r'^[A-Z-]\.|\.[A-Z-]$', '', peptide)):
         if len(tok) == 1:
             pos, res = pos + 1, tok.upper()
-        elif re.search(r'glycan|glycosyl', tok, flags = re.IGNORECASE) or (pos and res in 'NST' and (m := re.fullmatch(r'\+?(\d+\.?\d*)', tok[1:-1])) and float(m[1]) >= 200):
+        elif re.search(r'glycan|glycosyl', tok, flags = re.IGNORECASE) or (pos and res in 'NST' and (m := re.fullmatch(r'\+?(\d+\.?\d*)', tok[1:-1])) and float(m[1]) >= 130 and not any(abs(float(m[1]) - t) < 0.01 for t in (140.095, 144.1021, 148.1092, 224.1525, 225.1558, 229.1629, 304.2054, 304.2071))):  # a pentose (132.04) is the lightest glycan; the amine tags (mTRAQ, iTRAQ 4-plex, TMT0, TMT2, TMT, iTRAQ 8-plex, TMTpro) also label S and T
             out.append((pos, tok[1:-1]))
     return out
 
