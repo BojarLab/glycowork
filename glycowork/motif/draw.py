@@ -2,7 +2,7 @@ from pathlib import Path
 from glycowork.glycan_data.loader import unwrap, resolve_motif_name, lib
 from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, compare_glycans, graph_to_string, resolve_anchor
-from glycowork.motif.tokenization import get_core, get_modification
+from glycowork.motif.tokenization import get_core, get_modification, SIALIC_KEYS
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit, is_composition, canonicalize_composition, _COMP_ORDER, PDB_TO_IUPAC
 import warnings
 import html
@@ -1719,8 +1719,10 @@ def GlycoDraw(
         d, cursor, row = draw.Group(), 0.0, 0.0
         comp = dict(sorted(comp.items(), key = lambda x: (_COMP_ORDER.get(x[0], len(_COMP_ORDER)), x[0])))
         for mono, count in comp.items():
-            if mono in sugar_dict:
-                shape, color, furanose = sugar_dict[mono]
+            # a sialic acid of known linkage (Neu5Ac_a2-6, from a linkage-specific derivatization) is its symbol, with the linkage after the count
+            base, link = next(((b, f' α2,{k[-1]}') for b, keys in SIALIC_KEYS.items() for k in keys if k == mono), (mono, ''))
+            if base in sugar_dict:
+                shape, color, furanose = sugar_dict[base]
                 draw_shape(shape, color, x_pos = -(cursor + 0.5), y_pos = row, col_dict = col_dict_base, drawing = d, furanose = furanose, dim = dim)
                 cursor += 1.2
             else:
@@ -1729,9 +1731,9 @@ def GlycoDraw(
                 d.append(draw.Text(mono, dim * 0.5, (cursor + (step - 0.2) / 2) * dim, (row + 0.18) * dim,
                                    text_anchor = 'middle', fill = col_dict_base['black']))
                 cursor += step
-            d.append(draw.Text(str(count), dim * 0.5, cursor * dim, (row + 0.18) * dim, text_anchor = 'start', fill = col_dict_base['black']))
+            d.append(draw.Text(f'{count}{link}', dim * 0.5, cursor * dim, (row + 0.18) * dim, text_anchor = 'start', fill = col_dict_base['black']))
             # Vertical compositions are stacked row by row instead of rotated, so the counts stay upright and readable
-            cursor, row = (0.0, row + 1.25) if vertical else (cursor + 0.28 * len(str(count)) + 0.45, row)
+            cursor, row = (0.0, row + 1.25) if vertical else (cursor + 0.28 * len(f'{count}{link}') + 0.45, row)
         if alt_text is None:
             alt_text = f"SNFG composition diagram of {glycan}: " + ", ".join(f"{count} {mono}" for mono, count in comp.items()) + "."
         return _finish_drawing(d, in_glycan, alt_text, (in_glycan, compact, vertical, dim), dim = dim, filepath = filepath, suppress = suppress, shadow = shadow, sticker = sticker)

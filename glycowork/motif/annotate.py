@@ -766,6 +766,7 @@ def get_k_saccharides(
         return [] if just_motifs else pd.DataFrame()
     ggraphs = [glycan_to_nxGraph(g) for g in glycans]
     if up_to:
+        from glycowork.motif.tokenization import SIALIC_KEYS
         wga_letter_data = []
         actual_glycans = [g for g in glycans if not is_composition(g)]
         lib = get_lib(actual_glycans)
@@ -774,6 +775,10 @@ def get_k_saccharides(
         for g, gg in zip(glycans, ggraphs):
             if is_composition(g):
                 comp_dict = canonicalize_composition(g)
+                # a sialic acid of known linkage (H5N4E1L1 from a linkage-specific derivatization) also counts as its residue
+                for k, v in list(comp_dict.items()):
+                    if base := next((b for b, keys in SIALIC_KEYS.items() if k in keys), None):
+                        comp_dict[base] = comp_dict.get(base, 0) + v
                 wga_letter_data.append(comp_dict)
             else:
                 # Counted on graph nodes, since a substring search also counts the Fuc in D-Fuc or the Hep in LDManHep

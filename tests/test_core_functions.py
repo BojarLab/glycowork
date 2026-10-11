@@ -33,7 +33,7 @@ from glycowork.motif.tokenization import (
     constrain_prot, prot_to_coded, string_to_labels, pad_sequence, mz_to_composition,
     get_core, get_modification, get_stem_lib, stemify_glycan, mask_rare_glycoletters,
     glycan_to_composition, calculate_adduct_mass, structure_to_basic, map_to_basic,
-    compositions_to_structures, match_composition_relaxed, stemify_dataset, composition_to_mass,
+    compositions_to_structures, match_composition_relaxed, stemify_dataset, composition_to_mass, resolve_sialic_linkages, sialic_linkage_splits,
     condense_composition_matching, get_unique_topologies, mz_to_structures, glycan_to_mass,
     get_random_glycan, get_ion_mzs, PROTON_MASS, mass_dict
 )
@@ -1551,9 +1551,23 @@ def test_glycan_to_composition():
               "Glc(b1-4)Glc1Pam", "3,6-Anhydro-Gal(a1-3)Gal"):
         assert glycan_to_composition(g) == {}
     assert glycan_to_composition("Rhaf(a1-3)Gal1Cer3S") == {'dHex': 1, 'Hex': 1, 'S': 1}
+    # counted by linkage, as a linkage-specific sialic acid derivatization tells a2-6 from the lactone-forming a2-3/8/9; an unknown one stays Neu5Ac
+    assert glycan_to_composition("Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", sialic_linkage = True) == {'Hex': 1, 'HexNAc': 1, 'Neu5Ac_a2-3': 1, 'Neu5Ac_a2-6': 1}
+    assert glycan_to_composition("Neu5Ac(a2-8)Neu5Gc(a2-3/6)Gal(b1-4)Glc", sialic_linkage = True) == {'Hex': 2, 'Neu5Ac_a2-3': 1, 'Neu5Gc': 1}
+    assert glycan_to_composition("Neu5Ac9Ac(a2-6)Gal(b1-4)Glc", sialic_linkage = True) == {'Hex': 2, 'Neu5Ac_a2-6': 1, 'Ac': 1}
 
 
 def test_glycan_to_mass():
+    # a linkage-specific sialic acid derivatization adds its a2-6 product (ethyl ester, +C2H4) and its lactone (-H2O) to disialyl T
+    dst = "Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc"
+    assert abs(glycan_to_mass(dst, sialic_derivatization = 'EE') - glycan_to_mass(dst) - 28.0313 + 18.0106) < 1e-3
+    assert abs(glycan_to_mass(dst, sialic_derivatization = 'SALSA') - glycan_to_mass(dst) - 41.0629 - 13.0316) < 1e-3
+    assert abs(glycan_to_mass(dst, sialic_derivatization = 'EEA') - composition_to_mass('H1N1E1L1', sialic_derivatization = 'EEA')) < 1e-6
+    assert abs(glycan_to_mass("GlcA(b1-3)Gal(b1-4)Glc", sialic_derivatization = 'DMA') - glycan_to_mass("GlcA(b1-3)Gal(b1-4)Glc") - 27.0473) < 1e-3  # a uronic acid takes the a2-6 product
+    with pytest.raises(ValueError, match = 'unknown'):
+        glycan_to_mass("Neu5Ac(a2-3/6)Gal(b1-4)Glc", sialic_derivatization = 'EE')
+    with pytest.raises(ValueError, match = 'underivatized'):
+        glycan_to_mass(dst, sample_prep = 'permethylated', sialic_derivatization = 'EE')
     assert abs(glycan_to_mass("Neu1,7lactone5,9Ac2(a2-3)Gal(b1-4)Glc") - 657.2115545999999) < 0.1
     assert abs(glycan_to_mass("Neu5Az(a2-3)Gal(b1-4)Glc") - 674.2129516) < 0.1
     assert abs(glycan_to_mass("Neu5Ac(a2-3)Gal(b1-4)Glc") - 633.2115546) < 0.1
@@ -1667,6 +1681,10 @@ def test_mask_rare_glycoletters():
 
 
 def test_mz_to_composition():
+    # with a linkage-specific derivatization, each way of linking the sialic acids is a composition of its own mass (H5N4E1L1 at [M+Na]+ after EEA)
+    assert sialic_linkage_splits({'Hex': 1, 'Neu5Ac': 2}) == [{'Hex': 1, 'Neu5Ac_a2-6': 2}, {'Hex': 1, 'Neu5Ac_a2-6': 1, 'Neu5Ac_a2-3': 1}, {'Hex': 1, 'Neu5Ac_a2-3': 2}]
+    assert mz_to_composition(2272.82, max_charge = 1, glycan_class = 'N', mass_tolerance = 0.02, extras = ['adduct'], adduct_ions = ['Na+'],
+                             sialic_derivatization = 'EEA') == [{'Hex': 5, 'HexNAc': 4, 'Neu5Ac_a2-6': 1, 'Neu5Ac_a2-3': 1}]
     # Test O-glycan mass
     result = mz_to_composition(
         675,
@@ -1806,6 +1824,14 @@ def test_compositions_to_structures():
 
 
 def test_match_composition_relaxed():
+    # a composition with linkage-resolved sialic acids only takes structures with these linkages, and sets unknown ones where it decides them
+    a2 = "Neu5Ac(a2-3/6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert resolve_sialic_linkages(a2, 'H5N4E1L1') == a2.replace('a2-3/6', 'a2-6')
+    assert resolve_sialic_linkages(a2, 'H5N4A2') == a2 and resolve_sialic_linkages(a2, 'H5N4E2') is None
+    assert resolve_sialic_linkages(a2.replace('(a2-3)', '(a2-3/6)'), 'H5N4E1L1') == a2.replace('(a2-3)', '(a2-3/6)')  # which arm is open
+    assert resolve_sialic_linkages("Neu5Ac(a2-8)Neu5Ac(a2-3/6)Gal(b1-4)Glc", 'H2L2') == "Neu5Ac(a2-8)Neu5Ac(a2-3)Gal(b1-4)Glc"
+    result = match_composition_relaxed('H5N4E2', glycan_class = 'N')
+    assert result and all(glycan_to_composition(g, sialic_linkage = True) == {'Hex': 5, 'HexNAc': 4, 'Neu5Ac_a2-6': 2} for g in result)
     composition = {'Hex': 3, 'HexNAc': 2}
     result = match_composition_relaxed(
         composition,
@@ -1841,6 +1867,16 @@ def test_stemify_dataset():
 
 
 def test_composition_to_mass():
+    # linkage-specific sialic acid derivatization: H5N4E2, the main plasma N-glycan of ethyl esterified samples, at [M+Na]+ 2301.835 (Reiding et al. 2014)
+    assert abs(composition_to_mass('H5N4E2', sialic_derivatization = 'EE') + 22.989221 - 2301.835) < 1e-3
+    assert abs(composition_to_mass('H5N4E1L1', sialic_derivatization = 'EEA') - composition_to_mass('H5N4A2') - 28.0313 + 0.9840) < 1e-3
+    assert abs(composition_to_mass('H5N4E2', sialic_derivatization = 'SALSA') - composition_to_mass('H5N4L2', sialic_derivatization = 'SALSA') - 2 * 28.0313) < 1e-3  # 28 Da per linkage (Nishikaze 2017)
+    assert composition_to_mass('H5N4E1L1', sialic_derivatization = ('dimethylamide', 'amide')) == composition_to_mass({'Hex': 5, 'HexNAc': 4, 'Neu5Ac_a2-6': 1, 'Neu5Ac_a2-3': 1}, sialic_derivatization = ('dimethylamide', 'amide'))
+    assert composition_to_mass('H5N4E1L1') == composition_to_mass('H5N4A2')  # without a derivatization, the linkage weighs nothing
+    with pytest.raises(ValueError, match = 'linkage'):
+        composition_to_mass('H5N4A2', sialic_derivatization = 'EE')
+    with pytest.raises(ValueError, match = 'Unknown sialic_derivatization'):
+        composition_to_mass('H5N4E2', sialic_derivatization = 'XYZ')
     # Test basic composition
     comp = {'Hex': 1, 'HexNAc': 1}
     mass = composition_to_mass(comp)
@@ -1946,6 +1982,9 @@ def test_get_unique_topologies():
 
 
 def test_mz_to_structures():
+    # a linkage-specific derivatization reads the sialic acid linkages off the mass: [M+H]+ of H5N4L2 after EEA
+    result = mz_to_structures(composition_to_mass('H5N4L2', sialic_derivatization = 'EEA') + 1.007276, glycan_class = 'N', max_charge = 1, mass_tolerance = 0.02, sialic_derivatization = 'EEA')
+    assert len(result) and all(glycan_to_composition(g, sialic_linkage = True) == {'Hex': 5, 'HexNAc': 4, 'Neu5Ac_a2-3': 2} for g in result.glycan)
     # Test single mass
     mz_values = [530]
     result = mz_to_structures(
@@ -2346,7 +2385,7 @@ def test_canonicalize_composition():
             canonicalize_composition(bad, strict = True)
     assert canonicalize_composition('HexNAc(4)Hex(5)Fuc(1)', strict = True) == {'HexNAc': 4, 'Hex': 5, 'dHex': 1}
     assert canonicalize_composition('Phospho', strict = True) == {'P': 1}
-    assert canonicalize_composition('H5N4F1E1L1', as_string = True, strict = True) == 'H5N4F1A2'
+    assert canonicalize_composition('H5N4F1E1L1', as_string = True, strict = True) == 'H5N4F1E1L1'
     assert canonicalize_composition({'Hex': 1, 'PCho': 1, '+N3': 1, '-H2O': 1}, strict = True) == {'Hex': 1, 'PCho': 1, '+N3': 1, '-H2O': 1}
     with pytest.raises(ValueError, match = 'exactly four digits'):  # one digit per residue is only unambiguous for Hex/HexNAc/Neu5Ac/dHex
         canonicalize_composition('542')
@@ -2372,6 +2411,7 @@ def test_parse_glycoform():
     assert result["high_Man"] == 0
     # Long-form composition strings go through canonicalize_composition instead of parsing to all zeros
     assert parse_glycoform("Hex5HexNAc4dHex1NeuAc2") == parse_glycoform("H5N4F1A2")
+    assert parse_glycoform("H5N4F1E1L1") == parse_glycoform("H5N4F1A2")  # sialic acids of known linkage count as sialic acids
     # The composition rules approximate process_for_glycoshift's structural definitions: Man5 is high-mannose, H5N4 complex, H6N3 hybrid
     assert [(r['high_Man'], r['complex'], r['hybrid']) for r in map(parse_glycoform, ("H5N2", "H5N4", "H6N3"))] == [(1, 0, 0), (0, 1, 0), (0, 0, 1)]
     # N-glycan type rules are not applied to other classes: an O-glycan N2F1 is no high-mannose glycan
@@ -4032,6 +4072,9 @@ def test_get_molecular_properties():
 
 def test_get_k_saccharides():
     glycans = ["Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"]
+    # a sialic acid of known linkage in a composition counts by its linkage and as its residue
+    comp = get_k_saccharides(['H5N4F1E1L1', 'H5N4E2'], up_to = True, size = 1)
+    assert comp[['Neu5Ac_a2-6', 'Neu5Ac_a2-3', 'Neu5Ac']].values.tolist() == [[1, 1, 2], [2, 0, 2]]
     # Test basic functionality
     result = get_k_saccharides(glycans, size=2)
     assert isinstance(result, pd.DataFrame)
@@ -4941,6 +4984,9 @@ def test_glycodraw_compositions_and_lists():
     # A list is drawn as one grid, compositions included
     grid = GlycoDraw(["Gal(b1-4)GlcNAc", {'Hex': 3, 'HexNAc': 2}], vertical = True, suppress = True)
     assert grid.vertical and grid.alt_text == "SNFG diagrams of 2 glycans: Gal(b1-4)GlcNAc; H3N2."
+    # a sialic acid of known linkage, from a linkage-specific derivatization, is its symbol with the linkage after its count
+    texts = [el.escaped_text for el in GlycoDraw('H5N4E1L1', suppress = True).drawing_obj.elements[0].children if isinstance(el, draw.Text)]
+    assert '1 α2,6' in texts and '1 α2,3' in texts
 
 
 def test_glycodraw_floating_bits_keep_their_branches():
@@ -8778,10 +8824,16 @@ def test_read_glycoproteomics_other_engines():
 
 def test_canonicalize_composition_glycomics_formats():
     assert canonicalize_composition('(dHex)1 (Hex)5 (NeuAc)2 (HexNAc)4 ', as_string = True) == 'H5N4F1A2'
-    assert canonicalize_composition('Hex(6)HexNAc(4)NeuAc[+13.0316](2)', as_string = True) == 'H6N4A2'
+    assert canonicalize_composition('Hex(6)HexNAc(4)NeuAc[+13.0316](2)', as_string = True) == 'H6N4L2'  # a methylamide (SALSA) is a2-3
+    assert canonicalize_composition('Hex(5)HexNAc(4)NeuAc[+41.0629](1)NeuAc[-0.9840](1)NeuAc[+16.0500](1)', as_string = True) == 'H5N4A1E1L1'  # isopropylamide, amide, an unknown shift
     assert canonicalize_composition('{Fuc^Me:1; Hex^Me:6; HexNAc^Me:5}$C1H4', as_string = True) == 'H6N5F1'
-    assert canonicalize_composition('H5N4F1E1L1', as_string = True) == 'H5N4F1A2'
-    assert canonicalize_composition('H5N4AmG1EG1', as_string = True) == 'H5N4G2'
+    # linkage-specific sialic acid derivatives keep the linkage they tell, as E (a2-6) and L (lactone-forming a2-3/8/9), and read back
+    assert canonicalize_composition('H5N4F1E1L1', as_string = True) == 'H5N4F1E1L1'
+    assert canonicalize_composition('H5N4F1E1L1') == {'Hex': 5, 'HexNAc': 4, 'dHex': 1, 'Neu5Ac_a2-6': 1, 'Neu5Ac_a2-3': 1}
+    assert canonicalize_composition('H5N4AmG1EG1', as_string = True) == 'H5N4Ge1Gl1' == canonicalize_composition('H5N4Ge1Gl1', as_string = True)
+    assert canonicalize_composition('HexNAc4Hex5eNeuAc1lNeuAc1', as_string = True) == canonicalize_composition('H5N4M1Am1', as_string = True) == 'H5N4E1L1'
+    assert canonicalize_composition({'Kdn_a2-6': 1, 'Hex': 1}, as_string = True) == 'H1KdnE1' and canonicalize_composition('H1KdnE1') == {'Hex': 1, 'Kdn_a2-6': 1}
+    assert is_composition('H5N4F1E1L1') and is_composition('H5N4Ge1Gl1')
     assert is_composition('(Hex)5 (HexNAc)2') and is_composition('Hex(6)HexNAc(4)NeuAc[+13.0316](2)')
     assert not is_composition('(Hex)3 (HexNAc)1 (NeuAc)1 + (Man)3(GlcNAc)2')
     # adducts written into a composition are no residues: MSFragger-Glyco's Na(1) and NH4(1), StrucGP's '+Ammonium(+17)', and ion notation
@@ -8825,15 +8877,14 @@ def test_read_glycomics_summary_files(tmp_path):
     assert out.set_index('glycan').to_dict('index') == {'H5N4F1A1': {'S1.raw': 120.0, 'S2.raw': 60.0}, 'IgGI1H5N4': {'S1.raw': 15.0, 'S2.raw': 0.0}}
     (tmp_path / 'massy_Summary.txt').write_text('Processing Parameters\nCharge carrier\t[M+Na]+\n\nAnalyte Area - Background Area\tCalibrated\tH5N4F1E1\tH5N4F1L1\tH3N4F1\n\t[M+Na]+\t2000.7\t1950.6\t1485.5\n'
                                                 'S1.xy\t1\t100.0\t50.0\t10.0\nS2.xy\t1\t80.0\t40.0\t0.0\n\nS/N\tCalibrated\tH5N4F1E1\tH5N4F1L1\tH3N4F1\n\t[M+Na]+\t2000.7\t1950.6\t1485.5\nS1.xy\t1\t9\t9\t9\n')
-    with pytest.warns(UserWarning, match = 'summed'):
-        out = read_glycomics(tmp_path / 'massy_Summary.txt', sample_map = lambda s: s.split('.')[0])
-    assert out.set_index('glycan').to_dict('index') == {'H3N4F1': {'S1': 10.0, 'S2': 0.0}, 'H5N4F1A1': {'S1': 150.0, 'S2': 120.0}}
+    out = read_glycomics(tmp_path / 'massy_Summary.txt', sample_map = lambda s: s.split('.')[0])  # the ethyl ester (a2-6) and the lactone (a2-3) stay apart
+    assert out.set_index('glycan').to_dict('index') == {'H3N4F1': {'S1': 10.0, 'S2': 0.0}, 'H5N4F1E1': {'S1': 100.0, 'S2': 80.0}, 'H5N4F1L1': {'S1': 50.0, 'S2': 40.0}}
 
 
 def test_read_glycomics_tables(tmp_path):
     glyhunter = pd.DataFrame({'glycan': ['Hex(5)HexNAc(4)NeuAc[+13.0316](1)', 'Hex(5)HexNAc(4)NeuAc[+16.0500](1)', 'Hex(3)HexNAc(3)dHex(1)'], 'N21': ['10', '20', '5'], 'N22': ['1', '', '7']})
-    with pytest.warns(UserWarning, match = 'summed'):
-        assert read_glycomics(glyhunter).set_index('glycan').to_dict('index') == {'H3N3F1': {'N21': 5.0, 'N22': 7.0}, 'H5N4A1': {'N21': 30.0, 'N22': 1.0}}
+    # GlyHunter's methylamide (SALSA) is an a2-3 sialic acid, a shift no linkage-specific derivative has a plain one
+    assert read_glycomics(glyhunter).set_index('glycan').to_dict('index') == {'H3N3F1': {'N21': 5.0, 'N22': 7.0}, 'H5N4L1': {'N21': 10.0, 'N22': 1.0}, 'H5N4A1': {'N21': 20.0, 'N22': 0.0}}
     (tmp_path / 'run_glycan_abundance_table.csv').write_text('Sample,ctrl_1,ctrl_2,case_1\nGroup,ctrl,ctrl,case\nH5N4S1F1_12.34,100.0,90.0,10.0\nH5N4S1F1_14.20,10.0,9.0,30.0\n')
     gg = read_glycomics(tmp_path / 'run_glycan_abundance_table.csv')
     assert gg.to_dict('list') == {'glycan': ['H5N4F1A1'], 'ctrl_1': [110.0], 'ctrl_2': [99.0], 'case_1': [40.0]}

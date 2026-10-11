@@ -323,7 +323,7 @@ def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataF
         warnings.warn(f"{len(raw)} labels are neither a glycan sequence nor a composition glycowork can read and were kept as written, e.g., {raw[:3]}.", stacklevel = 2)
     df['glycan'] = [canon[(g, s)] or g.strip() for g, s in zip(df['label'], df['sia'])]
     if merged := {k: v for k, v in df.groupby('glycan')['label'].unique().items() if len(v) > 1}:
-        warnings.warn(f"{len(merged)} glycans were written in several ways and summed, e.g., {list(merged.items())[0][1].tolist()} into '{list(merged)[0]}'; adducts (Na, NH4, [M+Na]+) are dropped, and sialic acid derivatives (ethyl esters, lactones, amides) become Neu5Ac or Neu5Gc, since compositions carry no linkages.", stacklevel = 2)
+        warnings.warn(f"{len(merged)} glycans were written in several ways and summed, e.g., {list(merged.items())[0][1].tolist()} into '{list(merged)[0]}'; adducts (Na, NH4, [M+Na]+) are dropped, and of sialic acid derivatives only the linkage they tell is kept (E, ethyl ester or dimethylamide, as a2-6; L, lactone or amide, as a2-3).", stacklevel = 2)
     return _abundance_matrix(df[['run', 'ion', 'glycan', 'value']], sample_map, groups = groups)
 
 

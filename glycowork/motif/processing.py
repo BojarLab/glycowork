@@ -51,11 +51,14 @@ _CODE_TO_NAME = {m: base for base, pool in (('Hex', Hex), ('HexNAc', HexNAc), ('
                  'Neu5Ac': 'Neu5Ac', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'HexNac': 'HexNAc', 'HexNc': 'HexNAc', 'hex': 'Hex', 'KDN': 'Kdn', 'OAc': 'Ac',
                  'Su': 'S', 's': 'S', 'Sul': 'S', 'Sulfo': 'Sulf', 'Sulph': 'Sulf', 'p': 'P', 'Phospho': 'P', 'Phos': 'P', 'Pent': 'Pen', 'Deoxyhexose': 'dHex',
                  'X': 'Pen', 'HN': 'HexN', 'UA': 'HexA', 'Acetyl': 'Ac'} | {
-                 # Linkage-specific sialic acid derivatives (ethyl ester, lactone, methyl ester, amides) of LaCyTools, MassyTools, GlycoGenius, and GlyCombo; a composition has no linkages, so they are plain sialic acids
-                 code: sia for sia, codes in (('Neu5Ac', ('E', 'L', 'M', 'Am', 'eNeuAc', 'lNeuAc', 'dNeuAc', 'amNeuAc')), ('Neu5Gc', ('Ge', 'Gl', 'EG', 'AmG', 'eNeuGc', 'lNeuGc', 'dNeuGc', 'amNeuGc'))) for code in codes}
+                 # Linkage-specific sialic acid derivatives of LaCyTools, MassyTools, GlycoGenius, and GlyCombo name the linkage: an ethyl or methyl ester or a dimethylamide is
+                 # a2-6, a lactone or (lactone-derived) amide a2-3 (or a2-8/9), as written in the field's E and L codes and as glycowork's composition keys keep them
+                 code: sia for sia, codes in (('Neu5Ac_a2-6', ('E', 'M', 'eNeuAc', 'dNeuAc')), ('Neu5Ac_a2-3', ('L', 'Am', 'lNeuAc', 'amNeuAc')), ('Neu5Gc_a2-6', ('Ge', 'EG', 'eNeuGc', 'dNeuGc')),
+                                              ('Neu5Gc_a2-3', ('Gl', 'AmG', 'lNeuGc', 'amNeuGc')), ('Kdn_a2-6', ('KdnE',)), ('Kdn_a2-3', ('KdnL',))) for code in codes}
 _SULFATE_CODES = frozenset({'Su', 's', 'Sul'})
 _COMP_TABLE_FORM = re.compile(r'(?:\s*(?:Neu5[AG]c|NH4|[A-Za-z]+)(?:\[[+-]?[\d.]+\])?\(\d+\))+|(?:\s*\((?:NH4|[A-Za-z]+)\)\d+)+\s*|\{[^{}]*:\s*\d+[^{}]*\}(?:\$\S*)?')  # HexNAc(4)Hex(5) (Byonic), H(5)N(4)A(2)F(1) (pGlyco), NeuAc[+13.0316](2) (GlyHunter), (Hex)5 (HexNAc)2 (GlyCombo; GlycoMod's '+ (Man)3(GlcNAc)2' stays a sequence), {Hex:5; HexNAc:4} (GlycReSoft)
-_NAME_TO_CODE = {'Hex': 'H', 'HexNAc': 'N', 'dHex': 'F', 'Neu5Ac': 'A', 'Neu5Gc': 'G', 'HexA': 'HexA', 'Pen': 'Pen', 'S': 'S', 'P': 'P'}
+_NAME_TO_CODE = {'Hex': 'H', 'HexNAc': 'N', 'dHex': 'F', 'Neu5Ac': 'A', 'Neu5Ac_a2-6': 'E', 'Neu5Ac_a2-3': 'L', 'Neu5Gc': 'G', 'Neu5Gc_a2-6': 'Ge', 'Neu5Gc_a2-3': 'Gl',
+                 'Kdn_a2-6': 'KdnE', 'Kdn_a2-3': 'KdnL', 'HexA': 'HexA', 'Pen': 'Pen', 'S': 'S', 'P': 'P'}
 _COMP_ORDER = {k: i for i, k in enumerate(_NAME_TO_CODE)}
 _COMP_ENGINE_NAMES = {'byonic': {'HexNAc': 'HexNAc', 'Hex': 'Hex', 'dHex': 'Fuc', 'Neu5Ac': 'NeuAc', 'Neu5Gc': 'NeuGc', 'Kdn': 'KDN', 'HexA': 'HexA', 'HexN': 'HexN', 'Pen': 'Pent', 'S': 'Sulfo', 'P': 'Phospho'},
                       'glycresoft': {'Pen': 'Pen', 'dHex': 'Fuc', 'Hex': 'Hex', 'HexN': 'HexN', 'HexA': 'HexA', 'HexNAc': 'HexNAc', 'Kdn': 'Kdn', 'Neu5Ac': 'Neu5Ac', 'Neu5Gc': 'Neu5Gc',
@@ -416,6 +419,10 @@ def canonicalize_composition(comp: str | dict[str, int], # Composition in Hex5He
         # A dict, e.g., from glycan_to_composition, gets the same key aliases as a string, but a formula key like '-H2O' or '+N3' stays whole
         pairs = [(k, int(v)) for k, v in comp.items()]
     else:
+        if '[' in comp:  # GlyHunter writes a derivatized sialic acid with its mass shift, NeuAc[+13.0316](2), which names its linkage like the E and L codes
+            from glycowork.motif.tokenization import SIALIC_PRODUCTS, SIALIC_DERIVATIZATIONS, calculate_adduct_mass  # tokenization imports this module at load time
+            shifts = [(sum(calculate_adduct_mass(f) for f in SIALIC_PRODUCTS[p]), i) for pair in SIALIC_DERIVATIZATIONS.values() for i, p in enumerate(pair)]
+            comp = re.sub(r'Neu5?([AG])c\[([+-]?[\d.]+)\]', lambda m: next(((('E', 'L') if m[1] == 'A' else ('Ge', 'Gl'))[i] for d, i in shifts if abs(d - float(m[2])) < 0.01), m[0]), comp)
         comp = re.sub(r'\[[+-]?[\d.]+\](?!\s*$)|\([+-][\d.]+\)|\^[A-Za-z]+|\$\S*$', '', _COMP_ADDUCT.sub('', _COMP_MASS_SUFFIX.sub('', comp))).strip()  # GlyHunter's derivatized NeuAc[+13.0316], a mass after an adduct as in Ammonium(+17), GlycReSoft's permethylated Hex^Me and reducing-end $C1H4
         fields = re.split(r'[\s_,;]+', comp)
         if comp.isdigit() or (len(fields) > 1 and all(f.isdigit() for f in fields)):
@@ -2004,8 +2011,11 @@ def parse_glycoform(glycoform: str | dict[str, int], # Composition in H5N4F1A2 f
         glycoform = canonicalize_composition(glycoform)
     if isinstance(glycoform, dict):
         if not any(f in glycoform.keys() for f in glycan_features):
-            mapping = {'Hex': 'H', 'HexNAc': 'N', 'dHex': 'F', 'Neu5Ac': 'A', 'Neu5Gc': 'G'}
-            glycoform = {mapping.get(k, k): v for k, v in glycoform.items()}
+            # a sialic acid of known linkage (from a linkage-specific derivatization) counts as its residue
+            mapping, folded = {'Hex': 'H', 'HexNAc': 'N', 'dHex': 'F', 'Neu5Ac': 'A', 'Neu5Gc': 'G', 'Neu5Ac_a2-6': 'A', 'Neu5Ac_a2-3': 'A', 'Neu5Gc_a2-6': 'G', 'Neu5Gc_a2-3': 'G'}, {}
+            for k, v in glycoform.items():
+                folded[mapping.get(k, k)] = folded.get(mapping.get(k, k), 0) + v
+            glycoform = folded
         components = {k: glycoform.get(k, 0) for k in glycan_features}
         return components | (infer_features_from_composition(components) if glycan_class == 'N' else {})
     components = {c: 0 for c in glycan_features}
