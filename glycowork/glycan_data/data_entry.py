@@ -18,7 +18,10 @@ _GP_SIGNATURES = [('fragpipe', ('totalglycancomposition', 'proteinstart')), ('pg
                   ('metamorpheus', ('plausibleglycancomposition', 'fullsequence')), ('decipher', ('glycosite', 'glycancomposition')), ('strucgp', ('glycosite_position', 'glycancomposition')),
                   ('glycanfinder', ('proteinaccession', 'glycantype')), ('decipher_site', ('site', 'glycan'))]  # columns (whitespace removed, lowercased) that identify each glycoproteomics engine
 _SUMMARY_HEAD = re.compile(r'Absolute Intensity|Analyte Area(?: - Background Area)?\tCalibrated')  # an abundance block of a LaCyTools or MassyTools Summary.txt
-_DECOY = re.compile(r'>?\s*(?:rev_|reverse|decoy|#decoy#|xxx_)', flags = re.IGNORECASE)  # decoy protein labels: 'REV_sp|...' (pGlyco, MaxQuant), 'rev_sp|...' (FragPipe), '>Reverse sp|...' (Byonic), 'DECOY_P02763' (MetaMorpheus), '#DECOY#P02763' (PEAKS)
+_TAG_MASSES = (140.095, 144.1021, 148.1092, 224.1525, 225.1558, 229.1629, 304.2054,
+               304.2071)  # amine tags that also label S and T: mTRAQ, iTRAQ 4-plex, TMT0, TMT2, TMT, iTRAQ 8-plex, TMTpro
+_DECOY = re.compile(r'>?\s*(?:rev_|reverse|decoy|#decoy#|xxx_)',
+                    flags = re.IGNORECASE)  # decoy protein labels: 'REV_sp|...' (pGlyco, MaxQuant), 'rev_sp|...' (FragPipe), '>Reverse sp|...' (Byonic), 'DECOY_P02763' (MetaMorpheus), '#DECOY#P02763' (PEAKS)
 
 
 def _read_table(f: str | Path, # an Excel workbook, a .csv separated by commas, semicolons, or tabs, or any other text table separated by tabs
@@ -32,7 +35,11 @@ def _read_table(f: str | Path, # an Excel workbook, a .csv separated by commas, 
 
     if Path(f).suffix.lower() in ('.xlsx', '.xlsm', '.xlsb', '.xls', '.ods'):
         with pd.ExcelFile(f) as xl:
-            return [xl.parse(s, header = header(xl.parse(s, header = None, nrows = 50, dtype = str).values.tolist()) or 0, dtype = dtype) for s in xl.sheet_names]
+            sheets = [
+                xl.parse(s, header = header(xl.parse(s, header = None, nrows = 50, dtype = str).values.tolist()) or 0,
+                         dtype = dtype) for s in xl.sheet_names]
+        return [d for d in sheets if not d.empty] or sheets[
+            :1]  # the empty Sheet2 or Sheet3 of a workbook holds no table
     seps = (',', ';', '\t') if '.csv' in [x.lower() for x in Path(f).suffixes[-2:]] else ('\t',)  # also a compressed '.csv.xz', which pandas decompresses
     with get_handle(f, 'r', encoding = 'utf-8-sig', errors = 'replace', compression = 'infer') as fh:
         lines = [l for _, l in zip(range(50), fh.handle)]
@@ -43,12 +50,19 @@ def _read_table(f: str | Path, # an Excel workbook, a .csv separated by commas, 
                 found.append((s, h))
         except csv.Error:  # a wide line without this separator is one field beyond the csv module's size limit, e.g., the header of v12_glycan_binding.csv with ';'
             pass
-    sep, skip = min(found, key = lambda t: (t[1], -lines[t[1]].count(t[0])), default = (max(seps, key = (lines or [''])[0].count), 0))  # the separator that puts the header highest, then splits it most often; ties go to the comma
+    sep, skip = min(found, key = lambda t: (t[1], -lines[t[1]].count(t[0])),
+                    default = (max(seps, key = (lines or [''])[0].count),
+                               0))  # the separator that puts the header highest, then splits it most often; ties go to the comma
+    marks = set(re.findall(r'(?m)(?:^|;)\s*[-+]?\d+([.,])\d+(?:[eE][-+]?\d+)?\s*(?=;|$)', ''.join(lines[skip + 1:])))
+    dec = ',' if sep == ';' and marks != {
+        '.'} else '.'  # semicolons mostly come with decimal commas (European Excel, Skyline), but some tools write them with decimal points
     try:
-        df = pd.read_csv(f, sep = sep, dtype = dtype, decimal = ',' if sep == ';' else '.', skiprows = skip)
+        df = pd.read_csv(f, sep = sep, dtype = dtype, decimal = dec, skiprows = skip)
     except UnicodeDecodeError:  # Excel on Windows writes CSV in its code page, e.g., 'Müller' as cp1252
-        df = pd.read_csv(f, sep = sep, dtype = dtype, decimal = ',' if sep == ';' else '.', skiprows = skip, encoding = 'cp1252', encoding_errors = 'replace')
-    return [df.replace(r'^([-+]?\d+),(\d+(?:[eE][-+]?\d+)?)$', r'\1.\2', regex = True) if sep == ';' and dtype is str else df]  # values read as text keep their decimal comma otherwise
+        df = pd.read_csv(f, sep = sep, dtype = dtype, decimal = dec, skiprows = skip, encoding = 'cp1252',
+                         encoding_errors = 'replace')
+    return [df.replace(r'^([-+]?\d+),(\d+(?:[eE][-+]?\d+)?)$', r'\1.\2',
+                       regex = True) if dec == ',' and dtype is str else df]  # values read as text keep their decimal comma otherwise
 
 
 def _gp_engine(df: pd.DataFrame # a table as read from file
@@ -75,7 +89,9 @@ def _glycan_mods(peptide: str, # peptide with inline modifications, e.g., 'K.N[+
     for tok in re.findall(rf'{o}[^{c}]*{c}|[A-Za-z]', re.sub(r'^[A-Z-]\.|\.[A-Z-]$', '', peptide)):
         if len(tok) == 1:
             pos, res = pos + 1, tok.upper()
-        elif re.search(r'glycan|glycosyl', tok, flags = re.IGNORECASE) or (pos and res in 'NST' and (m := re.fullmatch(r'\+?(\d+\.?\d*)', tok[1:-1])) and float(m[1]) >= 130 and not any(abs(float(m[1]) - t) < 0.01 for t in (140.095, 144.1021, 148.1092, 224.1525, 225.1558, 229.1629, 304.2054, 304.2071))):  # a pentose (132.04) is the lightest glycan; the amine tags (mTRAQ, iTRAQ 4-plex, TMT0, TMT2, TMT, iTRAQ 8-plex, TMTpro) also label S and T
+        elif re.search(r'glycan|glycosyl', tok, flags = re.IGNORECASE) or (
+                    pos and res in 'NST' and (m := re.fullmatch(r'\+?(\d+\.?\d*)', tok[1:-1])) and float(m[1]) >= 130 and not any(
+                abs(float(m[1]) - t) < 0.01 for t in _TAG_MASSES)):  # a pentose (132.04) is the lightest glycan
             out.append((pos, tok[1:-1]))
     return out
 
@@ -147,7 +163,16 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
                 comp, _, mass = g.partition('%')
                 loc = re.findall(r'\[(\d+),([^,\]]+),', str(sp))  # O-Pair: [peptide position,composition,probability] for each glycan
                 mods = re.findall(r'(\d+)([A-Z])\((-?[\d.]+)\)', str(am))  # '3N(2350.8303),4C(57.0215)'
-                pos = [int(p) for p, _ in loc] or [int(p) for p, _, m in mods if mass.strip() and abs(float(m) - float(mass)) < 0.05] or [int(p) for p, r, m in mods if r in 'NST' and float(m) >= 200]
+                pos = [int(p) for p, _ in loc] or [int(p) for p, _, m in mods if
+                                                   mass.strip() and abs(float(m) - float(mass)) < 0.05] or [int(p) for
+                                                                                                            p, r, m in
+                                                                                                            mods if
+                                                                                                            r in 'NST' and float(
+                                                                                                                m) >= 130 and not any(
+                                                                                                                abs(float(
+                                                                                                                    m) - t) < 0.01
+                                                                                                                for t in
+                                                                                                                _TAG_MASSES)]
                 pairs.append(_pair_sites(int(float(start)), pos, [x for _, x in loc] or [comp.strip()]) if pd.notna(start) else [])
             vals = num('intensity') if 'intensity' in c and num('intensity').gt(0).any() else None
             if 'quanusage' in c:  # TMT or iTRAQ: 'Quan Usage', then one reporter ion column per channel, named by the plex's annotation file or else by the channel ('126', '127N'), which then gets its plex (experiment folder) in front
@@ -237,13 +262,16 @@ def _glycomics_layout(df: pd.DataFrame # a glycomics table as read from file
     rep = next((c[k] for k in ('replicatename', 'replicate') if k in c), None)
     area = next((c[k] for k in ('totalareams1', 'totalarea', 'area') if k in c), None)
     wide = {k: m[1] for k in df.columns if (m := re.fullmatch(r'(.+) Total Area MS1', str(k)))} or {k: m[1] for k in df.columns if (m := re.fullmatch(r'(.+) Total Area', str(k)))}
-    tool = 'glycresoft' if all(k in c for k in ('composition', 'total_signal', 'neutral_mass')) else 'candycrunch' if ('num_spectra' in c or 'n_files_ms2' in c) and 'composition' in c else 'compound_discoverer' if 'name' in c and any(
-        str(k).startswith('Area: ') for k in df.columns) else 'skyline' if mol is not None and ((rep is not None and area is not None) or wide) else 'glycogenius' if str(df.columns[0]) == 'Sample' and len(df) > 0 and str(df.iloc[0, 0]) == 'Group' else None
+    tool = 'glycresoft' if all(k in c for k in ('composition', 'total_signal', 'neutral_mass')) else 'candycrunch' if (
+                                                                                                                                  'num_spectra' in c or 'n_files_ms2' in c) and 'composition' in c else 'compound_discoverer' if 'name' in c and any(
+        str(k).startswith('Area: ') for k in df.columns) else 'skyline' if mol is not None and (
+                (rep is not None and area is not None) or wide) else 'glycogenius' if len(df) > 0 and str(
+        df.columns[0]) == 'Sample' and str(df.iloc[0, 0]) == 'Group' else None
     return tool, c, mol, rep, area, wide
 
 
 def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataFrame], # export(s) of Skyline (report, long or pivoted by replicate), LaCyTools or MassyTools (Summary.txt), GlycoWorkbench (.gwp workspace or .gwa annotated peak list), Thermo Compound Discoverer, GlycoGenius, GlyHunter, GlycReSoft, or CandyCrunch, or any table with glycans in its first column and samples in the others
-                   sample_map: dict[str, str] | Callable[[str], str] | None = None # renames runs (raw files, FragPipe experiments, or TMT channels) into samples; runs sharing a sample, e.g., fractions, are summed
+                   sample_map: dict[str, str] | Callable[[str], str] | None = None  # renames runs (raw files, Skyline replicates, or sample columns) into samples; runs sharing a sample, e.g., fractions, are summed
                    ) -> GlycoDataFrame: # glycans (IUPAC-condensed, canonical composition, or the label as written if it is neither) in column 'glycan', samples as columns; ready for get_differential_expression and the rest of glycowork
     "Reads the native output of glycomics software into a glycan x sample table, quantified by the tool's abundance where it reports one and by feature counts otherwise"
     recs, groups = [], {}  # (run, ion, label, abundance, S is NeuAc); Skyline, LaCyTools, MassyTools, and GlycoGenius write NeuAc as S, which glycowork reads as sulfate

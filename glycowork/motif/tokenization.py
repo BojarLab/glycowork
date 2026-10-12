@@ -532,7 +532,8 @@ def _carboxyl_sites(glycan: str # Glycan in IUPAC-condensed format
             base = map_to_basic(stem_lib[m[1]] if m[1] in stem_lib else get_core(m[1]))
         except Exception:
             continue
-        if base == 'HexA':
+        if base == 'HexA' and not re.search(r'6[A-Z]|AN(?![a-z])', m[
+            1]):  # a uronic acid carboxyl that already is an ester or amide (GalA6Me, GlcA6N, GlcAN, GlcA6GroN) reacts no further
             sites.append((base, 0, m.span(1), m.span(2) if m[2] else None))
         elif base in SIALIC_KEYS and not m[1].startswith('Neu1'):  # a carboxyl that already is an ester, amide or lactone (Neu1Me5Ac, Neu1N5Ac, Neu1,7lactone5Ac) reacts no further
             to = set(m[2].split('-')[-1].split('/')) if m[2] and '-' in m[2] else {'?'}  # the root, an unknown position, or a choice between a2-6 and a lactone-forming one

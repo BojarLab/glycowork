@@ -1622,16 +1622,13 @@ def _sia_onto_neu(glycan: str # Glycan in IUPAC-condensed nomenclature
     return re.sub(r'(5[AG]c\(a2-)\?\)', onto_neu, glycan)
 
 
-def canonicalize_iupac(glycan: str | int | list[str] | pd.Series
-                       # Glycan sequence in any supported format, or a list, tuple, array, Series, or Index of them
-                       ) -> str | list[
-    str] | pd.Series:  # Standardized IUPAC-condensed format; a list for a list/tuple/array, a Series/Index with the same index for a Series/Index
+def canonicalize_iupac(glycan: str | int | list[str] | pd.Series  # Glycan sequence in any supported format, or a list, tuple, array, Series, or Index of them
+                       ) -> str | list[str] | pd.Series:  # Standardized IUPAC-condensed format; a list for a list/tuple/array, a Series/Index with the same index for a Series/Index
     "Convert glycan(s) from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, pGlyco, StrucGP, CSDB-linear, KCF, SMILES, LINUCS, GlyConnect IDs, and GlyTouCanIDs to standardized IUPAC-condensed format"
     if isinstance(glycan, (pd.Series, pd.Index)):
         return glycan.map(_canonicalize_iupac)
     if isinstance(glycan, (list, tuple, np.ndarray)):
-        return [_canonicalize_iupac(g) for g in (glycan.tolist() if isinstance(glycan,
-                                                                               np.ndarray) else glycan)]  # tolist gives Python ints, so GlyConnect IDs from an int array are recognized
+        return [_canonicalize_iupac(g) for g in (glycan.tolist() if isinstance(glycan, np.ndarray) else glycan)]  # tolist gives Python ints, so GlyConnect IDs from an int array are recognized
     return _canonicalize_iupac(glycan)
 
 

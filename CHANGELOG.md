@@ -44,7 +44,7 @@
 - Added SNFG symbols for the furanoses `Hexf`, `Penf`, `Rhaf`, `6dTalf`, `Parf`, `Sorf`, and `Psif` (0967d8a)
 - `glycan_col_num` in `plot_glycans_excel` can now also be a column name (0967d8a)
 - Added the `highlight_residues` keyword argument to `GlycoDraw` to have `highlight_motif` behavior for manually specified residues (7bc927b)
-- `GlycoDraw` draws linkage-resolved sialic acids in compositions as their symbol, with the linkage after the count (e.g., `1 α2,6`) ()
+- `GlycoDraw` draws linkage-resolved sialic acids in compositions as their symbol, with the linkage after the count (e.g., `1 α2,6`) (d6fe1d5)
 
 ##### Changed 🔄
 - Black elements in `.svg` `GlycoDraw` outputs are now also charcoal (`#1C1917`), just like any other format (0967d8a)
@@ -76,11 +76,11 @@
 - `calculate_adduct_mass` now also supports F/Br/I halogen atom masses (a34092c)
 - `match_composition_relaxed`, `compositions_to_structures`, and `mz_to_structures` now also take `glycan_class = 'all'` (a34092c)
 - `glycan_to_mass` now also takes compositions (dicts, or strings such as `'H5N4F1'`) (3a21ba6)
-- `glycan_to_mass` now also weighs glycans whose residues no composition can currently express (e.g., `Kdo`, heptoses, furanoses, `QuiNAc`) atom by atom from their molecule, including permethylated and peracetylated masses ()
-- Linkage-specific sialic acid derivatization (e.g., Reiding et al. 2014; Lageveen-Kammeijer et al. 2019): the new `sialic_derivatization` keyword argument of `composition_to_mass`, `glycan_to_mass`, `mz_to_composition`, and `mz_to_structures` takes `'EE'` (ethyl esterification), `'EEA'` (ethyl esterification + amidation), `'ME'` (methyl esterification), `'DMA'` (dimethylamidation), `'SALSA'`, or any pair of carboxyl products from `SIALIC_PRODUCTS` for a2-6 and a2-3/8/9 sialic acids; uronic acids take the a2-6 product ()
-- Added the linkage-resolved composition keys `Neu5Ac_a2-6`/`Neu5Ac_a2-3` (and `Neu5Gc`, `Kdn`), written as `E`/`L`, `Ge`/`Gl`, and `KdnE`/`KdnL` in shorthand compositions (e.g., `H5N4E1L1`) ()
-- Added `sialic_linkage_splits`, which lists every linkage-resolved composition that a composition stands for, and `resolve_sialic_linkages`, which fits a structure's sialic acid linkages to a linkage-resolved composition ()
-- Added the `sialic_linkage` keyword argument to `glycan_to_composition`, which counts sialic acids by linkage ()
+- `glycan_to_mass` now also weighs glycans whose residues no composition can currently express (e.g., `Kdo`, heptoses, furanoses, `QuiNAc`) atom by atom from their molecule, including permethylated and peracetylated masses (d6fe1d5)
+- Linkage-specific sialic acid derivatization (e.g., Reiding et al. 2014; Lageveen-Kammeijer et al. 2019): the new `sialic_derivatization` keyword argument of `composition_to_mass`, `glycan_to_mass`, `mz_to_composition`, and `mz_to_structures` takes `'EE'` (ethyl esterification), `'EEA'` (ethyl esterification + amidation), `'ME'` (methyl esterification), `'DMA'` (dimethylamidation), `'SALSA'`, or any pair of carboxyl products from `SIALIC_PRODUCTS` for a2-6 and a2-3/8/9 sialic acids; uronic acids take the a2-6 product (d6fe1d5)
+- Added the linkage-resolved composition keys `Neu5Ac_a2-6`/`Neu5Ac_a2-3` (and `Neu5Gc`, `Kdn`), written as `E`/`L`, `Ge`/`Gl`, and `KdnE`/`KdnL` in shorthand compositions (e.g., `H5N4E1L1`) (d6fe1d5)
+- Added `sialic_linkage_splits`, which lists every linkage-resolved composition that a composition stands for, and `resolve_sialic_linkages`, which fits a structure's sialic acid linkages to a linkage-resolved composition (d6fe1d5)
+- Added the `sialic_linkage` keyword argument to `glycan_to_composition`, which counts sialic acids by linkage (d6fe1d5)
 
 ##### Changed 🔄
 - `get_core` and `get_modification` can now better deal with cases such as `Neu5,9Ac2` (0967d8a)
@@ -94,7 +94,7 @@
 - `glycan_to_composition` now returns `{}` instead of a bare-core composition when a residue carries a substituent it cannot count (e.g., `Pyr`, amino `N`, `Aep`, `Gro`, `Lac`, acyl chains, `-onic`, anhydro), so `glycan_to_mass` no longer returns a wrong mass for them (ba8b5f7)
 - `glycan_to_composition` now says when it was given a composition (dict or string like `'H5N4'`) instead of a sequence (ba8b5f7)
 - `get_ion_mzs`, `mz_to_composition`, and `mz_to_structures` now accept a single adduct, `filter_out`, or `deprioritized` string and a single m/z (ba8b5f7)
-- `match_composition_relaxed` and `mz_to_structures` with linkage-resolved compositions now return only structures with those linkages, and fill in unknown linkages wherever the composition decides them ()
+- `match_composition_relaxed` and `mz_to_structures` with linkage-resolved compositions now return only structures with those linkages, and fill in unknown linkages wherever the composition decides them (d6fe1d5)
 
 ##### Fixed 🐛
 - Fixed handling of `adduct` and `mass_tag` with multiply-charged glycans in `mz_to_composition` (a34092c)
@@ -142,8 +142,8 @@
 - `max_specify_glycan` now raises an error for species not in `df_species` (342a605)
 - `canonicalize_composition` now reads an IUPAC-condensed sequence as its composition instead of as residue tokens; `strict = True` still rejects sequences (ba8b5f7)
 - `get_possible_linkages`, and with it `compare_glycans`/`subgraph_isomorphism`, now raises an informative error for a malformed linkage such as `?3/6` (ba8b5f7)
-- `canonicalize_composition` now keeps the linkage of sialic acid derivative codes from LaCyTools, MassyTools, GlycoGenius, and GlyCombo (e.g., `E`, `L`, `M`, `Am`, `eNeuAc`, `lNeuAc`), which used to be merged into plain Neu5Ac/Neu5Gc, and maps GlyHunter's mass-tagged sialic acids (e.g., `NeuAc[+13.0316]`) to their linkage by product mass ()
-- `parse_glycoform` counts linkage-resolved sialic acids as Neu5Ac/Neu5Gc ()
+- `canonicalize_composition` now keeps the linkage of sialic acid derivative codes from LaCyTools, MassyTools, GlycoGenius, and GlyCombo (e.g., `E`, `L`, `M`, `Am`, `eNeuAc`, `lNeuAc`), which used to be merged into plain Neu5Ac/Neu5Gc, and maps GlyHunter's mass-tagged sialic acids (e.g., `NeuAc[+13.0316]`) to their linkage by product mass (d6fe1d5)
+- `parse_glycoform` counts linkage-resolved sialic acids as Neu5Ac/Neu5Gc (d6fe1d5)
 
 ##### Fixed 🐛
 - `sanitize_iupac` no longer flags phosphodiesters (e1c807a)
@@ -184,7 +184,7 @@
 - `annotate_dataset` now counts `custom_motifs` (sequences, `r`-prefixed glyco-regexes, or motif names) in the same pass as the known motifs, keeps each column labeled as given, and raises an error for entries that are none of these (79c0ac9)
 - `annotate_dataset` now keeps a glycan and its alditol (`-ol`) as separate rows (79c0ac9)
 - `annotate_dataset` now raises an informative error for an empty list or a composition dict (ba8b5f7)
-- `get_k_saccharides(up_to = True)` counts linkage-resolved sialic acids in compositions by linkage and also toward Neu5Ac/Neu5Gc ()
+- `get_k_saccharides(up_to = True)` counts linkage-resolved sialic acids in compositions by linkage and also toward Neu5Ac/Neu5Gc (d6fe1d5)
 
 ##### Fixed 🐛
 - Fixed `annotate_dataset`, `annotate_glycan_topology_uncertainty`, and `get_k_saccharides` counting motifs whose stated PTM positions differ from the glycan's (e.g., `Gal6S(b1-4)GlcNAcOS` in `Gal3S(b1-4)GlcNAc6S`, or `Terminal_Glc3Ac` in glycans with `Glc6Ac` and an `Ole` residue) as soon as either side contained an `O` (9576826)
@@ -339,7 +339,7 @@
 ##### Fixed 🐛
 - Fixed `groupby(...).apply` failing on `GlycoDataFrame`s such as `df_species` (eac80ee)
 - Removed a blank trailing row from `lectin_array_bacteria_PMID20973590` (ba8b5f7)
-- Regenerated the stored `Composition` column of `df_glycan`, which was outdated for 2,999 glycans (e.g., `GalN2Suc` counted as sulfated, `Neu5GcOLac` as plain Neu5Gc) and made `mz_to_composition` return compositions no glycan has ()
+- Regenerated the stored `Composition` column of `df_glycan`, which was outdated for 2,999 glycans (e.g., `GalN2Suc` counted as sulfated, `Neu5GcOLac` as plain Neu5Gc) and made `mz_to_composition` return compositions no glycan has (d6fe1d5)
 
 ##### Deprecated ⚠️
 - Removed `human_lipoproteins_PMC9218963` glycoproteomics dataset (no per-sample values) (69d0a3e)
