@@ -1,0 +1,107 @@
+name: Desktop app
+
+# Builds the double-click glycowork app (Windows installer, macOS disk image), checks that the built app draws and analyzes,
+# and attaches both to a published GitHub release; run it by hand (Actions > Desktop app > Run workflow) to get them as build artifacts
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install glycowork and the app's PySide6
+      run: |
+        python -m pip install --upgrade pip
+        pip install . PySide6
+
+    # Antivirus heuristics flag PyInstaller's precompiled bootloader, which malware ships too, so the Windows app gets one compiled here (the runner's MSVC)
+    - name: Install PyInstaller with a bootloader built from source
+      if: runner.os == 'Windows'
+      env:
+        PYINSTALLER_COMPILE_BOOTLOADER: 1
+      run: pip install --no-binary pyinstaller --no-cache-dir --verbose pyinstaller
+
+    - name: Install PyInstaller
+      if: runner.os == 'macOS'
+      run: pip install pyinstaller
+
+    - name: Build the app
+      run: pyinstaller --noconfirm packaging/glycowork.spec
+
+    - name: Check that the built app draws and analyzes (a shipped dataset, differential expression with figures, in the worker process)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $app = Start-Process -FilePath dist\glycowork\glycowork.exe -ArgumentList '--self-test' -Wait -PassThru
+        Get-Content glycowork_self_test.log
+        exit $app.ExitCode
+
+    - name: Check that the built app draws and analyzes (a shipped dataset, differential expression with figures, in the worker process)
+      if: runner.os == 'macOS'
+      run: |
+        status=0
+        dist/glycowork.app/Contents/MacOS/glycowork --self-test || status=$?
+        cat glycowork_self_test.log
+        exit $status
+
+    - name: Build the Windows installer
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $version = python -c "from importlib.metadata import version; print(version('glycowork'))"
+        if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup --no-progress -y }
+        & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" packaging\glycowork.iss
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    # No installer that Microsoft Defender flags reaches a release; the log names the file and the threat
+    - name: Scan the app and installer with Microsoft Defender
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $defender = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe"
+        if (-not (Test-Path $defender)) { Write-Host 'Microsoft Defender is not installed on this runner'; exit 0 }
+        & $defender -SignatureUpdate | Out-Host
+        foreach ($target in @((Resolve-Path dist\glycowork).Path) + @(Get-ChildItem dist\glycowork-*-Windows-Setup.exe | ForEach-Object FullName)) {
+          & $defender -Scan -ScanType 3 -File $target -DisableRemediation | Out-Host
+          if ($LASTEXITCODE -eq 2) { Write-Host "::error::Microsoft Defender flags $target (file and threat listed above)"; exit 1 }
+        }
+        exit 0
+
+    - name: Build the macOS disk image
+      if: runner.os == 'macOS'
+      run: |
+        version=$(python -c "from importlib.metadata import version; print(version('glycowork'))")
+        hdiutil create -volname glycowork -srcfolder dist/glycowork.app -ov -format UDZO "dist/glycowork-$version-macOS.dmg"
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: glycowork-${{ runner.os }}
+        path: |
+          dist/glycowork-*-Windows-Setup.exe
+          dist/glycowork-*-macOS.dmg
+
+    - name: Attach to the release
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          dist/glycowork-*-Windows-Setup.exe
+          dist/glycowork-*-macOS.dmg
