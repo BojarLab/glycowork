@@ -2,8 +2,8 @@ from pathlib import Path
 from glycowork.glycan_data.loader import unwrap, resolve_motif_name, lib
 from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, compare_glycans, graph_to_string, resolve_anchor
-from glycowork.motif.tokenization import get_core, get_modification
-from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit, is_composition, canonicalize_composition, _COMP_ORDER
+from glycowork.motif.tokenization import get_core, get_modification, SIALIC_KEYS
+from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit, is_composition, canonicalize_composition, _COMP_ORDER, PDB_TO_IUPAC
 import warnings
 import html
 import hashlib
@@ -44,6 +44,7 @@ sugar_dict = {
     "Galf": ['Hex', 'snfg_yellow', True], "Gul": ['Hex', 'snfg_orange', False],
     "Alt": ['Hex', 'snfg_pink', False], "All": ['Hex', 'snfg_purple', False],
     "Tal": ['Hex', 'snfg_light_blue', False], "Ido": ['Hex', 'snfg_brown', False],
+    "Hexf": ['Hex', 'snfg_white', True], "Altf": ['Hex', 'snfg_pink', True],
 
     "HexNAc": ['HexNAc', 'snfg_white', False], "GlcNAc": ['HexNAc', 'snfg_alt_blue', False],
     "GlcfNAc": ['HexNAc', 'snfg_alt_blue', True], "ManNAc": ['HexNAc', 'snfg_green', False],
@@ -65,10 +66,10 @@ sugar_dict = {
     "IdoA": ['HexA_2', 'snfg_brown', False],
 
     "dHex": ['dHex', 'snfg_white', False], "Qui": ['dHex', 'snfg_alt_blue', False],
-    "Rha": ['dHex', 'snfg_green', False], "6dGul": ['dHex', 'snfg_orange', False],
+    "Rha": ['dHex', 'snfg_green', False], "6dGul": ['dHex', 'snfg_orange', False], "Rhaf": ['dHex', 'snfg_green', True],
     "6dAlt": ['dHex', 'snfg_pink', False], "6dAltf": ['dHex', 'snfg_pink', True],
     "6dTal": ['dHex', 'snfg_light_blue', False], "Fuc": ['dHex', 'snfg_red', False],
-    "Fucf": ['dHex', 'snfg_red', True],
+    "Fucf": ['dHex', 'snfg_red', True], "6dTalf": ['dHex', 'snfg_light_blue', True],
 
     "dHexNAc": ['dHexNAc', 'snfg_white', False], "QuiNAc": ['dHexNAc', 'snfg_alt_blue', False],
     "RhaNAc": ['dHexNAc', 'snfg_green', False], "6dAltNAc": ['dHexNAc', 'snfg_pink', False],
@@ -77,10 +78,10 @@ sugar_dict = {
 
     "ddHex": ['ddHex', 'snfg_white', False], "Oli": ['ddHex', 'snfg_alt_blue', False],
     "Tyv": ['ddHex', 'snfg_green', False], "Abe": ['ddHex', 'snfg_orange', False],
-    "Par": ['ddHex', 'snfg_pink', False], "Dig": ['ddHex', 'snfg_purple', False],
+    "Par": ['ddHex', 'snfg_pink', False], "Parf": ['ddHex', 'snfg_pink', True], "Dig": ['ddHex', 'snfg_purple', False],
     "Col": ['ddHex', 'snfg_light_blue', False],
 
-    "Pen": ['Pen', 'snfg_white', False], "Ara": ['Pen', 'snfg_green', False],
+    "Pen": ['Pen', 'snfg_white', False], "Penf": ['Pen', 'snfg_white', True], "Ara": ['Pen', 'snfg_green', False],
     "Araf": ['Pen', 'snfg_green', True], "Lyx": ['Pen', 'snfg_yellow', False],
     "Lyxf": ['Pen', 'snfg_yellow', True], "Xyl": ['Pen', 'snfg_orange', False],
     "Xylf": ['Pen', 'snfg_orange', True], "Rib": ['Pen', 'snfg_pink', False],
@@ -103,7 +104,9 @@ sugar_dict = {
     "Assigned": ['Assigned', 'snfg_white', False], "Api": ['Assigned', 'snfg_alt_blue', False],
     "Apif": ['Assigned', 'snfg_alt_blue', True], "Fru": ['Assigned', 'snfg_green', False],
     "Fruf": ['Assigned', 'snfg_green', True], "Tag": ['Assigned', 'snfg_yellow', False],
-    "Sor": ['Assigned', 'snfg_orange', False], "Psi": ['Assigned', 'snfg_pink', False],
+    "Tagf": ['Assigned', 'snfg_yellow', True], "Sor": ['Assigned', 'snfg_orange', False],
+    "Sorf": ['Assigned', 'snfg_orange', True], "Psi": ['Assigned', 'snfg_pink', False],
+    "Psif": ['Assigned', 'snfg_pink', True],
     "non_glycan": ['Assigned', 'black', False],
 
     "blank": ['empty', 'snfg_white', False], "text": ['text', None, None], "-": ['empty', None, None],
@@ -164,8 +167,10 @@ def _flatten_text_paths(
         return (f'<text{attrs} transform="translate({x:.4f},{y:.4f}) rotate({angle:.4f})" '
                 f'x="0" y="{shift:.4f}">{label}</text>')
 
+    # glycorender draws #000000 as charcoal, so nothing in a GlycoDraw figure is ever pure black; the SVG must match
     return _SVG_TEXT_PATH.sub(_place, data).replace('<text ',
-                                                    "<text font-family=\"'Century Gothic', Comfortaa, sans-serif\" ")
+                                                    "<text font-family=\"'Century Gothic', Comfortaa, sans-serif\" ").replace(
+        '"#000000"', '"#1C1917"')
 
 
 def _drawn_extent(
@@ -173,35 +178,56 @@ def _drawn_extent(
         acc: list # Accumulator of (x0, y0, x1, y1) boxes in user space
 ) -> list: # The accumulator, so the caller can fold it in one expression
     "Collects the bounding boxes of everything visible in a drawsvg tree, so a drawing can be cropped to what it actually contains"
+    from glycorender.render import pdfmetrics, font_to_use
     a = getattr(element, 'args', {}) or {}
-    if isinstance(element, draw.Circle):
+    if isinstance(element, draw.Circle) and not a.get('fill') == a.get('stroke') == 'none':
         acc.append((a['cx'] - a['r'], a['cy'] - a['r'], a['cx'] + a['r'], a['cy'] + a['r']))
     elif isinstance(element, draw.Rectangle):
         acc.append((a['x'], a['y'], a['x'] + a['width'], a['y'] + a['height']))
     elif isinstance(element, draw.Text):
-        size, shift = a.get('font-size', 10), 0
+        size, shift, bold, track = a.get('font-size', 10), 0, False, 0
         text = element.escaped_text or ''.join(str(getattr(k, 'escaped_text', '') or '') for c in (element.children or []) for k in (c.children or []))
+        if not text:
+            # Every symbol carries a modification label, empty when it has none, which must not pad the bottom of the crop
+            return acc
         if a.get('x') is None:
             # Modification, conformation and linkage labels ride an invisible carrier path, anchored by startOffset along it and displaced by a dy in em
             carrier = element.children[0]
             pts = [float(k) for k in
                    _SVG_NUMBER.findall(re.sub(r'[A-DF-Za-df-z]', ' ', carrier.args['xlink:href'].args['d']))]
-            frac = {'50%': 0.5, '100%': 1.0}.get(carrier.args.get('startOffset'), 0.0)
+            offset = str(carrier.args.get('startOffset', '0'))
+            frac = float(offset[:-1]) / 100 if offset.endswith('%') else 0.0
             x, y = pts[0] + frac * (pts[-2] - pts[0]), pts[1] + frac * (pts[-1] - pts[1])
             for tspan in carrier.children or []:
                 shift = float(str(tspan.args.get('dy', '0em')).rstrip('em')) * size
+                bold = tspan.args.get('dy') == '-3.15em'
+            # glycorender drops the spaces of a label on a path and tracks it by 0.05 em
+            text, track = text.replace(' ', ''), 0.05 * size
         else:
             x, y = a['x'], a['y']
-        text_width = 0.62 * size * len(text)  # mean advance width of the label font; the crop margin absorbs the per-glyph error
+        # Measured in the font glycorender renders with, as a long modification label like 2Me3Me4Me6Me outgrows any
+        # mean glyph width
+        text_width = pdfmetrics.stringWidth(text, font_to_use + ('-Bold' if bold else ''), size) + track * (
+                len(text) - 1)
         x -= text_width / 2 if a.get('text-anchor') == 'middle' else text_width if a.get('text-anchor') == 'end' else 0
-        acc.append((x, y + shift - size, x + text_width, y + shift + 0.3 * size))
+        # 0.8 em is the tallest ascender of the label fonts (digits, capitals, β)
+        acc.append((x, y + shift - 0.8 * size, x + text_width, y + shift + 0.3 * size))
     elif 'd' in a and (a.get('stroke-width') or a.get('fill', 'none') not in (None, 'none')):
         # An invisible carrier path is not ink and must not enlarge the crop; its text is measured above instead
         pts = [float(k) for k in _SVG_NUMBER.findall(re.sub(r'[A-DF-Za-df-z]', ' ', a['d']))]
         acc.append((min(pts[0::2]), min(pts[1::2]), max(pts[0::2]), max(pts[1::2])))
     if not isinstance(element, draw.Text):
+        start = len(acc)
         for child in getattr(element, 'children', []) or []:
             _drawn_extent(child, acc)
+        if rot := re.match(r'rotate\((\S+) (\S+) (\S+)\)', str(a.get('transform', ''))):
+            # Upright symbols in vertical mode, brackets and fragment markers sit in rotated groups; turn their boxes along
+            deg, rx, ry = (float(k) for k in rot.groups())
+            c, s = cos(radians(deg)), sin(radians(deg))
+            for i in range(start, len(acc)):
+                pts = [(rx + (x - rx) * c - (y - ry) * s, ry + (x - rx) * s + (y - ry) * c)
+                       for x in acc[i][0::2] for y in acc[i][1::2]]
+                acc[i] = (min(p[0] for p in pts), min(p[1] for p in pts), max(p[0] for p in pts), max(p[1] for p in pts))
     return acc
 
 
@@ -219,17 +245,8 @@ def draw_hex(
     y_base = y_pos * dim
     half_dim = 0.5 * dim
     stroke_width = 0.04 * dim
-    points = [v for a in (0,60,120,180,240,300) for v in (x_base+half_dim*cos(radians(a)), y_base+half_dim*sin(radians(a)))]
-    if outline_only:
-        p = draw.Path(stroke_width = stroke_width, stroke = col_dict['black'], fill = 'none')
-        p.M(points[0], points[1])  # Move to first point
-        for i in range(2, len(points), 2):  # Line to subsequent points
-            p.L(points[i], points[i+1])
-        p.Z()  # Close path
-        drawing.append(p)
-    else:
-        # Draw filled hexagon with border
-        drawing.append(draw.Lines(*points, close = True, fill = color, stroke = col_dict['black'], stroke_width = stroke_width))
+    points = [v for a in (0, 60, 120, 180, 240, 300) for v in (x_base + half_dim * cos(radians(a)), y_base + half_dim * sin(radians(a)))]
+    drawing.append(draw.Lines(*points, close = True, fill = 'none' if outline_only else color, stroke = col_dict['black'], stroke_width = stroke_width))
 
 
 def add_customization(
@@ -453,7 +470,7 @@ def draw_shape(
         # Draw outline
         draw_hex(x_pos, y_pos, dim, col_dict, drawing, outline_only = True)
     elif shape in {'Z', 'Y'}:
-        rot = f'rotate({deg} {-abs(x_pos)*dim} {-abs(y_pos)*dim})'
+        rot = f'rotate({deg} {x_base} {y_base})'
         g = draw.Group(transform = rot)
         p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
         p.M(x_base, y_base-half_dim)
@@ -510,8 +527,11 @@ def add_bond(
     p.M(x_start, y_start).L(x_stop, y_stop)
     drawing.append(p)
     if label and label != '-':
-        # A wildcard linkage such as "β 2/4/6" is far wider than the bond it rides on, so shrink it to what fits between the two symbols
-        span = (((x_stop - x_start) ** 2 + (y_stop - y_start) ** 2) ** 0.5) - dim
+        # A wildcard linkage such as "β 2/4/6" is far wider than the bond it rides on, so shrink it to what fits
+        # between the two symbols; along a diagonal bond a symbol reaches dim / 2 * (|cos| + |sin|), its corner
+        # poking under the label
+        length = ((x_stop - x_start) ** 2 + (y_stop - y_start) ** 2) ** 0.5
+        span = length - dim * (abs(x_stop - x_start) + abs(y_stop - y_start)) / (length or 1)
         drawing.append(draw.Text(label, min(dim * 0.4, max(dim * 0.22, span / (0.6 * len(label)))), path = p,
                                  text_anchor = 'middle', fill = col_dict['black'], valign = 'middle',
                                  line_offset = -0.5))
@@ -535,6 +555,14 @@ def add_sugar(
     col_dict = col_dict_transparent if highlight == 'hide' else col_dict_base
     x_pos = x_pos * (1.2 if compact else 2)
     y_pos = y_pos * (0.6 if compact else 1)
+    shape = sugar_dict[monosaccharide][0] if monosaccharide in sugar_dict else (
+        'Hex' if sum(p in sugar_dict for p in monosaccharide.split('/')) > 1 else 'empty')
+    if shape not in {'empty', 'text', 'red_end', 'free', 'Z', 'Y', 'B', 'C'} and shape[:2] not in _SEGMENT_PREFIXES:
+        # One group per symbol, so that vertical mode can turn it back upright about its own center
+        symbol = draw.Group(class_ = 'snfg-symbol')
+        symbol.center = (-x_pos * dim, y_pos * dim)
+        drawing.append(symbol)
+        drawing = symbol
     if monosaccharide in sugar_dict:
         shape, color, furanose = sugar_dict[monosaccharide]
         draw_shape(shape = shape, color = color, x_pos = x_pos, y_pos = y_pos, drawing = drawing, modification = modification,
@@ -555,16 +583,23 @@ def add_sugar(
                     a = radians(135 + sign * i * 180 / 32)
                     pts.extend([x_base + half_dim * cos(a), y_base - half_dim * sin(a)])
                 drawing.append(draw.Lines(*pts, close = True, fill = col, stroke = 'none', stroke_width = 0))
-            drawing.append(
-                draw.Circle(x_base, y_base, half_dim, fill = 'none', stroke_width = stroke_w, stroke = col_dict['black']))
+            # A path, not a circle: glycorender paints circles before paths, so the halves would cover half its stroke
+            k = 0.5523 * half_dim
+            p = draw.Path(fill = 'none', stroke_width = stroke_w, stroke = col_dict['black'])
+            p.M(x_base + half_dim, y_base)
+            p.C(x_base + half_dim, y_base + k, x_base + k, y_base + half_dim, x_base, y_base + half_dim)
+            p.C(x_base - k, y_base + half_dim, x_base - half_dim, y_base + k, x_base - half_dim, y_base)
+            p.C(x_base - half_dim, y_base - k, x_base - k, y_base - half_dim, x_base, y_base - half_dim)
+            p.C(x_base + k, y_base - half_dim, x_base + half_dim, y_base - k, x_base + half_dim, y_base).Z()
+            drawing.append(p)
         elif shape == 'HexNAc':
             tl, tr = (x_base - half_dim, y_base - half_dim), (x_base + half_dim, y_base - half_dim)
             bl, br = (x_base - half_dim, y_base + half_dim), (x_base + half_dim, y_base + half_dim)
             drawing.append(draw.Lines(*tl, *bl, *br, close = True, fill = colors[0], stroke = 'none', stroke_width = 0))
             drawing.append(draw.Lines(*tl, *tr, *br, close = True, fill = colors[1], stroke = 'none', stroke_width = 0))
-            drawing.append(
-                draw.Rectangle(x_base - half_dim, y_base - half_dim, dim, dim, fill = 'none', stroke_width = stroke_w,
-                               stroke = col_dict['black']))
+            # A path rather than a rect, so that glycorender paints it after the halves instead of under them
+            drawing.append(draw.Lines(*tl, *tr, *br, *bl, close = True, fill = 'none', stroke = col_dict['black'],
+                                      stroke_width = stroke_w))
         elif shape == 'dNon':
             drawing.append(
                 draw.Lines(x_base, y_base + half_dim, x_base - half_dim, y_base, x_base, y_base - half_dim, close = True,
@@ -607,7 +642,7 @@ def add_sugar(
         x_base = -x_pos * dim
         y_base = y_pos * dim
         half_dim = dim / 2
-        p = draw.Path(stroke_width = 0.04 * dim, stroke = 'black')
+        p = draw.Path(stroke_width = 0.04 * dim, stroke = col_dict['black'])
         p.M(x_base - half_dim, y_base + half_dim)
         p.L(x_base + half_dim, y_base - half_dim)
         p.M(x_base + half_dim, y_base + half_dim)
@@ -667,28 +702,13 @@ def get_branches_from_graph(graph: nx.DiGraph, main_chain: list, main_chain_suga
     all_nodes = main_chain_set.copy()
     main_chain_sugars = sorted(main_chain_sugars, reverse = True)
 
-    # Find branch by always following lowest node index
-    def follow_lowest_index_path(start_node: int):
-        path = [start_node]
-        current = start_node
-        while True:
-            successors = [n for n in graph.successors(current) if n not in all_nodes]
-            if not successors: break
-            # Always take the lowest node index
-            next_node = min(successors)
-            path.append(next_node)
-            current = next_node
-        # Extract sugars and bonds
-        sugar_nodes = sorted([n for n in path if n % 2 == 0], reverse = True)
-        bond_nodes = sorted([n for n in path if n % 2 == 1], reverse = True)
-        return path, sugar_nodes, bond_nodes
-
     def add_branch(branch_list: list, start_node: int, connection: tuple):
-        path, sugar_nodes, bond_nodes = follow_lowest_index_path(start_node)
-        branch_list.append({
-            'nodes': path, 'sugar_nodes': sugar_nodes,
-            'bond_nodes': bond_nodes, 'connection': connection
-        })
+        # A branch always follows the lowest node index at a fork
+        path = [start_node]
+        while successors := [n for n in graph.successors(path[-1]) if n not in all_nodes]:
+            path.append(min(successors))
+        branch_list.append({'nodes': path, 'sugar_nodes': sorted([n for n in path if n % 2 == 0], reverse = True),
+                            'connection': connection})
         all_nodes.update(path)
 
     def process_level(parent_level):
@@ -710,8 +730,7 @@ def get_branches_from_graph(graph: nx.DiGraph, main_chain: list, main_chain_suga
     levels = [first_level]
     while levels[-1]:
         levels.append(process_level(levels[-1]))
-    if not levels[-1]:
-        levels.pop()
+    levels.pop()  # The loop only stops on an empty level
     return levels + [[]] * max(0, 3 - len(levels))
 
 
@@ -742,7 +761,16 @@ def get_coordinates_and_labels(
                 continue
         core_label = get_core(raw_label) if raw_label not in domon_costello else raw_label
         normalized_label = core_label if core_label in sugar_dict else 'Unknown'
-        modification_text = get_modification(raw_label).replace('O', '').replace('-ol', '')
+        modification_text = get_modification(raw_label)
+        # get_core knows only some furanoses, so Altf or Tagf would carry their ring 'f' as a modification label
+        if normalized_label + 'f' in sugar_dict and re.match(r'(?:[DL]-)?f', modification_text):
+            normalized_label, modification_text = normalized_label + 'f', modification_text.replace('f', '', 1)
+        # Text right after an amine is its N-substituent (GlcNS, GlcNGc), unlike O-substituents or a uronic A: NS, NGc
+        if sugar_dict.get(normalized_label, [''])[0] == 'HexN' and re.search(
+                normalized_label + r'(?!A(?![a-z]))[A-NP-Z]', raw_label):
+            modification_text = re.sub(r'^((?:[DL]-)?)', r'\1N', modification_text, count = 1)
+        # An O marks an O-linked substituent (OMe, OS, OAc) and goes, but it stays inside a name such as Ole or Oct
+        modification_text = re.sub(r'O(?=[A-Z])', '', modification_text).replace('-ol', '')
         if modification_text:
             modification_text = modification_text.replace('Substituent', 'Subst')
             match = SUBSTITUENT_PATTERN.search(modification_text) if 'Subst' in modification_text else None
@@ -751,7 +779,17 @@ def get_coordinates_and_labels(
         parsed_sugars[idx] = (normalized_label, ('!' + modification_text) if negated else modification_text)
     root = max(graph.nodes())
     leaves = [n for n in graph.nodes() if graph.out_degree(n) == 0 and n != root] if len(graph) > 1 else [0]
-    main_chain = nx.shortest_path(graph.reverse(), leaves[0], root) if leaves else []
+    main_chain = nx.shortest_path(graph.reverse(copy = False), leaves[0], root) if leaves else []
+    # A bisected N-glycan core is laid out from its a1-3 arm as the chain, which puts the bisecting GlcNAc in line and the a1-6 arm above; a sequence written along the a1-6 arm stacked the a1-3 arm and the bisecting GlcNAc above it instead, so the chain is rerouted into the a1-3 arm
+    for i in range(2, len(main_chain) - 1, 2):
+        kids = {node_values[e]: next(iter(graph.successors(e))) for e in graph.successors(main_chain[i])}
+        if (parsed_sugars[main_chain[i]][0] == 'Man' and node_values[main_chain[i + 1]] == 'b1-4' and node_values[main_chain[i - 1]] == 'a1-6'
+                and parsed_sugars.get(kids.get('b1-4'), ('',))[0] == 'GlcNAc' and parsed_sugars.get(kids.get('a1-3'), ('',))[0] == 'Man'):
+            path = [next(e for e in graph.successors(main_chain[i]) if node_values[e] == 'a1-3')]
+            while successors := list(graph.successors(path[-1])):
+                path.append(min(successors))
+            main_chain = path[::-1] + main_chain[i:]
+            break
     main_label_sugar = [node for node in main_chain if node % 2 == 0]
     main_entries = [parsed_sugars[node] for node in main_chain if node % 2 == 0]
     main_sugar, main_sugar_modification = map(list, zip(*reversed(main_entries)))
@@ -811,6 +849,11 @@ def get_coordinates_and_labels(
     main_sugar_y_pos = [2 if tucked_end and i == len(main_sugar) - 1 else 0 for i in range(len(main_sugar))]
     lv_y_pos = [[[2 if s == "Fuc" or (s == "Xyl" and i == len(sugars) - 1) else 0 for i, s in enumerate(sugars)] for
                  sugars in level] for level in lv_sugar]
+    # A terminal Fuc or Xyl is tucked into its parent's column, so it has to leave its parent's row, even when that
+    # parent is a Fuc lifted the same way
+    for ys, sugars in zip(unwrap(lv_y_pos), unwrap(lv_sugar)):
+        if len(sugars) > 1 and sugars[-1] in {'Fuc', 'Xyl'}:
+            ys[-1] = ys[-2] + 2
     SPACING = 1
     # Main chain goes down, branches go up
     branch_points = {conn[1] for conn in lv_connection[0]}
@@ -975,6 +1018,14 @@ def get_coordinates_and_labels(
         acc = contour([node] + unwrap([subtree(k) for k in pins]))
         # The chain continues downwards and every side branch goes up; with no free chain residue to hold the lower side, the branches keep the side the rules above chose for them and straddle the parent instead of stacking above it
         sides = {k: 1 if (k == chain if chain in free else lanes_y[k[0]][k[1]][k[2]] > py) else -1 for k in free}
+        for k in free:
+            # A second residue tucked into the parent's column cannot stack beyond the pinned one, as its bond would run
+            # through it; it takes the other side
+            if lanes_x[k[0]][k[1]][k[2]] == px and any(lanes_x[p[0]][p[1]][p[2]] == px and (
+                    lanes_y[p[0]][p[1]][p[2]] > py) == (sides[k] > 0) for p in pins):
+                sides[k], lift = -sides[k], 2 * (py - lanes_y[k[0]][k[1]][k[2]])
+                for lane, b, i in subtree(k):
+                    lanes_y[lane][b][i] += lift
         seed, near = dict(acc), {}
         for side in (1, -1):
             for k in sorted([k for k in free if sides[k] == side],
@@ -1084,21 +1135,28 @@ def display_svg_with_matplotlib(
     plt.close(fig)
 
 
+def _written_positions(graph: nx.DiGraph # Glycan graph from glycan_to_nxGraph
+                       ) -> dict[int, int]: # Node: its position in the sequence as written
+    "glycan_to_nxGraph numbers the main part from 0 and the floating parts after it, although they are written before it"
+    main = nx.node_connected_component(graph.to_undirected(as_view = True), 0)
+    return {n: i for i, n in enumerate(sorted(graph, key = lambda n: (n in main, n)))}
+
+
 def process_per_residue(
         draw_this: str, # reordered IUPAC-condensed glycan sequence
         per_residue: list[float], # Scalar values per residue
         glycan: str, # original IUPAC-condensed glycan sequence
 ) -> dict[int, float]: # Value per sugar node of the drawn sequence
     "Maps per-residue scalar values onto the sugar nodes of the drawn sequence"
-    temp = re.sub(r'\([^)]*\)', 'x', re.sub(r'[^\[\]()]', '', draw_this)) + 'x'
-    if temp.count('x') != len(per_residue):
+    n_residues = (len(glycan_to_nxGraph(draw_this)) + 1) // 2
+    if n_residues != len(per_residue):
         raise ValueError(
-            f"per_residue has {len(per_residue)} values but {glycan} has {temp.count('x')} monosaccharides to color")
+            f"per_residue has {len(per_residue)} values but {glycan} has {n_residues} monosaccharides to color")
     if glycan != draw_this:
-        g1 = glycan_to_nxGraph(glycan)
-        g2 = glycan_to_nxGraph(draw_this)
+        g1, g2 = glycan_to_nxGraph(glycan), glycan_to_nxGraph(draw_this)
         _, mappy = compare_glycans(g2, g1, return_matches = True)
-        per_residue = [per_residue[mappy[i * 2] // 2] for i in range(len(per_residue))]
+        pos1, at2 = _written_positions(g1), {i: n for n, i in _written_positions(g2).items()}
+        per_residue = [per_residue[pos1[mappy[at2[i * 2]]] // 2] for i in range(len(per_residue))]
     return {i * 2: v for i, v in enumerate(per_residue)}
 
 
@@ -1108,15 +1166,17 @@ def process_per_linkage(
         glycan: str, # original IUPAC-condensed glycan sequence
 ) -> dict[int, bool]: # Flag per linkage node of the drawn sequence
     "Maps which linkages to highlight onto the linkage nodes of the drawn sequence"
-    if any(not 0 <= i < glycan.count('(') for i in highlight_linkages):
+    n_linkages = len(glycan_to_nxGraph(glycan)) // 2
+    if any(not 0 <= i < n_linkages for i in highlight_linkages):
         raise ValueError(
-            f"highlight_linkages {highlight_linkages} has to index the {glycan.count('(')} linkages of {glycan}, starting from 0")
-    per_linkage = [i in highlight_linkages for i in range(glycan.count('('))]
+            f"highlight_linkages {highlight_linkages} has to index the {n_linkages} linkages of {glycan}, starting from 0")
+    per_linkage = [i in highlight_linkages for i in range(n_linkages)]
     if glycan != draw_this:
-        g1 = glycan_to_nxGraph(glycan)
-        g2 = glycan_to_nxGraph(draw_this)
+        g1, g2 = glycan_to_nxGraph(glycan), glycan_to_nxGraph(draw_this)
         _, mappy = compare_glycans(g2, g1, return_matches = True)
-        per_linkage = [per_linkage[mappy[i * 2] // 2] for i in range(len(per_linkage))]
+        # A linkage moves with the residue it leaves, which precedes it in the written sequence
+        pos1, at2 = _written_positions(g1), {i: n for n, i in _written_positions(g2).items()}
+        per_linkage = [per_linkage[pos1[mappy[at2[i * 2]]] // 2] for i in range(len(per_linkage))]
     return {i * 2 + 1: v for i, v in enumerate(per_linkage)}
 
 
@@ -1192,7 +1252,7 @@ def add_colors_to_map(
 
 def draw_chem2d(
         draw_this: str, # IUPAC-condensed glycan sequence
-        mono_list: list[str], # List of monosaccharides to highlight
+        mono_list: str | list[str], # Monosaccharide(s) to highlight
         filepath: str | Path | None = None # Output file path
 ) -> Any: # IPython SVG display object
     "Creates 2D chemical structure drawing with highlighted monosaccharides using RDKit"
@@ -1219,12 +1279,16 @@ def draw_chem2d(
     if filepath:
         filepath = Path(filepath)
         filepath = filepath.with_name(filepath.name.replace('?', '_'))
-        if filepath.suffix.lower() == '.svg':
-            with open(filepath, 'w') as f:
+        suffix = filepath.suffix.lower()
+        if suffix not in {'.svg', '.pdf', '.png'}:
+            raise ValueError(f"Cannot save to '{filepath.name}': filepath has to end in .svg, .pdf, or .png")
+        filepath.parent.mkdir(parents = True, exist_ok = True)
+        if suffix == '.svg':
+            with open(filepath, 'w', encoding = "utf-8") as f:
                 f.write(svg_data)
-        elif filepath.suffix.lower() == '.pdf':
-            convert_svg_to_pdf, _ = _get_glycorender()
-            convert_svg_to_pdf(svg_data, str(filepath), chem = True)
+        else:
+            convert_svg_to_pdf, convert_svg_to_png = _get_glycorender()
+            (convert_svg_to_pdf if suffix == '.pdf' else convert_svg_to_png)(svg_data, str(filepath), chem = True)
     if not is_jupyter():
         return display_svg_with_matplotlib(svg_data, chem = True)
     from IPython.display import SVG
@@ -1233,7 +1297,7 @@ def draw_chem2d(
 
 def draw_chem3d(
         draw_this: str, # IUPAC-condensed glycan sequence
-        mono_list: list[str], # List of monosaccharides to highlight
+        mono_list: str | list[str], # Monosaccharide(s) to highlight
         filepath: str | Path | None = None, # Output file path for PDB
         pdb_file: str | Path | None = None  # already existing glycan structure
 ) -> None:
@@ -1250,6 +1314,7 @@ def draw_chem3d(
             from rdkit.Chem.Draw.rdMolDraw2D import MolDraw2DSVG
     except ImportError:
         raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
+    mono_list = [mono_list] if isinstance(mono_list, str) else mono_list
     smiles, atom_monos = get_mono_atoms(draw_this, mono_list)
     smiles_mol = MolFromSmiles(smiles)
     from_pdb = False
@@ -1271,23 +1336,20 @@ def draw_chem3d(
             from_pdb = True
         else:
             mol = AddHs(smiles_mol)
-            EmbedMolecule(mol)
+            if EmbedMolecule(mol, randomSeed = 42) == -1 and EmbedMolecule(mol, randomSeed = 42,
+                                                                           useRandomCoords = True) == -1:
+                raise ValueError(f"RDKit could not embed a 3D conformer for {draw_this}")
             MMFFOptimizeMolecule(mol)
             mol = RemoveHs(mol)
             print("Disclaimer: The conformer generated using RDKit and MMFFOptimizeMolecule is not intended to be a replacement for a 'real' conformer analysis tool. Install glycontact and run this again for improved conformers.")
     # Color atoms by monosaccharide after mol is finalized
     atom_colors, bond_colors = {}, {}
     if from_pdb:
-        try:
-            from glycontact.process import get_pdb_atom_monosaccharides
-            atom_monos = get_pdb_atom_monosaccharides(mol)
-            for atom_idx, mono_name in atom_monos.items():
-                for i, mono in enumerate(mono_list):
-                    if mono_name == mono:
-                        add_colors_to_map([atom_idx], atom_colors, i, alpha = False)
-                        break
-        except Exception:
-            pass
+        for atom in mol.GetAtoms():
+            info = atom.GetPDBResidueInfo()
+            mono_name = PDB_TO_IUPAC.get(info.GetResidueName().strip(), '').split('(')[0].strip() if info else ''
+            if mono_name and get_core(mono_name) in mono_list:
+                add_colors_to_map([atom.GetIdx()], atom_colors, mono_list.index(get_core(mono_name)), alpha = False)
         # ROH reducing end oxygen belongs to adjacent monosaccharide
         for atom in mol.GetAtoms():
             info = atom.GetPDBResidueInfo()
@@ -1326,22 +1388,45 @@ def draw_chem3d(
 
 
 class GlycanDrawing:
-    def __init__(self, drawing_obj, shadow = False, sticker = False, vertical = False):
+    def __init__(self, drawing_obj, shadow = False, sticker = False, vertical = False, alt_text = None):
         self.drawing_obj = drawing_obj
         self.shadow = shadow
         self.sticker = sticker
         self.vertical = vertical
+        self.alt_text = alt_text
 
     def as_svg(self):
-        return self.drawing_obj.as_svg()
+        data = self.drawing_obj.as_svg()
+        return data.replace('<svg ', f'<svg aria-label="{self.alt_text}" role="img" ', 1) if self.alt_text else data
 
     def save_svg(self, filepath):
-        data = self.drawing_obj.as_svg()
+        data = self.as_svg()
+        # drawsvg has no cut layer of its own, so route the SVG through glycorender as well
         if self.shadow or self.sticker:
             from glycorender.render import pdf_to_svg_bytes
             data = pdf_to_svg_bytes(data, shadow = self.shadow, sticker = self.sticker)
+            data = data.replace('<svg ', f'<svg aria-label="{self.alt_text}" role="img" ', 1) if self.alt_text else data
         with open(filepath, 'w', encoding = "utf-8") as f:
             f.write(_flatten_text_paths(data, turn = 90 if self.vertical else 0))
+
+    def save(self, filepath):
+        "Saves as .svg, .pdf, or .png (300 dpi) and returns the drawing, so saves can be chained"
+        filepath = Path(filepath)
+        suffix = filepath.suffix.lower()
+        if suffix not in {'.svg', '.pdf', '.png'}:
+            raise ValueError(f"Cannot save to '{filepath.name}': filepath has to end in .svg, .pdf, or .png")
+        filepath.parent.mkdir(parents = True, exist_ok = True)
+        if suffix == '.svg':
+            self.save_svg(filepath)
+        elif suffix == '.pdf':
+            convert_svg_to_pdf, _ = _get_glycorender()
+            convert_svg_to_pdf(self.as_svg(), str(filepath), shadow = self.shadow, sticker = self.sticker)
+        else:
+            _, convert_svg_to_png = _get_glycorender()
+            # print resolution; glycorender records the 300 dpi, so the physical size still matches the PDF
+            convert_svg_to_png(self.as_svg(), str(filepath), scale = 300 / 72, shadow = self.shadow,
+                               sticker = self.sticker)
+        return self
 
     def _repr_png_(self):
         _, convert_svg_to_png = _get_glycorender()
@@ -1365,6 +1450,208 @@ def _finish_drawing(
 ) -> Any: # Drawing object
     "Crops, saves, and returns a finished GlycoDraw canvas, shared by structures and compositions"
     alt_text = html.escape(alt_text)
+    # A bond into an invisible placeholder dangles, so it stops half a symbol short of it; trimmed here rather than by the
+    # renderer, so that the SVG, the PNG/PDF, the crop and the label centered on the bond all agree
+    stack, blanks, bonds, carriers = [d], set(), [], {}
+    while stack:
+        el = stack.pop()
+        a = getattr(el, 'args', {}) or {}
+        stack.extend(getattr(el, 'children', []) or [])
+        if isinstance(el, draw.Circle) and a.get('fill') == a.get('stroke') == 'none':
+            blanks.add((round(a['cx'], 6), round(a['cy'], 6)))
+        elif a.get('class') == 'snfg-linkage':
+            bonds.append(el)
+        elif 'startOffset' in a:
+            carriers[id(a['xlink:href'])] = el
+    rising = set()
+    for bond in bonds:
+        ends = [float(k) for k in _SVG_NUMBER.findall(re.sub(r'[A-DF-Za-df-z]', ' ', bond.args['d']))]
+        (x0, y0), (x1, y1) = ends[:2], ends[-2:]
+        if abs(x1 - x0) < 1e-6:
+            rising.add((round(x0, 6), round(max(y0, y1), 6)))
+        length = np.hypot(x1 - x0, y1 - y0)
+        if length <= dim:
+            continue
+        t0 = dim / 2 / length if (round(x0, 6), round(y0, 6)) in blanks else 0
+        t1 = 1 - dim / 2 / length if (round(x1, 6), round(y1, 6)) in blanks else 1
+        bond.args['d'] = f'M{x0 + t0 * (x1 - x0)},{y0 + t0 * (y1 - y0)} L{x0 + t1 * (x1 - x0)},{y0 + t1 * (y1 - y0)}'
+        if id(bond) in carriers and t1 - t0 < 1:
+            # Its label stays where the whole bond centered it, clear of the symbol, instead of sliding onto it with the
+            # trimmed end
+            carriers[id(bond)].args['startOffset'] = f'{(0.5 - t0) / (t1 - t0) * 100:.4f}%'
+    # SNFG says not to rotate symbols: in vertical mode each turns back upright about its center, its modification label
+    # beside it; otherwise only a label that a bond rising straight up from its symbol would strike through steps right
+    # of that bond
+    stack = [d]
+    while stack:
+        el = stack.pop()
+        stack.extend(getattr(el, 'children', []) or [])
+        if (getattr(el, 'args', {}) or {}).get('class') != 'snfg-symbol':
+            continue
+        cx, cy = el.center
+        if vertical:
+            el.args['transform'] = f'rotate(-90 {cx} {cy})'
+        elif (round(cx, 6), round(cy, 6)) not in rising:
+            continue
+        for label in el.children:
+            if isinstance(label, draw.Text) and any(t.args.get('dy') == '-3.15em' for t in label.children[0].children):
+                label.args['text-anchor'], label.children[0].args['startOffset'] = 'start', '0'
+                # dy = -3.15em lifts the baseline off its carrier, so the carrier sits that far below it
+                base_y = cy + 3.54 * label.args['font-size'] if vertical else cy + dim / 2
+                start = cx + (0.7 if vertical else 0.12) * dim
+                label.children[0].args['xlink:href'].args['d'] = f'M{start},{base_y} L{start + 2 * dim},{base_y}'
+    if vertical:
+        # Free-standing text (repeat counts, reducing-end labels, floating-bit counts) turns upright about its middle
+        for i, el in enumerate(d.children):
+            if isinstance(el, draw.Text) and el.args.get('x') is not None and (box := _drawn_extent(el, [])):
+                bx0, by0, bx1, by1 = box[0]
+                d.children[i] = draw.Group([el], transform = f'rotate(-90 {(bx0 + bx1) / 2} {(by0 + by1) / 2})')
+                if el.args.get('text-anchor') == 'start':
+                    # Repeat counts hang below the chain, which is its left once turned, so they grow away from it
+                    el.args['x'] -= max(0, (bx1 - bx0) - (by1 - by0)) / 2
+    # Labels are placed by local rules, blind to their neighbors. One that runs into a symbol, a bond or another label
+    # tries a smaller size, and then other spots (sliding along its bond, or beside its symbol), keeping the first that
+    # is clear; every label that does not collide stays exactly where it was. Geometry is in page orientation
+    from glycorender.render import pdfmetrics, font_to_use
+    turn = (lambda x, y: (-y, x)) if vertical else (lambda x, y: (x, y))
+    tol, edge, ring = 0.02 * dim, np.linspace(-0.5, 0.5, 51) * dim, np.linspace(0, 2 * np.pi, 160)
+    # Symbols are sampled across their inside and densely along their outline, a square or a circle
+    square = np.vstack([np.stack(np.meshgrid(edge[::5], edge[::5]), -1).reshape(-1, 2)] + [
+        np.column_stack([edge, np.full(51, k)])[:, ::i] for k in (-dim / 2, dim / 2) for i in (1, -1)])
+    circle = np.vstack(
+        [square[np.hypot(*square.T) < dim / 2], np.column_stack([np.cos(ring), np.sin(ring)]) * dim / 2])
+    pts, owner, pad, labels = [], [], [], []
+    stack = [(d, None)]
+    while stack:
+        el, sym = stack.pop()
+        a = getattr(el, 'args', {}) or {}
+        sym = el if a.get('class') == 'snfg-symbol' else sym
+        if not isinstance(el, draw.Text):
+            stack.extend((k, sym) for k in getattr(el, 'children', []) or [])
+        if a.get('class') == 'snfg-symbol':
+            pts.append((circle if isinstance(el.children[0], draw.Circle) else square) + turn(*el.center))
+        elif a.get('class') == 'snfg-linkage':
+            ends_xy = np.array([turn(*k) for k in np.reshape([float(k) for k in _SVG_NUMBER.findall(
+                re.sub(r'[A-DF-Za-df-z]', ' ', a['d']))], (-1, 2))[[0, -1]]])
+            k = np.linspace(0, 1, max(2, int(np.hypot(*(ends_xy[1] - ends_xy[0])) / tol / 2)))[:, None]
+            pts.append(ends_xy[0] + k * (ends_xy[1] - ends_xy[0]))
+        elif isinstance(el, draw.Text) and a.get('x') is not None and (box := _drawn_extent(el, [])):
+            # Free-standing text (repeat counts, floating-bit counts) is upright on the page and never moves
+            (bx0, by0, bx1, by1), grid = box[0], np.stack(np.meshgrid(np.linspace(-0.5, 0.5, 21),
+                                                                      np.linspace(-0.5, 0.5, 5)),
+                                                          -1).reshape(-1, 2)
+            pts.append(grid * (bx1 - bx0, by1 - by0) + turn((bx0 + bx1) / 2, (by0 + by1) / 2))
+        elif isinstance(el, draw.Text) and el.children and el.children[0].children:
+            dy = el.children[0].children[0].args.get('dy')
+            text = html.unescape(
+                ''.join(str(k.escaped_text or '') for k in el.children[0].children)).replace(' ', '')
+            if (dy == '-0.5em' or dy == '-3.15em' and sym is not None) and text:
+                font = pdfmetrics.fonts[font_to_use + ('-Bold' if dy == '-3.15em' else '')]
+                ink = [[k / font.ttf.units_per_em for _, args in font.ttf.outline(font.ttf.gid(ch)) for k in
+                        args] or [
+                           0, 0] for ch in text]
+                ys = [k for g in ink for k in g[1::2]]
+                # At unit size: advance with glycorender's 0.05 em tracking, the side bearings of the first and last
+                # glyph, and the ink band about the baseline
+                labels.append(
+                    [el, sym, dy == '-3.15em', text, pdfmetrics.stringWidth(text, font.name, 1) + 0.05 * (
+                            len(text) - 1), min(ink[0][0::2]),
+                     font.ttf.width(font.ttf.gid(text[-1])) / 1000 - max(
+                         ink[-1][0::2]), min(ys), max(ys), font.ttf.cap_height / font.ttf.units_per_em])
+            continue
+        else:
+            continue
+        owner.append(np.full(len(pts[-1]), id(el), dtype = np.int64))
+        pad.append(np.full(len(pts[-1]), float(a.get('stroke-width', 0)) / 2 if 'd' in a else 0.0))
+
+    def rect(label, carrier, frac, anchor, size):
+        # Ink box of a label on a straight carrier: origin, direction along it, normal towards the glyph tops, extents
+        el, sym, bold, text, width, lsb, rsb, low, high, cap = label[:10]
+        c = sym.center if sym is not None else None
+        place = (lambda x, y: (x - c[0] + turn(*c)[0], y - c[1] + turn(*c)[1])) if c else turn
+        (x0, y0), (x1, y1) = [place(*k) for k in carrier]
+        t = np.array([x1 - x0, y1 - y0]) / np.hypot(x1 - x0, y1 - y0)
+        u0, lift = {'middle': -width * size / 2, 'end': -width * size}.get(anchor, 0), (
+                                                                                           3.15 if bold else 0.5) * size
+        # A label that would read right-to-left is turned upright by glycorender, same side but hanging from its cap
+        low, high = (cap - high, cap - low) if t[0] < -1e-6 else (low, high)
+        return (np.array([x0 + frac * (x1 - x0), y0 + frac * (y1 - y0)]), t, np.array([t[1], -t[0]]),
+                u0 + lsb * size,
+                u0 + (width - rsb) * size, lift + low * size, lift + high * size)
+
+    def outline(box):
+        # A placed label is an obstacle too, sampled along its edges and across its inside
+        o, t, nrm, u0, u1, v0, v1 = box
+        u, v = np.linspace(u0, u1, max(2, int((u1 - u0) / tol / 2))), np.linspace(v0, v1, 5)
+        uv = np.column_stack([np.concatenate([np.tile(u, 5), np.repeat([u0, u1], 5)]),
+                              np.concatenate([np.repeat(v, len(u)), np.tile(v, 2)])])
+        return o + uv[:, :1] * t + uv[:, 1:] * nrm
+
+    def clear(box, own, slack):
+        # Points are kept sorted by x, so only the slice level with the label is tested; overlap within slack is a touch
+        o, t, nrm, u0, u1, v0, v1 = box
+        xs = o[0] + np.outer([u0, u1, u1, u0], t)[:, 0] + np.outer([v0, v0, v1, v1], nrm)[:, 0]
+        lo, hi = np.searchsorted(pts[:, 0], [xs.min() - 0.1 * dim, xs.max() + 0.1 * dim])
+        u, v, m = (pts[lo:hi] - o) @ t, (pts[lo:hi] - o) @ nrm, pad[lo:hi] - slack
+        return not np.any(
+            (u >= u0 - m) & (u <= u1 + m) & (v >= v0 - m) & (v <= v1 + m) & (owner[lo:hi] != own))
+
+    for label in labels:
+        carrier = label[0].children[0]
+        offset = str(carrier.args.get('startOffset', '0'))
+        label.append([np.reshape([float(k) for k in _SVG_NUMBER.findall(re.sub(
+            r'[A-DF-Za-df-z]', ' ', carrier.args['xlink:href'].args['d']))], (-1, 2))[[0, -1]].tolist(),
+                      float(offset[:-1]) / 100 if offset.endswith('%') else 0.0,
+                      label[0].args.get('text-anchor', 'middle'), float(label[0].args['font-size'])])
+        pts.append(outline(rect(label, *label[10])))
+        owner.append(np.full(len(pts[-1]), id(label[0]), dtype = np.int64))
+        pad.append(np.zeros(len(pts[-1])))
+    pts, owner, pad = np.vstack(pts), np.concatenate(owner), np.concatenate(pad)
+    order = np.argsort(pts[:, 0])
+    pts, owner, pad = pts[order], owner[order], pad[order]
+    for label in sorted(labels, key = lambda k: k[2]):
+        el, sym, bold, text, width, spots = label[0], label[1], label[2], label[3], label[4], label[10]
+        if clear(rect(label, *spots), id(el), tol):
+            continue
+        size = spots[3]
+        if bold:
+            cx, cy = sym.center
+            # Beside its symbol, shrinking in place first: above, right, below, left (right first in vertical mode)
+            sides = {'above': ([(cx - dim, cy), (cx + dim, cy)], 0.5, 'middle', lambda s: -0.6025 * dim),
+                     'right': ([(cx + 0.62 * dim, cy), (cx + 2.62 * dim, cy)], 0, 'start',
+                               lambda s: 0.35 * s),
+                     'below': ([(cx - dim, cy), (cx + dim, cy)], 0.5, 'middle',
+                               lambda s: 0.6 * dim + 0.78 * s),
+                     'left': ([(cx - 2.62 * dim, cy), (cx - 0.62 * dim, cy)], 1, 'end', lambda s: 0.35 * s)}
+            pref = ['right', 'above', 'below', 'left'] if vertical else ['above', 'right', 'below', 'left']
+            tries = [
+                ([(x, y + sides[k][3](s) + 3.15 * s) for x, y in sides[k][0]], sides[k][1], sides[k][2], s)
+                for
+                k, s in [(pref[0], 0.8 * size), (pref[0], 0.65 * size)] + [
+                    (k, s) for k in pref[1:] for s in (size, 0.8 * size, 0.65 * size)]]
+        else:
+            length = np.hypot(*np.subtract(spots[0][1], spots[0][0]))
+            # Slides along its bond, nearest spots first; the symbols at either end are obstacles like any other
+            tries = [(spots[0], k / length, 'middle', s) for s in
+                     (size, 0.8 * size, max(0.22 * dim, 0.65 * size))
+                     for k in sorted(np.arange(width * s / 2, length - width * s / 2, tol),
+                                     key = lambda k: abs(k / length - spots[1]))]
+        for spot in tries:
+            # A new spot has to keep a margin, so that the label does not just trade one touch for another
+            if not clear(box := rect(label, *spot), id(el), tol / 2):
+                continue
+            keep, new = owner != id(el), outline(box)
+            pts, owner = np.vstack([pts[keep], new]), np.concatenate(
+                [owner[keep], np.full(len(new), id(el))])
+            pad = np.concatenate([pad[keep], np.zeros(len(new))])
+            order = np.argsort(pts[:, 0])
+            pts, owner, pad = pts[order], owner[order], pad[order]
+            el.args['font-size'], el.args['text-anchor'] = spot[3], spot[2]
+            el.children[0].args['startOffset'] = f'{spot[1] * 100:.4f}%'
+            if bold:
+                (x0, y0), (x1, y1) = spot[0]
+                el.children[0].args['xlink:href'].args['d'] = f'M{x0},{y0} L{x1},{y1}'
+            break
     # Canvas: crop to what was actually drawn, since a formula over sugar positions cannot know how far labels, brackets and highlight halos reach
     boxes = _drawn_extent(d, [])
     x0, y0 = min(b[0] for b in boxes), min(b[1] for b in boxes)
@@ -1374,39 +1661,22 @@ def _finish_drawing(
         c_x, c_y = (x0 + x1) / 2, (y0 + y1) / 2
         d.args['transform'] = f'rotate(90 {c_x} {c_y})'
         x0, y0, x1, y1 = c_x - (y1 - y0) / 2, c_y - (x1 - x0) / 2, c_x + (y1 - y0) / 2, c_y + (x1 - x0) / 2
-    margin = dim * (0.45 if sticker else 0.2)
+    margin = dim * (0.45 if sticker else 0.35 if shadow else 0.2)
     # Namespace the element IDs per drawing, so that several GlycoDraw SVGs inlined into one HTML document do not resolve each other's <use> references
     tag = hashlib.blake2s(repr(id_key).encode(), digest_size = 4).hexdigest()
     d2 = draw.Drawing(x1 - x0 + 2 * margin, y1 - y0 + 2 * margin, origin = (x0 - margin, y0 - margin),
                       id_prefix = f'g{tag}_')
     d2.append(d)
+    drawing = GlycanDrawing(d2, shadow = shadow, sticker = sticker, vertical = vertical, alt_text = alt_text)
     if filepath:
-        filepath = Path(str(filepath).replace(in_glycan, re.sub(r'[<>:"/\\|?*]', '_', in_glycan)))
-        suffix = filepath.suffix.lower()
-        if suffix not in {'.svg', '.pdf', '.png'}:
-            raise ValueError(f"Cannot save to '{filepath.name}': filepath has to end in .svg, .pdf, or .png")
-        filepath.parent.mkdir(parents = True, exist_ok = True)
-        data = d2.as_svg()
-        data = data.replace('<svg ', f'<svg aria-label="{alt_text}" role="img" ', 1)
-        if suffix == '.svg':
-            if shadow or sticker:  # drawsvg has no cut layer of its own, so route the SVG through glycorender as well
-                from glycorender.render import pdf_to_svg_bytes
-                data = pdf_to_svg_bytes(data, shadow = shadow, sticker = sticker).replace('<svg ', f'<svg aria-label="{alt_text}" role="img" ', 1)
-            with open(filepath, 'w', encoding = "utf-8") as f:
-                f.write(_flatten_text_paths(data, turn = 90 if vertical else 0))
-        elif suffix == '.pdf':
-            convert_svg_to_pdf, _ = _get_glycorender()
-            convert_svg_to_pdf(data, str(filepath), shadow = shadow, sticker = sticker)
-        else:
-            _, convert_svg_to_png = _get_glycorender()
-            convert_svg_to_png(data, str(filepath), scale = 300 / 72, shadow = shadow, sticker = sticker)  # print resolution; glycorender records the 300 dpi, so the physical size still matches the PDF
-    return GlycanDrawing(d2, shadow = shadow, sticker = sticker, vertical = vertical) if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(
+        drawing.save(str(filepath).replace(in_glycan, re.sub(r'[<>:"/\\|?*]', '_', in_glycan)))
+    return drawing if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(
         d2, shadow = shadow, sticker = sticker)
 
 
 @rescue_glycans
 def GlycoDraw(
-        glycan: str, # IUPAC-condensed glycan sequence or composition (e.g., H5N4F1A2, Hex5HexNAc4Fuc1Neu5Ac2)
+        glycan: str | list[str] | dict[str, int], # IUPAC-condensed glycan sequence or composition (e.g., H5N4F1A2, Hex5HexNAc4Fuc1Neu5Ac2, {'Hex': 5}); a list is drawn as a grid
         vertical: bool = False, # Draw vertically
         compact: bool = False, # Use compact style
         show_linkage: bool = True, # Show linkage labels
@@ -1428,8 +1698,19 @@ def GlycoDraw(
         restrict_vocab: bool = False,  # Whether only tokens present in libr can be drawn
         shadow: bool = False,  # Draw a soft drop shadow under the monosaccharide symbols
         sticker: bool = False,  # Cut the whole structure out as a die-cut sticker: flat border hugging the outline, with a drop shadow
+        highlight_residues: list[int] | None = None,  # Residues to highlight (indices, starting from 0, of the monosaccharides in glycan, as per_residue); the others, and linkages not between two highlighted residues or in highlight_linkages, are faded as outside highlight_motif
 ) -> Any:  # Drawing object
     "Renders glycan structure using SNFG symbols or chemical structure representation"
+    if isinstance(glycan, dict):
+        # A composition dict, e.g. {'Hex': 5, 'HexNAc': 4}, as returned by glycan_to_composition
+        glycan = canonicalize_composition(glycan, as_string = True)
+    elif not isinstance(glycan, str):
+        # Several glycans (a list or a pandas column) are drawn side by side at one shared scale
+        return plot_glycans_grid(list(glycan), filepath = filepath, suppress = suppress, vertical = vertical,
+                                 compact = compact, show_linkage = show_linkage, dim = dim,
+                                 highlight_motif = highlight_motif, highlight_termini_list = highlight_termini_list,
+                                 reverse_highlight = reverse_highlight, libr = libr, restrict_vocab = restrict_vocab,
+                                 shadow = shadow, sticker = sticker)
     if any(k in glycan for k in (';', 'β', 'α', 'RES', '=')):
         raise Exception
     in_glycan = glycan  # motif names, repeat units, and trailing linkages all rewrite glycan below, while a caller-built filename still carries what was passed in
@@ -1439,36 +1720,49 @@ def GlycoDraw(
         glycan = glycan.split('_')[-1]
     motif_hit = resolve_motif_name(glycan)
     if motif_hit:
+        if motif_hit[0].startswith('r'):
+            raise ValueError(f"'{in_glycan}' is the glyco-regex {motif_hit[0][1:]}, matching a family of structures "
+                             f"rather than one to draw; draw a glycan with highlight_motif = '{in_glycan}' instead.")
         glycan = motif_hit[0]
     elif is_composition(glycan) and not sugar_dict.keys().isdisjoint(comp := canonicalize_composition(glycan)):
         # Compositions have no topology to lay out, so each monosaccharide gets its symbol followed by its count, and substituents like S or P are spelled out
         d, cursor, row = draw.Group(), 0.0, 0.0
-        for mono, count in sorted(comp.items(), key = lambda x: (_COMP_ORDER.get(x[0], len(_COMP_ORDER)), x[0])):
-            if mono in sugar_dict:
-                shape, color, furanose = sugar_dict[mono]
+        comp = dict(sorted(comp.items(), key = lambda x: (_COMP_ORDER.get(x[0], len(_COMP_ORDER)), x[0])))
+        for mono, count in comp.items():
+            # a sialic acid of known linkage (Neu5Ac_a2-6, from a linkage-specific derivatization) is its symbol, with the linkage after the count
+            base, link = next(((b, f' α2,{k[-1]}') for b, keys in SIALIC_KEYS.items() for k in keys if k == mono), (mono, ''))
+            if base in sugar_dict:
+                shape, color, furanose = sugar_dict[base]
                 draw_shape(shape, color, x_pos = -(cursor + 0.5), y_pos = row, col_dict = col_dict_base, drawing = d, furanose = furanose, dim = dim)
                 cursor += 1.2
             else:
-                d.append(draw.Text(mono, dim * 0.5, (cursor + 0.5) * dim, (row + 0.18) * dim, text_anchor = 'middle', fill = col_dict_base['black']))
-                cursor += max(1.2, 0.28 * len(mono) + 0.2)
-            d.append(draw.Text(str(count), dim * 0.5, cursor * dim, (row + 0.18) * dim, text_anchor = 'start', fill = col_dict_base['black']))
+                # Centered in the room it takes, like a symbol, so a long name like Sulfate clears the previous count
+                step = max(1.2, 0.31 * len(mono) + 0.2)
+                d.append(draw.Text(mono, dim * 0.5, (cursor + (step - 0.2) / 2) * dim, (row + 0.18) * dim,
+                                   text_anchor = 'middle', fill = col_dict_base['black']))
+                cursor += step
+            d.append(draw.Text(f'{count}{link}', dim * 0.5, cursor * dim, (row + 0.18) * dim, text_anchor = 'start', fill = col_dict_base['black']))
             # Vertical compositions are stacked row by row instead of rotated, so the counts stay upright and readable
-            cursor, row = (0.0, row + 1.25) if vertical else (cursor + 0.28 * len(str(count)) + 0.45, row)
+            cursor, row = (0.0, row + 1.25) if vertical else (cursor + 0.28 * len(f'{count}{link}') + 0.45, row)
         if alt_text is None:
             alt_text = f"SNFG composition diagram of {glycan}: " + ", ".join(f"{count} {mono}" for mono, count in comp.items()) + "."
         return _finish_drawing(d, in_glycan, alt_text, (in_glycan, compact, vertical, dim), dim = dim, filepath = filepath, suppress = suppress, shadow = shadow, sticker = sticker)
+    # Values often arrive as an array or Series (attributions, a dataframe column), whose truth value is ambiguous
+    per_residue = list(per_residue)
+    highlight_linkages = [] if highlight_linkages is None else list(highlight_linkages)
+    highlight_residues = None if highlight_residues is None else {int(k) for k in highlight_residues}
     if repeat and not repeat_range:
         _backbone = re.findall(r'.*\((?!.*\()', glycan)[0]
         _conn = re.sub(r'\)(.*)', '', re.sub(r'.*\((?!.*\()', '', glycan))
         glycan = f'blank(?1-{_conn[-1]}){_backbone}{_conn[:2]}-?)'
         if per_residue:
-            per_residue = [0] + list(per_residue)
+            per_residue = [0] + per_residue
         if highlight_linkages:
             highlight_linkages = [k + 1 for k in highlight_linkages]
     if glycan.endswith(')'):
         glycan += 'blank'
         if per_residue:
-            per_residue = list(per_residue) + [0]
+            per_residue = per_residue + [0]
     cut = glycan.rfind('}') + 1 if '^' in glycan else 0
     draw_this = glycan[:cut] + (
         graph_to_string(glycan_to_nxGraph(glycan[cut:]), order_by = "linkage") if not glycan[cut:].startswith(
@@ -1477,6 +1771,10 @@ def GlycoDraw(
         per_residue_by_node = process_per_residue(draw_this, per_residue, glycan)
     if highlight_linkages:
         per_linkage_by_node = process_per_linkage(draw_this, highlight_linkages, glycan)
+    if highlight_residues is not None:
+        # Mapped like per_residue, with the leading repeat placeholder and the trailing blank as residues that are never highlighted
+        shift = 1 if repeat and not repeat_range else 0
+        shown_by_node = process_per_residue(draw_this, [k - shift in highlight_residues for k in range((len(glycan_to_nxGraph(glycan)) + 1) // 2)], glycan)
     if compact:
         show_linkage = False
     if isinstance(highlight_motif, str):
@@ -1505,21 +1803,23 @@ def GlycoDraw(
     floaty_bits, anchored_bits, node_shift = [], [], 0
     for openpos, closepos, _ in get_matching_indices(draw_this, opendelim = '{', closedelim = '}'):
         bit = draw_this[openpos:closepos]
-        node_shift += 2 * bit.count('(')  # the values were indexed against the string that still carried these bits, so the nodes they contributed have to be added back when reading them
         if '^' in bit:
             fragment, bit_anchors = parse_floating_bit(bit)
-            anchored_bits.append((f"{fragment}blank", bit_anchors))
+            anchored_bits.append((f"{fragment}blank", bit_anchors, node_shift))
         else:
-            floaty_bits.append(f"{bit}blank")
+            fragment = bit
+            floaty_bits.append((f"{bit}blank", node_shift))  # with the node its per-residue and per-linkage values start at
+        # The values were indexed against the string that still carried these bits, so the nodes they contributed have to be added back when reading them; an anchored bit contributes its merged fragment, not every alternative
+        node_shift += 2 * fragment.count('(')
         draw_this = draw_this[:openpos-1] + len(draw_this[openpos-1:closepos+1])*'*' + draw_this[closepos+1:]
     draw_this = draw_this.replace('*', '')
     if anchored_bits:  # An anchor matching nothing must not silently delete its residue from the drawing
         anchor_graph = glycan_to_nxGraph(draw_this)
-        placeable = [any(resolve_anchor(anchor_graph, anchor) for anchor in bit_anchors.values()) for _, bit_anchors in
+        placeable = [any(resolve_anchor(anchor_graph, anchor) for anchor in bit_anchors.values()) for _, bit_anchors, _ in
                      anchored_bits]
-        floaty_bits += [bit for (bit, _), ok in zip(anchored_bits, placeable) if not ok]
+        floaty_bits += [(bit, off) for (bit, _, off), ok in zip(anchored_bits, placeable) if not ok]
         anchored_bits = [entry for entry, ok in zip(anchored_bits, placeable) if ok]
-    if restrict_vocab and not in_lib(draw_this, expand_lib(libr, list(sugar_dict.keys()) + [k for k in min_process_glycans([draw_this])[0] if '/' in k])): # support for super-narrow wildcard linkages
+    if restrict_vocab and not _drawable(draw_this, libr):
         if "!" in draw_this:
             draw_this = re.sub(r'\[!.*?\)\]|!.*?\)', '', draw_this)
         else:
@@ -1531,6 +1831,20 @@ def GlycoDraw(
     node_at = {v: k + node_shift for k, v in node_positions.items()}
     lv_sugar, lv_x_pos, lv_y_pos, lv_sugar_modification, lv_bond, lv_connection, lv_conf, lv_sugar_label, lv_bond_label = map(
         list, zip(*data[1:-1]))
+    if highlight_residues is not None:
+        tree, shown = glycan_to_nxGraph(draw_this), {node for node, flag in shown_by_node.items() if flag}
+
+        def bond_label(child):
+            # A drawn residue's linkage stays visible when both of its residues are highlighted, or when it is one of highlight_linkages
+            parent = next(iter(tree.pred[next(iter(tree.pred[child - node_shift]))])) + node_shift
+            return 'show' if (child in shown and parent in shown) or (highlight_linkages and per_linkage_by_node.get(child + 1, False)) else 'hide'
+
+        main_sugar_label = ['show' if node_at[(0, 0, k)] in shown else 'hide' for k in range(len(main_sugar))]
+        main_bond_label = [bond_label(node_at[(0, 0, k + 1)]) for k in range(len(main_sugar) - 1)]
+        lv_sugar_label = [[['show' if node_at[(lvl + 1, b, s)] in shown else 'hide' for s in range(len(sugars))] for b, sugars in enumerate(level)]
+                          for lvl, level in enumerate(lv_sugar)]
+        lv_bond_label = [[[bond_label(node_at[(lvl + 1, b, s)]) for s in range(len(sugars))] for b, sugars in enumerate(level)] for lvl, level in
+                         enumerate(lv_sugar)]
     if not show_linkage:
         main_bond = ['-'] * len(main_bond)
         lv_bond = [[['-' for _ in y] for y in level] for level in lv_bond]
@@ -1626,10 +1940,17 @@ def GlycoDraw(
                    highlight = lv_sugar_label[lvl][b_idx][s_idx],
                    scalar = per_residue_by_node.get(node_at[(lvl + 1, b_idx, s_idx)], 0) if per_residue else 0) for
          b_idx in range(len(lv_sugar[lvl])) for s_idx in range(len(lv_sugar[lvl][b_idx]))]
-    highlight = 'show' if highlight_motif == None else 'hide'
+    # Floating bits, brackets, and repeat labels are never part of the motif, so reverse_highlight shows them
+    highlight = 'show' if highlight_motif is None or reverse_highlight else 'hide'
     if floaty_bits != []:
-        fb_count = {i: floaty_bits.count(i) for i in floaty_bits}
-        floaty_bits = list(dict.fromkeys(floaty_bits))
+        # Identical bits are drawn once with a count, unless their per-residue values or linkage highlights tell them apart
+        fb_keys = [(bit, tuple((per_residue_by_node.get(off + n, 0) if per_residue else 0, per_linkage_by_node.get(off + n + 1, False) if highlight_linkages else False)
+                               for n in range(0, 2 * bit.count('('), 2))) for bit, off in floaty_bits]
+        fb_count, fb_offset = {i: fb_keys.count(i) for i in fb_keys}, {}
+        for key, (_, off) in zip(fb_keys, floaty_bits):
+            fb_offset.setdefault(key, off)
+        fb_keys = list(fb_offset)
+        floaty_bits = [key[0] for key in fb_keys]
         floaty_data = []
         for k, k_val in enumerate(floaty_bits):
             if in_lib(min_process_glycans([k_val])[0][0], libr):
@@ -1638,21 +1959,51 @@ def GlycoDraw(
                 floaty_data.append(get_coordinates_and_labels('blank(-)blank', highlight_motif = None))
         n_floats = len(floaty_bits)
         y_spacing = (y_span / (n_floats - 1)) if n_floats > 1 else 0
+        # How far each bit reaches above and below its root row, so that bits with a tucked Fuc or a side branch are
+        # stacked clear of each other
+        reach = [(min(ys) - j_val[0][2][0], max(ys) - j_val[0][2][0]) for j_val in floaty_data for ys in
+                 [j_val[0][2] + unwrap(unwrap([lv[2] for lv in j_val[1:-1]]))]]
         for j, j_val in enumerate(floaty_data):
             floaty_sugar, floaty_sugar_x_pos, floaty_sugar_y_pos, floaty_sugar_modification, floaty_bond, floaty_conf, _, _ = j_val[0]
-            floaty_sugar_label = ['show' if highlight_motif == None else 'hide' for k in floaty_sugar]
-            floaty_bond_label = ['show' if highlight_motif == None else 'hide' for k in floaty_bond]
+            # Nodes of the bit as drawn on its own, moved to where the bit sits in the sequence; its trailing blank stands in for the acceptor and carries no value
+            off, n_bit = fb_offset[fb_keys[j]], 2 * floaty_bits[j].count('(')
+            at = {v: off + n if n < n_bit else None for n, v in j_val[-1].items()}
+            scalar = lambda pos: per_residue_by_node.get(at[pos], 0) if per_residue else 0
+            linked = lambda pos: per_linkage_by_node.get(at[pos] + 1, False) if highlight_linkages and at[pos] is not None else False
+            floaty_sugar_label = [highlight] * len(floaty_sugar)
+            floaty_bond_label = [highlight] * len(floaty_bond)
             floaty_sugar_x_pos = [k + max_x + 1 for k in floaty_sugar_x_pos]
-            current_y = (min_y + (j * y_spacing)) if n_floats > 1 else ((min_y + max_y) / 2)
-            floaty_sugar_y_pos = [current_y for _ in range(len(floaty_sugar_y_pos))]
+            current_y = (min_y + j * y_spacing + sum(r[1] - r[0] for r in reach[:j]) - reach[j][0]) if (
+                    n_floats > 1) else (min_y + max_y - reach[j][0] - reach[j][1]) / 2
+            # The bit keeps its own layout, moved onto its row; flattened, a floating H antigen or Lewis X stacked its
+            # Fuc onto the Gal or GlcNAc, and side branches were lost
+            shift = current_y - floaty_sugar_y_pos[0]
+            floaty_sugar_y_pos = [k + shift for k in floaty_sugar_y_pos]
+            lanes = [([floaty_sugar_x_pos], [floaty_sugar_y_pos])] + [([[k + max_x + 1 for k in xs] for xs in lv[1]],
+                                                                        [[k + shift for k in ys] for ys in lv[2]])
+                                                                       for lv in j_val[1:-1]]
             if floaty_sugar != ['blank', 'blank']:
-                [add_bond(floaty_sugar_x_pos[k + 1], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k + 1], floaty_sugar_y_pos[k], d, label = floaty_bond[k], dim = dim, compact = compact, highlight = floaty_bond_label[k]) for k in range(len(floaty_sugar) - 1)]
-                [add_sugar(floaty_sugar[k], d, x_pos = floaty_sugar_x_pos[k], y_pos = floaty_sugar_y_pos[k], modification = floaty_sugar_modification[k], conf = floaty_conf[k], compact = compact, dim = dim, highlight = floaty_sugar_label[k]) for k in range(len(floaty_sugar))]
+                [add_bond(floaty_sugar_x_pos[k + 1], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k + 1], floaty_sugar_y_pos[k], d, label = floaty_bond[k] if show_linkage else '-', dim = dim, compact = compact, highlight = floaty_bond_label[k], color_highlight = linked((0, 0, k + 1))) for k in range(len(floaty_sugar) - 1)]
+                for lvl, lv in enumerate(j_val[1:-1]):
+                    (xs, ys), (pxs, pys) = lanes[lvl + 1], lanes[lvl]
+                    for b, (conn, bonds) in enumerate(zip(lv[5], lv[4])):
+                        parent = conn[0] if lvl else 0
+                        add_bond(xs[b][0], pxs[parent][conn[1]], ys[b][0], pys[parent][conn[1]], d,
+                                 label = bonds[0] if show_linkage else '-', dim = dim, compact = compact,
+                                 highlight = highlight, color_highlight = linked((lvl + 1, b, 0)))
+                        [add_bond(xs[b][k + 1], xs[b][k], ys[b][k + 1], ys[b][k], d,
+                                  label = bonds[k + 1] if show_linkage else '-', dim = dim, compact = compact,
+                                  highlight = highlight, color_highlight = linked((lvl + 1, b, k + 1))) for k in range(len(bonds) - 1)]
+                [add_sugar(floaty_sugar[k], d, x_pos = floaty_sugar_x_pos[k], y_pos = floaty_sugar_y_pos[k], modification = floaty_sugar_modification[k], conf = floaty_conf[k], compact = compact, dim = dim, highlight = floaty_sugar_label[k], scalar = scalar((0, 0, k))) for k in range(len(floaty_sugar))]
+                for lvl, lv in enumerate(j_val[1:-1]):
+                    [add_sugar(lv[0][b][k], d, x_pos = lanes[lvl + 1][0][b][k], y_pos = lanes[lvl + 1][1][b][k],
+                               modification = lv[3][b][k], conf = lv[6][b][k], compact = compact, dim = dim,
+                               highlight = highlight, scalar = scalar((lvl + 1, b, k))) for b in range(len(lv[0])) for k in range(len(lv[0][b]))]
             else:
                 add_sugar('text', d, x_pos = min(floaty_sugar_x_pos) - 0.3, y_pos = floaty_sugar_y_pos[-1], modification = floaty_bits[j].replace('blank', ''), compact = compact, dim = dim, text_anchor = 'end', highlight = highlight)
-            if fb_count[floaty_bits[j]] > 1:
+            if fb_count[fb_keys[j]] > 1:
                 x_offset = 0.5 if not compact else 0.75
-                add_sugar('text', d, x_pos = max(floaty_sugar_x_pos) + x_offset, y_pos = floaty_sugar_y_pos[-1], modification = f"{fb_count[floaty_bits[j]]}x", compact = compact, dim = dim, highlight = highlight)
+                add_sugar('text', d, x_pos = max(floaty_sugar_x_pos) + x_offset, y_pos = current_y, modification = f"{fb_count[fb_keys[j]]}x", compact = compact, dim = dim, highlight = highlight)
         bracket_x = max_x * (2 if not compact else 1.2) + 1
         bracket_y = (min_y, max_y) if not compact else ((min_y * 0.5) * 1.2, (max_y * 0.5) * 1.2)
         draw_bracket(bracket_x, bracket_y, d, direction = 'right', dim = dim, highlight = highlight)
@@ -1663,9 +2014,13 @@ def GlycoDraw(
         occupied = {(round(x), round(y)) for x, y in zip(main_sugar_x_pos, main_sugar_y_pos)}
         occupied |= {(round(x), round(y)) for xs, ys in
                      zip(unwrap(lv_x_pos), unwrap(lv_y_pos)) for x, y in zip(xs, ys)}
-        for bit, bit_anchors in anchored_bits:
-            a_sugar, a_x_pos, _, a_modification, a_bond, a_conf, _, _ = \
-                get_coordinates_and_labels(bit, highlight_motif = None)[0]
+        for bit, bit_anchors, off in anchored_bits:
+            a_data = get_coordinates_and_labels(bit, highlight_motif = None)
+            a_sugar, a_x_pos, _, a_modification, a_bond, a_conf, _, _ = a_data[0]
+            # Every ghost copy carries the values of the residues it stands for; index 0 is the trailing blank
+            a_at = {v: off + n for n, v in a_data[-1].items()}
+            a_scalar = [per_residue_by_node.get(a_at[(0, 0, k)], 0) if per_residue and k else 0 for k in range(len(a_sugar))]
+            a_linked = [per_linkage_by_node.get(a_at[(0, 0, k)] + 1, False) if highlight_linkages and k else False for k in range(len(a_sugar))]
             for linkage, anchor in bit_anchors.items():
                 for n in resolve_anchor(anchor_graph, anchor):
                     lane, b, i = node_positions[n]
@@ -1678,15 +2033,15 @@ def GlycoDraw(
                             (round(target_x + a_x_pos[k]), round(target_y + offset)) not in occupied for k in
                             range(1, len(a_sugar)))), target_y - (3 if compact else 2))
                     occupied.update((round(target_x + a_x_pos[k]), round(ghost_y)) for k in range(1, len(a_sugar)))
-                    [add_bond(target_x + a_x_pos[k + 1], target_x + a_x_pos[k], ghost_y, ghost_y, d, label = a_bond[k],
-                              dim = dim,
-                              compact = compact, highlight = highlight) for k in range(1, len(a_sugar) - 1)]
+                    [add_bond(target_x + a_x_pos[k + 1], target_x + a_x_pos[k], ghost_y, ghost_y, d,
+                              label = a_bond[k] if show_linkage else '-', dim = dim,
+                              compact = compact, highlight = highlight, color_highlight = a_linked[k + 1]) for k in range(1, len(a_sugar) - 1)]
                     [add_sugar(a_sugar[k], d, x_pos = target_x + a_x_pos[k], y_pos = ghost_y, modification = a_modification[k],
                                conf = a_conf[k],
-                               compact = compact, dim = dim, highlight = highlight) for k in range(1, len(a_sugar))]
+                               compact = compact, dim = dim, highlight = highlight, scalar = a_scalar[k]) for k in range(1, len(a_sugar))]
                     add_bond(target_x + a_x_pos[1], target_x, ghost_y, target_y, anchor_layer,
                              label = process_bonds([linkage])[0] if show_linkage else '-', dim = dim, compact = compact,
-                             highlight = highlight, dashed = True)
+                             highlight = highlight, dashed = True, color_highlight = a_linked[1])
         d.children.insert(0, anchor_layer)
     # add brackets around repeating unit
     if repeat:
@@ -1694,11 +2049,12 @@ def GlycoDraw(
         repeat_annot = 'n' + (' = ' + str(repeat) if isinstance(repeat, (str, int)) and repeat is not True else '')
         # repeat range code block
         if repeat_range:
-            bracket_open = (main_sugar_x_pos[repeat_range[1]] * 2) + 1 if not compact else (main_sugar_x_pos[repeat_range[1]] * 1.2) + 0.6
-            bracket_close = (main_sugar_x_pos[repeat_range[0]] * 2) - 1 if not compact else (main_sugar_x_pos[repeat_range[0]] * 1.2) - 0.6
+            # Between the linkage label and the symbol, not through the label at the middle of the bond
+            bracket_open = (main_sugar_x_pos[repeat_range[1]] * 2) + 0.62 if not compact else (main_sugar_x_pos[repeat_range[1]] * 1.2) + 0.6
+            bracket_close = (main_sugar_x_pos[repeat_range[0]] * 2) - 0.62 if not compact else (main_sugar_x_pos[repeat_range[0]] * 1.2) - 0.6
             bracket_y_open =  (main_sugar_y_pos[repeat_range[1]], main_sugar_y_pos[repeat_range[1]]) if not compact else (((np.mean(main_sugar_y_pos[repeat_range[1]]) * 0.5) * 1.2), ((np.mean(main_sugar_y_pos[repeat_range[1]]) * 0.5) * 1.2))
             bracket_y_close = (main_sugar_y_pos[repeat_range[0]], main_sugar_y_pos[repeat_range[0]]) if not compact else (((np.mean(main_sugar_y_pos[repeat_range[0]]) * 0.5) * 1.2), ((np.mean(main_sugar_y_pos[repeat_range[0]]) * 0.5) * 1.2))
-            text_x = main_sugar_x_pos[repeat_range[0]] - 0.5
+            text_x = main_sugar_x_pos[repeat_range[0]] - (0.31 if not compact else 0.5)
             text_y = main_sugar_y_pos[0] + 1.05 if not compact else (main_sugar_y_pos[0] + 1.03) / 0.6
             draw_bracket(bracket_close, bracket_y_close, d, direction = 'left', dim = dim, highlight = highlight, deg = 0)
             draw_bracket(bracket_open, bracket_y_open, d, direction = 'right', dim = dim, highlight = highlight, deg = 0)
@@ -1720,7 +2076,7 @@ def GlycoDraw(
             draw_bracket(bracket_open, bracket_y_open, d, direction = 'right', dim = dim, highlight = highlight, deg = open_deg)
             draw_bracket(bracket_close, bracket_y_close, d, direction = 'left', dim = dim, highlight = highlight, deg = 0)
             add_sugar('text', d, x_pos = text_x, y_pos = text_y, modification = repeat_annot, compact = compact, dim = dim, text_anchor = 'start', highlight = highlight)
-    return _finish_drawing(d, in_glycan, alt_text, (in_glycan, highlight_motif, highlight_termini_list, compact, vertical, dim, per_residue, repeat, reducing_end_label), vertical = vertical, dim = dim, filepath = filepath, suppress = suppress, shadow = shadow, sticker = sticker)
+    return _finish_drawing(d, in_glycan, alt_text, (in_glycan, highlight_motif, highlight_termini_list, compact, vertical, dim, per_residue, repeat, reducing_end_label, show_linkage, highlight_linkages, reverse_highlight, repeat_range, None if highlight_residues is None else sorted(highlight_residues)), vertical = vertical, dim = dim, filepath = filepath, suppress = suppress, shadow = shadow, sticker = sticker)
 
 
 def _drawable(glycan: str, # Candidate label
@@ -1731,6 +2087,53 @@ def _drawable(glycan: str, # Candidate label
         libr = lib
     return in_lib(glycan, expand_lib(libr, list(sugar_dict.keys())
                                      + [k for k in min_process_glycans([glycan])[0] if '/' in k]))
+
+
+def plot_glycans_grid(
+        glycans: str | list[str], # Glycans to draw (IUPAC-condensed, compositions, motif names)
+        ncols: int = 4, # Glycans per row
+        labels: list[str] | None = None, # Caption under each glycan, such as a name, ID, or fold change
+        filepath: str | Path | None = None, # Output file path (.svg, .pdf, or .png)
+        suppress: bool = False, # Suppress display
+        **kwargs # Passed on to GlycoDraw for every glycan, e.g. compact, vertical, dim, show_linkage, highlight_motif
+) -> Any: # Drawing object
+    "Draws several glycans at one shared scale into a single captioned figure, row by row, for side-by-side comparison"
+    glycans = [glycans] if isinstance(glycans, (str, dict)) else list(glycans)
+    # A composition dict, as glycan_to_composition returns it, is captioned in the alt text by its string form
+    glycans = [canonicalize_composition(g, as_string = True) if isinstance(g, dict) else g for g in glycans]
+    # A filtered pandas Series keeps its index, so labels[i] would look up index labels instead of positions
+    labels = None if labels is None else [labels] if isinstance(labels, str) else list(labels)
+    if labels is not None and len(labels) != len(glycans):
+        raise ValueError(f"labels has {len(labels)} entries but there are {len(glycans)} glycans to caption")
+    dim = kwargs.get('dim', 50)
+    drawings = [GlycoDraw(g, suppress = True, **kwargs) for g in glycans]
+    boxes = [k.drawing_obj.view_box for k in drawings]
+    # Every column is as wide as its widest glycan and every row as tall as its tallest, so all symbols keep one size
+    # A gutter between cells, or a composition or a Fuc at a cell's edge reads as part of its neighbor
+    cap, gap = dim * 0.55 if labels is not None else 0, dim * 0.8
+    col_w = [max(b[2] for b in boxes[c::ncols]) + gap for c in range(min(ncols, len(boxes)))]
+    row_h = [max(b[3] for b in boxes[r:r + ncols]) + cap + gap for r in range(0, len(boxes), ncols)]
+    tag = hashlib.blake2s(repr((glycans, labels, ncols, sorted(kwargs.items(), key = str))).encode(),
+                          digest_size = 4).hexdigest()
+    grid = draw.Drawing(sum(col_w) - gap, sum(row_h) - gap, id_prefix = f'g{tag}_')
+    for i, (k, (x0, y0, w, h)) in enumerate(zip(drawings, boxes)):
+        r, c = divmod(i, ncols)
+        left, top = sum(col_w[:c]), sum(row_h[:r])
+        # Vertical glycans stand on their reducing end, so they share a baseline right above their captions
+        shift = (left + (col_w[c] - gap - w) / 2 - x0,
+                 top + (row_h[r] - gap - cap - h) / (1 if kwargs.get('vertical') else 2) - y0)
+        grid.append(draw.Group(k.drawing_obj.elements, transform = f'translate({shift[0]} {shift[1]})'))
+        if labels is not None:
+            grid.append(draw.Text(str(labels[i]), dim * 0.35, left + (col_w[c] - gap) / 2,
+                                  top + row_h[r] - gap - cap * 0.35,
+                                  text_anchor = 'middle', fill = col_dict_base['black']))
+    alt_text = html.escape(f"SNFG diagrams of {len(glycans)} glycans: " + "; ".join(glycans) + ".")
+    drawing = GlycanDrawing(grid, shadow = kwargs.get('shadow', False), sticker = kwargs.get('sticker', False),
+                            vertical = kwargs.get('vertical', False), alt_text = alt_text)
+    if filepath:
+        drawing.save(filepath)
+    return drawing if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(
+        grid, shadow = drawing.shadow, sticker = drawing.sticker)
 
 
 def _spread_glycans(placements: list, # (x, y, w, h, anchor_x, anchor_y) per glycan, (x, y) being its natural corner
@@ -1901,16 +2304,19 @@ def annotate_figure(
 
 
 def plot_glycans_excel(
-        df: pd.DataFrame | str | Path, # DataFrame or filepath with glycans
+        df: pd.DataFrame | pd.Series | list[str] | str | Path, # DataFrame or filepath with glycans, or the glycans themselves
         folder_filepath: str | Path, # Output folder path
-        glycan_col_num: int = 0, # Glycan column index
+        glycan_col_num: int | str = 0, # Glycan column index, or its name
         scaling_factor: float = 0.2, # Image scaling
-        compact: bool = False # Use compact style
+        compact: bool = False, # Use compact style
+        **kwargs # Passed on to GlycoDraw for every glycan, e.g., vertical, show_linkage, highlight_motif
 ) -> None:
     "Creates Excel file with SNFG glycan images in a new column"
     _, convert_svg_to_png = _get_glycorender()
+    from glycorender.render import pdf_to_svg_bytes
     from openpyxl.drawing.image import Image as OpenpyxlImage
     from openpyxl.utils import get_column_letter
+    import zipfile
 
     class _PngImage(OpenpyxlImage):
         "openpyxl only calls Pillow to learn a PNG's size and to hand its bytes back, both of which we already have"
@@ -1927,42 +2333,76 @@ def plot_glycans_excel(
     if isinstance(df, (str, Path)):
         df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
             df).suffix.lower() == ".tsv" else pd.read_excel(df)
+    elif not isinstance(df, pd.DataFrame):
+        # A bare column or list of glycans becomes a one-column sheet; a Series would otherwise gain 'SNFG' as a row
+        df = pd.DataFrame({getattr(df, 'name', None) or 'glycan': list(df)})
     else:
         df = df.copy()
-    df["SNFG"] = [np.nan for k in range(len(df))]
+    df["SNFG"] = np.nan
     image_column_number = df.columns.tolist().index("SNFG") + 1
-    # Convert df_out to Excel
-    if Path(folder_filepath).suffix:
+    # Convert df_out to Excel; a directory gets the workbook as 'output.xlsx', an .xlsx path names it
+    out = Path(folder_filepath)
+    if out.suffix and out.suffix.lower() != '.xlsx' and not out.is_dir():  # an existing folder such as 'run.v2' is still a folder
         raise ValueError(
-            f"folder_filepath has to be a directory; the workbook is always written as 'output.xlsx' inside it (got '{folder_filepath}').")
-    Path(folder_filepath).mkdir(parents = True, exist_ok = True)
-    writer = pd.ExcelWriter(Path(folder_filepath) / "output.xlsx", engine = "openpyxl")
+            f"folder_filepath has to be a directory (the workbook is then written as 'output.xlsx' inside it) "
+            f"or an .xlsx file (got '{folder_filepath}').")
+    out = out if out.suffix and not out.is_dir() else out / "output.xlsx"
+    out.parent.mkdir(parents = True, exist_ok = True)
+    writer = pd.ExcelWriter(out, engine = "openpyxl")
     df.to_excel(writer, index = False)
-    # Load the workbook and get the active sheet
-    workbook = writer.book
+    # Get the active sheet
     sheet = writer.sheets["Sheet1"]
-    for i, glycan_structure in enumerate(df.iloc[:, glycan_col_num]):
+    column = df[glycan_col_num] if isinstance(glycan_col_num, str) else df.iloc[:, glycan_col_num]
+    column_letter, column_width, svgs = get_column_letter(image_column_number), 0, {}
+    for i, glycan_structure in enumerate(column):
         if isinstance(glycan_structure, (list, tuple)) and glycan_structure:
             glycan_structure = glycan_structure[0] if isinstance(glycan_structure[0], str) else glycan_structure[0][0]
         if isinstance(glycan_structure, str) and glycan_structure:
             # Generate glycan image using GlycoDraw
             try:
-                drawing = GlycoDraw(glycan_structure, compact = compact, suppress = True, restrict_vocab = True)
+                drawing = GlycoDraw(glycan_structure, compact = compact, suppress = True, restrict_vocab = True, **kwargs)
             except Exception as e:
                 raise ValueError(f"Could not draw the glycan in row {i + 2} of the sheet: {glycan_structure}") from e
             svg_data = drawing.as_svg()
-            # Rasterize straight at the final size; no resampling step needed
-            png_bytes = convert_svg_to_png(svg_data, scale = 2.0 * scaling_factor, return_bytes = True)
-            img_width, img_height = struct.unpack('>II', png_bytes[16:24])  # PNG IHDR carries the dimensions
+            # Excel 2016+ draws the vector twin added below; other readers show the PNG, rasterized at 4x the
+            # display size so it stays sharp on high-DPI screens and up to 400% zoom
+            png_bytes = convert_svg_to_png(svg_data, scale = 8.0 * scaling_factor, return_bytes = True,
+                                           shadow = drawing.shadow, sticker = drawing.sticker)
+            # Office's SVG renderer ignores filters, so shadowed glycans keep only their PNG
+            if not drawing.shadow:
+                svgs[png_bytes] = pdf_to_svg_bytes(svg_data, sticker = drawing.sticker).encode('utf-8')
+            # PNG IHDR carries the dimensions; the picture is displayed at a quarter of them
+            img_width, img_height = [round(v / 4) for v in struct.unpack('>II', png_bytes[16:24])]
             img_for_excel = _PngImage(BytesIO(png_bytes), img_width, img_height)
             # Find the cell to insert the image
             cell = sheet.cell(row = i + 2,
                               column = image_column_number)  # +2 because Excel is 1-indexed and there's a header row
             # Insert the image into the cell
             sheet.add_image(img_for_excel, cell.coordinate)
-            # Resize the cell to fit the image
-            column_letter = get_column_letter(image_column_number)
-            sheet.column_dimensions[column_letter].width = img_width * 0.1125
+            # Resize the cell to fit the image; a column width unit is 7 px (Calibri 11) and has to fit the widest
+            column_width = max(column_width, img_width / 7)
+            sheet.column_dimensions[column_letter].width = column_width
             sheet.row_dimensions[cell.row].height = img_height * 0.75
-    # Save the workbook
-    workbook.save(filename = Path(folder_filepath) / "output.xlsx")
+    # Save the workbook; closing the writer saves it and releases the file handle it has held open since creation
+    writer.close()
+    if not svgs:
+        return
+    # openpyxl cannot write Office's SVG picture extension, so each PNG gets its vector twin in the saved package
+    with zipfile.ZipFile(out) as z:
+        parts = {name: z.read(name) for name in z.namelist()}
+    rels, xml = parts['xl/drawings/_rels/drawing1.xml.rels'].decode(), parts['xl/drawings/drawing1.xml'].decode()
+    for media, rid in re.findall(r'Target="/(xl/media/image\d+)\.png" Id="(rId\d+)"', rels):
+        parts[media + '.svg'] = svgs[parts[media + '.png']]
+        rels = rels.replace('</Relationships>', '<Relationship Type="http://schemas.openxmlformats.org/officeDocument/'
+                            f'2006/relationships/image" Target="/{media}.svg" Id="{rid}s"/></Relationships>')
+        # lxml writes '"/>', the stdlib serializer openpyxl falls back to without it '" />'
+        xml = re.sub(f'(<a:blip [^>]*?r:embed="{rid}"[^>]*?)\\s*/>',
+                     '\\1><a:extLst><a:ext uri="{96DAC541-7B7A-43D3-8B79-37D633B846F1}"><asvg:svgBlip xmlns:asvg='
+                     f'"http://schemas.microsoft.com/office/drawing/2016/SVG/main" r:embed="{rid}s"/>'
+                     '</a:ext></a:extLst></a:blip>', xml)
+    parts['xl/drawings/_rels/drawing1.xml.rels'], parts['xl/drawings/drawing1.xml'] = rels.encode(), xml.encode()
+    parts['[Content_Types].xml'] = parts['[Content_Types].xml'].replace(
+        b'<Default Extension="png"', b'<Default Extension="svg" ContentType="image/svg+xml"/><Default Extension="png"')
+    with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
+        for name, data in parts.items():
+            z.writestr(name, data)

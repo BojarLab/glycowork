@@ -68,17 +68,17 @@ def terminal_pairs_for_precursors(ggraph: nx.DiGraph, # Glycan graph
 
 
 @lru_cache(maxsize = 1024)
-def create_neighbors(ggraph: nx.DiGraph, # Glycan graph
-                     min_size: int = 1 # Minimum root size; default:1
-                     ) -> list[nx.Graph]: # List of precursor graphs
+def create_neighbors(ggraph: nx.DiGraph,  # Glycan graph
+                     min_size: int = 1  # Minimum root size; default:1
+                     ) -> tuple[nx.Graph, ...]:  # Precursor graphs
     "Create biosynthetic precursor glycans"
     # Generate all precursors by iteratively cleaving off the non-reducing-end monosaccharides
     nodes = frozenset(ggraph)
     # Cleaving off messes with the node labeling, so they have to be re-labeled
-    return [
+    return tuple(
         nx.relabel_nodes(ggraph.subgraph(nodes - set(pair)), {m: i for i, m in enumerate(sorted(nodes - set(pair)))})
-        for pair in terminal_pairs_for_precursors(ggraph, min_size = min_size)
-    ]
+        for pair in terminal_pairs_for_precursors(ggraph,
+                                                  min_size = min_size))  # a tuple, since the result is lru-cached and a caller editing a list would change it for every later call on that graph
 
 
 @lru_cache(maxsize = 2048)
@@ -141,7 +141,7 @@ def find_ptm(glycan: str, # Glycan with PTM
              ) -> tuple[tuple[str, str], str] | int: # Edge tuple (glycan, precursor) and PTM or 0
     "Identify precursor glycans for glycan with PTM"
     # Checks which PTM(s) are present
-    mod = next((ptm for ptm in allowed_ptms if ptm in sia_re.sub('', glycan)), None)
+    mod = next((ptm for ptm in sorted(allowed_ptms) if ptm in sia_re.sub('', glycan)), None)  # sorted, as frozenset order changes with PYTHONHASHSEED and a multiply modified glycan would get a different label per run
     if mod is None:
         return 0
     # Stemifying returns the unmodified glycan
@@ -287,7 +287,7 @@ def build_network_from_glycans(glycans: list[str], # Observed glycans
     queue = list(glycans)
     seen = set(glycans)
     observed_by_fp = defaultdict(list)
-    edge_diffs = {}
+    edge_diffs, match_of = {}, {}
     for g in glycans:
         observed_by_fp[_graph_fp(safe_index(g, graph_dic))].append(g)
     while queue:
@@ -299,13 +299,16 @@ def build_network_from_glycans(glycans: list[str], # Observed glycans
             if prec_str.startswith('('):
                 continue
             graph_dic.setdefault(prec_str, prec_graph)
-            fp = _graph_fp(prec_graph)
             # Fast path: canonical string directly identifies observed glycan; fallback: graph isomorphism for wildcard cases
             if prec_str in observed:
                 match = prec_str
+            elif prec_str in match_of:
+                # buckets only ever grow at the end, so a precursor reached again from another parent resolves to the same first match
+                match = match_of[prec_str]
             else:
-                match = next((g for g in observed_by_fp.get(fp, []) if safe_compare(safe_index(g, graph_dic), prec_graph)),
-                             prec_str)
+                fp = _graph_fp(prec_graph)
+                match = match_of[prec_str] = next((g for g in observed_by_fp.get(fp, []) if safe_compare(safe_index(g, graph_dic), prec_graph)),
+                                                  prec_str)
             network.add_edge(glycan, match)
             diff = graph_to_string_int(ggraph.subgraph({term_node, link_node}))
             edge_diffs[(glycan, match)] = 'disregard' if any(ptm in sia_re.sub('', diff) for ptm in allowed_ptms) else diff
@@ -323,8 +326,7 @@ def construct_network(glycans: str | list[str] | pd.DataFrame, # Glycan(s), or a
                       edge_type: str = 'monolink', # Edge label type: monolink/monosaccharide/enzyme
                       permitted_roots: str | frozenset[str] | None = None, # Allowed root node(s)
                       abundances: list[float] = [], # Glycan abundances in the same order as glycans; default:empty
-                      constraints: bool | list[dict] | pd.DataFrame = True
-                      # Apply established biochemical constraints on reaction order; False to disable, or pass custom rules
+                      constraints: bool | list[dict] | pd.DataFrame = True  # Apply established biochemical constraints on reaction order; False to disable, or pass custom rules
                       ) -> nx.DiGraph: # Biosynthetic network
     "Construct glycan biosynthetic network"
     if isinstance(glycans, pd.DataFrame):
@@ -337,7 +339,10 @@ def construct_network(glycans: str | list[str] | pd.DataFrame, # Glycan(s), or a
     allowed_ptms = frozenset([allowed_ptms]) if isinstance(allowed_ptms, str) else allowed_ptms
     # Canonicalize all input strings upfront
     glycans = [canonicalize_iupac(g) for g in glycans]
-    abundance_mapping = dict(zip(glycans, abundances)) if abundances else {}  # zipped in the caller's order, before sorting and deduplication
+    # zipped in the caller's order, before sorting and deduplication; rows of one structure (isomer peaks, or two spellings of one sequence) add up instead of the last one overwriting the others
+    abundance_mapping = defaultdict(float)
+    for g, a in zip(glycans, abundances):
+        abundance_mapping[g] += a
     glycans = sorted(set(glycans))
     stem_lib = {k: k if sia_re.match(k) else v for k, v in get_stem_lib(get_lib(glycans)).items()}
     if permitted_roots is None:
@@ -360,18 +365,20 @@ def construct_network(glycans: str | list[str] | pd.DataFrame, # Glycan(s), or a
     # Connect post-translational modifications
     suffix = '-ol' if '-ol' in ''.join(glycans) else '1Cer' if '1Cer' in ''.join(glycans) else ''
     virtual_nodes = [x for x, y in network.nodes(data = True) if y['virtual'] == 1]
-    real_strings_by_size = defaultdict(set)
+    real_strings_by_size, real_fps = defaultdict(set), {}
     for x, y in network.nodes(data = True):
         if y['virtual'] == 0:
             real_strings_by_size[len(safe_index(x, graph_dic))].add(x)
+            real_fps[x] = _graph_fp(safe_index(x, graph_dic))
     to_remove_v = []
     for v in virtual_nodes:
         vg = safe_index(v, graph_dic)
         vsize = len(vg)
-        # Fast path: node name is canonical string so direct set lookup suffices; fallback: graph isomorphism for wildcard cases
+        vfp = _graph_fp(vg) if real_strings_by_size.get(vsize) else None
+        # Fast path: node name is canonical string so direct set lookup suffices; fallback: graph isomorphism for wildcard cases, which needs an identical topology unless an anchored floating bit is involved
         if not in_lib(v, lib) or v in real_strings_by_size.get(vsize, set()) or \
                 any(
-                    compare_glycans(vg, safe_index(r, graph_dic)) for r in real_strings_by_size.get(vsize, set()) if r != v):
+                    compare_glycans(vg, safe_index(r, graph_dic)) for r in real_strings_by_size.get(vsize, set()) if r != v and (real_fps[r] == vfp or '^' in v + r)):
             to_remove_v.append(v)
     network.remove_nodes_from(to_remove_v)
     ptm_links = process_ptm(list(network.nodes()), graph_dic, stem_lib, allowed_ptms = allowed_ptms, suffix = suffix)
@@ -400,7 +407,7 @@ def construct_network(glycans: str | list[str] | pd.DataFrame, # Glycan(s), or a
             rs = {}
             for term_node in (nd for nd in g.nodes() if g.out_degree(nd) == 0 and g.in_degree(nd) > 0):
                 link_node = next(g.predecessors(term_node))
-                sub = g.subgraph(set(g.nodes()) - {term_node, link_node})
+                sub = g.subgraph(set(g.nodes()) - {term_node, link_node}).copy()
                 rs[graph_to_string(sub)] = _graph_fp(sub)
             for n_small in candidates:
                 hit = n_small in rs
@@ -425,7 +432,7 @@ def construct_network(glycans: str | list[str] | pd.DataFrame, # Glycan(s), or a
     if edge_type != 'monolink':
         df_enzyme, net_class = None, None
         if edge_type == 'enzyme':
-            with resources.files("glycowork.network").joinpath("monolink_to_enzyme.csv").open() as f:
+            with resources.files("glycowork.network").joinpath("monolink_to_enzyme.csv").open(encoding = 'utf-8-sig') as f:
                 df_enzyme = pd.read_csv(f, sep = ',')
             net_class = get_class(glycans[0])  # glycans sorted desc by len, [0] is a real observed glycan
         for u, v in network.edges():
@@ -474,18 +481,23 @@ def apply_constraints(network: nx.DiGraph, # Biosynthetic network with 'diffs' e
     rules = [r for r in rules if not isinstance(r.get('glycan_class'), str) or net_class in str(r['glycan_class']).split('/')]
     if not rules:
         return network
-    motifs = {m for r in rules for m in [r['product']] + str(r['context']).split('|')}
     # an O-acetylated sialic acid is still the sialic acid a rule speaks about, and Sia wildcards do not match modified tokens
     cores = {n: sia_re.sub(lambda t: get_core(t.group()), n) for n in network.nodes()}
-    # one subgraph search per (node, motif) instead of per edge, since every node takes part in several edges
-    has = {m: {n: subgraph_isomorphism(cores[n], m) for n in network.nodes()} for m in motifs}
+    # at most one subgraph search per (node, motif) instead of per edge, and a context is only searched in precursors whose edge installs the product
+    has = {}
+
+    def hit(n, m):
+        if (n, m) not in has:
+            has[(n, m)] = subgraph_isomorphism(cores[n], m)
+        return has[(n, m)]
+
     violations = {}
     for u, v in network.edges():
         for r in rules:
             # the rule only speaks to the edge that installs its product, not to every edge downstream of it
-            if not has[r['product']].get(v, False) or has[r['product']].get(u, False):
+            if not hit(v, r['product']) or hit(u, r['product']):
                 continue
-            if any(has[c].get(u, False) for c in str(r['context']).split('|')) == (r['kind'] == 'forbids'):
+            if any(hit(u, c) for c in str(r['context']).split('|')) == (r['kind'] == 'forbids'):
                 violations[(u, v)] = ': '.join(r[k] for k in ('enzyme', 'rationale') if isinstance(r.get(k),
                                                                                                    str)) or f"{r['product']} {r['kind']} {r['context']}"
     network = network.copy()
@@ -510,7 +522,7 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
                  compact: bool = False,  # Use compact SNFG style
                  glycan_size: str = 'small',  # Glycan size preset ('small', 'medium', 'large')
                  title: str | None = None  # Plot title; None for none, as before
-                 ) -> None:  # Displays plot, or returns it as a Jupyter-renderable SVG when draw_glycans without a filepath
+                 ) -> None:  # Jupyter-renderable plot (interactive HTML, or SVG with draw_glycans); outside Jupyter it opens in the browser
     "Visualize biosynthetic network"
     if plot_format == 'hierarchical':
         roots = [n for n in network.nodes() if network.in_degree(n) == 0]
@@ -528,7 +540,7 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
         for node, level in levels.items():
             level_nodes[level].append(node)
         max_level = max(levels.values()) if levels else 0
-        max_width = max(len(nodes) for nodes in level_nodes.values())
+        max_width = max((len(nodes) for nodes in level_nodes.values()), default = 1)
         pos = {}
         for level, nodes in level_nodes.items():
             for i, node in enumerate(nodes):
@@ -604,17 +616,19 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
         rows = Counter(round(y, 6) for y in node_data['y'])
         if (f := {'small': 1, 'medium': 2, 'large': 3}.get(glycan_size) if draw_glycans else 1) is None:
             raise ValueError(f"glycan_size has to be 'small', 'medium', or 'large' (got '{glycan_size}').")
-        w, h = (1.5 * f * max(rows.values()), 1.8 * f * len(rows)) if max(rows.values()) > 1 else (1.5 * f * len(
+        w, h = (1.5 * f * max(rows.values()), 1.8 * f * len(rows)) if max(rows.values(), default = 0) > 1 else (1.5 * f * len(
             network) ** 0.5,) * 2
         fig, ax = plt.subplots(figsize = (min(60, max(12, w)), min(60, max(9, h))))
-        for (x0, x1), (y0, y1), color, width in zip(edge_data['xs'], edge_data['ys'], edge_data['color'],
-                                                    edge_data['width']):
+        # gids tag each arrow and node in the SVG, so the Jupyter display can attach hover text to them
+        for i, ((x0, x1), (y0, y1), color, width) in enumerate(zip(edge_data['xs'], edge_data['ys'], edge_data['color'],
+                                                                   edge_data['width'])):
             ax.annotate('', xy = (x1, y1), xytext = (x0, y0),
                         arrowprops = dict(arrowstyle = '-|>', color = color, linewidth = width, shrinkA = 0,
-                                          shrinkB = 0))
-        ax.scatter(node_data['x'], node_data['y'], s = [s ** 2 for s in node_data['size']], c = node_data['color'],
-                   alpha = node_data['alpha'], edgecolors = '#888888', linewidths = 1)
-        for x, y, name, s in zip(node_data['x'], node_data['y'], node_data['name'], node_data['size']):
+                                          shrinkB = 0)).arrow_patch.set_gid(f'gwedge{i}')
+        for i, (x, y, name, s, color, alpha) in enumerate(zip(node_data['x'], node_data['y'], node_data['name'],
+                                                              node_data['size'], node_data['color'], node_data['alpha'])):
+            ax.scatter(x, y, s = s ** 2, color = color, alpha = alpha, edgecolors = '#888888', linewidths = 1,
+                       gid = f'gwnode{i}')
             # anchored just right of the node, since annotate_figure grows the SNFG from the label's own origin
             ax.annotate(name, (x, y), textcoords = 'offset points', xytext = (s / 2 + 4, 0), fontsize = 8, ha = 'left',
                         va = 'center')
@@ -640,49 +654,105 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
             svg = annotate_figure(svg_temp, filepath = filepath, compact = compact, glycan_size = glycan_size)
         if svg is None and filepath and Path(filepath).suffix.lower() == '.svg':
             svg = Path(filepath).read_text(encoding = 'utf-8')
-        if svg and is_jupyter():
-            from IPython.display import SVG
-            return SVG(svg)
-        if svg and not filepath:
-            from glycowork.motif.draw import display_svg_with_matplotlib
-            display_svg_with_matplotlib(svg)
-        return
-    from bokeh.plotting import figure, show
-    from bokeh.io import output_notebook
-    from bokeh.models import HoverTool, Arrow, NormalHead, LabelSet, ColumnDataSource
-    try:
-        output_notebook()
-    except (ImportError, RuntimeError, Exception):
-        pass
-    p = figure(width = 900, height = 900, x_range = (-1.2, 1.2), y_range = (-1.2, 1.2),
-               tools = "pan,wheel_zoom,box_zoom,reset,save", toolbar_location = "above",
-               x_axis_type = None, y_axis_type = None, background_fill_color = "white",
-               title = title if title is not None else None)
-    # Draw nodes with hover
-    node_renderer = p.scatter('x', 'y', size = 'size', color = 'color', alpha = 'alpha', line_color = "#888",
-                              line_width = 1, source = ColumnDataSource(data = node_data))
-    p.add_tools(HoverTool(renderers = [node_renderer], tooltips = [("Node", "@name")]))
-    for edge, color, width in zip(network.edges(), edge_data['color'], edge_data['width']):
-        p.add_layout(
-            Arrow(end = NormalHead(size = 8, fill_color = color), x_start = pos[edge[0]][0], y_start = pos[edge[0]][1],
-                  x_end = pos[edge[1]][0], y_end = pos[edge[1]][1], line_width = width, line_color = color))
-    # Draw visible edges as segments; multi_line renderer (invisible) enables hover tooltips
-    edge_source = ColumnDataSource(data = edge_data)
-    edge_renderer = p.multi_line('xs', 'ys', color = 'color', line_width = 'width', source = edge_source, line_alpha = 0)
-    p.add_tools(HoverTool(renderers = [edge_renderer], tooltips = [("Reaction", "@label")]))
-    p.segment([x[0] for x in edge_data['xs']], [y[0] for y in edge_data['ys']],
-              [x[1] for x in edge_data['xs']], [y[1] for y in edge_data['ys']],
-              color = edge_data['color'], line_width = edge_data['width'])
-    # Add all edge labels in one LabelSet
-    if edge_label_draw:
-        p.add_layout(LabelSet(x = 'x', y = 'y', text = 'text', text_color = 'black', text_font_size = '10pt',
-                              x_offset = 0, y_offset = 0, text_align = 'center',
-                              source = ColumnDataSource(data = dict(
-                                  x = [(pos[e[0]][0] + pos[e[1]][0]) / 2 for e in network.edges()],
-                                  y = [(pos[e[0]][1] + pos[e[1]][1]) / 2 for e in network.edges()],
-                                  text = [edge_attributes.get(e, '') for e in network.edges()]))))
-    show(p)
-    return p
+        if not (svg and is_jupyter()):
+            if svg and not filepath:
+                from glycowork.motif.draw import display_svg_with_matplotlib
+                display_svg_with_matplotlib(svg)
+            return
+    import html
+    from uuid import uuid4
+    from glycowork.motif.draw import is_jupyter
+    uid = f'gwnet{uuid4().hex[:12]}'
+    W = H = 900
+    if draw_glycans:
+        # Jupyter display of the SNFG figure: hover text goes onto the elements tagged by gid above
+        for i, name in enumerate(node_data['name']):
+            svg = svg.replace(f'<g id="gwnode{i}">', f'<g id="gwnode{i}"><title>Node: {html.escape(name)}</title>', 1)
+        for i, lab in enumerate(edge_data['label']):
+            # the arrow's line again as a wide transparent stroke, so a thin edge is easy to hover
+            svg = re.sub(rf'<g id="gwedge{i}">\s*(<path d="[^"]*")', lambda m: (
+                f'<g id="gwedge{i}"><title>Reaction: {html.escape(lab)}</title>{m[1]} '
+                f'style="fill:none;stroke:transparent;stroke-width:9;pointer-events:stroke"/>{m[1]}'), svg, count = 1)
+        # inlined into the notebook page, so ids get the plot's uid; otherwise two figures resolve each other's glyphs
+        svg = re.sub(r'(\bid="|href="#|url\(#)', rf'\g<1>{uid}', svg[svg.index('<svg'):]).replace(
+            '<svg', '<svg style="max-width:100%;height:auto;background:#fff"', 1)
+    else:
+        # Interactive plot as self-contained SVG + HTML; <title> elements are the hover text where scripts can't run
+        pad = max(node_data['size'], default = 0) / 2 + 30
+        x_lo, x_hi = min(node_data['x'], default = 0), max(node_data['x'], default = 0)
+        y_lo, y_hi = min(node_data['y'], default = 0), max(node_data['y'], default = 0)
+        px = lambda x: W / 2 if x_hi == x_lo else pad + (x - x_lo) * (W - 2 * pad) / (x_hi - x_lo)
+        py = lambda y: H / 2 if y_hi == y_lo else H - pad - (y - y_lo) * (H - 2 * pad) / (y_hi - y_lo)
+        heads = {k: i for i, k in enumerate(dict.fromkeys(zip(edge_data['color'], edge_data['width'])))}
+        parts = ['<defs>'] + [f'<marker id="{uid}-{i}" viewBox="0 0 10 10" refX="0" refY="5" '
+                              f'markerWidth="{6 + 2 * w}" markerHeight="{6 + 2 * w}" markerUnits="userSpaceOnUse" '
+                              f'orient="auto"><path d="M0,0L10,5L0,10z" fill="{html.escape(c)}"/></marker>'
+                              for (c, w), i in heads.items()] + ['</defs><g>']
+        hits, labels = [], []
+        for (x0, x1), (y0, y1), c, w, lab in zip(edge_data['xs'], edge_data['ys'], edge_data['color'],
+                                                 edge_data['width'], edge_data['label']):
+            xy = f'x1="{px(x0):.1f}" y1="{py(y0):.1f}" x2="{px(x1):.1f}" y2="{py(y1):.1f}"'
+            parts.append(f'<line {xy} stroke="{html.escape(c)}" stroke-width="{w}" '
+                         f'marker-end="url(#{uid}-{heads[(c, w)]})"/>')
+            # invisible wider twin, so a thin edge is easy to hover
+            hits.append(f'<line {xy} stroke="transparent" stroke-width="{max(w, 9)}" style="pointer-events:stroke">'
+                        f'<title>Reaction: {html.escape(lab)}</title></line>')
+            if edge_label_draw:
+                labels.append(f'<text x="{px((x0 + x1) / 2):.1f}" y="{py((y0 + y1) / 2):.1f}">'
+                              f'{html.escape(lab)}</text>')
+        parts += hits
+        for x, y, name, s, c, a in zip(node_data['x'], node_data['y'], node_data['name'], node_data['size'],
+                                       node_data['color'], node_data['alpha']):
+            parts.append(f'<circle cx="{px(x):.1f}" cy="{py(y):.1f}" r="{s / 2}" fill="{html.escape(c)}" '
+                         f'opacity="{a}" stroke="#888"><title>Node: {html.escape(name)}</title></circle>')
+        parts.append(f'</g><g text-anchor="middle" dominant-baseline="central" font-size="13.3" '
+                     f'style="pointer-events:none">{"".join(labels)}</g>')
+        svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" '
+               f'style="max-width:100%;height:auto;background:#fff;cursor:grab;touch-action:none;user-select:none">'
+               f'{"".join(parts)}</svg>')
+    # notebook scripts share one global scope, so the script runs inside a function: top-level constants would make
+    # a second plot (or a rerun) fail on redeclaring them
+    js = ("(()=>{const r=document.currentScript?.parentNode||document.getElementById('UID'),"
+          "s=r.querySelector('svg'),t=r.querySelector('div[data-tooltip]'),"
+          "A={circle:['cx','cy'],line:['x1','y1','x2','y2'],text:['x','y']};"
+          "s.querySelectorAll('title').forEach(e=>{e.parentNode.dataset.tip=e.textContent;e.remove()});"
+          "const els=[...s.querySelectorAll('circle,line,text')].map(e=>[e,A[e.tagName].map(a=>+e.getAttribute(a))]);"
+          "let k=1,tx=0,ty=0,drag=null;"
+          "const draw=()=>els.forEach(([e,b])=>A[e.tagName].forEach((a,i)=>e.setAttribute(a,b[i]*k+(i%2?ty:tx))));"
+          "const u=ev=>{const q=s.getBoundingClientRect(),f=WIDTH/q.width;"
+          "return[(ev.clientX-q.left)*f,(ev.clientY-q.top)*f]};")
+    # pan and zoom only for the interactive plot; the SNFG figure is a fixed layout and only gets tooltips
+    if not draw_glycans:
+        js += ("s.addEventListener('wheel',ev=>{if(!(ev.ctrlKey||ev.metaKey))return;ev.preventDefault();"
+               "const[x,y]=u(ev),f=Math.exp(-ev.deltaY/300);k*=f;tx=x-(x-tx)*f;ty=y-(y-ty)*f;draw()},{passive:false});"
+               "s.addEventListener('pointerdown',ev=>{drag=u(ev);t.style.display='none';"
+               "s.setPointerCapture(ev.pointerId)});"
+               "s.addEventListener('pointerup',()=>{drag=null});"
+               "s.addEventListener('dblclick',()=>{k=1;tx=ty=0;draw()});")
+    js += ("s.addEventListener('pointerleave',()=>{t.style.display='none'});"
+           "s.addEventListener('pointermove',ev=>{if(drag){const[x,y]=u(ev);tx+=x-drag[0];ty+=y-drag[1];drag=[x,y];"
+           "return draw()}const e=ev.target.closest('[data-tip]'),q=r.getBoundingClientRect();"
+           "if(!e)return t.style.display='none';t.textContent=e.dataset.tip;t.style.display='block';"
+           "t.style.left=ev.clientX-q.left+14+'px';t.style.top=ev.clientY-q.top+14+'px'})})()")
+    js = js.replace('UID', uid).replace('WIDTH', str(W))
+    page = (f'<div id="{uid}" style="position:relative;display:inline-block;font-family:sans-serif;color:#222">'
+            + (f'<div style="font-weight:bold;font-size:14px;margin:4px 0">{html.escape(str(title))}</div>'
+               if title is not None and not draw_glycans else '') + svg
+            + '<div style="font-size:11px;color:#888">Hover for details'
+            + ('' if draw_glycans else ', drag to pan, Ctrl+scroll to zoom, double-click to reset') + '</div>'
+            '<div data-tooltip style="position:absolute;display:none;pointer-events:none;background:#fff;'
+            'border:1px solid #ccc;border-radius:4px;padding:4px 8px;font-size:12px;white-space:nowrap;'
+            'box-shadow:0 2px 6px rgba(0,0,0,.15)"></div>'
+            f'<script>{js}</script></div>')
+    if is_jupyter():
+        from IPython.display import HTML
+        return HTML(page)
+    import tempfile
+    import webbrowser
+    with tempfile.NamedTemporaryFile('w', suffix = '.html', delete = False, encoding = 'utf-8') as f:
+        f.write(f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>{html.escape(str(title or "Biosynthetic network"))}'
+                f'</title></head><body>{page}</body></html>')
+    webbrowser.open(Path(f.name).as_uri())
 
 
 def network_alignment(network_a: nx.DiGraph, # First network
@@ -719,7 +789,8 @@ def infer_virtual_nodes(network_a: nx.DiGraph, # First network
     "Identify virtual nodes observed in other species"
     # Perform network alignment if not provided
     if combined is None:
-        combined = network_alignment(network_a, network_b)
+        # only the aligned node attributes are read, so align edge-free views instead of copying (and deep-copying the attributes of) every edge
+        combined = network_alignment(*(nx.subgraph_view(g, filter_edge = lambda *e: False) for g in (network_a, network_b)))
     # Find virtual nodes in network_a that are observed in network_b and vice versa
     virtual_a = {k for k, v in network_a.nodes(data = True) if v.get('virtual', 0) == 1}
     virtual_b = {k for k, v in network_b.nodes(data = True) if v.get('virtual', 0) == 1}
@@ -727,7 +798,7 @@ def infer_virtual_nodes(network_a: nx.DiGraph, # First network
     supported = virtual_a & virtual_b
     inferred_a = virtual_a - virtual_combined
     inferred_b = virtual_b - virtual_combined
-    return (list(inferred_a), list(supported)), (list(inferred_b), list(supported))
+    return (sorted(inferred_a), sorted(supported)), (sorted(inferred_b), sorted(supported))
 
 
 def infer_network(network: nx.DiGraph, # Network to infer
@@ -821,12 +892,12 @@ def choose_path(diamond: dict[int, str], # Diamond node positions mapping to gly
     # For each species, check whether an alternative has been observed
     for species in ([species_list] if isinstance(species_list, str) else species_list):
         temp_network = network_dic[species]
-        temp_network_nodes = set(temp_network.nodes())
-        if source in temp_network_nodes and target in temp_network_nodes:
-            lookup_dic = nx.get_node_attributes(temp_network, 'virtual') if mode == 'presence' else nx.get_node_attributes(temp_network, 'abundance')
+        # membership and attribute lookups straight on the graph, since materializing every node set and attribute map per diamond and species dominated trace_diamonds
+        if source in temp_network and target in temp_network:
+            attr = 'virtual' if mode == 'presence' else 'abundance'
             for alt in alternatives:
-                if set(alt).issubset(temp_network_nodes):
-                    alts[alt].append(np.mean([lookup_dic.get(node, 0) for node in alt]))
+                if all(node in temp_network for node in alt):
+                    alts[alt].append(np.mean([temp_network.nodes[node].get(attr, 0) for node in alt]))
                 else:
                     alts[alt].append(1 if mode == 'presence' else 0)
     alts = {k: ((1 - np.mean(v)) if mode == 'presence' else np.mean(v)) if v else 0.0 for k, v in
@@ -998,9 +1069,28 @@ def highlight_network(network: nx.DiGraph, # Biosynthetic network
     elif highlight == 'abundance':
         abundance_dict = dict(zip(abundance_df[glycan_col], abundance_df[intensity_col] * 100))
         abundance_keys = GlycoList(list(abundance_dict))
-        node_abundance = {
-            node: abundance_dict[abundance_keys[abundance_keys.index(node)]] if node in abundance_keys else 50 for node
-            in network_out.nodes()}
+        # compare_glycans rejects two unanchored strings with different linkage counts before parsing either, and otherwise needs identical topologies,
+        # so a node is only compared against same-size keys sharing its fingerprint plus the anchored or non-string keys, still in key order as GlycoList.index does
+        by_size, fps, node_abundance = defaultdict(list), {}, {}
+        for i, k in enumerate(abundance_keys):
+            by_size[k.count('(') if isinstance(k, str) and '^' not in k else None].append(i)
+
+        def fp(g):
+            if g not in fps:
+                try:
+                    fps[g] = _graph_fp(glycan_to_nxGraph(g))
+                except Exception:
+                    fps[g] = None
+            return fps[g]
+
+        for node in network_out.nodes():
+            if not isinstance(node, str) or '^' in node:
+                idx = range(len(abundance_keys))
+            else:
+                nfp = fp(node)
+                idx = sorted([i for i in by_size[node.count('(')] if nfp is None or fp(abundance_keys[i]) in (nfp, None)] + by_size[None])
+            i = next((i for i in idx if abundance_keys._compare(abundance_keys[i], node)), None)
+            node_abundance[node] = abundance_dict[abundance_keys[i]] if i is not None else 50
         nx.set_node_attributes(network_out, node_abundance, name = 'abundance')
     # Add the degree of evolutionary conervation as 'abundance' node attribute used for node size scaling
     elif highlight == 'conservation':
@@ -1013,8 +1103,7 @@ def highlight_network(network: nx.DiGraph, # Biosynthetic network
 
 
 def get_edge_weight_by_abundance(network_in: nx.DiGraph, # Biosynthetic network
-                                 root: str | None = None,
-                                 # Root node; default: inferred from the network's glycan class
+                                 root: str | None = None,  # Root node; default: inferred from the network's glycan class
                                  root_default: float = 10.0,  # Root abundance
                                  virtual_damping: float = 0.5  # Per-hop abundance decay for undetected intermediates
                                  ) -> nx.DiGraph:  # Network with edge capacities
@@ -1050,8 +1139,7 @@ def get_edge_weight_by_abundance(network_in: nx.DiGraph, # Biosynthetic network
 def get_maximum_flow(network: nx.DiGraph, # Biosynthetic network
                      source: str | None = None,  # Source node; default: inferred from the network's glycan class
                      sinks: str | list[str] | None = None  # Target node(s); default:all terminal nodes
-                     ) -> dict[str, dict[
-    str, float | dict[str, dict[str, float]]]]:  # Flow results; sink: {maximum flow value, flow path dictionary}
+                     ) -> dict[str, dict[str, float | dict[str, dict[str, float]]]]:  # Flow results; sink: {maximum flow value, flow path dictionary}
     "Estimate maximum flow and flow paths between source and sinks"
     source = source or infer_network_root(network)
     if not nx.get_edge_attributes(network, 'capacity'):
@@ -1122,7 +1210,7 @@ def get_reaction_flow(network: nx.DiGraph, # Biosynthetic network
     return reaction_flows
 
 
-def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance data (first column: glycan sequences)
+def get_differential_biosynthesis(df: pd.DataFrame | str | Path, # Glycan abundance data (first column: glycan sequences), filepath, or shipped dataset name
                                   group1: list[str | int] | None = None, # First group column indices/names (or time points in longitudinal analysis); default: from the frame's contrasts
                                   group2: list[str | int] | None = None, # Second group column indices/names (or time points in longitudinal analysis)
                                   analysis: str = "reaction",  # Type: reaction/flow/branchpoint
@@ -1135,6 +1223,10 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
     "Compare biosynthetic patterns between conditions/timepoints"
     from scipy.stats import t as tdist
     from scipy.stats import f as f_dist
+    # Handle input data; read before anything looks at the frame, since a shipped dataset name brings its contrasts, pairing, and name
+    if isinstance(df, (str, Path)):
+        from glycowork.glycan_data.data_entry import read_abundances
+        df = read_abundances(df)
     if group1 is None and not longitudinal and isinstance(df, GlycoDataFrame) and df._contrasts:
         group1, group2 = list(df.group1), list(df.group2)
     in_name, in_prov = getattr(df, '_glyco_name', ''), getattr(df, '_provenance', {})
@@ -1148,9 +1240,6 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
         assert group2 is not None, "group2 must be specified for binary comparison"
         if paired:
             assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
-    # Handle input data
-    if isinstance(df, str):
-        df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     if not longitudinal and not isinstance(group1[0], str):
         columns_list = df.columns.tolist()
         group1 = [columns_list[k] for k in group1]
@@ -1182,7 +1271,9 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
     else:
         df_analysis = df_analysis.T
     # Network analysis
-    df_analysis = df_analysis.set_axis([canonicalize_iupac(g) for g in df_analysis.index])  # construct_network canonicalizes its node names, so the abundance keys have to be canonical too
+    df_analysis = df_analysis.set_axis(canonicalize_iupac(df_analysis.index))  # construct_network canonicalizes its node names, so the abundance keys have to be canonical too
+    # Rows of one structure (isomer peaks, or two spellings of one sequence) add up, as the node abundance lookup below would keep only the last of them
+    df_analysis = df_analysis.groupby(level = 0, sort = False).sum()
     core_net = construct_network(df_analysis.index.tolist(), edge_type = edge_type)
     root = infer_network_root(core_net)
     nets, features = {}, []
@@ -1375,11 +1466,13 @@ def edges_for_extension(leaf_glycans: set[str], # Terminal glycans in a network
     "Create edges connecting leaf and extended glycans"
     new_edges, new_edge_labels = [], []
     leaves_by_fp = defaultdict(list)  # isomorphism is only attempted within a topology bucket, as in build_network_from_glycans, since scanning every leaf per precursor is quadratic once a targeted step has produced thousands of leaves
-    for leaf in leaf_glycans:
+    for leaf in sorted(leaf_glycans):  # sorted, since a wildcard leaf (Man(a1-3/6)) also matches its concrete sibling's precursor and set order would pick between them per process
         leaves_by_fp[_graph_fp(safe_index(leaf, graphs))].append(leaf)
-    for new_g in new_glycans:
+    for new_g in sorted(new_glycans):
         for prec_graph in create_neighbors(safe_index(new_g, graphs), min_size = 1):
-            match = next((leaf for leaf in leaves_by_fp.get(_graph_fp(prec_graph), []) if safe_compare(safe_index(leaf, graphs), prec_graph)), None)
+            # Fast path: canonical string directly identifies the leaf; fallback: graph isomorphism for wildcard cases
+            prec_str = graph_to_string(prec_graph)
+            match = prec_str if prec_str in leaf_glycans else next((leaf for leaf in leaves_by_fp.get(_graph_fp(prec_graph), []) if safe_compare(safe_index(leaf, graphs), prec_graph)), None)
             if match:
                 new_edges.append((match, new_g))
                 new_edge_labels.append(find_diff(match, new_g))
@@ -1491,22 +1584,25 @@ def extend_network(network: nx.DiGraph, # Biosynthetic network
             flows.update(get_maximum_flow(weighted, source = root, sinks = sorted(set(new_glycans) - set(simple))))
             for g, v in flows.items():
                 scores[g] = max(scores[g], v['flow_value'])
-        new_glycans = dict(sorted(scores.items(), key = lambda kv: -kv[1]))
+        new_glycans = dict(sorted(scores.items(), key = lambda kv: (-kv[1], kv[0])))  # ties broken by name, as scores inherits the set order of new_glycans
     return (network, new_glycans) if not auto_steps else (network, new_glycans, steps)
 
 
 def get_biosynthetic_coherence(
-        df: pd.DataFrame, # Glycan abundances (glycans as index or first column, samples as columns)
+        df: pd.DataFrame | str | Path, # Glycan abundances (glycans as index or first column, samples as columns), or a filepath or shipped dataset name as read_abundances takes it
         group1: list[str] | None = None,  # First group column names; default: from the frame's contrasts
         group2: list[str] | None = None,  # Second group column names; default: from the frame's contrasts
         network: nx.DiGraph | None = None,  # Pre-built network; built from df if not provided
         paired: bool | None = None,  # Whether samples are paired; default: from the frame
         n_permutations: int = 20000,  # Label permutations for the exact shared-model null; 0 to skip
         random_state: int = 42  # Seed for permutation reproducibility
-) -> tuple[
-    pd.DataFrame, pd.DataFrame]:  # (Group-level results under both models, per-glycan coherence and its group difference)
+) -> tuple[pd.DataFrame, pd.DataFrame]:  # (Group-level results under both models, per-glycan coherence and its group difference)
     "Quantify how strongly each condition's glycome follows its own biosynthetic network, and which glycans decouple from it"
     from scipy.stats import ttest_ind, ttest_rel, t as tdist
+    # read before anything looks at the frame, since a shipped dataset name brings its contrasts and pairing, as in every other analysis function
+    if isinstance(df, (str, Path)):
+        from glycowork.glycan_data.data_entry import read_abundances
+        df = read_abundances(df)
     names = ('group1', 'group2')
     if group1 is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         group1, group2 = list(df.group1), list(df.group2)
@@ -1517,7 +1613,8 @@ def get_biosynthetic_coherence(
         df = df.set_index(df.columns[0])
     if network is None:
         network = construct_network(df.index.tolist())
-    df = df.set_axis([canonicalize_iupac(g) for g in df.index])
+    # Rows of one structure (isomer peaks, or two spellings of one sequence) add up, or each would be fitted and counted as a glycan of its own
+    df = df.set_axis(canonicalize_iupac(df.index)).groupby(level = 0, sort = False).sum()
     glycans = [g for g in df.index if network.nodes.get(g, {}).get('virtual', 1) == 0]
     gidx = {g: i for i, g in enumerate(glycans)}
     cols = list(group1) + list(group2)

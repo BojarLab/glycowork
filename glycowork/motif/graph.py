@@ -1,7 +1,7 @@
 import re
 import sys
 from copy import deepcopy
-from typing import Callable
+from typing import Any, Callable, Iterator
 from glycowork.glycan_data.loader import unwrap, modification_map, HashableDict
 from glycowork.motif.processing import min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans, parse_floating_bit
 import numpy as np
@@ -9,9 +9,10 @@ import pandas as pd
 import networkx as nx
 from collections import Counter, OrderedDict
 from functools import lru_cache, wraps
-
+from itertools import permutations
 
 PTM_REGEX = re.compile(r"(?<=[A-Za-z{])(?<!Neu)(\d+/\d+|\d+)(?=\D)(?![^()]*\))")
+PTM_UNIT = re.compile(r"(?<=[A-Za-z{])(?<!Neu)(?:\d+/\d+|\d+)(?=\D)|O")  # in a residue label, one hit per 'O' of its PTM-wildcarded form: the stated position, or 'O' where none is stated
 NEGATION_REGEX = re.compile(r'(?<!\()(!\w+(?:\([^)]+\))?)')
 MONO_PATTERN = re.compile(r"^(Hex|HexOS|HexNAc|HexNAcOS|dHex|Sia|HexA|Pen|Monosaccharide)$")
 LINKAGE_PATTERN = re.compile(r'[ab\?][12]-(\d+|\?)')
@@ -23,17 +24,11 @@ _SL_CACHE = WeakKeyDictionary()
 _NEG_CACHE = WeakKeyDictionary()
 _PTM_CACHE = WeakKeyDictionary()
 _HAS_O_CACHE = WeakKeyDictionary()
-
-def memoize_node_match(func):
-    """Memoization decorator for narrow wildcard lists"""
-    cache = {}
-    @wraps(func)
-    def wrapper(proc):
-        key = frozenset(proc)
-        if key not in cache:
-            cache[key] = func(proc)
-        return cache[key]
-    return wrapper
+_ROOT_CACHE = WeakKeyDictionary()
+_STUB_CACHE = WeakKeyDictionary()
+_ANCHOR_CACHE = WeakKeyDictionary()
+_DEG_CACHE = WeakKeyDictionary()
+_WILDCARD_CACHE = {}
 
 
 def _sl(g):  # cached string_labels, keyed on graph identity (subgraph views share g.graph, so it cannot live there)
@@ -50,6 +45,52 @@ def _has_o(g):  # cached "needs PTM wildcarding" flag, keyed on graph identity
     return v
 
 
+def _degs(g):  # cached sorted out-degree sequence, keyed on graph identity
+    v = _DEG_CACHE.get(g)
+    if v is None:
+        v = _DEG_CACHE[g] = sorted(d for _, d in g.out_degree())
+    return v
+
+
+def _roots(
+        g):  # cached in-degree-0 nodes if g is a forest of out-trees (as glycan_to_nxGraph always builds), else None, keyed on graph identity
+    v = _ROOT_CACHE.get(g, 0)
+    if v == 0:
+        # With every in-degree at most 1, an undirected cycle is a directed one, and a directed cycle is exactly what the roots cannot reach, so this is nx.is_branching without its generic forest check
+        v = [n for n, d in g.in_degree() if not d] if len(g) and all(d <= 1 for _, d in g.in_degree()) else None
+        seen, stack = set(v or ()), list(v or ())
+        while stack:
+            for c in g._succ[stack.pop()]:
+                if c not in seen:
+                    seen.add(c)
+                    stack.append(c)
+        v = _ROOT_CACHE[g] = v if v is not None and len(seen) == len(g) else None
+    return v
+
+
+def _tree_embeddings(g1: nx.DiGraph,  # Glycan graph
+                     g2: nx.DiGraph,  # Motif graph
+                     node_match: Callable[[dict, dict], bool]  # Node matcher, called as node_match(g1 data, g2 data)
+                     ) -> Iterator[set[frozenset[
+    int]]] | None:  # Per g1 node, the distinct g1 node sets of induced copies of g2 rooted there; None if VF2 is needed
+    "Induced subgraph isomorphism for the tree case, where it is exactly a rooted embedding: every motif child sits on a distinct child of its parent's image"
+    if _roots(g1) is None or len(r2 := _roots(g2) or ()) != 1:
+        return None
+    n1, n2, memo = g1.nodes, g2.nodes, {}
+
+    def embed(u, v):  # distinct node sets of g1 that the motif subtree below u can occupy with u on v
+        if (u, v) not in memo:
+            res = [frozenset([v])] if node_match(n1[v], n2[u]) else []
+            for cu in g2.successors(u):
+                if not res:
+                    break
+                res = {s | t for cv in g1.successors(v) for t in embed(cu, cv) for s in res if cv not in s}
+            memo[u, v] = res
+        return memo[u, v]
+
+    return (embed(r2[0], v) for v in g1)
+
+
 def _ptm_wildcarded(g):  # cached PTM-wildcarded copy, keyed on graph identity
     v = _PTM_CACHE.get(g)
     if v is None:
@@ -57,11 +98,18 @@ def _ptm_wildcarded(g):  # cached PTM-wildcarded copy, keyed on graph identity
     return v
 
 
-@memoize_node_match
-def build_wildcard_cache(proc: set) -> dict:
-    """Precompute all possible wildcard expansions"""
-    return {k: get_possible_linkages(k) for k in proc if '?' in k or ('/' in k and '-' in k)} | \
-        {k: get_possible_monosaccharides(k) for k in proc if MONO_PATTERN.match(k) or k.startswith('!') or ('/' in k and '-' not in k)}
+def _with_ptm(g, orig):  # copy of g, built from the PTM-wildcarded string of orig, carrying orig's labels as 'ptm' wherever wildcarding changed them, as ptm_wildcard_for_graph does
+    g = g.copy()
+    nx.set_node_attributes(g, {n: l for n, l in zip(orig, _sl(orig)) if l != g.nodes[n]['string_labels']}, 'ptm')
+    return g
+
+
+def build_wildcard_cache(proc: set[str] # Node labels (monosaccharides and linkages) of the graphs to match
+                         ) -> dict[str, frozenset[str]]: # Wildcard label : the labels it can stand for, for every wildcard in proc
+    """Precompute all possible wildcard expansions, cached per label set"""
+    if (hit := _WILDCARD_CACHE.get(key := frozenset(proc))) is None:
+        hit = _WILDCARD_CACHE[key] = {k: get_possible_linkages(k) for k in proc if '?' in k or ('/' in k and '-' in k)} | {k: get_possible_monosaccharides(k) for k in proc if MONO_PATTERN.match(k) or k.startswith('!') or ('/' in k and '-' not in k)}
+    return hit
 
 
 def resolve_anchor(ggraph: nx.DiGraph, # Glycan graph to search
@@ -113,7 +161,7 @@ def glycan_to_nxGraph_int(glycan: str, # Glycan in IUPAC-condensed format
                           libr: dict[str, int] | HashableDict[str, int] | None = None, # Dictionary of form glycoletter:index
                           termini: str = 'ignore', # How to encode terminal/internal position; options: ignore, calc, provided
                           termini_list: tuple[str] | None = None # List of positions from terminal/internal/flexible
-                          ) -> nx.DiGraph: # NetworkX graph object of glycan
+                          ) -> nx.DiGraph: # NetworkX graph object of glycan; cached and shared between calls, so copy it before modifying
     "Convert glycans into networkx graphs"
     # This allows to make glycan graphs of motifs ending in a linkage
     appended_hex = glycan.endswith(')')
@@ -143,8 +191,8 @@ def glycan_to_nxGraph_int(glycan: str, # Glycan in IUPAC-condensed format
 def glycan_to_nxGraph(glycan: str, # Glycan in IUPAC-condensed format
                       libr: HashableDict[str, int] | None = None, # Dictionary of form glycoletter:index
                       termini: str = 'ignore', # How to encode terminal/internal position; options: ignore, calc, provided
-                      termini_list: tuple[str] | None = None # List of positions from terminal/internal/flexible
-                      ) -> nx.DiGraph: # NetworkX graph object of glycan
+                      termini_list: tuple[str] | None = None  # List of positions from terminal/internal/flexible
+                      ) -> nx.DiGraph:  # NetworkX graph object of glycan; cached and shared between calls, so copy it before modifying (a changed label would change every later result for that glycan)
     "Wrapper for converting glycans into networkx graphs; also works with floating substituents"
     if not glycan:
         return nx.DiGraph()
@@ -157,28 +205,42 @@ def glycan_to_nxGraph(glycan: str, # Glycan in IUPAC-condensed format
         chunks, anchor_specs = zip(
             *[(k, {}) if i == len(chunks) - 1 else parse_floating_bit(k) for i, k in enumerate(chunks)])
         # the string writes floating bits first but the graph numbers them last, and an anchored bit spells out more linkages than it keeps, so expand over the parsed chunks and slice per chunk
-        sizes = [len(min_process_glycans([k])[0]) for k in chunks]
+        sizes = [len(min_process_glycans([k])[0]) for k in chunks] if termini_list else None
         termini_list = expand_termini_list(''.join(chunks), termini_list) if termini_list else None
         parts = [glycan_to_nxGraph_int(k, libr = libr, termini = termini,
                                        termini_list = None if termini_list is None else termini_list[sum(sizes[:i]):sum(sizes[:i + 1])]) for i, k in enumerate(chunks)]
-        len_org = len(parts[-1])
+        # floating bits are numbered after the main part but inserted first, building the same graph relabel_nodes + compose_all would, without the intermediate copies
+        g1, len_org = nx.DiGraph(), len(parts[-1])
         for i, p in enumerate(parts[:-1]):
-            parts[i] = nx.relabel_nodes(p, {pn: pn + len_org for pn in p.nodes()})
-            len_org += len(p)
+            g1.add_nodes_from((n + len_org, d) for n, d in p.nodes(data = True))
+            g1.add_edges_from((u + len_org, v + len_org) for u, v in p.edges())
             if anchor_specs[i]:
-                parts[i].nodes[max(parts[i].nodes())]['anchors'] = anchor_specs[i]
-        g1 = nx.compose_all(parts)
+                g1.nodes[max(p.nodes()) + len_org]['anchors'] = anchor_specs[i]
+            len_org += len(p)
+        g1.add_nodes_from(parts[-1].nodes(data = True))
+        g1.add_edges_from(parts[-1].edges())
     else:
         g1 = glycan_to_nxGraph_int(glycan, libr = libr, termini = termini,
                                    termini_list = expand_termini_list(glycan, termini_list) if termini_list else None)
     return g1
 
 
+def _check_glycans(*glycans: Any # Inputs that have to be single glycans
+                   ) -> None:
+    "Raises an actionable TypeError for anything that is no glycan string or graph, which otherwise failed deep inside with \"'dict' object has no attribute 'nodes'\""
+    for glycan in glycans:
+        if not isinstance(glycan, (str, nx.Graph)):
+            raise TypeError(f"Expected one glycan as an IUPAC-condensed string or networkx graph, got {type(glycan).__name__} {glycan!r:.80}; a composition has no structure to match, and several glycans are passed one at a time.")
+
+
 def ensure_graph(glycan: str | nx.DiGraph, # Glycan in IUPAC-condensed format or as networkx graph
                  **kwargs # Keyword arguments passed to glycan_to_nxGraph
-                 ) -> nx.DiGraph: # NetworkX graph object of glycan
+                 ) -> nx.DiGraph: # NetworkX graph object of glycan; for a string, the cached graph glycan_to_nxGraph returns
     "Ensures function compatibility with string glycans and graph glycans"
-    return glycan_to_nxGraph(glycan, **kwargs) if isinstance(glycan, str) else glycan
+    if isinstance(glycan, str):
+        return glycan_to_nxGraph(glycan, **kwargs)
+    _check_glycans(glycan)
+    return glycan
 
 
 def categorical_node_match_wildcard(attr: str | tuple[str, ...], # Attribute or tuple of attributes to match
@@ -191,6 +253,9 @@ def categorical_node_match_wildcard(attr: str | tuple[str, ...], # Attribute or 
     def match(data1, data2):
         data1_labels2, data2_labels2 = data1.get(attr2, default2), data2.get(attr2, default2)
         if data1_labels2 != data2_labels2 and data1_labels2 != 'flexible' and data2_labels2 != 'flexible':
+            return False
+        # 'ptm' holds the label before PTM wildcarding, so two residues have to agree on every PTM position both of them state (Gal3S vs Gal6S, but also Glc3Ac4PGro vs Glc6AcOPGro), paired modification by modification
+        if (p1 := data1.get('ptm')) and (p2 := data2.get('ptm')) and len(f1 := PTM_UNIT.findall(p1)) == len(f2 := PTM_UNIT.findall(p2)) and not all('O' in (x, y) or set(x.split('/')) & set(y.split('/')) for x, y in zip(f1, f2)):
             return False
         data1_labels, data2_labels = data1.get(attr, default), data2.get(attr, default)
         if data1_labels == data2_labels:
@@ -212,15 +277,15 @@ def categorical_node_match_wildcard(attr: str | tuple[str, ...], # Attribute or 
     return match
 
 
-def ptm_wildcard_for_graph(graph: nx.DiGraph # Input graph
-                           ) -> nx.DiGraph: # Modified graph with PTM wildcards
-    "Standardize PTM wildcards in graph"
+def ptm_wildcard_for_graph(graph: nx.DiGraph # Input graph, modified in place
+                           ) -> nx.DiGraph: # The same graph with PTM wildcards, written labels kept as 'ptm' node attributes
+    "Standardize PTM wildcards in graph, in place"
     _SL_CACHE.pop(graph, None)
     _PTM_CACHE.pop(graph, None)
     _HAS_O_CACHE.pop(graph, None)
     for node in graph.nodes:
-        if not LINKAGE_LABEL.match(label := graph.nodes[node]['string_labels']):
-            graph.nodes[node]['string_labels'] = PTM_REGEX.sub('O', label)
+        if not LINKAGE_LABEL.match(label := graph.nodes[node]['string_labels']) and (wild := PTM_REGEX.sub('O', label)) != label:
+            graph.nodes[node]['string_labels'], graph.nodes[node]['ptm'] = wild, label
     return graph
 
 
@@ -251,60 +316,95 @@ def _prefilter_labels(g1_labels: list, # G1 node labels
 
 def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
                     glycan_b: str | nx.DiGraph, # Second glycan to compare
-                    return_matches: bool = False # Whether to return node mapping between glycans
-                    ) -> bool: # True if glycans are same, False if not
-    "Check whether two glycans are identical"
+                    return_matches: bool = False, # Whether to return node mapping between glycans
+                    subsumes: bool = False # Whether to instead check that glycan_a covers every structure glycan_b can be, i.e., glycan_b is glycan_a or a more specific version of it (Gal(b1-4)GlcNAc for Gal(b1-3/4)GlcNAc, but not vice versa)
+                    ) -> bool: # True if glycans are same (or glycan_a subsumes glycan_b), False if not
+    "Check whether two glycans are identical, or whether glycan_a subsumes glycan_b"
     if glycan_a == glycan_b:
-        return ((True, {n: n for n in glycan_a.nodes}) if return_matches else True) if isinstance(glycan_a,
-                                                                                                  nx.DiGraph) else (
-            True, None) if return_matches else True
-    anchored = lambda g: ('^' in g) if isinstance(g, str) else any('anchors' in d for _, d in g.nodes(data = True))
+        return (True, {n: n for n in glycan_a.nodes} if isinstance(glycan_a, nx.DiGraph) else None) if return_matches else True
+    _check_glycans(glycan_a, glycan_b)
+    if subsumes:
+        expand = lambda l: (frozenset(k for k in get_possible_linkages(l) if '?' not in k and '/' not in k) if IS_LINKAGE(l) else get_possible_monosaccharides(l)) or frozenset([l])
+
+        def covers(spec, gen):  # node_match(specific data, general data): everything spec can be, gen can be too
+            if gen.get('anchors') not in (None, spec.get('anchors')):
+                return False
+            s, g = spec['string_labels'], gen['string_labels']
+            if s == g or (g in ('?1-?', '?2-?') and IS_LINKAGE(s)) or (g == 'Monosaccharide' and not IS_LINKAGE(s)):
+                return True
+            return bool(IS_LINKAGE(s)) == bool(IS_LINKAGE(g)) and (expand(s) <= expand(g) or PTM_REGEX.sub('O', s) in expand(g))
+
+        ga, gb = ensure_graph(glycan_a), ensure_graph(glycan_b)
+        n_parts = nx.number_weakly_connected_components(gb)
+        main_b = gb.subgraph(nx.node_connected_component(gb.to_undirected(as_view = True), 0))
+        # place glycan_a's floating parts one at a time (as strings, so equal placements collapse into one lru-cached graph), keeping placements whose main part still embeds into glycan_b's at its root, until the layouts agree and every part of glycan_b sits on an equally or more general part of glycan_a
+        frontier, same = [ga], False
+        while frontier and not (same := any(_degs(g) == _degs(gb) and (any(hits) if (hits := _tree_embeddings(gb, g, covers)) is not None else nx.isomorphism.DiGraphMatcher(gb, g, covers).is_isomorphic()) for g in frontier if nx.number_weakly_connected_components(g) == n_parts)):
+            placed = {}
+            for t in frontier:
+                for s in (get_possible_topologies(t, exhaustive = True) if nx.number_weakly_connected_components(t) > n_parts else []):
+                    if s not in placed:
+                        g = glycan_to_nxGraph(s)
+                        hits = _tree_embeddings(main_b, g.subgraph(nx.node_connected_component(g.to_undirected(as_view = True), 0)), covers)
+                        placed[s] = g if hits is not None and any(e for v, e in zip(main_b, hits) if v == _roots(main_b)[0]) else None
+            frontier = [g for g in placed.values() if g is not None]
+        return (same, None) if return_matches else same
+    anchored = lambda g: ('^' in g) if isinstance(g, str) else _ANCHOR_CACHE[g] if g in _ANCHOR_CACHE else _ANCHOR_CACHE.setdefault(g, any('anchors' in d for _, d in g.nodes(data = True)))
     if anchored(glycan_a) or anchored(glycan_b):
         topos = [get_possible_topologies(g, return_graphs = True) if anchored(g) else [ensure_graph(g)] for g in
                  (glycan_a, glycan_b)]
         same = len(topos[0]) == len(topos[1]) and all(
             any(compare_glycans(ta, tb) for tb in topos[1]) for ta in topos[0])
         return (same, None) if return_matches else same
+    ptm = None
     if isinstance(glycan_a, str) and isinstance(glycan_b, str):
         if glycan_a.count('(') != glycan_b.count('('):
             return (False, None) if return_matches else False
         proc = set(unwrap(min_process_glycans([glycan_a, glycan_b])))
         if 'O' in glycan_a or 'O' in glycan_b:
+            ptm = (glycan_to_nxGraph(glycan_a), glycan_to_nxGraph(glycan_b))
             glycan_a, glycan_b = PTM_REGEX.sub('O', glycan_a), PTM_REGEX.sub('O', glycan_b)
         g1, g2 = glycan_to_nxGraph(glycan_a), glycan_to_nxGraph(glycan_b)
-        g1_sl, g2_sl = nx.get_node_attributes(g1, "string_labels"), nx.get_node_attributes(g2, "string_labels")
+        if ptm:
+            g1, g2 = _with_ptm(g1, ptm[0]), _with_ptm(g2, ptm[1])
+        g1_sl, g2_sl = _sl(g1), _sl(g2)
     else:
         glycan_a, glycan_b = ensure_graph(glycan_a), ensure_graph(glycan_b)
         if len(glycan_a.nodes) != len(glycan_b.nodes):
             return (False, None) if return_matches else False
-        g1_sl, g2_sl = nx.get_node_attributes(glycan_a, "string_labels"), nx.get_node_attributes(glycan_b, "string_labels")
-        proc = set(g1_sl.values()) | set(g2_sl.values())
-        if any('O' in s for s in proc):
+        g1_sl, g2_sl = _sl(glycan_a), _sl(glycan_b)
+        proc = set(g1_sl) | set(g2_sl)
+        if ptm := any('O' in s for s in proc):
             g1, g2 = _ptm_wildcarded(glycan_a), _ptm_wildcarded(glycan_b)
-            g1_sl = nx.get_node_attributes(g1, "string_labels")
-            g2_sl = nx.get_node_attributes(g2, "string_labels")
+            g1_sl, g2_sl = _sl(g1), _sl(g2)
         else:
             g1, g2 = glycan_a, glycan_b
-    if sorted(d for _, d in g1.out_degree()) != sorted(d for _, d in g2.out_degree()):
+    if _degs(g1) != _degs(g2):
         return (False, None) if return_matches else False
     narrow_wildcard_list = build_wildcard_cache(proc)
     if narrow_wildcard_list:
-        g1_labels = list(g1_sl.values())
-        g2_labels = list(g2_sl.values())
-        if not _prefilter_labels(g1_labels, g2_labels, narrow_wildcard_list) or \
-                not _prefilter_labels(g2_labels, g1_labels, narrow_wildcard_list):
+        if not _prefilter_labels(g1_sl, g2_sl, narrow_wildcard_list) or not _prefilter_labels(g2_sl, g1_sl,
+                                                                                              narrow_wildcard_list):
             return (False, None) if return_matches else False
-        matcher = nx.isomorphism.DiGraphMatcher(g1, g2, categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list, 'termini', 'flexible'))
+        node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list, 'termini',
+                                                     'flexible')
     else:
         # First check whether components of both glycan graphs are identical, then check graph isomorphism (costly)
-        if sorted(g1_sl.values()) != sorted(g2_sl.values()):
+        if sorted(g1_sl) != sorted(g2_sl):
             return (False, None) if return_matches else False
-        if graph_to_string(g1) != graph_to_string(g2):
+        # floating parts are written in numbering order, so the parts are compared as a multiset
+        if sorted(graph_to_string(g1).split('}')) != sorted(graph_to_string(g2).split('}')):
             return (False, None) if return_matches else False
-        if not return_matches:
+        if not return_matches and not ptm:
             return True
-        matcher = nx.isomorphism.DiGraphMatcher(g1, g2, nx.algorithms.isomorphism.categorical_node_match('string_labels',
-                                                                                                         'unknown'))
+        # after PTM wildcarding, the wildcard matcher is the one that checks the stated PTM positions kept in 'ptm'
+        node_match = categorical_node_match_wildcard('string_labels', 'unknown', {}, 'termini',
+                                                     'flexible') if ptm else nx.algorithms.isomorphism.categorical_node_match(
+            'string_labels', 'unknown')
+    # equal out-degree multisets mean equal node counts, so any embedding of one tree into the other is already an isomorphism
+    if not return_matches and (hits := _tree_embeddings(g1, g2, node_match)) is not None:
+        return any(hits)
+    matcher = nx.isomorphism.DiGraphMatcher(g1, g2, node_match)
     for mapping in matcher.isomorphisms_iter():
         return (True, mapping) if return_matches else True
     return (False, None) if return_matches else False
@@ -372,22 +472,30 @@ def subgraph_isomorphism(glycan: str | nx.DiGraph, # Glycan sequence or graph
                 if (i == 0 or glycan[i - 1] in '([)]') and (i + m_len == len(glycan) or glycan[i + m_len] in ')]'):
                     return True
                 i = glycan.find(motif, i + 1)
-        if 'O' in glycan or 'O' in motif:
+        if ptm := ('O' in glycan or 'O' in motif):
+            orig = (glycan_to_nxGraph(glycan), glycan_to_nxGraph(motif))
             glycan, motif = PTM_REGEX.sub('O', glycan), PTM_REGEX.sub('O', motif)
         motif_comp = min_process_glycans([motif, glycan])
         g1 = glycan_to_nxGraph(glycan, termini = 'calc' if termini_list else 'ignore')
         g2 = glycan_to_nxGraph(motif, termini = 'provided' if termini_list else 'ignore', termini_list = termini_list)
+        if ptm:
+            g1, g2 = _with_ptm(g1, orig[0]), _with_ptm(g2, orig[1])
     else:
+        _check_glycans(glycan, motif)
         glycan = glycan_to_nxGraph(glycan, termini = 'calc' if termini_list else 'ignore') if isinstance(glycan,
                                                                                                          str) else glycan
         motif = glycan_to_nxGraph(motif, termini = 'provided' if termini_list else 'ignore',
                                   termini_list = termini_list) if isinstance(motif, str) else motif
         if len(glycan.nodes) < len(motif.nodes):
             return (0, []) if return_matches else 0 if count else False
-        if termini_list and not nx.get_node_attributes(motif, 'termini'):
+        if termini_list and all('termini' not in d for _, d in motif.nodes(data = True)):
             motif = motif.copy()
             nx.set_node_attributes(motif, dict(zip(motif.nodes(), expand_termini_list(motif, termini_list) if len(termini_list) < len(motif) else termini_list)), 'termini')
-        if _has_o(motif) or _has_o(glycan):
+        if termini_list and all('termini' not in d for _, d in glycan.nodes(data = True)):  # a glycan graph built without termini would match any position, so they are calculated as glycan_to_nxGraph(termini = 'calc') does, per part
+            roots, degrees = {max(c) for c in nx.weakly_connected_components(glycan)}, dict(glycan.degree())
+            glycan = glycan.copy()
+            nx.set_node_attributes(glycan, {k: 'terminal' if degrees[k] == 1 or k in roots else 'internal' for k in glycan}, 'termini')
+        if ptm := (_has_o(motif) or _has_o(glycan)):
             g1, g2 = _ptm_wildcarded(glycan), _ptm_wildcarded(motif)
         else:
             g1, g2 = glycan, motif
@@ -399,13 +507,18 @@ def subgraph_isomorphism(glycan: str | nx.DiGraph, # Glycan sequence or graph
             return (0, []) if return_matches else 0 if count else False
         if narrow_wildcard_list and not _prefilter_labels(_sl(g1), _sl(g2), narrow_wildcard_list):
             return (0, []) if return_matches else 0 if count else False
-        graph_pair = nx.algorithms.isomorphism.DiGraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list,
-                                                                                                                   'termini', 'flexible'))
+        node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list, 'termini',
+                                                     'flexible')
     else:
         g1_node_attr = set(_sl(g1))
         if not set(motif_comp[0]).issubset(g1_node_attr):
             return (0, []) if return_matches else 0 if count else False
-        graph_pair = nx.algorithms.isomorphism.DiGraphMatcher(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
+        # after PTM wildcarding, the wildcard matcher is the one that checks the stated PTM positions kept in 'ptm'
+        node_match = categorical_node_match_wildcard('string_labels', 'unknown', {}, 'termini', 'flexible') if ptm else nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown')
+    if not return_matches and (
+    hits := _tree_embeddings(g1, g2, node_match)) is not None:  # only the order of returned matches still needs VF2
+        return len(set().union(*hits)) if count else any(hits)
+    graph_pair = nx.algorithms.isomorphism.DiGraphMatcher(g1, g2, node_match = node_match)
     # Count motif occurrence
     valid_mappings, seen = [], set()
     for mapping in graph_pair.subgraph_isomorphisms_iter():
@@ -449,6 +562,9 @@ def subgraph_isomorphism_with_negation(glycan: str | nx.DiGraph, # Glycan sequen
             # The spec describes the full motif, so drop the entry of the residue the stub no longer has
             monos = [t for t in min_process_glycans([motif])[0] if not IS_LINKAGE(t)]
             termini_list = [t for i, t in enumerate(termini_list) if not monos[i].startswith('!')]
+    elif (hit := _STUB_CACHE.setdefault(motif, {}).get(key := tuple(
+            termini_list))) is not None:  # the stub only depends on the motif and its spec, so a motif reused over many glycans is dissected once
+        motif_stub, negated_part_clean, termini_list, positive = hit
     else:
         motif_copy = deepcopy(motif)
         motif_stub = motif_copy.copy()
@@ -469,6 +585,10 @@ def subgraph_isomorphism_with_negation(glycan: str | nx.DiGraph, # Glycan sequen
             # The spec describes the full motif, so expand it there and keep only what the stub retained; the stub's node ids are non-contiguous, so a positional zip lands on the wrong nodes or fails to fit at all
             expanded = expand_termini_list(motif, termini_list) if len(termini_list) < len(motif) else termini_list
             termini_list = [expanded[n] for n in motif_stub.nodes()]
+        positive = motif_copy
+        for node in positive.nodes():
+            positive.nodes[node]['string_labels'] = positive.nodes[node]['string_labels'].replace('!', '')
+        _STUB_CACHE[motif][key] = (motif_stub, negated_part_clean, termini_list, positive)
     res = subgraph_isomorphism.__wrapped__(glycan, motif_stub, termini_list = termini_list, count = count,
                                            return_matches = True)
     if not res[0]:
@@ -476,10 +596,6 @@ def subgraph_isomorphism_with_negation(glycan: str | nx.DiGraph, # Glycan sequen
     ggraph = glycan_to_nxGraph(glycan) if isinstance(glycan, str) else glycan
     if isinstance(motif, str):
         positive = glycan_to_nxGraph(motif.replace('!', ''))
-    else:
-        positive = motif_copy
-        for node in positive.nodes():
-            positive.nodes[node]['string_labels'] = positive.nodes[node]['string_labels'].replace('!', '')
     # A stub hit only dies to a hit of the fully positive motif that contains it, so the negated part has to sit exactly where the motif puts it instead of anywhere in the neighborhood
     extra = len(positive) - len(res[1][0])
     _, positive_matches = subgraph_isomorphism.__wrapped__(ggraph, positive, count = True, return_matches = True)
@@ -544,15 +660,18 @@ def generate_graph_features(glycan: str | nx.DiGraph, # Glycan sequence or netwo
     if N == 1:
         features.update({'egap': 0.0, 'entropyStation': 0.0})
     else:
-        M = ((A + np.diag(np.ones(N))).T / (deg + 1)).T
-        from scipy.sparse.linalg import eigsh
-        eigval, vec = eigsh(M, 2, which = 'LM')
-        distr = np.abs(vec[:, -1]) / sum(np.abs(vec[:, -1]))
-        features.update({'egap': 1 - eigval[0], 'entropyStation': np.sum(distr * np.log(distr))})
+        # The walk D^-1 (A + I) is not symmetric, so eigsh (which assumes it is) returned different, meaningless values on every call; on the undirected graph it is similar to the symmetric D^-1/2 (A + I) D^-1/2, whose spectrum eigvalsh gives exactly, and its stationary distribution is proportional to deg + 1
+        d = deg + 1
+        eigval = np.linalg.eigvalsh((A + A.T + np.eye(N)) / np.sqrt(np.outer(d, d)))
+        distr = d / d.sum()
+        features.update({'egap': 1 - np.sort(eigval[np.argsort(np.abs(eigval))[-2:]])[0], 'entropyStation': np.sum(distr * np.log(distr))})
     return pd.DataFrame(features, index = [glycan])
 
 
-def get_linkage_number(node, graph):
+def get_linkage_number(node: int, # Linkage node
+                       graph: nx.DiGraph # Glycan graph
+                       ) -> float: # Acceptor position for ordering branches: the number, +100 for a slash wildcard (3/6), inf for '?' or a non-linkage node
+    "Sort key of a linkage node by the acceptor position it links to"
     link_label = graph.nodes[node].get("string_labels", "")
     match = LINKAGE_PATTERN.search(link_label)
     if match:  # Extract the second number in the linkage (e.g., from "a1-3" get "3")
@@ -563,7 +682,9 @@ def get_linkage_number(node, graph):
     return float('inf')
 
 
-def glycan_graph_memoize(maxsize: int = 128):
+def glycan_graph_memoize(maxsize: int = 128 # Maximum number of cached results
+                         ) -> Callable: # Decorator for a function taking a glycan graph first
+    "Memoizes a function of a glycan graph on its labels, out-degrees and edges, so equal graphs built separately share one result; graphs below 4 nodes are not cached"
     cache = OrderedDict()
     def decorator(func):
         @wraps(func)
@@ -603,69 +724,70 @@ def graph_to_string_int(graph: nx.DiGraph, # Glycan graph
         return f"{node_labels[nodes[0]]}({node_labels[nodes[1]]}){node_labels[nodes[2]]}"
     # Get the root node (highest index)
     root_idx = max(graph.nodes())
+    # Successor lists and labels are read into plain dicts once, as every step below would otherwise go through networkx views
+    succ, labels = {n: list(nbrs) for n, nbrs in graph.adjacency()}, dict(graph.nodes(data = "string_labels", default = ""))
     # Build depths with a single traversal
-    depths, leaf_labels, subtree_keys = {}, {}, {}
+    depths, leaf_labels, subtree_keys, tree_keys = {}, {}, {}, {}
 
     def compute_metrics(node):
         if node in depths:
-            return depths[node], leaf_labels[node]
-        successors = list(graph.successors(node))
-        label = graph.nodes[node].get("string_labels", "")
-        if not successors:
-            depths[node] = 0
-            leaf_labels[node] = label
-            subtree_keys[node] = label
+            return
+        successors, label = succ[node], labels[node]
+        for child in successors:
+            compute_metrics(child)
+        # subtree_keys concatenate without delimiters, so two different subtrees can share one; the nested tree_keys spell out the topology and break such ties, which would otherwise leave the order to the input string
+        if len(successors) == 1:  # linkages and chain residues, the vast majority of nodes
+            child = successors[0]
+            depths[node], leaf_labels[node], subtree_keys[node], tree_keys[node] = depths[child] + 1, leaf_labels[child], label + subtree_keys[child], (label, (tree_keys[child],))
+        elif successors:
+            depths[node] = 1 + max(map(depths.__getitem__, successors))
+            leaf_labels[node] = min(map(leaf_labels.__getitem__, successors))
+            subtree_keys[node] = label + ''.join(sorted(map(subtree_keys.__getitem__, successors)))
+            tree_keys[node] = (label, tuple(sorted(map(tree_keys.__getitem__, successors))))
         else:
-            for child in successors:
-                compute_metrics(child)
-            depths[node] = 1 + max(depths[child] for child in successors)
-            leaf_labels[node] = min(leaf_labels[child] for child in successors)
-            subtree_keys[node] = label + ''.join(sorted(subtree_keys[child] for child in successors))
-        return depths[node], leaf_labels[node]
+            depths[node], leaf_labels[node], subtree_keys[node], tree_keys[node] = 0, label, label, (label, ())
 
     compute_metrics(root_idx)
 
     def is_special_branch(node):
         """Check if a 1-mono branch starting at node contains Gal/Man."""
-        descendants = list(nx.descendants(graph, node))
-        if len(descendants) != 1:
+        descendants = succ[node]
+        if len(descendants) != 1 or succ[descendants[0]]:
             return False
-        tip_string = graph.nodes[descendants[0]].get("string_labels", "")
+        tip_string = labels[descendants[0]]
         if tip_string in {"Gal", "Man"}:
             return False
-        if "GlcNAc" in tip_string and graph.nodes[node].get("string_labels", "") == 'b1-3':
+        if "GlcNAc" in tip_string and labels[node] == 'b1-3':
             return False
         return True
 
     # Convert to string with a single traversal
     def node_to_string(node):
-        output = graph.nodes[node].get("string_labels", "")
+        output = labels[node]
         # Handle formatting for linkage descriptions
         if (output[0] in "?ab" or output[0].isdigit()) and (output[-1] == "?" or output[-1].isdigit()):
             output = f"({output})"
-        # Sort children by depth (shallow to deep)
-        children = list(graph.successors(node))
+        children = succ[node]
         if not children:
             return output
-        if canonicalize:
-            # Combining the stable sorts: length-based and special branches use the same canonical tie-breakers
-            if order_by == "length" or any(is_special_branch(child) for child in children):
-                children.sort(key = lambda x: (-depths[x], get_linkage_number(x, graph), leaf_labels[x], subtree_keys[x]), reverse = True)
-            else:
-                # Standard linkage canonicalization relies on positive depth rather than negative
-                children.sort(key = lambda x: (get_linkage_number(x, graph), depths[x], leaf_labels[x], subtree_keys[x]), reverse = True)
-        else:
-            # Sort children based on ordering mode
-            if order_by == "length":
-                # Sort by depth (shallow to deep)
-                children.sort(key = lambda x: depths[x])
-            else:  # order_by == "linkage"
-                if any(is_special_branch(child) for child in children):
-                    # Use length-based sorting if special single mono branches exist
-                    children.sort(key = lambda x: (depths[x], -get_linkage_number(x, graph)))
+        # Sort children by depth (shallow to deep); a single child needs no sorting
+        if len(children) > 1:
+            if canonicalize:
+                # Combining the stable sorts: length-based and special branches use the same canonical tie-breakers
+                if order_by == "length" or any(is_special_branch(child) for child in children):
+                    children = sorted(children, key = lambda x: (-depths[x], get_linkage_number(x, graph), leaf_labels[x], subtree_keys[x], tree_keys[x]), reverse = True)
                 else:
-                    # Use linkage-based sorting in all other cases
-                    children.sort(key = lambda x: -get_linkage_number(x, graph))
+                    # Standard linkage canonicalization relies on positive depth rather than negative
+                    children = sorted(children, key = lambda x: (get_linkage_number(x, graph), depths[x], leaf_labels[x], subtree_keys[x], tree_keys[x]), reverse = True)
+            elif order_by == "length":
+                # Sort by depth (shallow to deep)
+                children = sorted(children, key = lambda x: depths[x])
+            elif any(is_special_branch(child) for child in children):
+                # Use length-based sorting if special single mono branches exist
+                children = sorted(children, key = lambda x: (depths[x], -get_linkage_number(x, graph)))
+            else:
+                # Use linkage-based sorting in all other cases
+                children = sorted(children, key = lambda x: -get_linkage_number(x, graph))
         # Process all but the deepest child
         for child in children[:-1]:
             output = f"[{node_to_string(child)}]{output}"
@@ -686,8 +808,13 @@ def graph_to_string(graph: nx.DiGraph, # Glycan graph (assumes root node is the 
     components = sorted(nx.weakly_connected_components(graph), key = min)
     if len(components) > 1:
         # glycan_to_nxGraph numbers the main part first and each floating bit after it, so the parts are emitted in that same order and each is put back on its own 0-based range
-        parts = [graph.subgraph(sorted(c)) for c in components[1:] + components[:1]]
-        parts = [nx.relabel_nodes(p.copy(), {pn: pn - min(p.nodes()) for pn in p.nodes()}) for p in parts]
+        parts = []
+        for c in components[1:] + components[:1]:
+            # copying each part out of graph directly, shifted onto 0, avoids iterating filtered subgraph views and a second relabeling copy
+            off, p = min(c), nx.DiGraph()
+            p.add_nodes_from((n - off, graph.nodes[n]) for n in sorted(c))
+            p.add_edges_from((u - off, v - off) for u in sorted(c) for v in graph.successors(u))
+            parts.append(p)
         out = []
         for p in parts:
             anchors = p.nodes[max(p.nodes())].get('anchors')
@@ -729,15 +856,25 @@ def try_string_conversion(graph: nx.DiGraph # Glycan graph to validate
 def largest_subgraph(glycan_a: str | nx.DiGraph, # First glycan
                      glycan_b: str | nx.DiGraph # Second glycan
                      ) -> str: # Largest common subgraph in IUPAC format
-    "Find the largest common subgraph of two glycans"
-    graph_a = ensure_graph(glycan_a)
-    graph_b = ensure_graph(glycan_b)
-    ismags = nx.isomorphism.ISMAGS(graph_a, graph_b,
-                                   node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
-    largest_common_subgraph = list(ismags.largest_common_subgraph(symmetry = False))
-    if not largest_common_subgraph:
-        return ''
-    return graph_to_string(graph_a.subgraph(largest_common_subgraph[0].keys()))
+    "Find the largest connected structure two glycans share, with wildcards and PTMs matching as in compare_glycans"
+    graph_a, graph_b = ensure_graph(glycan_a), ensure_graph(glycan_b)
+    wa, wb = (_ptm_wildcarded(graph_a), _ptm_wildcarded(graph_b)) if _has_o(graph_a) or _has_o(graph_b) else (graph_a, graph_b)
+    node_match, memo = categorical_node_match_wildcard('string_labels', 'unknown', build_wildcard_cache(set(_sl(wa)) | set(_sl(wb))), 'termini', 'flexible'), {}
+
+    def common(u, v):  # graph_a nodes of the largest shared subtree with u on v, its top node; children pair up one to one, and a linkage only counts with its donor, so nothing ends in a dangling linkage
+        if (u, v) not in memo:
+            memo[u, v] = None
+            if node_match(wa.nodes[u], wb.nodes[v]):
+                ca, cb = list(wa.successors(u)), list(wb.successors(v))
+                subs = [[common(x, y) for y in cb] for x in ca]
+                w = subs if len(ca) <= len(cb) else [list(c) for c in zip(*subs)]
+                picked = max(([s for i, j in enumerate(p) if (s := w[i][j])] for p in permutations(range(len(w[0])), len(w))), key = lambda ss: sum(map(len, ss))) if ca and cb else []
+                if picked or not IS_LINKAGE(wa.nodes[u]['string_labels']):
+                    memo[u, v] = frozenset([u]).union(*picked)
+        return memo[u, v]
+
+    best = max((s for u in wa for v in wb if (s := common(u, v))), key = len, default = None)
+    return graph_to_string(graph_a.subgraph(best)) if best else ''
 
 
 def get_possible_topologies(glycan: str | nx.DiGraph, # Glycan with floating substituent
@@ -751,7 +888,9 @@ def get_possible_topologies(glycan: str | nx.DiGraph, # Glycan with floating sub
     parts = [ggraph.subgraph(c) for c in nx.weakly_connected_components(ggraph)]
     if len(parts) == 1:
         raise ValueError("This glycan already has a defined topology; please don't use this function.")
-    main_part, floating_part = parts[-1], parts[0]
+    # the main part holds node 0; an anchored bit goes first, as its alternatives are what compare_glycans has to resolve
+    main_part, floating = next(p for p in parts if 0 in p), [p for p in parts if 0 not in p]
+    floating_part = next((p for p in floating if 'anchors' in ggraph.nodes[max(p)]), floating[0])
     dangling_linkage = max(floating_part.nodes())
     is_modification = len(floating_part.nodes()) == 1
     anchors = ggraph.nodes[dangling_linkage].get('anchors', {})
@@ -759,18 +898,18 @@ def get_possible_topologies(glycan: str | nx.DiGraph, # Glycan with floating sub
         modification = ggraph.nodes[dangling_linkage]['string_labels']
     else:
         floating_monosaccharide = dangling_linkage - 1
-    topologies = []
+    topologies, deep = [], any('anchors' in d for _, d in ggraph.nodes(data = True))  # anchors are the only nested attribute, so without them a flat copy is already independent
     if anchors:
         candidates = [(n, link) for link, anchor in anchors.items() for n in resolve_anchor(main_part, anchor)]
     else:
         candidates = [(k, ggraph.nodes[dangling_linkage]['string_labels']) for i, k in enumerate(main_part.nodes()) if
                       i % 2 == 0 and (exhaustive or is_modification or main_part.out_degree[k] == 0)]
     for k, link in candidates:
-        dangling_carbon = modification[0] if is_modification else link[-1]
-        neighbor_carbons = [ggraph.nodes[n]['string_labels'][-1] for n in ggraph.neighbors(k) if n < k]
-        if dangling_carbon in neighbor_carbons:
+        # the bit cannot go on k only if every position it may take is already stated as taken there; '?' and '3/6' leave a position open
+        options = set((modification[0] if is_modification else link.split('-')[-1]).split('/'))
+        if all(o.isdigit() for o in options) and options <= {ggraph.nodes[n]['string_labels'].split('-')[-1] for n in ggraph.neighbors(k) if n < k}:
             continue
-        new_graph = deepcopy(ggraph)
+        new_graph = deepcopy(ggraph) if deep else ggraph.copy()
         new_graph.nodes[dangling_linkage].pop('anchors', None)
         if not is_modification:
             new_graph.nodes[dangling_linkage]['string_labels'] = link
@@ -789,8 +928,12 @@ def get_possible_topologies(glycan: str | nx.DiGraph, # Glycan with floating sub
                                 f"{new_graph.nodes[k]['string_labels']}")
                 if disaccharide not in allowed_disaccharides:
                     continue
-        new_graph = nx.convert_node_labels_to_integers(new_graph)
-        topologies.append(new_graph)
+        # renumbered into glycan_to_nxGraph's layout (main part first, the placed bit ahead of it so the root stays last; remaining floating parts numbered after, inserted before), so the output can be placed again
+        main, rest = [n for n in new_graph if n in main_part or n in floating_part], [n for n in new_graph if n not in main_part and n not in floating_part]
+        mapping, out = {n: i for i, n in enumerate(main + rest)}, nx.DiGraph()
+        out.add_nodes_from((mapping[n], new_graph.nodes[n]) for n in rest + main)
+        out.add_edges_from((mapping[u], mapping[v]) for u, v in new_graph.edges())
+        topologies.append(out)
     return topologies if return_graphs else [graph_to_string(t) for t in topologies]
 
 
@@ -815,12 +958,14 @@ def deduplicate_glycans(glycans: list[str] | set[str] # List/set of glycans to d
     n = len(glycans)
     keep = [True] * n
     # graph_to_string is a total canonicalization, so it decides isomorphism outright once no token can match anything but itself; build_wildcard_cache is the predicate compare_glycans itself uses, so this gate cannot drift when MONO_PATTERN grows
-    if build_wildcard_cache(set(unwrap(min_process_glycans(glycans)))) or any(c in g for g in glycans for c in 'O^{'):
+    if any('^' in g for g in glycans):
         groups = [list(range(n))]
     else:
+        # Otherwise compare_glycans rejects any pair whose out-degree multisets (and with them node counts) differ before it looks at labels, so only glycans sharing one can collapse into each other
+        exact = not build_wildcard_cache(set(unwrap(min_process_glycans(glycans)))) and not any(c in g for g in glycans for c in 'O{')
         buckets = {}
         for i in range(n):
-            buckets.setdefault(graph_to_string(ggraphs[i]), []).append(i)
+            buckets.setdefault(graph_to_string(ggraphs[i]) if exact else tuple(_degs(ggraphs[i])), []).append(i)
         groups = [b for b in buckets.values() if len(b) > 1]
     for group in groups:
         for gi, i in enumerate(group):

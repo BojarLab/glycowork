@@ -1,0 +1,10 @@
+{
+  "name": "glycowork",
+  "displayName": "glycowork",
+  "description": "Use the glycowork Python package for any glycan-related code: notation conversion, motifs, masses, SNFG drawing, glycomics statistics, glycan databases",
+  "author": {"name": "Daniel Bojar", "email": "daniel.bojar@gu.se"},
+  "homepage": "https://bojarlab.github.io/glycowork/",
+  "repository": "https://github.com/BojarLab/glycowork",
+  "license": "MIT",
+  "keywords": ["glycans", "glycomics", "glycobiology", "glycoinformatics", "carbohydrates"]
+}

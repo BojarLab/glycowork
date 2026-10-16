@@ -4,9 +4,9 @@ import numpy as np
 try:
     import torch
     import torch.nn.functional as F
-    from torch_geometric.nn import GraphConv, HeteroConv, GINConv
-    from torch_geometric.nn import global_mean_pool as gap
-    from glycowork.ml.processing import HeteroDataBatch, atom_map, bond_map
+    from torch_geometric.nn import GraphConv, HeteroConv, GINConv, GINEConv
+    from torch_geometric.nn import global_mean_pool as gap, global_max_pool
+    from glycowork.ml.processing import HeteroDataBatch, GIFFLAR_EDGE_TYPES, atom_map, bond_map
     device = "cpu"
     if torch.cuda.is_available():
         device = "cuda:0"
@@ -26,10 +26,11 @@ class SweetNet(torch.nn.Module):
         self.conv1 = GraphConv(hidden_dim, hidden_dim)
         self.conv2 = GraphConv(hidden_dim, hidden_dim)
         self.conv3 = GraphConv(hidden_dim, hidden_dim)
+        self.norms = torch.nn.ModuleList(torch.nn.BatchNorm1d(hidden_dim) for _ in range(3))
         # Node embedding
         self.item_embedding = torch.nn.Embedding(num_embeddings = lib_size + 1, embedding_dim = hidden_dim)
-        # Fully connected part
-        self.lin1 = torch.nn.Linear(hidden_dim, 1024)
+        # Fully connected part, fed with mean and max pooling side by side
+        self.lin1 = torch.nn.Linear(2 * hidden_dim, 1024)
         self.lin2 = torch.nn.Linear(1024, 128)
         self.lin3 = torch.nn.Linear(128, num_classes)
         self.bn1 = torch.nn.BatchNorm1d(1024)
@@ -41,11 +42,10 @@ class SweetNet(torch.nn.Module):
                 inference: bool = False) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         # Getting node features
         x = self.item_embedding(x).squeeze(1)
-        # Graph convolution operations
-        x = F.leaky_relu(self.conv1(x, edge_index))
-        x = F.leaky_relu(self.conv2(x, edge_index))
-        x = F.leaky_relu(self.conv3(x, edge_index))
-        x = gap(x, batch)
+        # Graph convolution operations, each normalized and added onto its input
+        for conv, norm in zip((self.conv1, self.conv2, self.conv3), self.norms):
+            x = x + F.leaky_relu(norm(conv(x, edge_index)))
+        x = torch.cat([gap(x, batch), global_max_pool(x, batch)], dim = 1)
         # Fully connected part
         x = self.act1(self.bn1(self.lin1(x)))
         x_out = self.bn2(self.lin2(x))
@@ -242,17 +242,12 @@ class LectinOracle_flex(torch.nn.Module):
 
 
 def get_gin_layer(input_dim: int,  # input dimension of the GIN layer
-                  output_dim: int  # output dimension of the GIN layer
-                  ) -> GINConv:  # GIN layer with the specified input and output dimensions
-    """Get a GIN layer with the specified input and output dimensions"""
-    return GINConv(
-        torch.nn.Sequential(
-            torch.nn.Linear(input_dim, output_dim),
-            torch.nn.PReLU(),
-            torch.nn.Dropout(0.2),
-            torch.nn.BatchNorm1d(output_dim),
-        )
-    )
+                  output_dim: int,  # output dimension of the GIN layer
+                  edge_dim: int | None = None  # dimension of edge features; if given, a GINEConv that adds them to every message
+                  ) -> GINConv | GINEConv:  # GIN layer with the specified input and output dimensions
+    """Get a GIN layer whose update is a two-layer MLP with a learnable self-weight, which is what makes GIN as expressive as the WL test"""
+    mlp = torch.nn.Sequential(torch.nn.Linear(input_dim, output_dim), torch.nn.BatchNorm1d(output_dim), torch.nn.PReLU(), torch.nn.Linear(output_dim, output_dim))
+    return GINConv(mlp, train_eps = True) if edge_dim is None else GINEConv(mlp, train_eps = True, edge_dim = edge_dim)
 
 
 class GIFFLAR(torch.nn.Module):
@@ -261,21 +256,23 @@ class GIFFLAR(torch.nn.Module):
                  embed_dim: int,  # Dimension of embeddings of each GNN layer
                  output_dim: int,  # Dimension of the output, e.g., num_classes for classification
                  num_layers: int,  # Number of GNN layers
+                 dropout: float = 0.2  # Dropout after every GNN layer and in the prediction head
                  ):
         """Initialize the GIFFLAR model"""
         super(GIFFLAR, self).__init__()
         self.atom_embedding = torch.nn.Embedding(len(atom_map) + 1, feat_dim)
         self.bond_embedding = torch.nn.Embedding(len(bond_map) + 1, feat_dim)
         self.mono_embedding = torch.nn.Embedding(len(lib) + 1, feat_dim)
-        from glycowork.ml.processing import GIFFLAR_EDGE_TYPES
+        self.link_embedding = torch.nn.Embedding(2 * (len(lib) + 1), embed_dim)  # second half for the acceptor-to-donor direction
         dims = [feat_dim] + [embed_dim] * num_layers
-        self.convs = torch.nn.ModuleList()
-        for i in range(num_layers):
-            self.convs.append(HeteroConv({key: get_gin_layer(dims[i], dims[i + 1]) for key in GIFFLAR_EDGE_TYPES}))
+        self.convs = torch.nn.ModuleList(HeteroConv({key: get_gin_layer(dims[i], dims[i + 1], edge_dim = embed_dim if key == ("monosacchs", "boundary", "monosacchs") else None) for key in GIFFLAR_EDGE_TYPES}) for i in range(num_layers))
+        self.norms = torch.nn.ModuleList(torch.nn.ModuleDict({key: torch.nn.BatchNorm1d(embed_dim) for key in ("atoms", "bonds", "monosacchs")}) for _ in range(num_layers))
+        self.acts = torch.nn.ModuleList(torch.nn.ModuleDict({key: torch.nn.PReLU() for key in ("atoms", "bonds", "monosacchs")}) for _ in range(num_layers))
+        self.dropout = dropout
         self.head = torch.nn.Sequential(
-            torch.nn.Linear(embed_dim, embed_dim // 2),
+            torch.nn.Linear(3 * embed_dim, embed_dim // 2),
             torch.nn.PReLU(),
-            torch.nn.Dropout(0.2),
+            torch.nn.Dropout(dropout),
             torch.nn.Linear(embed_dim // 2, output_dim),
         )
 
@@ -285,11 +282,15 @@ class GIFFLAR(torch.nn.Module):
                 *args, **kwargs
                 ) -> torch.Tensor | dict:  # node embeddings
         """Compute the node embeddings"""
-        x_dict = {"atoms": self.atom_embedding.forward(batch.x_dict["atoms"]),
-                  "bonds": self.bond_embedding.forward(batch.x_dict["bonds"]),
-                  "monosacchs": self.mono_embedding.forward(batch.x_dict["monosacchs"])}
-        for conv in self.convs:
-            x_dict = conv(x_dict, batch.edge_index_dict)
+        x_dict = {"atoms": self.atom_embedding(batch.x_dict["atoms"]),
+                  "bonds": self.bond_embedding(batch.x_dict["bonds"]),
+                  "monosacchs": self.mono_embedding(batch.x_dict["monosacchs"])}
+        edge_attr_dict = {key: self.link_embedding(value) for key, value in batch.edge_attr_dict.items()}
+        for conv, norms, acts in zip(self.convs, self.norms, self.acts):
+            out = conv(x_dict, batch.edge_index_dict, edge_attr_dict = edge_attr_dict)
+            out = {key: F.dropout(acts[key](norms[key](value)), p = self.dropout, training = self.training) for key, value in out.items()}
+            # Residual updates keep message passing from washing out the input chemistry
+            x_dict = {key: value + x_dict[key] if value.shape == x_dict[key].shape else value for key, value in out.items()}
         graph_embed = self.pool(x_dict, batch.batch_dict)
         pred = self.head(graph_embed).squeeze(-1)
         if embeddings:
@@ -304,8 +305,9 @@ class GIFFLAR(torch.nn.Module):
              nodes: dict,  # node embeddings
              batch_ids: dict  # batch IDs for each node
              ) -> torch.Tensor:  # graph-level embedding
-        """Pool the node embeddings to get a graph-level embedding """
-        return gap(torch.concat([nodes["atoms"], nodes["bonds"], nodes["monosacchs"]], dim = 0), torch.concat([batch_ids["atoms"], batch_ids["bonds"], batch_ids["monosacchs"]], dim = 0))
+        """Pool each node type on its own, so that the hundreds of atoms cannot drown out the few monosaccharides"""
+        size = int(batch_ids["monosacchs"].max()) + 1
+        return torch.cat([gap(nodes[key], batch_ids[key], size = size) for key in ("atoms", "bonds", "monosacchs")], dim = 1)
 
 
 def init_weights(model: torch.nn.Module, # neural network for analyzing glycans
@@ -334,21 +336,30 @@ def prep_model(model_type: Literal["SweetNet", "GIFFLAR", "LectinOracle", "Lecti
     if libr is None:
         libr = lib
     if model_type == 'SweetNet':
-        if trained and num_classes != 1075:
-            warnings.warn(f"Trained SweetNet model uses 1075 classes (multilabel setting). Overriding num_classes={num_classes} with 1075.")
-            num_classes = 1075
-        model = SweetNet(len(libr), num_classes = num_classes, hidden_dim = hidden_dim)
-        model = model.apply(lambda module: init_weights(module, mode = 'sparse'))
         if trained:
             if hidden_dim != 128:
                 raise ValueError("Hidden dimension must be 128 for pretrained model")
-            model_path = download_model("glycowork_sweetnet_species.pt")
-            model.load_state_dict(torch.load(model_path, map_location = device, weights_only = True))
+            # Every SweetNet architecture has its own weights file, so that older glycowork installs keep downloading the one that fits them
+            state = torch.load(download_model("glycowork_sweetnet_species_v2.pt"), map_location = device, weights_only = True)
+            if num_classes != state["lin3.weight"].shape[0]:
+                warnings.warn(f"Trained SweetNet model uses {state['lin3.weight'].shape[0]} classes (multilabel setting). Overriding num_classes={num_classes} with {state['lin3.weight'].shape[0]}.")
+                num_classes = state["lin3.weight"].shape[0]
+        model = SweetNet(len(libr), num_classes = num_classes, hidden_dim = hidden_dim)
+        model = model.apply(lambda module: init_weights(module, mode = 'sparse'))
+        if trained:
+            model.load_state_dict(state)
         model = model.to(device)
     elif model_type == 'GIFFLAR':
-        model = GIFFLAR(feat_dim = 128, embed_dim = 128, output_dim = num_classes, num_layers = 8)
         if trained:
-            warnings.warn("No pretrained GIFFLAR model is currently available. The model will be randomly initialized.")
+            state = torch.load(download_model("glycowork_gifflar_species.pt"), map_location = device,
+                               weights_only = True)
+            if num_classes != state["head.3.weight"].shape[0]:
+                warnings.warn(
+                    f"Trained GIFFLAR model uses {state['head.3.weight'].shape[0]} classes (multilabel setting). Overriding num_classes={num_classes} with {state['head.3.weight'].shape[0]}.")
+                num_classes = state["head.3.weight"].shape[0]
+        model = GIFFLAR(feat_dim = 128, embed_dim = 128, output_dim = num_classes, num_layers = 4)
+        if trained:
+            model.load_state_dict(state)
         model = model.to(device)
     elif model_type == 'LectinOracle':
         model = LectinOracle(len(libr), num_classes = num_classes)

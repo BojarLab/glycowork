@@ -1,5 +1,8 @@
-from importlib.metadata import version
-__version__ = version("glycowork")
+from importlib.metadata import version, PackageNotFoundError
+try:
+    __version__ = version("glycowork")
+except PackageNotFoundError:  # a source checkout on sys.path, or a frozen app, has no installed metadata
+    __version__ = "unknown"
 from .motif.draw import GlycoDraw
 
 __all__ = ['GlycoDraw']

@@ -5,13 +5,13 @@ build-backend = "setuptools.build_meta"
 # Project metadata
 [project]
 name = "glycowork"
-version = "1.10.1"
-description = "Package for processing and analyzing glycans"
+version = "1.11.0"
+description = "The Python package for glycan data science: reads any glycan notation, motif search, SNFG drawing, glycomics statistics, curated glycan data"
 readme = "README.md"
 authors = [
     {name = "Daniel Bojar", email = "daniel.bojar@gu.se"}
 ]
-keywords = ["glycans", "glycomics", "glycobiology", "bioinformatics", "machine learning"]
+keywords = ["glycans", "glycomics", "glycobiology", "glycoinformatics", "glycoproteomics", "carbohydrates", "oligosaccharides", "SNFG", "IUPAC", "WURCS", "GlycoCT", "GlyTouCan", "mass spectrometry", "bioinformatics", "machine learning"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
@@ -27,11 +27,10 @@ dependencies = [
     "numpy",
     "matplotlib",
     "scikit-learn",
-    "networkx>=3.0",
+    "networkx>=3.4",
     "scipy>=1.16",
     "seaborn",
-    "bokeh",
-    "pandas>=2.1",
+    "pandas>=2.2.2",
     "drawSvg~=2.0",
     "openpyxl",
     "glycorender~=0.4.2"
@@ -47,7 +46,7 @@ Issues = "https://github.com/BojarLab/glycowork/issues"
 ml = ["torch_geometric", "torch", "xgboost", "huggingface_hub>=0.16.0"]
 chem = ["rdkit>=2021.9.2", "py3Dmol"]
 all = ["glycowork[ml,chem]"]
-dev = ["glycowork[all]", "nbdev", "pytest", "glycontact>=0.3.3"]
+dev = ["glycowork[all]", "nbdev", "pytest"]
 
 [tool.setuptools]
 include-package-data = true
@@ -57,7 +56,7 @@ include = ["glycowork*"]
 exclude = ["index_files*"]
 
 [tool.setuptools.package-data]
-"*" = ["*.csv", "*.pkl", "*.jpg", "*.pt", "*.json"]
+"*" = ["*.csv", "*.xz", "*.pkl", "*.jpg", "*.pt", "*.json"]
 
 [tool.nbdev]
 lib_path = "glycowork"
@@ -73,4 +72,4 @@ custom_sidebar = false
 doc_host = "https://BojarLab.github.io"
 doc_baseurl = "/glycowork/"
 title = "glycowork"
-description = "Package for processing and analyzing glycans"
+description = "The Python package for glycan data science: reads any glycan notation, motif search, SNFG drawing, glycomics statistics, curated glycan data"

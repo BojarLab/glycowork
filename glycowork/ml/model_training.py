@@ -88,11 +88,11 @@ def enable_running_stats(model: torch.nn.Module  # model to enable batch norm
 def train_model(model: torch.nn.Module,  # graph neural network for analyzing glycans
                 dataloaders: dict[str, torch.utils.data.DataLoader],  # dict with 'train' and 'val' loaders
                 criterion: torch.nn.Module,  # PyTorch loss function
-                optimizer: torch.optim.Optimizer,  # PyTorch optimizer, has to be SAM if mode != "regression"
+                optimizer: torch.optim.Optimizer,  # PyTorch optimizer, e.g., from training_setup; SAM gets its two-step update
                 scheduler: torch.optim.lr_scheduler.LRScheduler,  # PyTorch learning rate decay
                 num_epochs: int = 25,  # number of epochs for training
                 patience: int = 50,  # epochs without improvement until early stop
-                mode: str = 'classification',  # 'classification', 'multilabel', or 'regression'
+                mode: str = 'classification',  # 'classification', 'multilabel', or 'regression'; training_setup's 'multiclass' and 'binary' set mode2 themselves
                 mode2: str = 'multi',  # 'multi' or 'binary' classification
                 return_metrics: bool = False,  # whether to return metrics
                 ) -> torch.nn.Module | tuple[torch.nn.Module, dict[
@@ -101,6 +101,8 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
     from sklearn.metrics import accuracy_score, label_ranking_average_precision_score, matthews_corrcoef, mean_absolute_error, mean_squared_error, ndcg_score, r2_score, roc_auc_score
     import matplotlib.pyplot as plt
     since = time.time()
+    if mode in {'multiclass', 'binary'}:  # the mode names of training_setup, which would otherwise fall through to regression
+        mode, mode2 = 'classification', 'multi' if mode == 'multiclass' else 'binary'
     early_stopping = EarlyStopping(patience = patience, verbose = True)
     best_model_wts = copy.deepcopy(model.state_dict())
     best_loss = float("inf")
@@ -120,8 +122,7 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                 model.train()
             else:
                 model.eval()
-            running_metrics = copy.deepcopy(blank_metrics)
-            running_metrics["weights"] = []
+            losses, weights, ys, preds = [], [], [], []
             for data in dataloaders[phase]:
                 # Get all relevant node attributes
                 if isinstance(data, HeteroDataBatch):
@@ -131,7 +132,7 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                 x = x.to(device)
                 if mode == 'multilabel':
                     # hetero_collate already stacks the per-sample label rows, so only the flat PyG y has to be folded back into [B, C]
-                    y = (y if batch is None else y.view(int(batch.max()) + 1, -1)).to(device)
+                    y = (y if batch is None else y.view(int(batch.max()) + 1, -1)).float().to(device)
                 elif mode == "regression":
                     y = y.view(-1, 1).to(device)
                 else:
@@ -157,7 +158,6 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                     loss = criterion(pred, y)
                     if phase == 'train':
                         loss.backward()
-                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm = 1.0)
                         if hasattr(optimizer, "first_step"):
                             optimizer.first_step(zero_grad = True)
                             # Second forward pass
@@ -166,49 +166,45 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                                                                                                            edge_index,
                                                                                                            batch)
                             criterion(second_pred, y).backward()
+                            # SAM rescales the first gradient to length rho anyway, so only this second one, which the update is taken from, can be clipped
+                            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm = 1.0)
                             optimizer.second_step(zero_grad = True)
                         else:
+                            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm = 1.0)
                             optimizer.step()
-                # Collecting relevant metrics
-                running_metrics["loss"].append(loss.item())
-                running_metrics["weights"].append(len(y))
-                y_det = y.detach().cpu().numpy()
-                pred_det = pred.cpu().detach().numpy()
-                if mode == 'classification':
-                    if mode2 == 'multi':
-                        pred2 = np.argmax(pred_det, axis = 1)
-                    else:
-                        if pred_det.ndim > 1 and pred_det.shape[1] == 2:
-                            pred_proba = (np.exp(pred_det) / np.sum(np.exp(pred_det), axis = 1, keepdims = True))[:, 1]
-                        else:
-                            pred_proba = sigmoid(pred_det)
-                        pred2 = (pred_proba >= 0.5).astype(int)
-                    running_metrics["acc"].append(accuracy_score(y_det.astype(int), pred2))
-                    running_metrics["mcc"].append(matthews_corrcoef(y_det, pred2))
-                    # A batch that happens to hold one class has no defined AUROC; sklearn already returns nan for it, just noisily
-                    running_metrics["auroc"].append(
-                        roc_auc_score(y_det.astype(int), pred_proba) if mode2 == 'binary' and len(
-                            np.unique(y_det)) > 1 else np.nan)
-                elif mode == 'multilabel':
-                    pred_proba = sigmoid(pred_det)
-                    pred2 = (pred_proba >= 0.5).astype(int)
-                    running_metrics["acc"].append(accuracy_score(y_det.astype(int), pred2))
-                    running_metrics["mcc"].append(matthews_corrcoef(y_det.flatten(), pred2.flatten()))
-                    running_metrics["lrap"].append(label_ranking_average_precision_score(y_det.astype(int), pred_proba))
-                    running_metrics["ndcg"].append(ndcg_score(y_det.astype(int), pred_proba))
+                losses.append(loss.item())
+                weights.append(len(y))
+                ys.append(y.detach().cpu().numpy())
+                preds.append(pred.detach().cpu().numpy())
+            # Metrics are computed once over the whole epoch; averaging per-batch MCC, AUROC, LRAP, or R2 neither gives the epoch's value nor survives single-class batches
+            y_det, pred_det = np.concatenate(ys), np.concatenate(preds)
+            metrics[phase]["loss"].append(np.average(losses, weights = weights))
+            if mode == 'classification':
+                if mode2 == 'multi':
+                    pred2 = np.argmax(pred_det, axis = 1)
                 else:
-                    running_metrics["mse"].append(mean_squared_error(y_det, pred_det))
-                    running_metrics["mae"].append(mean_absolute_error(y_det, pred_det))
-                    running_metrics["r2"].append(r2_score(y_det, pred_det))
-            # Averaging metrics at end of epoch
-            for key in running_metrics:
-                if key == "weights":
-                    continue
-                vals, wts = np.asarray(running_metrics[key], dtype = float), np.asarray(running_metrics["weights"],
-                                                                                        dtype = float)
-                ok = ~np.isnan(vals)
-                # A metric that is undefined for some batches (AUROC on a single-class batch) should drop those batches, not poison the epoch average
-                metrics[phase][key].append(np.average(vals[ok], weights = wts[ok]) if ok.any() else np.nan)
+                    if pred_det.ndim > 1 and pred_det.shape[1] == 2:
+                        pred_proba = 1 / (1 + np.exp(pred_det[:, 0] - pred_det[
+                            :, 1]))  # the softmax's second column, without overflowing on large logits
+                    else:
+                        pred_proba = sigmoid(pred_det)
+                    pred2 = (pred_proba >= 0.5).astype(int)
+                metrics[phase]["acc"].append(accuracy_score(y_det.astype(int), pred2))
+                metrics[phase]["mcc"].append(matthews_corrcoef(y_det, pred2))
+                metrics[phase]["auroc"].append(
+                    roc_auc_score(y_det.astype(int), pred_proba) if mode2 == 'binary' and len(
+                        np.unique(y_det)) > 1 else np.nan)
+            elif mode == 'multilabel':
+                pred_proba = sigmoid(pred_det)
+                pred2 = (pred_proba >= 0.5).astype(int)
+                metrics[phase]["acc"].append(accuracy_score(y_det.astype(int), pred2))
+                metrics[phase]["mcc"].append(matthews_corrcoef(y_det.flatten(), pred2.flatten()))
+                metrics[phase]["lrap"].append(label_ranking_average_precision_score(y_det.astype(int), pred_proba))
+                metrics[phase]["ndcg"].append(ndcg_score(y_det.astype(int), pred_proba))
+            else:
+                metrics[phase]["mse"].append(mean_squared_error(y_det, pred_det))
+                metrics[phase]["mae"].append(mean_absolute_error(y_det, pred_det))
+                metrics[phase]["r2"].append(r2_score(y_det, pred_det))
             if mode == 'classification':
                 print('{} Loss: {:.4f} Accuracy: {:.4f} MCC: {:.4f}'.format(phase, metrics[phase]["loss"][-1],
                                                                             metrics[phase]["acc"][-1],
@@ -283,7 +279,7 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
 class SAM(torch.optim.Optimizer):
     def __init__(self, params: list[torch.nn.Parameter],  # model parameters
                  base_optimizer: type[torch.optim.Optimizer],  # base PyTorch optimizer type
-                 rho: float = 0.5,  # size of neighborhood to explore
+                 rho: float = 0.05,  # size of neighborhood to explore; 0.05 is the published value for plain SAM, 0.5 only suits adaptive=True
                  alpha: float = 0.0,  # surrogate gap minimization coefficient
                  adaptive: bool = False,  # whether to use adaptive SAM
                  **kwargs  # additional optimizer arguments
@@ -306,9 +302,11 @@ class SAM(torch.optim.Optimizer):
         for group in self.param_groups:
             scale = group["rho"] / (grad_norm + 1e-12)
             for p in group["params"]:
+                self.state[p]["old_p"] = p.data.clone()
+                if self.minimize_surrogate_gap:
+                    self.state[p].pop("old_g", None)
                 if p.grad is None:
                     continue
-                self.state[p]["old_p"] = p.data.clone()
                 if self.minimize_surrogate_gap:
                     self.state[p]["old_g"] = p.grad.data.clone()
                 e_w = (torch.pow(p, 2) if group["adaptive"] else 1.0) * p.grad * scale.to(p)
@@ -322,9 +320,8 @@ class SAM(torch.optim.Optimizer):
         "Performs second optimization step with regular weights"
         for group in self.param_groups:
             for p in group["params"]:
-                if p.grad is None:
-                    continue
-                p.data = self.state[p]["old_p"]  # Get back to "w" from "w + e(w)"
+                if "old_p" in self.state[p]:
+                    p.data = self.state[p]["old_p"]  # Get back to "w" from "w + e(w)"
         if self.minimize_surrogate_gap:
             self._gradient_decompose()
         self.base_optimizer.step()  # Do the actual "sharpness-aware" update
@@ -335,14 +332,14 @@ class SAM(torch.optim.Optimizer):
         coeff_nomin, coeff_denom = 0.0, 0.0
         for group in self.param_groups:
             for p in group['params']:
-                if p.grad is None:
+                if p.grad is None or 'old_g' not in self.state[p]:
                     continue
                 coeff_nomin += (self.state[p]['old_g'] * p.grad).sum()
                 coeff_denom += p.grad.pow(2).sum()
         coeff = coeff_nomin / (coeff_denom + 1e-12)
         for group in self.param_groups:
             for p in group['params']:
-                if p.grad is None:
+                if p.grad is None or 'old_g' not in self.state[p]:
                     continue
                 rejection = self.state[p]['old_g'] - coeff * p.grad
                 p.grad.data.add_(rejection, alpha = -group["alpha"])
@@ -420,11 +417,11 @@ class WarmupScheduler:
             warmup_factor = min(1.0, (self.current_epoch + 1) / self.warmup_epochs)
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = self.base_lr * warmup_factor
+        elif isinstance(self.base_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+            self.base_scheduler.step(metrics)
         else:
-            if metrics is not None:
-                self.base_scheduler.step(metrics)
-            else:
-                self.base_scheduler.step()
+            # train_model hands every WarmupScheduler the validation loss, which any other scheduler would read as its epoch
+            self.base_scheduler.step()
 
 
 def training_setup(model: torch.nn.Module,  # graph neural network for analyzing glycans
@@ -456,7 +453,7 @@ def training_setup(model: torch.nn.Module,  # graph neural network for analyzing
     # Choose loss function
     if mode == 'multiclass':
         if num_classes == 2:
-            raise ValueError("You have to set the number of classes via num_classes")
+            raise ValueError("mode = 'multiclass' needs num_classes > 2; set it to the number of classes, or use mode = 'binary' for two classes")
         criterion = Poly1CrossEntropyLoss(num_classes = num_classes).to(device)
     elif mode == 'multilabel':
         criterion = torch.nn.BCEWithLogitsLoss().to(device)
@@ -561,7 +558,7 @@ def get_mismatch(model: xgb.XGBModel,  # trained ML model from train_ml_model
     preds = model.predict(X_test)
     preds_proba = model.predict_proba(X_test)
     # Get false predictions
-    idx = [k for k in range(len(preds)) if preds[k] != y_test[k]]
+    idx = [k for k, (pred, y) in enumerate(zip(preds, y_test)) if pred != y]  # by position, as a Series y_test would otherwise be indexed by its labels
     preds = X_test.iloc[idx, :].index.values.tolist()
     preds_proba = [preds_proba[k].tolist()[1] for k in idx]
     # Return the mismatches
