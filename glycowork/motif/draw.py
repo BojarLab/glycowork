@@ -1416,7 +1416,7 @@ class GlycanDrawing:
             f.write(self.as_standalone_svg())
 
     def as_markdown(self,
-                    size: float = 16  # Height of one monosaccharide symbol in pixels, about that of a line of text
+                    size: float = 14  # Height of one monosaccharide symbol in pixels, about that of a line of text
     ) -> str:  # HTML <img> tag with the drawing as an SVG data URI
         "Inline image of the drawing for Markdown text, e.g., Markdown(f'binds {d.as_markdown()}')"
         data = base64.b64encode(self.as_standalone_svg().encode('utf-8')).decode('ascii')
