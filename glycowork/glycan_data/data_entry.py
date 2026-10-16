@@ -3,6 +3,7 @@ import ast
 import csv
 import warnings
 import xml.etree.ElementTree as ET
+import numpy as np
 import pandas as pd
 from pathlib import Path
 from pandas.io.common import get_handle
@@ -17,7 +18,8 @@ _GP_SIGNATURES = [('fragpipe', ('totalglycancomposition', 'proteinstart')), ('pg
                   ('byonic', ('proteinname', 'glycansnhfagna')), ('byonic', ('proteinname', 'composition', 'position')), ('glycresoft', ('glycopeptide', 'peptide_start')),
                   ('metamorpheus', ('plausibleglycancomposition', 'fullsequence')), ('decipher', ('glycosite', 'glycancomposition')), ('strucgp', ('glycosite_position', 'glycancomposition')),
                   ('glycanfinder', ('proteinaccession', 'glycantype')), ('decipher_site', ('site', 'glycan'))]  # columns (whitespace removed, lowercased) that identify each glycoproteomics engine
-_SUMMARY_HEAD = re.compile(r'Absolute Intensity|Analyte Area(?: - Background Area)?\tCalibrated')  # an abundance block of a LaCyTools or MassyTools Summary.txt
+_SUMMARY_HEAD = re.compile(r'Absolute Intensity|Analyte Area(?: - Background Area)?\tCalibrated|(?:Background Subtracted )?Intensities \(Area\)\t')  # an abundance block of a LaCyTools Summary.txt, or of a MassyTools 1 or 2 summary.txt
+_LACY_QC = re.compile(r'(Mass Accuracy \[ppm\]|Isotopic Pattern Quality|S/N) \((\d+)\+\)')  # the quality blocks of a LaCyTools Summary.txt, one per charge state
 _TAG_MASSES = (140.095, 144.1021, 148.1092, 224.1525, 225.1558, 229.1629, 304.2054,
                304.2071)  # amine tags that also label S and T: mTRAQ, iTRAQ 4-plex, TMT0, TMT2, TMT, iTRAQ 8-plex, TMTpro
 _DECOY = re.compile(r'>?\s*(?:rev_|reverse|decoy|#decoy#|xxx_)',
@@ -271,10 +273,12 @@ def _glycomics_layout(df: pd.DataFrame # a glycomics table as read from file
 
 
 def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataFrame], # export(s) of Skyline (report, long or pivoted by replicate), LaCyTools or MassyTools (Summary.txt), GlycoWorkbench (.gwp workspace or .gwa annotated peak list), Thermo Compound Discoverer, GlycoGenius, GlyHunter, GlycReSoft, or CandyCrunch, or any table with glycans in its first column and samples in the others
-                   sample_map: dict[str, str] | Callable[[str], str] | None = None  # renames runs (raw files, Skyline replicates, or sample columns) into samples; runs sharing a sample, e.g., fractions, are summed
+                   sample_map: dict[str, str] | Callable[[str], str] | None = None,  # renames runs (raw files, Skyline replicates, or sample columns) into samples; runs sharing a sample, e.g., fractions, are summed
+                   qc: dict[str, float] = {'ppm': 20, 'ipq': 0.2, 'sn': 9}, # GlycoDash's limits for a LaCyTools charge state to pass in a run: absolute mass error (ppm), isotopic pattern quality (at most), S/N (at least); {} keeps every analyte
+                   min_pass: float = 0.25 # fraction of runs a LaCyTools charge state has to pass qc in to be kept in every run, as LaCyTools reports each listed analyte in each run, noise included; GlycoDash's analyte curation uses 0.8 per biological group, after removing failed spectra
                    ) -> GlycoDataFrame: # glycans (IUPAC-condensed, canonical composition, or the label as written if it is neither) in column 'glycan', samples as columns; ready for get_differential_expression and the rest of glycowork
     "Reads the native output of glycomics software into a glycan x sample table, quantified by the tool's abundance where it reports one and by feature counts otherwise"
-    recs, groups = [], {}  # (run, ion, label, abundance, S is NeuAc); Skyline, LaCyTools, MassyTools, and GlycoGenius write NeuAc as S, which glycowork reads as sulfate
+    recs, groups, checks, units = [], {}, {}, {}  # (run, ion, label, abundance, S is NeuAc); Skyline, LaCyTools, MassyTools, and GlycoGenius write NeuAc as S, which glycowork reads as sulfate
     for fi, f in enumerate([files] if isinstance(files, (str, Path, pd.DataFrame)) else list(files)):  # a list, or any iterable such as Path.glob('*.csv')
         ext, stem = ('', f'sample{fi + 1}') if isinstance(f, pd.DataFrame) else (Path(f).suffix.lower(), Path(f).stem)
         if ext in ('.gwp', '.gwa'):  # GlycoWorkbench workspace, one top-level Scan per sample, or one annotated peak list; MS/MS scans are skipped
@@ -288,17 +292,33 @@ def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataF
                         recs.append((scan.get('name') or (stem if len(scans) == 1 else f'{stem}_{si + 1}'), (fi, peak.get('mz_ratio')), g.replace('/#lcleavage', ''), float(peak.get('intensity')), False))
             continue
         lines = Path(f).read_text(encoding = 'utf-8-sig', errors = 'replace').splitlines() if ext == '.txt' else []
-        heads = [i for i, l in enumerate(lines) if re.match(r'Absolute Intensity \(Background Subtracted|Analyte Area - Background Area\tCalibrated', l)] or [
+        heads = [i for i, l in enumerate(lines) if re.match(r'Absolute Intensity \(Background Subtracted|Analyte Area - Background Area\tCalibrated|Background Subtracted Intensities \(Area\)\t', l)] or [
             i for i, l in enumerate(lines) if _SUMMARY_HEAD.match(l)]
-        for h in heads:  # LaCyTools: one block per charge state, analytes in the header and samples as rows below 'Fraction' and the mass row; MassyTools: 'Calibrated' and the mass row in front
-            head = lines[h].split('\t')
+        blocks, qcs = {}, {(m[1], m[2]): i for i, l in enumerate(lines) if (m := _LACY_QC.match(l))}
+        for h in heads + list(qcs.values()):  # LaCyTools: one block per charge state, analytes in the header and samples as rows below 'Fraction' and the mass row; MassyTools 1: 'Calibrated' and the mass row in front; MassyTools 2: each analyte and charge as 'H5N4F1E1 [1z]', then an 'Exact m/z' row
+            head = [re.sub(r'\s*\[\d+z\]$', '', k) for k in lines[h].split('\t')]
             off = 2 if head[1:2] == ['Calibrated'] else 1
+            labs, rows = [lab.strip() for lab in head[off:]], {}
             for l in lines[h + 1:]:
                 row = l.split('\t')
                 if not l.strip():
                     break
-                if row[0] not in ('Fraction', '') and not row[0].startswith(('Exact mass', 'Monoisotopic mass')):
-                    recs.extend((row[0], (fi, h, j), lab.strip(), v, True) for j, (lab, v) in enumerate(zip(head[off:], pd.to_numeric(pd.Series(row[off:off + len(head) - off]), errors = 'coerce'))) if lab.strip() and v > 0)
+                if row[0] != '' and not row[0].startswith(('Exact mass', 'Exact m/z', 'Monoisotopic mass')):
+                    rows[row[0]] = pd.to_numeric(pd.Series(row[off:off + len(labs)]), errors = 'coerce').reindex(range(len(labs))).to_numpy()
+            blocks[h] = (labs, rows.pop('Fraction', [1] * len(labs)), rows)  # the share of its isotope envelope LaCyTools integrated differs between analytes, so GlycoDash divides by it
+        for h in heads:
+            labs, frac, rows = blocks[h]
+            z = re.search(r'(\d+)\+\)', lines[h])
+            q = {kind: np.array([blocks[i][2].get(r, [np.nan] * len(labs)) for r in rows]) for (kind, zq), i in qcs.items() if z and zq == z[1]}
+            if q and qc and rows:
+                ok = np.ones((len(rows), len(labs)), dtype = bool)
+                for kind, key in (('Mass Accuracy [ppm]', 'ppm'), ('Isotopic Pattern Quality', 'ipq'), ('S/N', 'sn')):
+                    if kind in q and key in qc:
+                        ok &= (q[kind] >= qc[key]) if key == 'sn' else (np.abs(q[kind]) <= qc[key])  # a missing value fails, as in GlycoDash
+                for j, lab in enumerate(labs):
+                    checks.setdefault((lab, z[1]), []).extend(ok[:, j])
+                    units[(fi, h, j)] = (lab, z[1])
+            recs.extend((r, (fi, h, j), lab, v / (frac[j] if frac[j] > 0 else 1), True) for r, vals in rows.items() for j, (lab, v) in enumerate(zip(labs, vals)) if lab and v > 0)
         if heads:
             continue
         frames = [f] if isinstance(f, pd.DataFrame) else _read_table(f)
@@ -332,6 +352,9 @@ def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataF
             labs = [re.sub(r'_\d+(\.\d+)?$', '', g) if gg and isinstance(g, str) else g for g in df.iloc[:, 0]]
             for k in df.columns[1:]:
                 recs.extend((k, (fi, i), g, v, gg) for i, (g, v) in enumerate(zip(labs, num(k))) if isinstance(g, str) and v > 0)
+    if failed := {u for u, v in checks.items() if np.mean(v) < min_pass}:  # over all runs of all files, so the plates of one study keep the same analytes
+        recs = [r for r in recs if units.get(r[1]) not in failed]
+        warnings.warn(f"{len(failed)} LaCyTools charge states passed qc in fewer than {min_pass:.0%} of runs and were removed, e.g., {sorted(failed)[:3]}.", stacklevel = 2)
     if not recs:
         raise ValueError("No abundances found; expected a Skyline report, a LaCyTools or MassyTools Summary.txt, a GlycoWorkbench workspace, or a Compound Discoverer, GlycoGenius, GlyHunter, GlycReSoft, or CandyCrunch table with glycans and positive abundances, or any table with glycans in its first column (not the index; use df.reset_index()) and samples in the others.")
     df = pd.DataFrame(recs, columns = ['run', 'ion', 'label', 'value', 'sia'])
@@ -346,6 +369,11 @@ def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataF
             comp = canonicalize_composition(re.sub(r'S(?=\d)', 'A', g.strip()) if sia else g.strip(), as_string = True, strict = True) if iupac is None and is_composition(g.strip()) else ''  # strict: a label like 'IgGI1H5N4F1' parses into a nonsense residue
         except ValueError:
             comp = ''
+        if not (iupac or comp) and (pep := re.fullmatch(r'([A-Za-z]+?)1((?:[A-Z][a-z]?\d+)+)', g.strip())):  # a LaCyTools glycopeptide, one peptide block and the glycan, e.g., IgGI1H5N4F1S1 (IgGI is EEQYNSTYR of IgG1); the block becomes the protein and its count the site, so each cluster is closed and traited on its own, as in GlycoDash
+            try:
+                comp = f'{pep[1]}_1_' + canonicalize_composition(re.sub(r'S(?=\d)', 'A', pep[2]) if sia else pep[2], as_string = True, strict = True)
+            except ValueError:
+                pass
         canon[(g, sia)] = iupac or comp or None
     if raw := [g for (g, _), v in canon.items() if v is None]:
         warnings.warn(f"{len(raw)} labels are neither a glycan sequence nor a composition glycowork can read and were kept as written, e.g., {raw[:3]}.", stacklevel = 2)

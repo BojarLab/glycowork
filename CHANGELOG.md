@@ -81,6 +81,8 @@
 - Added the linkage-resolved composition keys `Neu5Ac_a2-6`/`Neu5Ac_a2-3` (and `Neu5Gc`, `Kdn`), written as `E`/`L`, `Ge`/`Gl`, and `KdnE`/`KdnL` in shorthand compositions (e.g., `H5N4E1L1`) (d6fe1d5)
 - Added `sialic_linkage_splits`, which lists every linkage-resolved composition that a composition stands for, and `resolve_sialic_linkages`, which fits a structure's sialic acid linkages to a linkage-resolved composition (d6fe1d5)
 - Added the `sialic_linkage` keyword argument to `glycan_to_composition`, which counts sialic acids by linkage (d6fe1d5)
+- Added the `return_all` keyword argument to `mz_to_composition` to return all compositions within `mass_tolerance` instead of only the best ()
+- Added `get_formula`, which gives the elemental formula (e.g., 'C62H104N4O46') of any glycan sequence, composition, or formula, with the same derivatization, label, adduct, peptide, and sialic acid derivatization options as `glycan_to_mass` ()
 
 ##### Changed 🔄
 - `get_core` and `get_modification` can now better deal with cases such as `Neu5,9Ac2` (0967d8a)

@@ -470,7 +470,7 @@ def draw_shape(
         # Draw outline
         draw_hex(x_pos, y_pos, dim, col_dict, drawing, outline_only = True)
     elif shape in {'Z', 'Y'}:
-        rot = f'rotate({deg} {-abs(x_pos)*dim} {-abs(y_pos)*dim})'
+        rot = f'rotate({deg} {x_base} {y_base})'
         g = draw.Group(transform = rot)
         p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
         p.M(x_base, y_base-half_dim)
@@ -780,6 +780,16 @@ def get_coordinates_and_labels(
     root = max(graph.nodes())
     leaves = [n for n in graph.nodes() if graph.out_degree(n) == 0 and n != root] if len(graph) > 1 else [0]
     main_chain = nx.shortest_path(graph.reverse(copy = False), leaves[0], root) if leaves else []
+    # A bisected N-glycan core is laid out from its a1-3 arm as the chain, which puts the bisecting GlcNAc in line and the a1-6 arm above; a sequence written along the a1-6 arm stacked the a1-3 arm and the bisecting GlcNAc above it instead, so the chain is rerouted into the a1-3 arm
+    for i in range(2, len(main_chain) - 1, 2):
+        kids = {node_values[e]: next(iter(graph.successors(e))) for e in graph.successors(main_chain[i])}
+        if (parsed_sugars[main_chain[i]][0] == 'Man' and node_values[main_chain[i + 1]] == 'b1-4' and node_values[main_chain[i - 1]] == 'a1-6'
+                and parsed_sugars.get(kids.get('b1-4'), ('',))[0] == 'GlcNAc' and parsed_sugars.get(kids.get('a1-3'), ('',))[0] == 'Man'):
+            path = [next(e for e in graph.successors(main_chain[i]) if node_values[e] == 'a1-3')]
+            while successors := list(graph.successors(path[-1])):
+                path.append(min(successors))
+            main_chain = path[::-1] + main_chain[i:]
+            break
     main_label_sugar = [node for node in main_chain if node % 2 == 0]
     main_entries = [parsed_sugars[node] for node in main_chain if node % 2 == 0]
     main_sugar, main_sugar_modification = map(list, zip(*reversed(main_entries)))

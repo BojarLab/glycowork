@@ -35,7 +35,7 @@ from glycowork.motif.tokenization import (
     glycan_to_composition, calculate_adduct_mass, structure_to_basic, map_to_basic,
     compositions_to_structures, match_composition_relaxed, stemify_dataset, composition_to_mass, resolve_sialic_linkages, sialic_linkage_splits,
     condense_composition_matching, get_unique_topologies, mz_to_structures, glycan_to_mass,
-    get_random_glycan, get_ion_mzs, PROTON_MASS, mass_dict
+    get_random_glycan, get_ion_mzs, PROTON_MASS, mass_dict, get_formula,
 )
 from glycowork.motif.processing import (
     min_process_glycans, get_lib, expand_lib, get_possible_linkages, looks_like_linearcode,
@@ -1777,6 +1777,11 @@ def test_mz_to_composition():
     avg = composition_to_mass(comp, mass_value = 'average', modification = 'reduced')
     assert abs(get_ion_mzs(avg, max_charge = -1, adducts = 'Cl-', mass_value = 'average')['[M+Cl]-'] - avg - calculate_adduct_mass('Cl', mass_value = 'average') - 0.00054858) < 1e-5
     assert mz_to_composition(avg + 35.45355, max_charge = -1, mass_value = 'average', glycan_class = 'O', mass_tolerance = 0.05, modification = 'reduced', extras = 'adduct', adduct_ions = 'Cl-') == [comp]
+    # an ion of the other charge takes one proton more the other way ([M+Na-2H]-, [M+Cl+2H]+); it was added with the mode's protons, giving ions of the wrong charge ('[M+Na]-' at M + 22.99)
+    na = get_ion_mzs(neutral, max_charge = -2, adducts = 'Na+')
+    assert abs(na['[M+Na-2H]-'] - (neutral + mass_dict['Na+'] - 2 * PROTON_MASS)) < 1e-9 and abs(na['[M+Na-3H]2-'] - (neutral + mass_dict['Na+'] - 3 * PROTON_MASS) / 2) < 1e-9 and '[M+2Na]2-' not in na
+    assert abs(get_ion_mzs(neutral, max_charge = 1, adducts = 'Cl-')['[M+Cl+2H]+'] - (neutral + mass_dict['Cl-'] + 2 * PROTON_MASS)) < 1e-9
+    assert mz_to_composition(neutral + mass_dict['Na+'] - 2 * PROTON_MASS, max_charge = -1, glycan_class = 'O', mass_tolerance = 10, tolerance_unit = 'ppm', modification = 'reduced', extras = 'adduct', adduct_ions = 'Na+') == [comp]
     animal = df_glycan[df_glycan.Kingdom.apply(lambda x: 'Animalia' in x)]
     assert match_composition_relaxed({'Hex': 1, 'HexNAc': 1}, glycan_class = 'O', df_use = animal) == match_composition_relaxed({'Hex': 1, 'HexNAc': 1}, glycan_class = 'O')
     # A single adduct, extra, or monosaccharide may be passed as a bare string; 'Na+' used to be iterated as 'N', 'a', '+' (KeyError) and a bare filter_out/deprioritized raised AttributeError
@@ -1867,6 +1872,24 @@ def test_stemify_dataset():
 
 
 def test_composition_to_mass():
+    # elemental formulas weigh exactly what composition_to_mass and glycan_to_mass weigh
+    assert get_formula('H5N4') == 'C62H104N4O46'
+    assert get_formula('H5N4F1A2', sample_prep = 'permethylated') == 'C131H230N6O66'
+    assert get_formula('H3N4F1', modification = '2AB') == 'C63H102N6O40'
+    assert get_formula('H5N4F1', peptide = 'EEQYNSTYR') == 'C118H184N18O69'
+    for comp, kwargs in [('H5N4E1L1', {'sialic_derivatization': 'EEA', 'adduct': 'Na'}), ({'Hex': 2, 'Ac': 1, 'Me': 1, 'S': 1}, {'sample_prep': 'permethylated', 'modification': '2AA'}),
+                         ('H2N1P1', {'sample_prep': 'peracetylated', 'modification': 'reduced'})]:
+        assert abs(calculate_adduct_mass(get_formula(comp, **kwargs)) - composition_to_mass(comp, **kwargs)) < 1e-9
+    with pytest.raises(ValueError, match = 'no elemental formula'):
+        get_formula('H5N4', adduct = 22.99)
+    # any input gives the molecule glycan_to_mass weighs: sequences in any nomenclature, compositions in any format, formulas (H5N4 reads as a composition, not as a hydride)
+    g = 'Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc'
+    assert {get_formula(x) for x in ['H5N4', {'Hex': 5, 'HexNAc': 4}, 'HexNAc(4)Hex(5)', 'C62H104N4O46']} == {'C62H104N4O46'} and get_formula(g) == get_formula('H5N4F1A2') == get_formula('FA2G2S2')
+    for glycan, kwargs in [(g, {'sialic_derivatization': 'EE', 'modification': '2AB'}), ('Kdo(a2-4)Kdo', {'sample_prep': 'permethylated'}), ('Gal(b1-3)GalNAc-ol', {'sample_prep': 'permethylated'}),
+                           ('GlcNAc(b1-6)Man6P', {'sample_prep': 'peracetylated'}), ('Gal(b1-4)GlcNAc', {'peptide': 'NGT', 'adduct': 'Na'})]:  # sialic products, the atom path, an alditol, a phosphodiester, a glycopeptide
+        assert abs(calculate_adduct_mass(get_formula(glycan, **kwargs)) - glycan_to_mass(glycan, **kwargs)) < 1e-9
+    with pytest.raises(ValueError, match = 'whole molecule'):
+        get_formula('C62H104N4O46', sample_prep = 'permethylated')
     # linkage-specific sialic acid derivatization: H5N4E2, the main plasma N-glycan of ethyl esterified samples, at [M+Na]+ 2301.835 (Reiding et al. 2014)
     assert abs(composition_to_mass('H5N4E2', sialic_derivatization = 'EE') + 22.989221 - 2301.835) < 1e-3
     assert abs(composition_to_mass('H5N4E1L1', sialic_derivatization = 'EEA') - composition_to_mass('H5N4A2') - 28.0313 + 0.9840) < 1e-3
@@ -8872,13 +8895,23 @@ def test_read_glycomics_summary_files(tmp_path):
     (tmp_path / 'lacy_Summary.txt').write_text('Parameter Settings\t\t\nLaCyTools Version\t2.0.1\t\n\t\t\nAbsolute Intensity (Background Subtracted, 2+)\tH5N4F1S1\tIgGI1H5N4\t\nFraction\t0.93\t0.92\t\n'
                                                'Exact mass of most abundant isotopologue\t[1203.97]\t[1284.99]\t\nS1.raw\t100\t10\t\nS2.raw\t50\t\t\n\t\t\t\nAbsolute Intensity (Background Subtracted, 3+)\tH5N4F1S1\tIgGI1H5N4\t\n'
                                                'Fraction\t0.93\t0.92\t\nExact mass of most abundant isotopologue\t[802.98]\t[857.00]\t\nS1.raw\t20\t5\t\nS2.raw\t10\t\t\n\t\t\t\nNoise (2+)\tH5N4F1S1\tIgGI1H5N4\t\nS1.raw\t999\t999\t\n')
-    with pytest.warns(UserWarning, match = 'kept as written'):
-        out = read_glycomics(tmp_path / 'lacy_Summary.txt')
-    assert out.set_index('glycan').to_dict('index') == {'H5N4F1A1': {'S1.raw': 120.0, 'S2.raw': 60.0}, 'IgGI1H5N4': {'S1.raw': 15.0, 'S2.raw': 0.0}}
+    out = read_glycomics(tmp_path / 'lacy_Summary.txt')
+    assert out.set_index('glycan').round(3).to_dict('index') == {'H5N4F1A1': {'S1.raw': 129.032, 'S2.raw': 64.516}, 'IgGI_1_H5N4': {'S1.raw': 16.304, 'S2.raw': 0.0}}  # divided by the integrated share of the isotope envelope (Fraction), as GlycoDash does; IgGI1H5N4 is the H5N4 glycopeptide of the IgGI peptide block
+    qc_block = lambda z, a, b: f'S/N ({z}+)\tH5N4F1S1\tIgGI1H5N4\t\nFraction\t0.93\t0.92\t\nExact mass of most abundant isotopologue\t[1]\t[2]\t\nS1.raw\t50\t{a}\t\nS2.raw\t40\t{b}\t\n\t\t\t\n'
+    (tmp_path / 'lacy_qc_Summary.txt').write_text((tmp_path / 'lacy_Summary.txt').read_text() + '\n' + qc_block(2, 3, 2) + qc_block(3, 30, 20))
+    with pytest.warns(UserWarning, match = 'passed qc in fewer than'):  # IgGI1H5N4 2+ is noise (S/N 3 and 2), its 3+ passes
+        out = read_glycomics(tmp_path / 'lacy_qc_Summary.txt')
+    assert out.set_index('glycan').round(3).to_dict('index') == {'H5N4F1A1': {'S1.raw': 129.032, 'S2.raw': 64.516}, 'IgGI_1_H5N4': {'S1.raw': 5.435, 'S2.raw': 0.0}}
+    assert read_glycomics(tmp_path / 'lacy_qc_Summary.txt', qc = {}).set_index('glycan').round(3).loc['IgGI_1_H5N4', 'S1.raw'] == 16.304
     (tmp_path / 'massy_Summary.txt').write_text('Processing Parameters\nCharge carrier\t[M+Na]+\n\nAnalyte Area - Background Area\tCalibrated\tH5N4F1E1\tH5N4F1L1\tH3N4F1\n\t[M+Na]+\t2000.7\t1950.6\t1485.5\n'
                                                 'S1.xy\t1\t100.0\t50.0\t10.0\nS2.xy\t1\t80.0\t40.0\t0.0\n\nS/N\tCalibrated\tH5N4F1E1\tH5N4F1L1\tH3N4F1\n\t[M+Na]+\t2000.7\t1950.6\t1485.5\nS1.xy\t1\t9\t9\t9\n')
     out = read_glycomics(tmp_path / 'massy_Summary.txt', sample_map = lambda s: s.split('.')[0])  # the ethyl ester (a2-6) and the lactone (a2-3) stay apart
     assert out.set_index('glycan').to_dict('index') == {'H3N4F1': {'S1': 10.0, 'S2': 0.0}, 'H5N4F1E1': {'S1': 100.0, 'S2': 80.0}, 'H5N4F1L1': {'S1': 50.0, 'S2': 40.0}}
+    # MassyTools 2 writes '<analyte> [<z>z]' headers and an 'Exact m/z' row; charge states of one analyte add up, negative background-subtracted areas are no signal
+    (tmp_path / '2026-10-14 1200_summary.txt').write_text('MassyTools Metadata\nVersion:\t2.0.0\n\nBackground Subtracted Intensities (Area)\tH5N4F1E1 [1z]\tH5N4F1E1 [2z]\tH3N4F1 [1z]\nExact m/z\t2000.7\t1000.9\t1485.5\n'
+                                                          'S1\t100.0\t20.0\t10.0\nS2\t80.0\t0.0\t-3.0\n\nMass Accuracy [ppm]\tH5N4F1E1 [1z]\tH5N4F1E1 [2z]\tH3N4F1 [1z]\nExact m/z\t2000.7\t1000.9\t1485.5\nS1\t1.2\t0.4\t3.0\n\n')
+    for out in (read_glycomics(tmp_path / '2026-10-14 1200_summary.txt'), read_abundances(tmp_path / '2026-10-14 1200_summary.txt')):
+        assert out.set_index('glycan').to_dict('index') == {'H3N4F1': {'S1': 10.0, 'S2': 0.0}, 'H5N4F1E1': {'S1': 120.0, 'S2': 80.0}}
 
 
 def test_read_glycomics_tables(tmp_path):
