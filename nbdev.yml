@@ -4,6 +4,6 @@ project:
 website:
   title: "glycowork"
   site-url: "https://bojarlab.github.io/glycowork"
-  description: "Package for processing and analyzing glycans"
+  description: "The Python package for glycan data science: reads any glycan notation, motif search, SNFG drawing, glycomics statistics, curated glycan data"
   repo-branch: master
   repo-url: ""
