@@ -746,7 +746,13 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
             f'<script>{js}</script></div>')
     if is_jupyter():
         from IPython.display import HTML
-        return HTML(page)
+        # the SVG twin is what markdown renderers pick (Quarto's README export ranks image/svg+xml above text/html), since GitHub strips inline SVG and scripts; notebooks and the HTML docs site still show the interactive HTML
+
+        class NetworkPlot(HTML):
+            def _repr_svg_(self):
+                return svg
+
+        return NetworkPlot(page)
     import tempfile
     import webbrowser
     with tempfile.NamedTemporaryFile('w', suffix = '.html', delete = False, encoding = 'utf-8') as f:
