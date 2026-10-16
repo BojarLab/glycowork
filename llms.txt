@@ -1,0 +1,7 @@
+# glycowork
+
+> The Python package for glycan data science: reads any glycan notation, motif search, SNFG drawing, glycomics statistics, curated glycan data
+
+## Pages
+
+- [glycowork](https://bojarlab.github.io/glycowork/index.llms.md)

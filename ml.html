@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.10.18">
+<meta name="generator" content="quarto-1.10.19">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -77,7 +77,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-bf27225e3a48a9273f3daa8f8e829971.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="site_libs/bootstrap/bootstrap-f2788e636de456f6409e966386820849.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
@@ -112,16 +112,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <link rel="stylesheet" href="styles.css">
 <meta property="og:title" content="ml – glycowork">
-<meta property="og:description" content="Package for processing and analyzing glycans">
+<meta property="og:description" content="The Python package for glycan data science: reads any glycan notation, motif search, SNFG drawing, glycomics statistics, curated glycan data">
 <meta property="og:image" content="https://bojarlab.github.io/glycowork/02_ml_files/figure-html/cell-8-output-1.png">
 <meta property="og:site_name" content="glycowork">
 <meta property="og:image:height" content="470">
-<meta property="og:image:width" content="616">
+<meta property="og:image:width" content="617">
 <meta name="twitter:title" content="ml – glycowork">
-<meta name="twitter:description" content="Package for processing and analyzing glycans">
+<meta name="twitter:description" content="The Python package for glycan data science: reads any glycan notation, motif search, SNFG drawing, glycomics statistics, curated glycan data">
 <meta name="twitter:image" content="https://bojarlab.github.io/glycowork/02_ml_files/figure-html/cell-8-output-1.png">
 <meta name="twitter:image-height" content="470">
-<meta name="twitter:image-width" content="616">
+<meta name="twitter:image-width" content="617">
 <meta name="twitter:card" content="summary_large_image">
 </head>
 
@@ -254,7 +254,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <blockquote class="blockquote">
 <p>contains functions for training machine learning models</p>
 </blockquote>
-<div id="indie-confirmation" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.007353+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.053130+00:00&quot;,&quot;total&quot;:0.04578268700001331}}" data-execution_count="3">
+<div id="indie-confirmation" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.142113+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.324334+00:00&quot;,&quot;total&quot;:0.18222692300000176}}" data-execution_count="3">
 <hr>
 <section id="earlystopping" class="level3">
 <h3 class="anchored" data-anchor-id="earlystopping">EarlyStopping</h3>
@@ -265,7 +265,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p><em>Early stops the training if validation loss doesn’t improve after a given patience</em></p>
 </section>
 </div>
-<div id="southeast-brighton" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.053253+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.063653+00:00&quot;,&quot;total&quot;:0.010404462999986208}}" data-execution_count="4">
+<div id="southeast-brighton" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.324451+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.332760+00:00&quot;,&quot;total&quot;:0.008312225999986822}}" data-execution_count="4">
 <hr>
 <section id="train_model" class="level3">
 <h3 class="anchored" data-anchor-id="train_model">train_model</h3>
@@ -273,18 +273,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    model:torch.nn.modules.module.Module, <span class="co"># graph neural network for analyzing glycans</span></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    dataloaders:<span class="bu">dict</span>[<span class="bu">str</span>, torch.utils.data.dataloader.DataLoader], <span class="co"># dict with 'train' and 'val' loaders</span></span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    criterion:torch.nn.modules.module.Module, <span class="co"># PyTorch loss function</span></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    optimizer:torch.optim.optimizer.Optimizer, <span class="co"># PyTorch optimizer, has to be SAM if mode != "regression"</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    optimizer:torch.optim.optimizer.Optimizer, <span class="co"># PyTorch optimizer, e.g., from training_setup; SAM gets its two-step update</span></span>
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    scheduler:torch.optim.lr_scheduler.LRScheduler, <span class="co"># PyTorch learning rate decay</span></span>
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    num_epochs:<span class="bu">int</span><span class="op">=</span><span class="dv">25</span>, <span class="co"># number of epochs for training</span></span>
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    patience:<span class="bu">int</span><span class="op">=</span><span class="dv">50</span>, <span class="co"># epochs without improvement until early stop</span></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    mode:<span class="bu">str</span><span class="op">=</span><span class="st">'classification'</span>, <span class="co"># 'classification', 'multilabel', or 'regression'</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    mode:<span class="bu">str</span><span class="op">=</span><span class="st">'classification'</span>, <span class="co"># 'classification', 'multilabel', or 'regression'; training_setup's 'multiclass' and 'binary' set mode2 themselves</span></span>
 <span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    mode2:<span class="bu">str</span><span class="op">=</span><span class="st">'multi'</span>, <span class="co"># 'multi' or 'binary' classification</span></span>
 <span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    return_metrics:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># whether to return metrics</span></span>
 <span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>torch.nn.modules.module.Module <span class="op">|</span> <span class="bu">tuple</span>[torch.nn.modules.module.Module, <span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">list</span>[<span class="bu">float</span>]]]]:</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>trains a deep learning model on predicting glycan properties</em></p>
 </section>
 </div>
-<div id="generic-taxation" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.063760+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.067524+00:00&quot;,&quot;total&quot;:0.0037668889999906696}}" data-execution_count="5">
+<div id="generic-taxation" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.332856+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.335944+00:00&quot;,&quot;total&quot;:0.0030909509999901275}}" data-execution_count="5">
 <hr>
 <section id="training_setup" class="level3">
 <h3 class="anchored" data-anchor-id="training_setup">training_setup</h3>
@@ -302,7 +302,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p><em>prepares optimizer, learning rate scheduler, and loss criterion for model training</em></p>
 </section>
 </div>
-<div id="bored-quality" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.067611+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.071755+00:00&quot;,&quot;total&quot;:0.0041464499999790405}}" data-execution_count="6">
+<div id="bored-quality" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.336026+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.339558+00:00&quot;,&quot;total&quot;:0.0035351109999908203}}" data-execution_count="6">
 <hr>
 <section id="train_ml_model" class="level3">
 <h3 class="anchored" data-anchor-id="train_ml_model">train_ml_model</h3>
@@ -336,7 +336,7 @@ Evaluating model...
 Accuracy of trained model on separate validation set: 0.8604852686308492</code></pre>
 </div>
 </div>
-<div id="federal-lover" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.072045+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.074665+00:00&quot;,&quot;total&quot;:0.00262293100001898}}" data-execution_count="7">
+<div id="federal-lover" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.339826+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.342155+00:00&quot;,&quot;total&quot;:0.0023307149999993726}}" data-execution_count="7">
 <hr>
 <section id="analyze_ml_model" class="level3">
 <h3 class="anchored" data-anchor-id="analyze_ml_model">analyze_ml_model</h3>
@@ -356,7 +356,7 @@ Accuracy of trained model on separate validation set: 0.8604852686308492</code><
 </div>
 </div>
 </div>
-<div id="moved-greene" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.074770+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.077386+00:00&quot;,&quot;total&quot;:0.002618683999997984}}" data-execution_count="8">
+<div id="moved-greene" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.342258+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.344561+00:00&quot;,&quot;total&quot;:0.0023048280000068644}}" data-execution_count="8">
 <hr>
 <section id="get_mismatch" class="level3">
 <h3 class="anchored" data-anchor-id="get_mismatch">get_mismatch</h3>
@@ -396,7 +396,7 @@ Accuracy of trained model on separate validation set: 0.8604852686308492</code><
 <blockquote class="blockquote">
 <p>describes some examples for machine learning architectures applicable to glycans. The main portal is prep_models which allows users to setup (trained) models by their string names</p>
 </blockquote>
-<div id="clean-personality" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.077506+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.080398+00:00&quot;,&quot;total&quot;:0.0028943389999938063}}" data-execution_count="9">
+<div id="clean-personality" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.344702+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.347297+00:00&quot;,&quot;total&quot;:0.0025977930000067317}}" data-execution_count="9">
 <hr>
 <section id="sweetnet" class="level3">
 <h3 class="anchored" data-anchor-id="sweetnet">SweetNet</h3>
@@ -426,7 +426,7 @@ class Model(nn.Module):
 <p>:ivar training: Boolean represents whether this module is in training or evaluation mode. :vartype training: bool</p>
 </section>
 </div>
-<div id="christian-arnold" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.080479+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.084061+00:00&quot;,&quot;total&quot;:0.003584826000007979}}" data-execution_count="10">
+<div id="christian-arnold" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.347379+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.350454+00:00&quot;,&quot;total&quot;:0.0030779170000130307}}" data-execution_count="10">
 <hr>
 <section id="lectinoracle" class="level3">
 <h3 class="anchored" data-anchor-id="lectinoracle">LectinOracle</h3>
@@ -459,7 +459,7 @@ class Model(nn.Module):
 <p>:ivar training: Boolean represents whether this module is in training or evaluation mode. :vartype training: bool</p>
 </section>
 </div>
-<div id="robust-passion" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.084145+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.088124+00:00&quot;,&quot;total&quot;:0.0039823129999945195}}" data-execution_count="11">
+<div id="robust-passion" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.350535+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.353980+00:00&quot;,&quot;total&quot;:0.003448437999992393}}" data-execution_count="11">
 <hr>
 <section id="lectinoracle_flex" class="level3">
 <h3 class="anchored" data-anchor-id="lectinoracle_flex">LectinOracle_flex</h3>
@@ -492,7 +492,7 @@ class Model(nn.Module):
 <p>:ivar training: Boolean represents whether this module is in training or evaluation mode. :vartype training: bool</p>
 </section>
 </div>
-<div id="likely-grove" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.088211+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.090756+00:00&quot;,&quot;total&quot;:0.002547837999998137}}" data-execution_count="12">
+<div id="likely-grove" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.354061+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.356272+00:00&quot;,&quot;total&quot;:0.0022134170000072118}}" data-execution_count="12">
 <hr>
 <section id="nsequonpred" class="level3">
 <h3 class="anchored" data-anchor-id="nsequonpred">NSequonPred</h3>
@@ -518,7 +518,7 @@ class Model(nn.Module):
 <p>:ivar training: Boolean represents whether this module is in training or evaluation mode. :vartype training: bool</p>
 </section>
 </div>
-<div id="frank-command" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.090837+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.093291+00:00&quot;,&quot;total&quot;:0.0024561099999971248}}" data-execution_count="13">
+<div id="frank-command" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.356350+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.358467+00:00&quot;,&quot;total&quot;:0.002119938999982196}}" data-execution_count="13">
 <hr>
 <section id="init_weights" class="level3">
 <h3 class="anchored" data-anchor-id="init_weights">init_weights</h3>
@@ -530,7 +530,7 @@ class Model(nn.Module):
 <p><em>initializes linear layers of PyTorch model with a weight initialization</em></p>
 </section>
 </div>
-<div id="collective-cooler" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.093363+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.097225+00:00&quot;,&quot;total&quot;:0.0038645670000221344}}" data-execution_count="14">
+<div id="collective-cooler" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.358537+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.362179+00:00&quot;,&quot;total&quot;:0.0036449110000091878}}" data-execution_count="14">
 <hr>
 <section id="prep_model" class="level3">
 <h3 class="anchored" data-anchor-id="prep_model">prep_model</h3>
@@ -550,7 +550,7 @@ class Model(nn.Module):
 <blockquote class="blockquote">
 <p>contains helper functions to prepare glycan data for model training</p>
 </blockquote>
-<div id="lesbian-closer" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.097307+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.100127+00:00&quot;,&quot;total&quot;:0.002823061000015059}}" data-execution_count="15">
+<div id="lesbian-closer" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.362256+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.365043+00:00&quot;,&quot;total&quot;:0.0027891400000044086}}" data-execution_count="15">
 <hr>
 <section id="dataset_to_graphs" class="level3">
 <h3 class="anchored" data-anchor-id="dataset_to_graphs">dataset_to_graphs</h3>
@@ -571,7 +571,7 @@ class Model(nn.Module):
  Data(edge_index=[2, 4], labels=[5], string_labels=[5], num_nodes=5, y=0)]</code></pre>
 </div>
 </div>
-<div id="broadband-tours" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.100252+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.103987+00:00&quot;,&quot;total&quot;:0.003737325000003011}}" data-execution_count="16">
+<div id="broadband-tours" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.365150+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.368295+00:00&quot;,&quot;total&quot;:0.003146645000015269}}" data-execution_count="16">
 <hr>
 <section id="dataset_to_dataloader" class="level3">
 <h3 class="anchored" data-anchor-id="dataset_to_dataloader">dataset_to_dataloader</h3>
@@ -598,7 +598,7 @@ class Model(nn.Module):
 <pre><code>DataBatch(edge_index=[2, 8], labels=[10], string_labels=[2], num_nodes=10, y=[2], batch=[10], ptr=[3])</code></pre>
 </div>
 </div>
-<div id="heated-georgia" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.104128+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.107271+00:00&quot;,&quot;total&quot;:0.0031454060000157824}}" data-execution_count="17">
+<div id="heated-georgia" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.368417+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.371087+00:00&quot;,&quot;total&quot;:0.002672720999981948}}" data-execution_count="17">
 <hr>
 <section id="split_data_to_train" class="level3">
 <h3 class="anchored" data-anchor-id="split_data_to_train">split_data_to_train</h3>
@@ -633,7 +633,7 @@ class Model(nn.Module):
 <section id="inference" class="level2">
 <h2 class="anchored" data-anchor-id="inference">inference</h2>
 <p><a class="anchor" id="inference"></a> &gt;can be used to analyze trained models, make predictions, or obtain glycan representations</p>
-<div id="continued-tokyo" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.107419+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.110674+00:00&quot;,&quot;total&quot;:0.003257474000008642}}" data-execution_count="18">
+<div id="continued-tokyo" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.371213+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.374449+00:00&quot;,&quot;total&quot;:0.003238065999994433}}" data-execution_count="18">
 <hr>
 <section id="glycans_to_emb" class="level3">
 <h3 class="anchored" data-anchor-id="glycans_to_emb">glycans_to_emb</h3>
@@ -643,13 +643,13 @@ class Model(nn.Module):
 <span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>    libr:<span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">int</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># dictionary of form glycoletter:index</span></span>
 <span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>    batch_size:<span class="bu">int</span><span class="op">=</span><span class="dv">32</span>, <span class="co"># batch size used during training</span></span>
 <span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>    rep:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span>, <span class="co"># True returns representations, False returns predicted labels</span></span>
-<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>    class_list:<span class="bu">list</span>[<span class="bu">str</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># list of unique classes to map predictions</span></span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>    class_list:<span class="bu">list</span>[<span class="bu">str</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># list of unique classes to map predictions; a model with a single output is a binary classifier, read as class_list[1] for logits &gt;= 0</span></span>
 <span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a>    multilabel:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># whether to output predictions for a multilabel-task</span></span>
 <span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>pandas.DataFrame <span class="op">|</span> <span class="bu">list</span>[<span class="bu">str</span>]: <span class="co"># dataframe of representations or list of predictions</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>Returns a dataframe of learned representations for a list of glycans</em></p>
 </section>
 </div>
-<div id="collective-strike" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.110748+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.113864+00:00&quot;,&quot;total&quot;:0.0031186150000053203}}" data-execution_count="19">
+<div id="collective-strike" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.374519+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.377160+00:00&quot;,&quot;total&quot;:0.002644309999993766}}" data-execution_count="19">
 <hr>
 <section id="get_lectin_preds" class="level3">
 <h3 class="anchored" data-anchor-id="get_lectin_preds">get_lectin_preds</h3>
@@ -668,7 +668,7 @@ class Model(nn.Module):
 <p><em>Wrapper that uses LectinOracle-type model for predicting binding of protein to glycans</em></p>
 </section>
 </div>
-<div id="therapeutic-alias" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.113963+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.116701+00:00&quot;,&quot;total&quot;:0.002741108999998687}}" data-execution_count="20">
+<div id="therapeutic-alias" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.377228+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.379568+00:00&quot;,&quot;total&quot;:0.0023422640000205774}}" data-execution_count="20">
 <hr>
 <section id="get_nsequon_preds" class="level3">
 <h3 class="anchored" data-anchor-id="get_nsequon_preds">get_Nsequon_preds</h3>
@@ -680,7 +680,7 @@ class Model(nn.Module):
 <p><em>Predicts whether an N-sequon will be glycosylated</em></p>
 </section>
 </div>
-<div id="cognitive-diploma" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.116772+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.119557+00:00&quot;,&quot;total&quot;:0.00278801900000758}}" data-execution_count="21">
+<div id="cognitive-diploma" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.379641+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.382047+00:00&quot;,&quot;total&quot;:0.0024086189999934504}}" data-execution_count="21">
 <hr>
 <section id="get_esmc_representations" class="level3">
 <h3 class="anchored" data-anchor-id="get_esmc_representations">get_esmc_representations</h3>
@@ -701,7 +701,7 @@ model = ESMC.from_pretrained("esmc_300m")</code></pre>
 <blockquote class="blockquote">
 <p>contains various data split functions to get appropriate training and test sets</p>
 </blockquote>
-<div id="checked-effect" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.119644+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.124540+00:00&quot;,&quot;total&quot;:0.004898961000009194}}" data-execution_count="22">
+<div id="checked-effect" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.382127+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.386108+00:00&quot;,&quot;total&quot;:0.0039834410000025855}}" data-execution_count="22">
 <hr>
 <section id="hierarchy_filter" class="level3">
 <h3 class="anchored" data-anchor-id="hierarchy_filter">hierarchy_filter</h3>
@@ -726,7 +726,7 @@ model = ESMC.from_pretrained("esmc_300m")</code></pre>
 <pre><code>['Glc(b1-3)Glc(b1-3)[Man(b1-3)Man(b1-6)]Glc(b1-3)Glc(b1-3)[Man(b1-3)Man(b1-6)]Glc(b1-3)Glc(b1-3)Glc', 'Gal(b1-3)[Neu5Ac(a2-6)]GlcNAc(b1-4)[Gal(b1-4)GlcNAc(b1-2)]Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', '[Rha(a1-3)]Man(a1-3)Man(a1-3)GlcNAc(b1-4)Man', 'Fuc(a1-3)[HexNAc(b1-4)]Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3/6)Gal(b1-4)GlcNAc(b1-2)[Neu5Ac(a2-3)[GalNAc(b1-4)]Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc', 'Pen(?1-?)Hex(?1-?)Pen(?1-?)Pen', 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc', 'Xyl(b1-4)[Gal(a1-2)][D-Rha(a1-3)]Fuc(a1-3)[Xyl(b1-4)]Glc', 'GlcN6Me(b1-4)GlcNAc(b1-4)GlcNAc(b1-4)GlcNAc', 'GalNAcOS(b1-4)GlcNAc(b1-2)Man(a1-3)[GalNAc(b1-4)GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc', 'Fuc(a1-2)[GalNAc(a1-3)]Gal']</code></pre>
 </div>
 </div>
-<div id="ordinary-balance" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.124709+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.127101+00:00&quot;,&quot;total&quot;:0.0023944379999818466}}" data-execution_count="23">
+<div id="ordinary-balance" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.386242+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.388291+00:00&quot;,&quot;total&quot;:0.0020517240000117454}}" data-execution_count="23">
 <hr>
 <section id="general_split" class="level3">
 <h3 class="anchored" data-anchor-id="general_split">general_split</h3>
@@ -746,7 +746,7 @@ model = ESMC.from_pretrained("esmc_300m")</code></pre>
 <pre><code>['Neu5Ac(a2-3/6)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3/6)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc', '[Man(a1-2)Man(a1-2)Man(a1-6)Man(a1-3)Man(a1-2)Man(a1-2)]Man(a1-6)Man(a1-6)[Man(a1-3)Man(a1-2)Man(a1-2)]Man(a1-3)[Man(a1-3)Man(a1-2)Man(a1-6)[Man(a1-3)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Gal(a1-3)Gal(b1-4)GlcNAc(b1-2)[Gal(a1-3)Gal(b1-4)GlcNAc(b1-4/6)]Man(a1-3/6)[Gal(a1-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Qui3NSerAc(b1-3)Ribf(b1-4)Gal(b1-3)GlcNAc(a1-4)Qui3NSerAc', 'Gal(a1-4)Neu5Ac(a2-6)Gal', 'GlcA(?1-?)GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)GalNAc(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc', 'LDManHep(a1-7)LDManHepOP(a1-3)[DDManHepOP(a1-2)DDManHep(a1-4)]LDManHep(a1-5)Kdo', 'Neu5Gc(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Gal(b1-3/4)GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Fuc(a1-2)Gal(b1-4)GlcNAc(b1-6)[Fuc(a1-2)Gal(b1-4)]Gal(b1-4)Glc-ol']</code></pre>
 </div>
 </div>
-<div id="flush-joyce" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-28T07:58:32.127264+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-28T07:58:32.130028+00:00&quot;,&quot;total&quot;:0.0027670780000050854}}" data-execution_count="24">
+<div id="flush-joyce" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-16T08:02:26.388432+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-16T08:02:26.390760+00:00&quot;,&quot;total&quot;:0.0023297519999800897}}" data-execution_count="24">
 <hr>
 <section id="prepare_multilabel" class="level3">
 <h3 class="anchored" data-anchor-id="prepare_multilabel">prepare_multilabel</h3>
