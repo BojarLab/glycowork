@@ -6,6 +6,7 @@ from glycowork.motif.tokenization import get_core, get_modification, SIALIC_KEYS
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit, is_composition, canonicalize_composition, _COMP_ORDER, PDB_TO_IUPAC
 import warnings
 import html
+import base64
 import hashlib
 from io import BytesIO
 from typing import Any
@@ -1388,26 +1389,42 @@ def draw_chem3d(
 
 
 class GlycanDrawing:
-    def __init__(self, drawing_obj, shadow = False, sticker = False, vertical = False, alt_text = None):
+    def __init__(self, drawing_obj, shadow = False, sticker = False, vertical = False, alt_text = None, dim = 50):
         self.drawing_obj = drawing_obj
         self.shadow = shadow
         self.sticker = sticker
         self.vertical = vertical
         self.alt_text = alt_text
+        self.dim = dim
 
     def as_svg(self):
         data = self.drawing_obj.as_svg()
         return data.replace('<svg ', f'<svg aria-label="{self.alt_text}" role="img" ', 1) if self.alt_text else data
 
-    def save_svg(self, filepath):
+    def as_standalone_svg(self):
+        "SVG code that looks the same in any viewer: effects baked in by glycorender, labels as plainly positioned text"
         data = self.as_svg()
         # drawsvg has no cut layer of its own, so route the SVG through glycorender as well
         if self.shadow or self.sticker:
             from glycorender.render import pdf_to_svg_bytes
             data = pdf_to_svg_bytes(data, shadow = self.shadow, sticker = self.sticker)
             data = data.replace('<svg ', f'<svg aria-label="{self.alt_text}" role="img" ', 1) if self.alt_text else data
+        return _flatten_text_paths(data, turn = 90 if self.vertical else 0)
+
+    def save_svg(self, filepath):
         with open(filepath, 'w', encoding = "utf-8") as f:
-            f.write(_flatten_text_paths(data, turn = 90 if self.vertical else 0))
+            f.write(self.as_standalone_svg())
+
+    def as_markdown(self,
+                    size: float = 16  # Height of one monosaccharide symbol in pixels, about that of a line of text
+    ) -> str:  # HTML <img> tag with the drawing as an SVG data URI
+        "Inline image of the drawing for Markdown text, e.g., Markdown(f'binds {d.as_markdown()}')"
+        data = base64.b64encode(self.as_standalone_svg().encode('utf-8')).decode('ascii')
+        h = max(1, round(self.drawing_obj.height * size / self.dim))
+        # An <img>, not ![alt](...), since glycan brackets would end the alt text. The height goes in twice: Jupyter's
+        # stylesheet (img {height: auto}) overrides the attribute, and GitHub strips style
+        return (f'<img src="data:image/svg+xml;base64,{data}" alt="{self.alt_text or ""}" '
+                f'height="{h}" style="height: {h}px; vertical-align: middle">')
 
     def save(self, filepath):
         "Saves as .svg, .pdf, or .png (300 dpi) and returns the drawing, so saves can be chained"
@@ -1667,7 +1684,7 @@ def _finish_drawing(
     d2 = draw.Drawing(x1 - x0 + 2 * margin, y1 - y0 + 2 * margin, origin = (x0 - margin, y0 - margin),
                       id_prefix = f'g{tag}_')
     d2.append(d)
-    drawing = GlycanDrawing(d2, shadow = shadow, sticker = sticker, vertical = vertical, alt_text = alt_text)
+    drawing = GlycanDrawing(d2, shadow = shadow, sticker = sticker, vertical = vertical, alt_text = alt_text, dim = dim)
     if filepath:
         drawing.save(str(filepath).replace(in_glycan, re.sub(r'[<>:"/\\|?*]', '_', in_glycan)))
     return drawing if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(
@@ -2129,7 +2146,7 @@ def plot_glycans_grid(
                                   text_anchor = 'middle', fill = col_dict_base['black']))
     alt_text = html.escape(f"SNFG diagrams of {len(glycans)} glycans: " + "; ".join(glycans) + ".")
     drawing = GlycanDrawing(grid, shadow = kwargs.get('shadow', False), sticker = kwargs.get('sticker', False),
-                            vertical = kwargs.get('vertical', False), alt_text = alt_text)
+                            vertical = kwargs.get('vertical', False), alt_text = alt_text, dim = dim)
     if filepath:
         drawing.save(filepath)
     return drawing if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(

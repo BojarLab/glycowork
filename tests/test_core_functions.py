@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 import seaborn as sns
-import sys, os, re
+import sys, os, re, base64
 os.environ.setdefault("LOKY_MAX_CPU_COUNT", "1")  # joblib's physical-core probe shells out to a tool Windows no longer ships; nothing here needs more than one worker
 import shutil
 import torch
@@ -4976,6 +4976,13 @@ def test_glycodraw():
     assert Path("test.pdf").exists()
     GlycoDraw("GlcNAc(b1-4)GlcA", filepath = "test.png", sticker = {'edge': 1.5})
     assert Path("test.png").exists()
+    # Inline Markdown: the standalone SVG as a data URI, sized per symbol so glycans of any size share one symbol height
+    md = GlycoDraw("GlcNAc(b1-4)GlcA", sticker = True, suppress = True).as_markdown()
+    assert md.startswith('<img src="data:image/svg+xml;base64,') and 'alt="SNFG diagram of GlcNAc(b1-4)GlcA' in md
+    assert 'feDropShadow' in base64.b64decode(md.split('base64,')[1].split('"')[0]).decode('utf-8')
+    assert [re.search(r'height="(\d+)" style="height: \1px;', GlycoDraw(g, dim = dim, suppress = True).as_markdown(size = size)).group(1)
+            for g, dim, size in [("GlcNAc(b1-4)GlcA", 50, 16), ("GlcNAc(b1-4)GlcA", 100, 16), ("GlcNAc(b1-4)GlcA", 50, 32),
+                                 (["GlcNAc(b1-4)GlcA", "Gal(b1-3)GalNAc"], 50, 16)]] == ['23', '23', '45', '23']
     # Test invalid glycan
     with pytest.raises(Exception):
         GlycoDraw("InvalidGlycan", restrict_vocab = True)
