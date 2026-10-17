@@ -399,6 +399,7 @@ def get_class(glycan: str # Glycan in IUPAC-condensed nomenclature
     "Determines glycan class"
     if glycan.startswith('['):
         return 'repeat'
+    glycan = re.sub(r'1(?:Ser|Thr|Asn)$', '', glycan)  # an amino-acid aglycone, as canonicalize_iupac keeps it (GalNAc1Ser, GlcNAc1Asn), leaves the class as it is
     if glycan.endswith('-ol'):
         return 'free'
     if glycan.endswith(('1Cer', 'Ins')):
@@ -496,7 +497,7 @@ def IUPAC_to_SMILES(glycan_list: str | list[str] # List of IUPAC-condensed glyca
                     ) -> list[str]: # List of corresponding SMILES strings; empty for anything without a defined structure
     "Convert list of IUPAC-condensed glycans to isomeric SMILES"
     from glycowork.motif.smiles import glycan_to_smiles, GlycanSMILESError
-    if not isinstance(glycan_list, list):
+    if not isinstance(glycan_list, (list, tuple, pd.Series, pd.Index, np.ndarray)):
         glycan_list = [glycan_list]
     res = []
     for g in glycan_list:
@@ -660,7 +661,7 @@ def glycoct_to_iupac(glycoct: str # Glycan in GlycoCT format
     floating_specs = []
     for header, f in floating_bits:
         residue_dic_f, iupac_parts_f = glycoct_to_iupac_int(f, _GLYCOCT_MONO, _GLYCOCT_SUB)
-        part = list(residue_dic_f.values())[0] if len(residue_dic_f) == 1 else glycoct_build_iupac(iupac_parts_f, residue_dic_f)
+        part = glycoct_build_iupac(iupac_parts_f, residue_dic_f)
         hit_p, hit_l = re.search(r'ParentIDs:([\d|]+)', header), re.search(
             r'SubtreeLinkageID\d+:\w\((-?\d+)\+(-?\d+)\)', header)
         parents = [int(x) for x in hit_p.group(1).split('|')] if hit_p else []
@@ -685,7 +686,7 @@ def glycoct_to_iupac(glycoct: str # Glycan in GlycoCT format
         for comp in components[1:]:
             res_c = {k: residue_dic[k] for k in comp}
             parts_c = defaultdict(list, {k: iupac_parts[k] for k in comp if k in iupac_parts})
-            floating_specs.append((res_c[comp[0]] if len(comp) == 1 else glycoct_build_iupac(parts_c, res_c), [], '1-?'))
+            floating_specs.append((glycoct_build_iupac(parts_c, res_c), [], '1-?'))
         residue_dic = {k: residue_dic[k] for k in components[0]}
         iupac_parts = defaultdict(list, {k: iupac_parts[k] for k in components[0] if k in iupac_parts})
         floating_specs = [(part, [p for p in parents if p in residue_dic], link) for part, parents, link in floating_specs]
@@ -758,6 +759,9 @@ def glycan_to_glycoct(glycan: str # Glycan in IUPAC-condensed format
         if parent is not None:
             lin.append(f"{len(lin) + 1}:{ids[next(graph.predecessors(parent))]}o({acceptor.replace('/', '|').replace('?', '-1')}+{donor.replace('?', '-1')}){ids[node]}d")
         subs = [({'NAc': 'n-acetyl', 'NGc': 'n-glycolyl', 'NS': 'n-sulfate', 'N': 'amino'}[nsub], '2', 'd')] if nsub else []
+        linked = ({donor} if parent is not None else set()) | {re.fullmatch(r'[ab?]?[\d?]-([\d?/]+)', labels[link]).group(1) for link in graph.successors(node)}
+        if stem != 'Neu' and any(p in linked for p, _ in re.findall(r'(\d)(S|P|Ac|Gc|Me)', mods)):  # GlcNAc1P(a1-6)Man or GlcNAc(b1-6)Man6P: a phosphodiester would put the phosphate and the glycosidic bond on one oxygen
+            raise ValueError(f"'{labels[node]}' in '{glycan}' carries a substituent on a linked position (a phosphodiester), which glycan_to_glycoct cannot write.")
         for p, s in re.findall(r'([\dO])(S|P|Ac|Gc|Me)', mods):
             n_linked = stem == 'Neu' and p == '5'  # Neu5Ac and Neu5Gc carry their N-substituent at C5; O-substituents replace the hydroxyl at their position, -1 if unknown (GlcNAcOS)
             subs.append((('n-' if n_linked else '') + {'S': 'sulfate', 'P': 'phosphate', 'Ac': 'acetyl', 'Gc': 'glycolyl', 'Me': 'methyl'}[s], p.replace('O', '-1'), 'd' if n_linked else 'o'))
@@ -773,64 +777,16 @@ def glycan_to_glycoct(glycan: str # Glycan in IUPAC-condensed format
 def glycoctxml_to_iupac(glycan_xml: str # GlycoCT XML format string
                         ) -> str: # Basic IUPAC-condensed format
     """Convert GlycoCT XML format to basic IUPAC-condensed format"""
-    residue_dic = {}
-    iupac_parts = defaultdict(list)
-    lines = glycan_xml.split('\n')
-    current_basetype_id = None
-    for i, line in enumerate(lines):
-        if '<basetype' in line:
-            id_match = re.search(r'id="(\d+)"', line)
-            anomer_match = re.search(r'anomer="([^"]+)"', line)
-            if id_match:
-                current_basetype_id = int(id_match.group(1))
-                anomer = anomer_match.group(1).replace('x', '?') if anomer_match else '?'
-                if i+1 < len(lines) and '<stemtype' in lines[i+1]:
-                    stemtype_match = re.search(r'type="([^"]+)"', lines[i+1])
-                    if stemtype_match:
-                        stemtype = stemtype_match.group(1)
-                        residue_dic[current_basetype_id] = multireplace(stemtype, _GLYCOCT_MONO) + anomer
-        elif '<substituent' in line:
-            id_match = re.search(r'id="(\d+)"', line)
-            name_match = re.search(r'name="([^"]+)"', line)
-            if id_match and name_match:
-                res_id = int(id_match.group(1))
-                residue_dic[res_id] = multireplace(name_match.group(1).lower(), _GLYCOCT_SUB)
-        elif '<connection' in line:
-            parent_match = re.search(r'parent="(\d+)"', line)
-            child_match = re.search(r'child="(\d+)"', line)
-            if parent_match and child_match:
-                parent_id = int(parent_match.group(1))
-                child_id = int(child_match.group(1))
-                # Each scan below may find nothing, so start from an unknown state instead of inheriting the previous connection's
-                child_type, parent_pos, child_pos = '', '?', '?'
-                for j in range(i + 1, min(i + 10, len(lines))):
-                    if 'childType=' in lines[j]:
-                        child_type_match = re.search(r'childType="([^"]+)"', lines[j])
-                        if child_type_match:
-                            child_type = child_type_match.group(1)
-                            break
-                for j in range(i+1, min(i+10, len(lines))):
-                    if '<parent' in lines[j]:
-                        pos_match = re.search(r'pos="([^"]+)"', lines[j])
-                        if pos_match:
-                            parent_pos = pos_match.group(1)
-                            break
-                for j in range(i+1, min(i+10, len(lines))):
-                    if '<child' in lines[j]:
-                        pos_match = re.search(r'pos="([^"]+)"', lines[j])
-                        if pos_match:
-                            child_pos = pos_match.group(1)
-                            break
-                if child_type == 'n':
-                    sub = residue_dic[child_id]
-                    sub = parent_pos + sub[1:] if parent_pos.isdigit() and sub[
-                        0] == 'O' else parent_pos + sub if parent_pos not in ('-1', '?', '2', '5') and sub[
-                        0] == 'N' else '5' + sub[1:] if sub in ('NAc', 'NGc') and residue_dic[parent_id].startswith(
-                        'Neu') else sub  # sulfate at 6 to 6S, an N-substituent off its canonical carbon keeps it, as in glycoct_to_iupac_int
-                    residue_dic[parent_id] = residue_dic[parent_id][:-1] + sub + residue_dic[parent_id][-1]
-                else:
-                    iupac_parts[parent_id].append((f"{child_pos}-{parent_pos}", child_id))
-    return re.sub(r'([ab\?])\(', r'(\1', glycoct_build_iupac(iupac_parts, residue_dic))
+    import xml.etree.ElementTree as ET
+    sugar = ET.fromstring(glycan_xml.strip())
+    ring = lambda e, key: e.get(key, '-1').replace('-1', 'x')
+    positions = lambda link, tag: '|'.join(p.get('pos', '-1') for p in link.iter(tag)) or '-1'
+    res = [f"{e.get('id')}b:{e.get('anomer', 'x')}-{''.join(s.get('type') + '-' for s in e.iter('stemtype'))}{e.get('superclass', 'hex').upper()}-{ring(e, 'ringStart')}:{ring(e, 'ringEnd')}"
+           + ''.join(f"|{m.get('pos_one')}{',' + m.get('pos_two') if m.get('pos_two') else ''}:{m.get('type')}" for m in e.iter('modification'))
+           if e.tag == 'basetype' else f"{e.get('id')}s:{e.get('name')}" for e in sugar.find('.//residues')]  # the RES and LIN lines of GlycoCT condensed, so deoxy, uronic, keto, ring size and alternative positions read as there
+    lin = [f"{i}:{c.get('parent')}{l.get('parentType', 'o')}({positions(l, 'parent')}+{positions(l, 'child')}){c.get('child')}{l.get('childType', 'd')}"
+           for i, (c, l) in enumerate(((c, c.find('linkage')) for c in sugar.iter('connection')), 1)]
+    return glycoct_to_iupac('RES\n' + '\n'.join(res) + ('\nLIN\n' + '\n'.join(lin) if lin else ''))
 
 
 def get_mono(token: str # WURCS monosaccharide token
@@ -916,12 +872,18 @@ def get_mono(token: str # WURCS monosaccharide token
     return mono
 
 
+def _wurcs_id(i: int # 1-based residue index
+              ) -> str: # WURCS residue ID: a to z, A to Z, then aa, ab, ... (bijective base 52, as in WURCSFramework)
+    "Residue ID of the i-th WURCS residue"
+    return (_wurcs_id((i - 1) // 52) if i > 52 else '') + 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'[(i - 1) % 52]
+
+
 def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
                    ) -> str: # Basic IUPAC-condensed format
     "Convert glycan from WURCS to barebones IUPAC-condensed format"
     wurcs = wurcs[wurcs.index('/') + 1:]
-    pattern = r'(?<!\|)\b([a-zA-Z]+)\d(?:\|\1\d)+\}?(?!\|)|(?<!\|)\b[a-zA-Z]+(\d)(?:\|[a-zA-Z]+\2)+\}?(?!\|)'  # whole alternative groups only, so d4|d6|g4|g6 is not read as d4|d6; residues past the 52nd are aa, ab, ...
-    additional_pattern = r'\b[a-zA-Z]+[\d?](?:\|[a-zA-Z]+[\d?])+\}?'  # alternatives across residues and positions (d4|d6|g4|g6) leave the part floating
+    pattern = r'(?<![a-zA-Z\d|])([a-zA-Z]+)\d(?:\|\1\d)+\}?(?!\|)|(?<![a-zA-Z\d|])[a-zA-Z]+(\d)(?:\|[a-zA-Z]+\2)+\}?(?!\|)'  # whole alternative groups only, so d4|d6|g4|g6 is not read as d4|d6; residues past the 52nd are aa, ab, ...; a group can follow '_' (a?|b?}*OCC/3=O), where \b fails
+    additional_pattern = r'(?<![a-zA-Z\d|])[a-zA-Z]+[\d?](?:\|[a-zA-Z]+[\d?])+\}?'  # alternatives across residues and positions (d4|d6|g4|g6) leave the part floating
 
     def replacement(match):
         text = match.group(0)
@@ -939,11 +901,17 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
     topology, connectivity = topology.split('_'), connectivity.split('-')
     if any('~' in link or link.count('-') > 1 for link in topology):
         raise ValueError(f"'{wurcs}' has repeating units or linkages bridging more than two residues, which IUPAC-condensed cannot express.")
-    connectivity = {chr(97 + i) if i < 26 else chr(65 + i - 26) if i < 52 else chr(97) + chr(97 + i - 52) if i < 78 else chr(97) + chr(65 + i - 78): int(num) for i, num in enumerate(connectivity)}
+    substituents = ''
+    for pos, _, chem in (link.partition('*') for link in topology if link and '-' not in link.partition('*')[0]):  # a substituent on alternative residues (a?|b?}*OCC/3=O, c4|d4}*OSO/3=O/3=O) floats, as {OAc} or {4S}
+        if chem not in _WURCS_MOD:
+            raise ValueError(f"WURCS substituent '{chem}' is not supported yet, so '{wurcs}' cannot be converted to IUPAC-condensed.")
+        substituents += '{' + (re.sub(r'[a-zA-Z?|]', '', pos) or 'O') + _WURCS_MOD[chem] + '}'
+    topology = [link for link in topology if not link or '-' in link.partition('*')[0]]
+    connectivity = {_wurcs_id(i + 1): int(num) for i, num in enumerate(connectivity)}
     if len(connectivity) > 1 and not any(link.split('-')[0].rstrip('0123456789?') in connectivity for link in topology if '-' in link):
         monos = [get_mono(monosaccharides[i - 1]) for i in
                  connectivity.values()]  # composition-like record, fully ambiguous linkages
-        return ''.join('{' + f"{m[:-1]}({m[-1]}1-?)" + '}' for m in monos[1:]) + monos[0][:-1]
+        return substituents + ''.join('{' + f"{m[:-1]}({m[-1]}1-?)" + '}' for m in monos[1:]) + monos[0][:-1]
     kids, floaty = defaultdict(list), []
     for link in topology:
         if '-' not in link:
@@ -969,7 +937,7 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
         raise ValueError(f"'{wurcs}' is cyclic (every residue is attached to another), which IUPAC-condensed cannot express.")
     floating_part = ''.join('{' + f"{subtree(n, {n})}(1-{pos})" + '}' for n, pos in
                             floaty)  # a floating bit can be a whole subtree, not just its attachment residue
-    iupac = re.sub(r'(-ol)?([ab?])\((\d+)([PS])-', r'\3\4\1\2(\3-', (floating_part + subtree(root, {root}))[:-1])  # a phosphodiester is written on its donor, GlcNAc1P(a1-6)Man or Rib5P-ol(5-1)Rib-ol
+    iupac = re.sub(r'(-ol)?([ab?])\((\d+)([PS])-', r'\3\4\1\2(\3-', (substituents + floating_part + subtree(root, {root}))[:-1])  # a phosphodiester is written on its donor, GlcNAc1P(a1-6)Man or Rib5P-ol(5-1)Rib-ol
     return re.sub(r'([ab?])\(', r'(\1', iupac).replace('-ol(?', '-ol(')  # an alditol has no anomer
 
 
@@ -1206,14 +1174,14 @@ def glycan_to_wurcs(glycan: str # Glycan in IUPAC-condensed format
     walk(seq, root)
     order = [n for t, n in seq.nodes if t == 'B']
     index = {node: i + 1 for i, node in enumerate(order)}
-    letter = lambda i: (letter((i - 1) // 52) if i > 52 else '') + 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'[(i - 1) % 52]
-    unique = list(dict.fromkeys(_wurcs_ms(residues[node]) for node in order))
+    ms = [_wurcs_ms(residues[node]) for node in order]
+    unique = {u: i + 1 for i, u in enumerate(dict.fromkeys(ms))}
     lins = []
     for parent, acceptor, child, donor, mp in (n for t, n in seq.nodes if t == 'M'):  # LINComparator: fewer unknown positions, fewer alternatives, then residue by residue, then MAP
         glips = sorted([[(index[parent], p) for p in acceptor], [(index[child], donor)]], key = lambda g: (len(g), [(i, p == -1, p) for i, p in g]))
         lins.append(((sum(p == -1 for g in glips for _, p in g), sum(len(g) for g in glips if len(g) > 1), [(len(g), [(i, p == -1, p) for i, p in g]) for g in glips], mp != '', mp),
-                     '-'.join('|'.join(f"{letter(i)}{'?' if p == -1 else p}" for i, p in g) for g in glips) + mp))
-    return (f"WURCS=2.0/{len(unique)},{len(order)},{len(lins)}/{''.join(f'[{u}]' for u in unique)}/" + '-'.join(str(unique.index(_wurcs_ms(residues[node])) + 1) for node in order)
+                     '-'.join('|'.join(f"{_wurcs_id(i)}{'?' if p == -1 else p}" for i, p in g) for g in glips) + mp))
+    return (f"WURCS=2.0/{len(unique)},{len(order)},{len(lins)}/{''.join(f'[{u}]' for u in unique)}/" + '-'.join(str(unique[u]) for u in ms)
             + '/' + '_'.join(lin for _, lin in sorted(lins, key = lambda x: x[0])))
 
 
@@ -1917,6 +1885,8 @@ def _canonicalize_iupac(glycan: str | int  # Glycan sequence in any supported fo
             f"canonicalize_iupac needs a non-empty glycan string but got {glycan!r}; empty cells/NaN have to be filtered out of your data first.")
     if glycan.startswith("ENTRY"):
         glycan = kcf_to_iupac(glycan)
+    elif glycan.lstrip().startswith('<?xml') or '<sugar' in glycan:  # GlycoCT XML, read before the spaces between its attributes are stripped
+        glycan = glycoctxml_to_iupac(glycan)
     glycan = re.sub('[\u2010-\u2015\u2212]', '-', glycan.strip()).replace(' ', '')  # hyphen, non-breaking hyphen, figure/en/em dash, and minus sign from PDF copy-paste all mean '-'
     glycan = _COMP_ADDUCT.sub('', glycan)  # an ion written after the glycan, 'FA2G2S1 [M+Na]+' or 'N4H5F1+Ammonium(+17)', names that glycan
     if '//' in glycan:
@@ -1975,8 +1945,6 @@ def _canonicalize_iupac(glycan: str | int  # Glycan sequence in any supported fo
         glycan = linearcode_to_iupac(glycan)
     elif looks_like_oxford(glycan):
         glycan = oxford_to_iupac(glycan)
-    elif glycan.startswith('<?xml') or '<sugar' in glycan:
-        glycan = glycoctxml_to_iupac(glycan)
     elif looks_like_smiles(glycan):  # SMILES hook
         glycan = smiles_to_iupac(glycan)
     glycan = re.sub(r'^(?!-)(.*\((?:[abx?]?[12]))-?$', r'\1-?)', glycan)  # a sequence ending in an unterminated linkage keeps it as an open linkage; left alone, the dash is dropped further down and the dangling '(b1' later reads as an extra residue that shifts every main-chain linkage label in GlycoDraw. A repeat unit is exempt: its trailing linkage is closed by the leading one, not open

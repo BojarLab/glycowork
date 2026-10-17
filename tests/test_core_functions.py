@@ -652,7 +652,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("WURCS=2.0/1,2,1/[a2122h-1b_1-5]/1-1/a4-b1*OSO*/3=O/3=O") == "Glc1S(b1-4)Glc"
     assert canonicalize_iupac("WURCS=2.0/4,8,7/[a1211h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a2211h-1a_1-5][a1122h-1a_1-5]/1-2-3-3-3-3-4-4/a4-b1_b3-c1_b6-e1_c2-d1_e3-f1_e6-g1_g2-h1") == "Man(a1-2)Man(a1-6)[L-Man(a1-3)]L-Man(a1-6)[L-Man(a1-2)L-Man(a1-3)]Man(b1-4)L-GlcNAc"
     assert canonicalize_iupac("WURCS=2.0/6,13,12/[a2122h-1x_1-5_2*NCC/3=O][a1221m-1a_1-5][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a212h-1b_1-5][a1122h-1a_1-5]/1-2-3-4-5-6-6-6-6-6-6-6-6/a3-b1_a4-c1_c4-d1_d2-e1_d3-f1_d6-j1_f3-g1_f6-h1_h2-i1_j3-k1_j6-l1_l2-m1") == "Man(a1-2)Man(a1-6)[Man(a1-3)]Man(a1-3)[Man(a1-2)Man(a1-6)[Man(a1-3)]Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc"
-    assert canonicalize_iupac("WURCS=2.0/3,6,10/[u2122h_2*NSO/3=O/3=O][u21FFA][u2121A]/1-1-1-2-3-3/a?|b?|c?|d?|e?|f?}*OSO/3=O/3=O_a?|b?|c?|d?|e?|f?}*OSO/3=O/3=O_a?|b?|c?|d?|e?|f?}*OSO/3=O/3=O_a?|b?|c?|d?|e?|f?}*OSO/3=O/3=O_a?|b?|c?|d?|e?|f?}*OSO/3=O/3=O_a?|b?|c?|d?|e?|f?}-{a?|b?|c?|d?|e?|f?_a?|b?|c?|d?|e?|f?}-{a?|b?|c?|d?|e?|f?_a?|b?|c?|d?|e?|f?}-{a?|b?|c?|d?|e?|f?_a?|b?|c?|d?|e?|f?}-{a?|b?|c?|d?|e?|f?_a?|b?|c?|d?|e?|f?}-{a?|b?|c?|d?|e?|f?") == "{GlcNS(?1-?)}{GlcNS(?1-?)}{HexA(?1-?)}{IdoA(?1-?)}{IdoA(?1-?)}GlcNS"
+    assert canonicalize_iupac("WURCS=2.0/3,6,10/[u2122h_2*NSO/3=O/3=O][u21FFA][u2121A]/1-1-1-2-3-3/a?|b?|c?|d?|e?|f?}*OSO/3=O/3=O_a?|b?|c?|d?|e?|f?}*OSO/3=O/3=O_a?|b?|c?|d?|e?|f?}*OSO/3=O/3=O_a?|b?|c?|d?|e?|f?}*OSO/3=O/3=O_a?|b?|c?|d?|e?|f?}*OSO/3=O/3=O_a?|b?|c?|d?|e?|f?}-{a?|b?|c?|d?|e?|f?_a?|b?|c?|d?|e?|f?}-{a?|b?|c?|d?|e?|f?_a?|b?|c?|d?|e?|f?}-{a?|b?|c?|d?|e?|f?_a?|b?|c?|d?|e?|f?}-{a?|b?|c?|d?|e?|f?_a?|b?|c?|d?|e?|f?}-{a?|b?|c?|d?|e?|f?") == "{GlcNS(?1-?)}{GlcNS(?1-?)}{HexA(?1-?)}{IdoA(?1-?)}{IdoA(?1-?)}{OS}{OS}{OS}{OS}{OS}GlcNS"
     assert canonicalize_iupac("G07426YY") == "Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("G96417BZ") == "Man(a1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("G26039ES") == "Gal(b1-4)Glc-ol"
@@ -2245,11 +2245,11 @@ LIN
                    "Glc(a1-2)Fruf", "Kdo(a2-4)Kdo", "GlcNAcOS(b1-3)Gal1Me", "L-Gal(a1-2)D-Fuc", "Gal(b1-3)GalNAc-ol", "Xyl(b1-2)Man(b1-4)GlcNAc",
                    "Man(a1-2/3/6)Man(a1-3/6)[Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",  # GlycoCT alternatives 3|6 and 2|3|6 are 3/6 and 2/3/6
                    "ManA(b1-4)L-Gul(a1-4)ManA", "Rib(b1-3)Rha(a1-2)Glc", "Gal(b1-3)TalNAc", "Glc(a1-3)L-GlcNAc(a1-4)Glc", "L-Qui(a1-3)GlcNAc", "Glc(a1-3)[Lyx(a1-6)]Glc", "QuiNAc(b1-3)Alt(a1-3)QuiNAc",
-                   "Rha(a1-2)Rha-ol", "GalA(a1-4)GalA-ol", "ManNAcA(b1-3)D-FucNAc-ol", "Glc(a1-2)[Glc(a1-3)]Rib5P-ol(5-1)Rib-ol",  # alditols with further modifications, an inner alditol
+                   "Rha(a1-2)Rha-ol", "GalA(a1-4)GalA-ol", "ManNAcA(b1-3)D-FucNAc-ol", "Glc(a1-2)[Glc(a1-3)]Rib-ol(5-1)Rib-ol",  # alditols with further modifications, an inner alditol
                    "Neu4Ac5Ac(a2-3)Gal(b1-4)Glc-ol", "Neu1Me5Ac(a2-3)Gal(b1-4)Glc", "Kdn8Me(a2-3)Gal", "Kdn5Ac(a2-3)Gal", "GlcNAc(b1-4)GlcNGc", "Neu4Gc5Ac(a2-3)Gal(b1-4)Glc", "Glc3Gc4Gc(b1-6)Glc3Gc4Gc",
                    "Xyl(b1-4)All", "D-AllNAc(a1-4)GlcNAc"]:  # glycowork's All is L-allose (smiles.ENANTIOMER)  # Neu substituents in positional order, Kdn with O-substituents, an N-glycolyl off a sialic acid
         assert canonicalize_iupac(glycan_to_glycoct(glycan)) == glycan
-    for glycan in ["{Fuc(a1-?)}Gal(b1-4)GlcNAc", "Neu(a2-3)Gal", "6dTal(a1-3)Glc", "GlcNAc6PCho(b1-2)Man"]:  # floating parts, sialic acids without N-substituent, residues and substituents without a GlycoCT spelling here
+    for glycan in ["{Fuc(a1-?)}Gal(b1-4)GlcNAc", "Neu(a2-3)Gal", "6dTal(a1-3)Glc", "GlcNAc6PCho(b1-2)Man", "GlcNAc1P(a1-6)Man", "GlcNAc(b1-6)Man6P"]:  # floating parts, sialic acids without N-substituent, residues and substituents without a GlycoCT spelling here, phosphodiesters
         with pytest.raises(ValueError):
             glycan_to_glycoct(glycan)
     # A connection whose linkage block sits further than the lookahead reaches must not inherit the previous connection's positions
@@ -2271,17 +2271,20 @@ LIN
         </connection>
       </linkages>
     </sugar>'''
-    assert glycoctxml_to_iupac(xml) == "Gal(b1-4)Glcb"
+    assert glycoctxml_to_iupac(xml) == "Gal(b1-4)Glc"
     far = xml.replace('<linkage id="1"', '\n'.join(['      <!-- annotation -->'] * 12) + '\n      <linkage id="1"')
-    assert glycoctxml_to_iupac(far) == "Gal(b?-?)Glcb"
+    assert glycoctxml_to_iupac(far) == "Gal(b1-4)Glc"
+    fuc = xml.replace('name="b-dgal-HEX-1:5">', 'name="a-lgal-HEX-1:5|6:d">').replace('type="dgal" />', 'type="lgal" />\n          <modification type="d" pos_one="6" />').replace('<parent pos="4" />', '<parent pos="3" />\n            <parent pos="4" />')
+    assert glycoctxml_to_iupac(fuc.replace('anomer="b" superclass="hex" ringStart="1" ringEnd="5" name="a-lgal', 'anomer="a" superclass="hex" ringStart="1" ringEnd="5" name="a-lgal')) == "Fuc(a1-3/4)Glc"  # modifications (6-deoxy) and alternative positions, as in GlycoCT condensed
     # A substituent keeps its position, as in GlycoCT condensed: Gal6S, not GalOS
     sulf = xml.replace('</residues>', '  <substituent id="3" name="sulfate" />\n      </residues>').replace('</linkages>', '  <connection id="2" parent="2" child="3">\n          <linkage id="2" parentType="o" childType="n">\n            <parent pos="6" />\n            <child pos="1" />\n          </linkage>\n        </connection>\n      </linkages>')
-    assert glycoctxml_to_iupac(sulf) == "Gal6S(b1-4)Glcb"
+    assert glycoctxml_to_iupac(sulf) == "Gal6S(b1-4)Glc"
 
 
 def test_wurcs_to_iupac():
     with pytest.raises(ValueError, match = 'cyclic'):  # every residue is attached to another, so there is no reducing end
         wurcs_to_iupac("WURCS=2.0/1,2,2/[a2122h-1b_1-5]/1-1/a4-b1_b4-a1")
+    assert wurcs_to_iupac("WURCS=2.0/2,2,2/[a2122h-1x_1-5_2*NCC/3=O][a2112h-1b_1-5]/1-2/a4-b1_a?|b?}*OPO/3O/3=O") == "{OP}Gal(b1-4)GlcNAc"  # G44100ZK: a substituent on alternative residues floats
     wurcs = "WURCS=2.0/6,10,9/[a2122h-1x_1-5_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a2112h-1b_1-5][Aad21122h-2a_2-6_5*NCC/3=O]/1-2-3-4-2-5-6-4-2-5/a4-b1_b4-c1_c3-d1_c6-h1_d2-e1_e4-f1_f6-g2_h2-i1_i4-j1"
     result = wurcs_to_iupac(wurcs)
     assert "GlcNAc" in result
@@ -2303,7 +2306,7 @@ def test_wurcs_to_iupac():
                    "Man(a1-2/3/6)Man(a1-3/6)[Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc", "Kdn(a2-8)Neu5Ac(a2-3)Gal(b1-4)Glc", "LDManHep(a1-3)LDManHep(a1-5)[Kdo(a2-4)]Kdo", "MurNAc(b1-4)GlcNAc",
                    "Xyl(b1-4)All", "Glc(a1-3)[Lyx(a1-6)]Glc", "D-AllNAc(a1-4)GlcNAc", "L-Lyx(a1-4)Rha", "D-FucNAc4N(b1-3)Glc", "GlcNA(b1-4)GlcNAc", "Pse5Ac7Fo(a2-3)Gal", "Fruf6N(b2-1)Glc",
                    "GlcNAcOPCho(b1-2)Man", "LDManHepOPEtN(a1-3)LDManHep", "Gal(b1-4)Glc3S-ol", "Glc(a1-2)[Glc(a1-3)]Rib5P-ol(5-1)Rib-ol", "Glc(a1-6)1,5-Anhydro-Glc-ol", "Man4Ac(b1-4)Ery-ol",
-                   "GlcN(b1-6)Man(a1-5)2,7-Anhydro-Kdo", "GlcA(b1-4)2,5-Anhydro-Man-ol", "6dIdo(a1-3)Glc", "Glc(a1-4)" * 59 + "Glc",  # 60 residues, so that indices run past Z to aa, ab, ...
+                   "GlcN(b1-6)Man(a1-5)2,7-Anhydro-Kdo", "GlcA(b1-4)2,5-Anhydro-Man-ol", "6dIdo(a1-3)Glc", "Glc(a1-4)" * 119 + "Glc",  # 120 residues, so that indices run past Z to aa, ab, ... and past aZ to ba
                    "Araf(b1-5)Dha", "Leg5Ac7Ac(a2-3)Gal", "8eLeg5Ac7Ac(a2-3)Gal", "Ko(a2-4)Kdo", "Gal(b1-4)D-4dAraHex", "D-6dManHep(a1-3)Glc", "Glc(b1-4)Glc-onic", "Glc(a1-6)ManN-onic"]:  # backbones read off smiles.py's templates, also where wurcs_tokens.json has no entry
         assert canonicalize_iupac(glycan_to_wurcs(glycan)) == glycan
     assert glycan_to_wurcs("GlcAN(b1-4)GalNAc") == glycan_to_wurcs("GlcA6N(b1-4)GalNAc")  # an amine right after A is the uronamide
@@ -2546,6 +2549,8 @@ def test_get_class():
     assert get_class("Gal(b1-4)Glc") == "lipid/free"
     assert get_class("UnknownGlycan") == ""
     assert get_class("[Glc(b1-3)]Glc(b1-6)Glc") == "repeat"
+    assert get_class("Gal(b1-3)GalNAc1Ser") == "O"  # amino-acid aglycones, as canonicalize_iupac keeps them
+    assert get_class("Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc1Asn") == "N"
 
 
 def test_enforce_class():
@@ -2655,6 +2660,7 @@ def test_IUPAC_to_SMILES():
     assert IUPAC_to_SMILES(["HexNAc(4)Hex(5)", "Gal(b1-4)GlcNAc"])[0] == ''
     # An empty cell comes back empty as well, instead of networkx's 'Connectivity is undefined for the null graph', and a list passed as one glycan gets a TypeError naming the problem
     assert IUPAC_to_SMILES(["", "Gal(b1-4)GlcNAc"])[0] == ''
+    assert IUPAC_to_SMILES(pd.Series(["Gal(b1-4)GlcNAc", "Fuc(a1-2)Gal"])) == IUPAC_to_SMILES(("Gal(b1-4)GlcNAc", "Fuc(a1-2)Gal")) == IUPAC_to_SMILES(["Gal(b1-4)GlcNAc", "Fuc(a1-2)Gal"])  # a Series or tuple is several glycans, not one
     with pytest.raises(TypeError, match = 'one glycan as an IUPAC-condensed string'):
         glycan_to_smiles(["Gal(b1-4)GlcNAc"])
 

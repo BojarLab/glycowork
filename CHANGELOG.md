@@ -15,8 +15,12 @@
 
 #### processing
 ##### Added ✨
-- `glycan_to_wurcs` converts IUPAC-condensed to WURCS 2.0 in WURCSFramework's canonical order, as GlyTouCan writes it (97% coverage), e.g., for GlyTouCan registration or lookup ()
+- `glycan_to_wurcs` converts IUPAC-condensed to WURCS 2.0 in WURCSFramework's canonical order, as GlyTouCan writes it (97% coverage), e.g., for GlyTouCan registration or lookup (322fc99)
+
+##### Changed 🔄
+- Improved GlycoCT/GlycoCT XML parsing of phosphodiesters and more exotic monosaccharides ()
+- `get_class` can now also deal with aglycones, such as in `Gal(b1-3)GalNAc1Ser` ()
 
 ##### Fixed 🐛
-- `wurcs_to_iupac` now reads residues past the 52nd (`aa`, `ab`, ...), alditols with substituents (`h2122h_3*OSO/3=O/3=O`), anhydro forms (`2,7-Anhydro-Kdo`, `1,5-Anhydro-Glc-ol`), PCho and lactyl groups, and Pse with any acyls on its amines; phosphodiesters are written on the donor (`Rib5P-ol(5-1)`), and `Glc3S-ol` no longer becomes `Glc3-S-ol` ()
-- Fixed some WURCS tokens ()
+- `wurcs_to_iupac` now reads residues past the 52nd (`aa`, `ab`, ...), alditols with substituents (`h2122h_3*OSO/3=O/3=O`), anhydro forms (`2,7-Anhydro-Kdo`, `1,5-Anhydro-Glc-ol`), PCho and lactyl groups, and Pse with any acyls on its amines; phosphodiesters are written on the donor (`Rib5P-ol(5-1)`), and `Glc3S-ol` no longer becomes `Glc3-S-ol` (322fc99)
+- Fixed some WURCS tokens (322fc99)
