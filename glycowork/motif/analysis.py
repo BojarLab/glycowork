@@ -53,24 +53,24 @@ def _glycans_to_column(df: pd.DataFrame  # Abundance table, glycans in the first
 
 def _abundance_input(*names: str  # Parameters taking an abundance table, a file path, or a shipped dataset name
                    ) -> Callable:  # Decorator for analysis entry points
-  "Reads paths and dataset names with read_abundances and moves glycans from the index into the first column; a glycoproteomics parameter defaulting to None is then decided on the row labels of the first table"
-  def decorator(func):
-      sig = inspect.signature(func)
-      detect = 'glycoproteomics' in sig.parameters and sig.parameters['glycoproteomics'].default is None
+    "Reads paths and dataset names with read_abundances and moves glycans from the index into the first column; a glycoproteomics parameter defaulting to None is then decided on the row labels of the first table"
+    def decorator(func):
+        sig = inspect.signature(func)
+        detect = 'glycoproteomics' in sig.parameters and sig.parameters['glycoproteomics'].default is None
 
-      @wraps(func)
-      def wrapper(*args, **kwargs):
-          bound = sig.bind(*args, **kwargs)
-          for name in names:
-              if name in bound.arguments:
-                  x = bound.arguments[name]
-                  bound.arguments[name] = _glycans_to_column(read_abundances(x) if isinstance(x, (str, Path)) else x)
-          if detect and bound.arguments.get('glycoproteomics') is None:
-              df = bound.arguments[names[0]]
-              bound.arguments['glycoproteomics'] = len(df) > 0 and all(GLYCOFORM_ID.fullmatch(str(k)) for k in df.iloc[:, 0])  # decided on the labels, which survive pd.DataFrame(), to_csv, and a reader; attrs did not, and outlived a collapse to compositions
-          return func(*bound.args, **bound.kwargs)
-      return wrapper
-  return decorator
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            bound = sig.bind(*args, **kwargs)
+            for name in names:
+                if name in bound.arguments:
+                    x = bound.arguments[name]
+                    bound.arguments[name] = _glycans_to_column(read_abundances(x) if isinstance(x, (str, Path)) else x)
+            if detect and bound.arguments.get('glycoproteomics') is None:
+                df = bound.arguments[names[0]]
+                bound.arguments['glycoproteomics'] = len(df) > 0 and all(GLYCOFORM_ID.fullmatch(str(k)) for k in df.iloc[:, 0])  # decided on the labels, which survive pd.DataFrame(), to_csv, and a reader; attrs did not, and outlived a collapse to compositions
+            return func(*bound.args, **bound.kwargs)
+        return wrapper
+    return decorator
 
 
 @_abundance_input('df')
@@ -224,7 +224,7 @@ def preprocess_data(
             df_org, sites = df_org[ok], sites[
                 ok]  # a group needs two measured samples before it has a variance; the closure above already ran over the observed cells only, so dropping here changes no site total
             if transform == "Nothing":
-                df = df.loc[df_org.index]
+                df = df_org.copy()  # the within-site shares; the whole-sample shares mixed protein abundance and coverage into every glycoform
             else:
                 cols = df_org.columns.tolist() if experiment == "anova" else ((group1 + group2) if paired else group1)
                 grp2 = [] if (paired or experiment == "anova") else group2
@@ -258,6 +258,7 @@ def _explained_by(parent: str,  # Parent motif whose signal is being decomposed
     return ', '.join(labels) + (f', +{len(shown) - n} more' if len(shown) > n else '')
 
 
+@_abundance_input('df')
 def get_pvals_motifs(
         df: pd.DataFrame | str | Path,  # Input dataframe, filepath (.csv/.xlsx), or shipped dataset name
         label_col_name: str = 'target',  # Column name for labels
@@ -273,8 +274,6 @@ def get_pvals_motifs(
         top_explained: int | None = 5  # How many child motifs to name in 'Explained by'; None names all of them
 ) -> GlycoDataFrame:  # DataFrame with p-values, FDR-corrected p-values, significance, Cohen's d effect sizes, and equivalence p-values for glycan motifs
     "Identifies significantly enriched glycan motifs using a moderated t-test with DAG-grouped FDR correction and Cohen's d effect size calculation, comparing samples above/below threshold"
-    if isinstance(df, (str, Path)):
-        df = read_abundances(df)
     in_name = getattr(df, '_glyco_name', '')
     glycan_col_name = GlycoDataFrame(df)._glycan_col or df.columns[0]
     if not multiple_samples and label_col_name not in df.columns:
@@ -335,8 +334,7 @@ def get_pvals_motifs(
     equivalence_pvals[np.isnan(equivalence_pvals)] = 1.0
     # Multiple testing correction
     if grouped_BH:
-        cohorts = (pd.DataFrame(B, index = motif_names), pd.DataFrame(A, index = motif_names)) if dag is None else (pd.DataFrame(index = motif_names),) * 2  # the DAG branch of select_grouping reads only names and p-values, so materializing the cohorts there doubled peak memory for nothing
-        grouped_motifs, grouped_pvals = select_grouping(*cohorts, motif_names, ttests, grouped_BH = True, dag = dag)
+        grouped_motifs, grouped_pvals = select_grouping(pd.DataFrame(index = motif_names), pd.DataFrame(index = motif_names), motif_names, ttests, grouped_BH = True, dag = dag)  # grouped_BH always builds the DAG, and its branch of select_grouping reads only names and p-values
         corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_motifs, grouped_pvals, alpha)
         ttests_corr = [max(corrpvals[m], ttests[i]) for i, m in enumerate(motif_names)]
         significance = [significance_dict[m] for m in motif_names]
@@ -428,22 +426,40 @@ def get_representative_substructures(
             gmotifs[m] = (glycan_to_nxGraph(s, termini = 'provided', termini_list = sp), sp)
         except Exception:
             continue  # non-structural features (graph/chemical/size_branch) cannot be searched for in a sequence
-    motif_scores = []
+    motif_scores, size = [], {}
     for k in glycans:
         ggraph = glycan_to_nxGraph(k, termini = 'calc')
         hit = {m for m, (p, sp) in gmotifs.items() if subgraph_isomorphism(ggraph, p, termini_list = sp)}
         motif_scores.append(sum(weight_of[m] for m in hit if not (descendants.get(m, set()) & hit)))
-    # For each glycan, get their motif score, normalized by glycan length
-    length_scores = [len(g) for g in glycans]
+        size[k] = len(ggraph)  # residues and linkages; the string length made a Neu5Gc twice the size of a Fuc
+    # For each glycan, get their motif score, normalized by glycan size
+    length_scores = [size[g] for g in glycans]
     combined_scores = np.divide(motif_scores, length_scores)
     df_score = pd.DataFrame({'glycan': glycans, 'motif_score': motif_scores, 'length_score': length_scores,
                              'combined_score': combined_scores})
     df_score = df_score.sort_values(by = 'combined_score', ascending = False)
     # Take the 10 glycans with the highest score
     rep_motifs = df_score.glycan.values.tolist()[:10]
-    rep_motifs.sort(key = len)
+    rep_motifs.sort(key = size.get)
     # Make sure that the list only contains the minimum number of representative glycans
     return [k for k in rep_motifs if sum(subgraph_isomorphism(j, k) for j in rep_motifs) <= 1]
+
+
+def _features_as_rows(df: pd.DataFrame | str | Path, # abundance table, file path, or shipped dataset name, with glycans as rows or as columns
+                      index_col: str # column holding the glycans
+                      ) -> pd.DataFrame: # glycans (or other features) as index, samples as columns, missing values as 0
+    "Reads the input of get_heatmap and get_distance_matrix"
+    if isinstance(df, (str, Path)):
+        df = read_abundances(df)
+    gcol = index_col if index_col in df.columns else GlycoDataFrame(df)._glycan_col
+    set_idx = bool(gcol) or isinstance(df.iloc[0, 0], str)
+    if set_idx:
+        df = df.set_index(gcol or df.columns[0])
+    # Glycans as columns get transposed; a feature column lifted into the index is otherwise trusted, since compositions carry no linkages to recognize them by, and a named glycan column always is, since sample names can hold brackets too ('Hexa (or HA) Li')
+    if not gcol and (sum(isinstance(c, str) and '(' in c for c in df.columns) > sum(isinstance(k, str) and '(' in k for k in df.index) or (
+            not set_idx and (not isinstance(df.index[0], str) or '(' not in df.index[0]))):
+        df = df.T
+    return df.fillna(0)
 
 
 def get_heatmap(
@@ -464,17 +480,7 @@ def get_heatmap(
 ) -> tuple[Any, list[str], pd.DataFrame] | None:  # None or (plot object, column names, transformed dataframe) if return_plot=True
     "Creates hierarchically clustered heatmap visualization of glycan/motif abundances"
     import seaborn as sns
-    if isinstance(df, (str, Path)):
-        df = read_abundances(df)
-    gcol = index_col if index_col in df.columns else GlycoDataFrame(df)._glycan_col
-    set_idx = bool(gcol) or isinstance(df.iloc[0, 0], str)
-    if set_idx:
-        df = df.set_index(gcol or df.columns[0])
-    # Glycans as columns get transposed; a feature column lifted into the index is otherwise trusted, since compositions carry no linkages to recognize them by, and a named glycan column always is, since sample names can hold brackets too ('Hexa (or HA) Li')
-    if not gcol and (sum(isinstance(c, str) and '(' in c for c in df.columns) > sum(isinstance(k, str) and '(' in k for k in df.index) or (
-            not set_idx and (not isinstance(df.index[0], str) or '(' not in df.index[0]))):
-        df = df.T
-    df = df.fillna(0)
+    df = _features_as_rows(df, index_col)
     if transform:
         df = df[(df > 0).sum(axis = 1) >= np.max([np.round(rarity_filter * df.shape[1]), 1])]
         df = df.replace(0, 1e-6)
@@ -491,8 +497,7 @@ def get_heatmap(
             df_motif = df_motif.replace(0, np.nan).dropna(
                 thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
             df = df_motif.T.fillna(0) @ df
-            df = df.apply(lambda col: col / col.sum()).T
-            df = deduplicate_motifs(df.T)
+            df = deduplicate_motifs(df.apply(lambda col: col / col.sum()))
     # Quantify on raw abundances and transform the motif composition, as get_pca/preprocess_data do
     if transform == "CLR":
         df = clr_transformation(df + 1e-7, [], [], gamma = 0)
@@ -552,17 +557,7 @@ def get_distance_matrix(
         if not callable(getattr(distance, dist_func, None)):
             raise ValueError(f"dist_func = '{dist_func}' is not a scipy.spatial.distance metric.")
         dist_func = getattr(distance, dist_func)
-    if isinstance(df, (str, Path)):
-        df = read_abundances(df)
-    gcol = index_col if index_col in df.columns else GlycoDataFrame(df)._glycan_col
-    set_idx = bool(gcol) or isinstance(df.iloc[0, 0], str)
-    if set_idx:
-        df = df.set_index(gcol or df.columns[0])
-    # Glycans as columns get transposed; a feature column lifted into the index is otherwise trusted, since compositions carry no linkages to recognize them by, and a named glycan column always is, since sample names can hold brackets too ('Hexa (or HA) Li')
-    if not gcol and (sum(isinstance(c, str) and '(' in c for c in df.columns) > sum(isinstance(k, str) and '(' in k for k in df.index) or (
-            not set_idx and (not isinstance(df.index[0], str) or '(' not in df.index[0]))):
-        df = df.T
-    df = df.fillna(0)
+    df = _features_as_rows(df, index_col)
     if motifs:
         df = quantify_motifs(df, glycans = df.index.tolist(), feature_set = feature_set, custom_motifs = custom_motifs)
     # Quantify on raw abundances and transform the (motif) composition, as get_heatmap does
@@ -608,7 +603,7 @@ def plot_embeddings(
     markers = None
     if shape_feature is not None:
         markers = {shape_feature: "X", "Absent": "o"}
-        shape_feature = [shape_feature if shape_feature in g else 'Absent' for g in glycans]
+        shape_feature = [shape_feature if shape_feature in nx.get_node_attributes(glycan_to_nxGraph(g), 'string_labels').values() else 'Absent' for g in glycans]  # whole monosaccharides and linkages: 'Gal' is not in GalNAc
     sns.scatterplot(x = embs[:, 0], y = embs[:, 1], hue = label_list if label_list is not None else None,
                     palette = palette if label_list is not None else None, style = shape_feature,
                     markers = markers, alpha = alpha, **kwargs)
@@ -651,7 +646,7 @@ def characterize_monosaccharide(
     if rank is not None and focus is not None:
         df = df[df[rank] == focus]
     # Get all disaccharides by extracting adjacent pairs from graph structure
-    pool_in = []
+    pool_in_split = []
     for glycan in df[glycan_col_name].tolist():
         graph = glycan_to_nxGraph(glycan)
         node_labels = nx.get_node_attributes(graph, 'string_labels')
@@ -659,8 +654,7 @@ def characterize_monosaccharide(
             if parent_mono % 2 == 0:
                 for linkage in graph.successors(parent_mono):
                     for child_mono in graph.successors(linkage):
-                        pool_in.append(f"{node_labels[child_mono]}*{node_labels[linkage]}*{node_labels[parent_mono]}")
-    pool_in_split = [k.split('*') for k in pool_in]
+                        pool_in_split.append((node_labels[child_mono], node_labels[linkage], node_labels[parent_mono]))
     pool, sugars = [], []
     if mode == 'bond':
         # Get upstream monosaccharides for a specific linkage
@@ -668,7 +662,7 @@ def characterize_monosaccharide(
     elif mode in ['sugar', 'sugarbond']:
         for k in pool_in_split:
             # Get downstream monosaccharides or downstream linkages for a specific monosaccharide
-            k0, k2 = k[0], k[2] if len(k) > 2 else None
+            k0, k2 = k[0], k[2]
             if modifications and sugar in k0:
                 sugars.append(k0)
                 pool.append(k2 if mode == 'sugar' else k[1])
@@ -790,20 +784,16 @@ def get_pca(
         df = df[[df._glycan_col or df.columns[0]] + [c for c in df.columns if c in df._contrasts]]  # the labels only cover the contrast columns, and X pairs them with columns by position
     if isinstance(groups, list) and len(groups) > df.shape[1] - 1:
         raise ValueError(f"{len(groups)} group labels were given for {df.shape[1] - 1} sample columns; pass one label per sample column, in column order.")
-    if transform and not motifs:
+    if transform:
         df = df[(df.iloc[:, 1:] > 0).sum(axis = 1) >= np.max([np.round(rarity_filter * (df.shape[1] - 1)), 1])].reset_index(drop = True)
         df.iloc[:, 1:] = df.iloc[:, 1:].replace(0, 1e-6)
-        if transform == "ALR":
-            df = get_additive_logratio_transformation(df, df.columns.tolist()[1:], [], paired = False, gamma = 0)
-        elif transform == "CLR":
-            df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], [], [], gamma = 0)
+    if not motifs and transform == "ALR":
+        df = get_additive_logratio_transformation(df, df.columns.tolist()[1:], [], paired = False, gamma = 0)
+    elif not motifs and transform == "CLR":
+        df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], [], [], gamma = 0)
     if motifs:
         # Motif extraction and quantification
-        df_motif = df
-        if transform:
-            df_motif = df[(df.iloc[:, 1:] > 0).sum(axis = 1) >= np.max([np.round(rarity_filter * (df.shape[1] - 1)), 1])].reset_index(drop = True)
-            df_motif.iloc[:, 1:] = df_motif.iloc[:, 1:].replace(0, 1e-6)
-        raw = quantify_motifs(df_motif, feature_set = feature_set, custom_motifs = custom_motifs)
+        raw = quantify_motifs(df, feature_set = feature_set, custom_motifs = custom_motifs)
         if transform == "CLR":
             raw = clr_transformation(raw + 1e-7, raw.columns.tolist(), [], gamma = 0)
         elif transform == "ALR":
@@ -828,41 +818,25 @@ def get_pca(
     if isinstance(groups, list):
         color = groups
     # make plot
+    _, axes = plt.subplots(1, 2) if eigenvalues else plt.subplots()
+    ax = axes[0] if eigenvalues else axes
+    sns.scatterplot(x = pc_x - 1, y = pc_y - 1, data = df_pca, hue = color, style = shape, size = size, ax = ax)
+    ax.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance',
+           ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
+    if title is not None:
+        ax.set_title(title)
+    if color or shape or size:
+        ax.legend(bbox_to_anchor = (1.05, 1), loc = 'upper left', borderaxespad = 0)
     if eigenvalues:
-        _, (ax1, ax2) = plt.subplots(1, 2)
-        sns.scatterplot(x = pc_x - 1, y = pc_y - 1, data = df_pca, hue = color, style = shape, size = size, ax = ax1)
-        ax1.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance',
-                ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
-        if title is not None:
-            ax1.set_title(title)
-        if color or shape or size:
-            ax1.legend(bbox_to_anchor = (1.05, 1), loc = 'upper left', borderaxespad = 0)
-        ax2.bar(x = range(1, len(percent_var) + 1), height = percent_var, tick_label = percent_var_labels, edgecolor = "black", linewidth = 1)
-        ax2.set(ylabel = 'Explained Variance (%)',
-                xlabel = 'Principal Component')
-        ax2.tick_params(axis = "x", labelrotation = 45)
-        ax2.grid(visible = False)
-        sns.despine()
-        # save to file
-        if filepath:
-            plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
-        plt.show()
-        plt.close()
-    else:
-        _, ax = plt.subplots()
-        ax = sns.scatterplot(x = pc_x - 1, y = pc_y - 1, data = df_pca, hue = color, style = shape, size = size)
-        ax.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance',
-               ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
-        if color or shape or size:
-            ax.legend(bbox_to_anchor = (1.05, 1), loc = 'upper left', borderaxespad = 0)
-        if title is not None:
-            ax.set_title(title)
-        sns.despine()
-        # save to file
-        if filepath:
-            plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
-        plt.show()
-        plt.close()
+        axes[1].bar(x = range(1, len(percent_var) + 1), height = percent_var, tick_label = percent_var_labels, edgecolor = "black", linewidth = 1)
+        axes[1].set(ylabel = 'Explained Variance (%)', xlabel = 'Principal Component')
+        axes[1].tick_params(axis = "x", labelrotation = 45)
+        axes[1].grid(visible = False)
+    sns.despine()
+    if filepath:
+        plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
+    plt.show()
+    plt.close()
 
 
 def get_pcoa(

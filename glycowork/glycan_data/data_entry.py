@@ -8,6 +8,7 @@ import pandas as pd
 from pathlib import Path
 from pandas.io.common import get_handle
 from typing import Callable
+from functools import cache
 from glycowork.glycan_data.loader import GlycoDataFrame, glycomics_data_loader, glycoproteomics_data_loader, lectin_array_data_loader
 from glycowork.motif.processing import check_nomenclature, canonicalize_composition, canonicalize_iupac, is_composition, _STRUCGP_CODE, _COMP_ADDUCT
 from glycowork.motif.tokenization import glycan_to_composition
@@ -75,11 +76,19 @@ def _gp_engine(df: pd.DataFrame # a table as read from file
     return next((s for s, ks in _GP_SIGNATURES if all(k in c for k in ks) and ok.get(s, lambda: True)()), None), c
 
 
+@cache
 def _accession(protein: str # protein label as a search engine writes it, e.g., '>sp|P02763|A1AG1_HUMAN Alpha-1-acid glycoprotein 1' or 'Q9P0K1(pre=R,post=L)'
                ) -> str: # bare accession, '_' turned into '-' so that it cannot be mistaken for a separator of protein_site_composition
     "Extracts the accession from a protein label"
     parts = re.sub(r'^(?:contam_|CON__)', '', str(protein).strip().lstrip('>'), flags = re.IGNORECASE).split()[0].split('(')[0].split('|')  # contaminants: 'contam_sp|P02768|ALBU_HUMAN' (FragPipe), 'CON__P02768' (MaxQuant)
     return (parts[1] if len(parts) > 2 and parts[0] in ('sp', 'tr') else parts[0]).replace('_', '-')
+
+
+def _glycan_mass(res: str, # modified residue
+                 mass: float # modification mass
+                 ) -> bool: # whether the modification is a glycan
+    "A glycan without a name is a mass of at least 130 Da on N, S, or T that is no isobaric tag; a pentose (132.04) is the lightest glycan"
+    return res in 'NST' and mass >= 130 and not any(abs(mass - t) < 0.01 for t in _TAG_MASSES)
 
 
 def _glycan_mods(peptide: str, # peptide with inline modifications, e.g., 'K.N[+203.0794]GTR.G', 'NC(+57.02)GVN(+1913.68)C', 'YN(N-Glycosylation)GTK', or 'LQT[O-linked glycosylation:H1N1A2 on X]LAL'
@@ -91,9 +100,7 @@ def _glycan_mods(peptide: str, # peptide with inline modifications, e.g., 'K.N[+
     for tok in re.findall(rf'{o}[^{c}]*{c}|[A-Za-z]', re.sub(r'^[A-Z-]\.|\.[A-Z-]$', '', peptide)):
         if len(tok) == 1:
             pos, res = pos + 1, tok.upper()
-        elif re.search(r'glycan|glycosyl', tok, flags = re.IGNORECASE) or (
-                    pos and res in 'NST' and (m := re.fullmatch(r'\+?(\d+\.?\d*)', tok[1:-1])) and float(m[1]) >= 130 and not any(
-                abs(float(m[1]) - t) < 0.01 for t in _TAG_MASSES)):  # a pentose (132.04) is the lightest glycan
+        elif re.search(r'glycan|glycosyl', tok, flags = re.IGNORECASE) or (pos and (m := re.fullmatch(r'\+?(\d+\.?\d*)', tok[1:-1])) and _glycan_mass(res, float(m[1]))):
             out.append((pos, tok[1:-1]))
     return out
 
@@ -107,6 +114,13 @@ def _pair_sites(start: int, # protein position of the peptide's first residue
     if len(sites) == len(comps):
         return list(zip(sites, comps))
     return [('+'.join(sites), ','.join(comps))] if sites else []
+
+
+def _run_names(files: list[str | Path | pd.DataFrame] # input files or DataFrames
+               ) -> list[str]: # run name per input
+    "Names each input that holds one run by its file name, with its folder in front where files share a name (ctrl/glycans.csv, case/glycans.csv), and a DataFrame as sample<n>"
+    stems = [f'sample{fi + 1}' if isinstance(f, pd.DataFrame) else Path(f).stem for fi, f in enumerate(files)]
+    return [f'{Path(f).parent.name}_{s}' if stems.count(s) > 1 and not isinstance(f, pd.DataFrame) else s for f, s in zip(files, stems)]
 
 
 def _abundance_matrix(df: pd.DataFrame, # columns run, ion, label, and value, one row per measurement
@@ -127,8 +141,8 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
                          ) -> GlycoDataFrame: # glycoforms as 'protein_site_composition' in column 'ID' ('protein_site_sequence' for StrucGP structure codes), samples as columns; ready for get_differential_expression(glycoproteomics = True) or get_glycoshift_per_site
     "Reads the native output of glycoproteomics search engines into a site-specific glycoform x sample table, quantified by intensity where the engine reports one and by spectral counts otherwise"
     recs, skipped = [], 0  # (run, ion, protein, site, composition, abundance); an ion has one abundance per run, so its repeated matches must not add up
-    for fi, f in enumerate([files] if isinstance(files, (str, Path, pd.DataFrame)) else list(files)):  # a list, or any iterable such as Path.glob('*/psm.tsv')
-        stem = f'sample{fi + 1}' if isinstance(f, pd.DataFrame) else Path(f).stem
+    files = [files] if isinstance(files, (str, Path, pd.DataFrame)) else list(files)  # a list, or any iterable such as Path.glob('*/psm.tsv')
+    for fi, (f, stem) in enumerate(zip(files, _run_names(files))):
         frames = [f] if isinstance(f, pd.DataFrame) else _read_table(f)
         for df in frames:
             sig, c = _gp_engine(df)
@@ -143,7 +157,7 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
             if k in c:
                 keep &= ~(num(k) > max_q)  # an empty q-value, e.g., without a glycan FDR step, does not reject the match
         for k, ok in (('isdecoy', lambda s: s.str.lower() != 'true'), ('glydecoy', lambda s: ~s.isin(('1', '1.0'))), ('pepdecoy', lambda s: ~s.isin(('1', '1.0'))),
-                      ('decoy/contaminant/target', lambda s: s == 'T'), ('is_best_match', lambda s: s.str.lower() == 'true'), ('quanusage', lambda s: s.str.lower() != 'false')):  # FragPipe marks PSMs failing its reporter ion filters (purity, minimum intensity) Quan Usage 'false'
+                      ('decoy/contaminant/target', lambda s: ~s.str.contains('D')), ('is_best_match', lambda s: s.str.lower() == 'true'), ('quanusage', lambda s: s.str.lower() != 'false')):  # FragPipe marks PSMs failing its reporter ion filters (purity, minimum intensity) Quan Usage 'false'
             if k in c:
                 keep &= ok(df[c[k]].astype(str).str.strip())
         df = df[keep]
@@ -165,16 +179,7 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
                 comp, _, mass = g.partition('%')
                 loc = re.findall(r'\[(\d+),([^,\]]+),', str(sp))  # O-Pair: [peptide position,composition,probability] for each glycan
                 mods = re.findall(r'(\d+)([A-Z])\((-?[\d.]+)\)', str(am))  # '3N(2350.8303),4C(57.0215)'
-                pos = [int(p) for p, _ in loc] or [int(p) for p, _, m in mods if
-                                                   mass.strip() and abs(float(m) - float(mass)) < 0.05] or [int(p) for
-                                                                                                            p, r, m in
-                                                                                                            mods if
-                                                                                                            r in 'NST' and float(
-                                                                                                                m) >= 130 and not any(
-                                                                                                                abs(float(
-                                                                                                                    m) - t) < 0.01
-                                                                                                                for t in
-                                                                                                                _TAG_MASSES)]
+                pos = [int(p) for p, _ in loc] or [int(p) for p, _, m in mods if mass.strip() and abs(float(m) - float(mass)) < 0.05] or [int(p) for p, r, m in mods if _glycan_mass(r, float(m))]
                 pairs.append(_pair_sites(int(float(start)), pos, [x for _, x in loc] or [comp.strip()]) if pd.notna(start) else [])
             vals = num('intensity') if 'intensity' in c and num('intensity').gt(0).any() else None
             if 'quanusage' in c:  # TMT or iTRAQ: 'Quan Usage', then one reporter ion column per channel, named by the plex's annotation file or else by the channel ('126', '127N'), which then gets its plex (experiment folder) in front
@@ -225,17 +230,18 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
         else:  # Glyco-Decipher site table: 'P00738@211;P00739@153' maps to the first protein, 'O43866@226;O43866@229' to the ambiguous site '226/229'
             sites = [str(s).split(';') for s in col('site')]
             prots = [s[0].split('@')[0] if '@' in s[0] else None for s in sites]
-            pairs = [[('/'.join(x.split('@')[-1] for x in s if x.split('@')[0] == p), g)] for s, p, g in zip(sites, prots, col('glycan'))]
+            pairs = [[('/'.join(x.split('@')[-1] for x in s if x.split('@')[0] == p), g)] if isinstance(g, str) else None for s, p, g in zip(sites, prots, col('glycan'))]
             ions, wide = list(range(len(df))), {k: k for k in df.columns[2:]}
         wide = wide or {k: m[1] for k in df.columns if (m := re.fullmatch(r'Intensity\((.+)\)', str(k)))}  # pGlycoQuant appends one column per run to pGlyco3 or Byonic results
         abund = df[list(wide)].apply(pd.to_numeric, errors = 'coerce').fillna(0).to_numpy() if wide else None
+        vals = None if vals is None else vals.to_numpy()
         for i, (prot, pr, ion) in enumerate(zip(prots, pairs, ions)):
             if pr is None or (isinstance(prot, str) and _DECOY.match(prot)):  # no glycan, or a decoy
                 continue
             if not pr or pd.isna(prot):
                 skipped += 1
                 continue
-            obs = zip(wide.values(), abund[i]) if wide else [(runs[i], 1.0 if vals is None else vals.iloc[i])]
+            obs = zip(wide.values(), abund[i]) if wide else [(runs[i], 1.0 if vals is None else vals[i])]
             recs.extend((run, ion if wide or vals is not None else (fi, i), _accession(prot), site, comp, v) for run, v in obs if v > 0 for site, comp in pr)
     if skipped:
         warnings.warn(f"{skipped} matches had no protein or glycosylation site to place them on and were skipped.", stacklevel = 2)
@@ -279,8 +285,9 @@ def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataF
                    ) -> GlycoDataFrame: # glycans (IUPAC-condensed, canonical composition, or the label as written if it is neither) in column 'glycan', samples as columns; ready for get_differential_expression and the rest of glycowork
     "Reads the native output of glycomics software into a glycan x sample table, quantified by the tool's abundance where it reports one and by feature counts otherwise"
     recs, groups, checks, units = [], {}, {}, {}  # (run, ion, label, abundance, S is NeuAc); Skyline, LaCyTools, MassyTools, and GlycoGenius write NeuAc as S, which glycowork reads as sulfate
-    for fi, f in enumerate([files] if isinstance(files, (str, Path, pd.DataFrame)) else list(files)):  # a list, or any iterable such as Path.glob('*.csv')
-        ext, stem = ('', f'sample{fi + 1}') if isinstance(f, pd.DataFrame) else (Path(f).suffix.lower(), Path(f).stem)
+    files = [files] if isinstance(files, (str, Path, pd.DataFrame)) else list(files)  # a list, or any iterable such as Path.glob('*.csv')
+    for fi, (f, stem) in enumerate(zip(files, _run_names(files))):
+        ext = '' if isinstance(f, pd.DataFrame) else Path(f).suffix.lower()
         if ext in ('.gwp', '.gwa'):  # GlycoWorkbench workspace, one top-level Scan per sample, or one annotated peak list; MS/MS scans are skipped
             root = ET.parse(f).getroot()
             scans = [root] if root.tag == 'AnnotatedPeakList' else [s for s in root.findall('Scan') if s.get('is_msms') != 'true']
@@ -360,13 +367,15 @@ def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataF
     df = pd.DataFrame(recs, columns = ['run', 'ion', 'label', 'value', 'sia'])
     canon = {}
     for g, sia in df[['label', 'sia']].drop_duplicates().itertuples(index = False):
+        is_comp = is_composition(g.strip())
         try:
             iupac = canonicalize_iupac(g.strip())
-            iupac = iupac if '(' in iupac and glycan_to_composition(iupac) else None  # canonicalize_iupac hands back what it cannot read, e.g., 'H5N4' or 'Internal Standard'
+            glycan_to_composition(iupac)  # raises on what canonicalize_iupac hands back unread, e.g., 'H5N4' or 'Internal Standard'; Kdo, heptoses, or QuiNAc are glycans without a composition ({})
+            iupac = None if is_comp and '(' not in iupac else iupac
         except Exception:
             iupac = None
         try:
-            comp = canonicalize_composition(re.sub(r'S(?=\d)', 'A', g.strip()) if sia else g.strip(), as_string = True, strict = True) if iupac is None and is_composition(g.strip()) else ''  # strict: a label like 'IgGI1H5N4F1' parses into a nonsense residue
+            comp = canonicalize_composition(re.sub(r'S(?=\d)', 'A', g.strip()) if sia else g.strip(), as_string = True, strict = True) if iupac is None and is_comp else ''  # strict: a label like 'IgGI1H5N4F1' parses into a nonsense residue
         except ValueError:
             comp = ''
         if not (iupac or comp) and (pep := re.fullmatch(r'([A-Za-z]+?)1((?:[A-Z][a-z]?\d+)+)', g.strip())):  # a LaCyTools glycopeptide, one peptide block and the glycan, e.g., IgGI1H5N4F1S1 (IgGI is EEQYNSTYR of IgG1); the block becomes the protein and its count the site, so each cluster is closed and traited on its own, as in GlycoDash
