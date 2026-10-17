@@ -1612,6 +1612,7 @@ def test_calculate_adduct_mass():
     assert abs(calculate_adduct_mass('+H2O') - 18.0106) < 0.001
     assert abs(calculate_adduct_mass('CH3COOH') - 60.0211) < 0.001
     assert abs(calculate_adduct_mass('-H2O') + 18.0106) < 0.001
+    assert abs(calculate_adduct_mass('C5H6N2-O') - 78.0582) < 0.001  # signed parts, as a net change that loses atoms
     # Test with different mass types
     h2o_mono = calculate_adduct_mass('H2O', mass_value='monoisotopic')
     h2o_avg = calculate_adduct_mass('H2O', mass_value='average')
@@ -1951,6 +1952,10 @@ def test_composition_to_mass():
     # reductive amination opens the ring like reduction does (C5-OH), and permethylation also caps the label's acid or amide
     assert abs(composition_to_mass('H3N2', modification = '2AB', sample_prep = 'permethylated') - 1310.7096) < 0.001
     assert abs(composition_to_mass('H3N2', modification = '2AA', sample_prep = 'peracetylated') - 1703.5495) < 0.001
+    # 2-aminopyridine (PA) adds C5H6N2 minus O, 78.058 Da: PA-Man9GlcNAc2 [M+H]+ 1961.71
+    assert abs(composition_to_mass('H9N2', modification = 'PA') + 1.007276 - 1961.7102) < 0.001
+    assert get_formula('H3N2', modification = 'PA') == 'C39H64N4O25'
+    assert mz_to_composition(989.39, max_charge = 1, modification = 'PA', glycan_class = 'N') == [{'Hex': 3, 'HexNAc': 2}]
     assert abs(composition_to_mass({'Kdn': 1, 'Hex': 1}, sample_prep = 'peracetylated', mass_value = 'average') - calculate_adduct_mass('C33H44O23', mass_value = 'average')) < 1e-4
     assert abs(composition_to_mass('H5N4F1A2', mass_value = 'average') - calculate_adduct_mass('C90H148N6O66', mass_value = 'average')) < 1e-4
     with pytest.raises(ValueError):  # 'H' is Hex in shorthand, not the hydrogen row of mz_to_composition.csv
@@ -2002,6 +2007,8 @@ def test_get_unique_topologies():
         assert comp['Hex'] == 3
         assert comp['HexNAc'] == 2
         assert 'Fuc' in topology
+    assert get_unique_topologies({'Hex': 99}, 'N') == get_unique_topologies('H99', 'N') == []  # a composition without structures
+    assert get_unique_topologies('H3N2F1', 'N', universal_replacers = {'dHex': 'Fuc'}) == result
 
 
 def test_mz_to_structures():
