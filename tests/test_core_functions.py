@@ -46,7 +46,7 @@ from glycowork.motif.processing import (
     in_lib, get_class, enforce_class, equal_repeats, get_matching_indices, is_composition,
     bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono, iupac_to_smiles,
     max_specify_glycan, parse_floating_bit, rescue_compositions, rescue_glycans, split_glycoform_id, glycan_to_oxford,
-    glycan_to_glycam, glycan_to_iupac_extended, glycan_to_glycoct
+    glycan_to_glycam, glycan_to_iupac_extended, glycan_to_glycoct, glycan_to_wurcs
 )
 from glycowork.motif.smiles import (SKELETONS, ALDITOLS, SUBSTITUENTS, ENANTIOMER, CERAMIDE, GlycanSMILESError,
                                     glycan_to_smiles, glycan_to_molecule, smiles_to_iupac, looks_like_smiles,
@@ -712,7 +712,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac(
         "WURCS=2.0/2,2,1/[a2122h-1b_1-5_2*NCC/3=O][a5122h-1b_1-5_2*NCC/3=O]/1-2/a4-b2") == "ManNAc(b2-4)GlcNAc"
     assert canonicalize_iupac(
-        "WURCS=2.0/3,3,2/[a2122h-1x_1-5_2*NCC/3=O][a2112h-1b_1-5][a12d1m-1a_1-5]/1-2-3/a4-b1_b2-c1") == "4d6dHex(a1-2)Gal(b1-4)GlcNAc"
+        "WURCS=2.0/3,3,2/[a2122h-1x_1-5_2*NCC/3=O][a2112h-1b_1-5][a12d1m-1a_1-5]/1-2-3/a4-b1_b2-c1") == "4dFuc(a1-2)Gal(b1-4)GlcNAc"  # read off smiles.py's 4dFuc, configuration and all
     assert canonicalize_iupac("Gal(b1-4)[Hex6S(?1-?)]HexNAc") == "Gal(b1-4)[Hex6S(?1-?)]HexNAc"
     assert canonicalize_iupac("Gal(b1-4)GlcNSOS") == "Gal(b1-4)GlcNSOS"
     assert canonicalize_iupac("freeEnd--1?1D-GlcNAc,p(--4b1D-GlcNAc,p--4b1D-Man,p(--3a1D-Man,p(--2b1D-GlcNAc,p--4b1D-Gal,p--3a2D-NeuAc,p)--4b1D-GlcNAc,p--4b1D-Gal,p--3S)--6a1D-Man,p(--2b1D-GlcNAc,p--4b1D-Gal,p--3a2D-NeuAc,p)--6b1D-GlcNAc,p--4b1D-Gal,p--3a2D-NeuAc,p)--6a1L-Fuc,p$MONO,Und,0,0,freeEnd") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)[Gal3S(b1-4)GlcNAc(b1-4)]Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
@@ -2288,6 +2288,33 @@ def test_wurcs_to_iupac():
     assert "Man" in result
     assert "Gal" in result
     assert "Neu5Ac" in result
+    # ...and back: glycan_to_wurcs orders residues and linkages as WURCSFramework does, so it writes GlyTouCan's own WURCS (here G01287FH, G04016KC, G50761UQ, G39277TV, G01031EZ, G08732ZV)
+    for glycan, wurcs in [("Neu5Gc(a2-8)Neu5Gc(a2-6)[Gal(b1-3)]GalNAc-ol", "WURCS=2.0/3,4,3/[h2112h_2*NCC/3=O][a2112h-1b_1-5][Aad21122h-2a_2-6_5*NCCO/3=O]/1-2-3-3/a3-b1_a6-c2_c8-d2"),
+                          ("Gal(b1-4)GlcNAc(b1-?)Gal(b1-3)GalNAc-ol", "WURCS=2.0/3,4,3/[h2112h_2*NCC/3=O][a2112h-1b_1-5][a2122h-1b_1-5_2*NCC/3=O]/1-2-3-2/a3-b1_c4-d1_b?-c1"),  # a linkage with an unknown position goes last
+                          ("Rha(?1-?)Araf1P(?1-4)Rha(?1-?)Glc-ol", "WURCS=2.0/3,4,3/[h2122h][a2211m-1x_1-5][a211h-1x_1-4]/1-2-3-2/b4-c1*OPO*/3O/3=O_a?-b1_c?-d1"),  # a phosphodiester is one linkage
+                          ("Galf(b1-2)Man(a1-5)Man-ol", "WURCS=2.0/3,3,2/[h1122h][a1122h-1a_1-5][a2112h-1b_1-4]/1-2-3/a5-b1_b2-c1"),
+                          ("Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc-ol",
+                           "WURCS=2.0/7,11,10/[h2122h_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a2112h-1b_1-5][Aad21122h-2a_2-6_5*NCC/3=O][a1221m-1a_1-5]/1-2-3-4-2-5-6-4-2-5-7/a4-b1_a6-k1_b4-c1_d2-e1_e4-f1_f6-g2_h2-i1_i4-j1_d1-c3|c6_h1-c3|c6"),  # the larger branch first, alternatives after the defined linkages
+                          ("Xyl(a1-6)Glc(b1-4)[Xyl(a1-6)]Glc(b1-4)[Fuc(a1-2)Gal(b1-2)Xyl(a1-6)]Glc(b1-4)Glc(b1-4)[Xyl(b1-2)][Xyl(a1-6)]Glc(b1-4)[Xyl(a1-6)]Glc(b1-4)[Fuc(a1-2)Gal(b1-2)Xyl(a1-6)]Glc(b1-4)Glc-ol",
+                           "WURCS=2.0/6,19,18/[h2122h][a2122h-1b_1-5][a212h-1b_1-5][a212h-1a_1-5][a2112h-1b_1-5][a1221m-1a_1-5]/1-2-2-2-3-2-2-2-2-4-4-4-5-6-4-4-4-5-6/a4-b1_b4-c1_b6-q1_c4-d1_c6-p1_d2-e1_d4-f1_d6-o1_f4-g1_g4-h1_g6-l1_h4-i1_h6-k1_i6-j1_l2-m1_m2-n1_q2-r1_r2-s1")]:
+        assert glycan_to_wurcs(glycan) == wurcs
+    assert glycan_to_wurcs("Gal") == "WURCS=2.0/1,1,0/[a2112h-1x_1-5]/1/"
+    for glycan in ["Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc6S", "IdoA2S(a1-4)GlcNS6S", "Kdo(a2-4)Kdo", "Glc(a1-2)Fruf", "L-Gal(a1-2)D-Fuc", "Neu5Ac9Ac(a2-3)Gal(b1-4)Glc", "GlcNAc1P(a1-6)Man", "Glc1Me",
+                   "Man(a1-2/3/6)Man(a1-3/6)[Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc", "Kdn(a2-8)Neu5Ac(a2-3)Gal(b1-4)Glc", "LDManHep(a1-3)LDManHep(a1-5)[Kdo(a2-4)]Kdo", "MurNAc(b1-4)GlcNAc",
+                   "Xyl(b1-4)All", "Glc(a1-3)[Lyx(a1-6)]Glc", "D-AllNAc(a1-4)GlcNAc", "L-Lyx(a1-4)Rha", "D-FucNAc4N(b1-3)Glc", "GlcNA(b1-4)GlcNAc", "Pse5Ac7Fo(a2-3)Gal", "Fruf6N(b2-1)Glc",
+                   "GlcNAcOPCho(b1-2)Man", "LDManHepOPEtN(a1-3)LDManHep", "Gal(b1-4)Glc3S-ol", "Glc(a1-2)[Glc(a1-3)]Rib5P-ol(5-1)Rib-ol", "Glc(a1-6)1,5-Anhydro-Glc-ol", "Man4Ac(b1-4)Ery-ol",
+                   "GlcN(b1-6)Man(a1-5)2,7-Anhydro-Kdo", "GlcA(b1-4)2,5-Anhydro-Man-ol", "6dIdo(a1-3)Glc", "Glc(a1-4)" * 59 + "Glc",  # 60 residues, so that indices run past Z to aa, ab, ...
+                   "Araf(b1-5)Dha", "Leg5Ac7Ac(a2-3)Gal", "8eLeg5Ac7Ac(a2-3)Gal", "Ko(a2-4)Kdo", "Gal(b1-4)D-4dAraHex", "D-6dManHep(a1-3)Glc", "Glc(b1-4)Glc-onic", "Glc(a1-6)ManN-onic"]:  # backbones read off smiles.py's templates, also where wurcs_tokens.json has no entry
+        assert canonicalize_iupac(glycan_to_wurcs(glycan)) == glycan
+    assert glycan_to_wurcs("GlcAN(b1-4)GalNAc") == glycan_to_wurcs("GlcA6N(b1-4)GalNAc")  # an amine right after A is the uronamide
+    assert glycan_to_wurcs("Glc(a1-3)2,5-Anhydro-Man") == "WURCS=2.0/2,2,1/[a1122h-1x_1-?_2-5][a2122h-1a_1-5]/1-2/a3-b1"  # a bridge to the ring-closing carbon leaves the ring open, as GlyTouCan writes 2,5-anhydromannose
+    assert glycan_to_wurcs("QuiNAc(b1-2)1dEry-ol") == "WURCS=2.0/2,2,1/[h11m][a2122m-1b_1-5_2*NCC/3=O]/1-2/a3-b1"  # an alditol is numbered from the end with the lower backbone score, so 1-deoxy-D-erythritol is 4-deoxy-L-erythritol
+    assert canonicalize_iupac(glycan_to_wurcs("Gal(b1-4)L-Glc-ol")) == "Gal(b1-3)Gul-ol"  # L-glucitol is D-gulitol
+    assert glycan_to_wurcs("Xyl(b1-4)Xyl(b1-4)Xyl(b1-4)Xyl(b1-4)Xyl-onic") == "WURCS=2.0/2,5,4/[A212h][a212h-1b_1-5]/1-2-2-2-2/a4-b1_b4-c1_c4-d1_d4-e1"  # an aldonic acid is open, as in GlyTouCan
+    assert "[a12d2h-1b_1-5]" in glycan_to_wurcs("Gal(b1-3)D-4dAraHex(b1-4)Glc")  # the three centres of arabino sit on C2, C3, and C5 around the 4-deoxy position
+    for glycan in ["{Fuc(a1-?)}Gal(b1-4)GlcNAc", "Gal(b1-4)Glc1Cer", "Gal(b1-3)Gal1,4lactone", "Sia(a2-3)Gal", "Gal(b1-3)Gal4CMe", "Glc(b1-4)Ins"]:  # floating parts, aglycones, lactones, wildcards, C-substituents, and cyclitols are refused
+        with pytest.raises(ValueError):
+            glycan_to_wurcs(glycan)
 
 
 def test_oxford_to_iupac():
@@ -10914,6 +10941,12 @@ def test_parse_floating_bit_conflicting_fragments():
 @pytest.mark.parametrize("wurcs,expected", [
     ("WURCS=2.0/1,1,0/[a2122h-1b_1-5_2*NCC/3=O]/1/", "GlcNAcb"),  # single residue, no linkage block
     ("WURCS=2.0/1,1,0/[a2122h-1b_1-5_2*ZZZ]/1/", "Hexb"),  # unmappable modification falls back to the skeleton
+    ("WURCS=2.0/1,1,0/[a2222h-1b_1-5]/1/", "D-Allb"),  # glycowork's unprefixed All is L-allose
+    ("WURCS=2.0/1,1,0/[h2122h_3*OSO/3=O/3=O]/1/", "Glc3S-ol"),  # an alditol has no anomeric part to swap
+    ("WURCS=2.0/1,1,0/[Aad22111m-2a_2-6_5*NCC/3=O_7*N]/1/", "Pse5Aca"),  # acyls on the amines of Pse are written as on Neu5Ac
+    ("WURCS=2.0/1,1,0/[a2122A-1x_1-5_2*N]/1/", "GlcNA"),  # the 2-amine; GlcAN is the uronamide
+    ("WURCS=2.0/1,1,0/[Aad21122m-2a_2-6_5*NCC/3=O_7*NCC/3=O]/1/", "Leg5Ac7Aca"),  # skeletons without a table entry are read off smiles.py's templates
+    ("WURCS=2.0/1,1,0/[Aad112A-2x_2-6]/1/", "Dha"),
 ])
 def test_wurcs_to_iupac_edge_cases(wurcs, expected):
     assert wurcs_to_iupac(wurcs) == expected

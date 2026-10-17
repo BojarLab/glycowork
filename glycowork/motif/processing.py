@@ -6,9 +6,10 @@ import lzma
 import re
 import warnings
 from random import choice
-from functools import wraps, lru_cache
+from functools import wraps, lru_cache, cmp_to_key
 from collections import defaultdict, Counter
 from pathlib import Path
+from types import SimpleNamespace
 from itertools import combinations
 from typing import Callable, Generator
 from glycowork.glycan_data import loader
@@ -117,12 +118,21 @@ _GLYCOCT_BASETYPE = {'Glc': ('dglc', 'HEX', 1, ''), 'Gal': ('dgal', 'HEX', 1, ''
 _GLYCOCT_SUB = {'n-acetyl': 'NAc', 'n-sulfate': 'NS', 'sulfate': 'OS', 'phosphate': 'OP', 'n-glycolyl': 'NGc', 'glycolyl': 'OGc', 'acetyl': 'OAc', 'methyl': 'OMe', 'amino': 'N'}  # applied in order, so n-acetyl and n-glycolyl go before acetyl and glycolyl
 _WURCS_MOD = {'Br': 'Br', 'C': 'CMe', 'Cl': 'Cl', 'F': 'F', 'I': 'I', 'N': 'N', 'NC': 'NMe', 'NC=O': 'NFo',
               'NCC/3=O': 'NAc', 'NCCO/3=O': 'NGc', 'NCN/3=N': 'NAm', 'NSO/3=O/3=O': 'NS', 'OC': 'Me', 'OC/2C': 'Et',
-              'OC=O': 'Fo', 'OCC/3=O': 'Ac', 'OCCO': 'Gc', 'OCCO/3=O': 'Gc', 'OCC^RC/4O/3=O': 'Lac', 'OCC^SC/4O/3=O': 'Lac',
-              'OPO/3O/3=O': 'P', 'PO/2O/2=O': 'P', 'OP^XOCCN/3O/3=O': 'PEtN', 'OP^XOPO/5O/5=O/3O/3=O': 'PP',
+              'OC=O': 'Fo', 'OCC/3=O': 'Ac', 'OCCO': 'Gc', 'OCCO/3=O': 'Gc', 'OCC^RC/4O/3=O': 'Lac', 'OCC^SC/4O/3=O': 'Lac', 'OC^RCO/4=O/3C': 'Lac',
+              'OPO/3O/3=O': 'P', 'PO/2O/2=O': 'P', 'OP^XOCCN/3O/3=O': 'PEtN', 'OP^XOCCNC/7C/7C/3O/3=O': 'PCho', 'OP^XOPO/5O/5=O/3O/3=O': 'PP',
               'OP^XOP^XOCCN/5O/5=O/3O/3=O': 'PPEtN', 'OSO/3=O/3=O': 'S', 'S': 'SH'}
 _WURCS_MODSPLIT = re.compile(r'_(?=(?:\?|\d+(?:\|\d+)*)\*)')
 _WURCS_SIA_N = {'N': 'Neu', 'NCC/3=O': 'Neu5Ac', 'NCCO/3=O': 'Neu5Gc'}
 _WURCS_HLOSE = str.maketrans('5678', '1234')
+_WURCS_MAPS = {'Ac': 'OCC/3=O', 'Me': 'OC', 'Et': 'OC/2C', 'S': 'OSO/3=O/3=O', 'P': 'OPO/3O/3=O', 'PEtN': 'OP^XOCCN/3O/3=O', 'PCho': 'OP^XOCCNC/7C/7C/3O/3=O',
+               'PP': 'OP^XOPO/5O/5=O/3O/3=O', 'PPEtN': 'OP^XOP^XOCCN/5O/5=O/3O/3=O', 'Gc': 'OCCO/3=O', 'Fo': 'OC=O', 'N': 'N', 'NAc': 'NCC/3=O', 'NGc': 'NCCO/3=O',
+               'NS': 'NSO/3=O/3=O', 'NMe': 'NC', 'NFo': 'NC=O', 'NAm': 'NCN/3=N', 'F': 'F', 'Cl': 'Cl', 'Br': 'Br', 'I': 'I', 'SH': 'S', 'Lac': 'OC^RCO/4=O/3C'}  # glycowork modification: the MAP GlyTouCan writes for it in place of the hydroxyl
+_WURCS_SCORE = ({'m': 4, 'M': 10, 'h': 6, 'c': 8, 'C': 10, '1': 10, '2': 9, '3': 10, '4': 9, 'x': 8, '5': 12, '6': 11, '7': 12, '8': 11, 'X': 10, 'o': 17, 'A': 14, 'n': 4,
+                 'N': 8, 'e': 8, 'z': 7, 'f': 7, 'E': 10, 'Z': 9, 'F': 8, 'T': 10, 'K': 6, 't': 4, 'a': 17, 'u': 17},
+                {'d': 4, 'C': 8, '1': 8, '2': 7, '3': 8, '4': 7, 'x': 6, '5': 10, '6': 9, '7': 10, '8': 9, 'X': 8, 'O': 17, 'e': 6, 'z': 5, 'n': 4, 'f': 4, 'E': 8, 'Z': 7, 'N': 6,
+                 'F': 6, 'K': 4, 'T': 4, 'a': 17, 'U': 17})  # WURCSFramework's CarbonDescriptor scores (terminal, inner carbon), which order backbones
+_WURCS_BACKBONES = {}  # (SkeletonCode, ring, amine positions): glycowork name, for every skeleton in lib, filled on the first token wurcs_tokens.json lacks
+_WURCS_SKELETONS = {}  # (skeleton, D/L): (SkeletonCode, anomeric position, ring, C-branch MAPs) from wurcs_tokens.json, filled by the first glycan_to_wurcs call
 _GWB_RESIDUE = re.compile(r'^([\d?])(?:([ab?])(\d))?(?:([DLX])-)?([A-Za-z0-9]+?)(?:,([pfo]))?$')
 _MONO_STEM = re.compile(rf'(?:[\d?/]+[A-Za-z]+|{_MOD_NAMES})+$')  # strips trailing modifications to expose the monosaccharide stem
 _LINEARCODE_MAPPING = {'G': 'Glc', 'ME': 'me', 'M': 'Man', 'A': 'Gal', 'NN': 'Neu5Ac', 'GlcN': 'GlcNAc', 'GN': 'GlcNAc',
@@ -830,7 +840,10 @@ def get_mono(token: str # WURCS monosaccharide token
         skeleton, _, mods = token.partition('_')
         token = 'a' + skeleton[1:] + '-1x_1-5' + (f'_{mods}' if mods else '')
     token = f"{token.replace('U', 'a')}-2x_2-6" if 'U' in token else token
-    anomer = token[token.index('_')-1] if '_' in token else ''
+    head, *parts = token.split('_')
+    bridges = [p for p in parts[1 if '-' in head else 0:] if re.fullmatch(r'\d+-\d+', p)] if token not in monosaccharide_mapping else []  # bridges besides the ring are anhydro forms (2,7-Anhydro-Kdo, 1,5-Anhydro-Glc-ol), read on their parent
+    token = '_'.join([head] + [p for p in parts if p not in bridges])
+    anomer = m.group(1) if (m := re.match(r'[^-_]+-[\d?]([abx?])', token)) else ''  # alditols have no anomeric part, whose position holds a stereocode instead
     if token in monosaccharide_mapping:
         mono = monosaccharide_mapping[token]
     else:
@@ -848,15 +861,35 @@ def get_mono(token: str # WURCS monosaccharide token
             stem = descriptor[0] + descriptor[1:].translate(
                 _WURCS_HLOSE) + sep + rest  # 5-8 mark substituted carbons; look up the plain stereocode
             base = monosaccharide_mapping.get(stem) or monosaccharide_mapping.get(stem.replace('_1-?', '_1-5', 1))
+            amines = []
+            if not base and not _WURCS_BACKBONES:  # every skeleton smiles.py builds for lib, both enantiomers, the shortest name first (Qui before 6dGlc)
+                from glycowork.motif.smiles import _split_token, _SKELETON_RE, SKELETONS
+                for name in sorted(lib, key = lambda t: (len(t), t)):
+                    try:
+                        skeleton, _, enantiomer, form, _ = _split_token(name)
+                        systematic = skeleton not in SKELETONS and (sk := _SKELETON_RE.fullmatch(skeleton)) and sk.group(5) and not sk.group(1)
+                        for dl in ('D', 'L') if systematic else (enantiomer, 'D', 'L'):  # a systematic name states its enantiomer (D-4dAraHex), as smiles_to_iupac writes it
+                            code, _, ring, holders = _wurcs_backbone(skeleton, enantiomer = dl, form = form)
+                            _WURCS_BACKBONES.setdefault((code, ring, holders), (f"{dl}-" if dl else '') + skeleton + form)
+                    except ValueError:  # wildcards, and skeletons that are branched, decorated, or unknown to smiles.py
+                        continue
+            if not base and (m := re.fullmatch(r'([^-_]+)(?:-\dx_(\d)-(\d))?', stem)):  # skeletons wurcs_tokens.json lacks (Leg, Dha, Ko), first with every amine position as the skeleton's (Pse5Ac7Fo, written as on Neu5Ac)
+                ring = (int(m.group(2)), int(m.group(3))) if m.group(2) else None
+                positions = tuple(sorted(int(p) for p, _, chem in (c.partition('*') for c in chunks[1:]) if chem[:1] == 'N' and p.isdigit()))
+                base = _WURCS_BACKBONES.get((m.group(1), ring, positions)) or _WURCS_BACKBONES.get((m.group(1), ring, ()))
+                amines = [str(p) for p in positions] if base and (m.group(1), ring, positions) in _WURCS_BACKBONES else []
             if not base and len(
                     descriptor) == 6:  # dideoxyhexose without a tabulated stereocode, e.g. a12d1m -> 4d6dHex
                 deoxy = sorted([str(i + 1) for i, c in enumerate(descriptor) if c == 'd'] + (
                     ['6'] if descriptor.endswith('m') else []))
                 base = ''.join(f'{p}d' for p in deoxy) + 'Hex' if len(deoxy) > 1 else None
+            if not base and re.fullmatch(r'h[1-4dx]+[hm]', stem):  # untabulated alditol: the alditol of its aldose
+                parent = monosaccharide_mapping.get(f"a{stem[1:]}-1x_1-5") or monosaccharide_mapping.get(f"a{stem[1:]}-1x_1-4", '').removesuffix('f')
+                base = parent + '-ol' if parent and not parent.endswith(('-ol', '-onic')) else None
             if not base and '_1-4' in stem:  # untabulated furanose: derive from the tabulated pyranose
                 pyranose = monosaccharide_mapping.get(stem.replace('_1-4', '_1-5', 1))
                 base = re.sub('[A-Z][a-z]{2}', lambda m: m.group() + 'f', pyranose, count = 1) if pyranose else None
-            tail = next((t for t in ('-ol', '-onic') if base and base.endswith(t)), '')
+            tail = next((t for t in ('-ol', '-onic', '-ulosonic') if base and base.endswith(t)), '')
             base, mods = base[:len(base) - len(tail)] if base and tail else base, []
             for m in (chunks[1:] if base else []):
                 pos, _, chem = m.partition('*')
@@ -865,8 +898,9 @@ def get_mono(token: str # WURCS monosaccharide token
                     base = None
                     break
                 if suffix[0] != 'N':
-                    mods.append(('O' if pos == '?' and suffix in ('S', 'P', 'Ac',
-                                                                  'Me') else '' if pos == '?' else pos) + suffix)
+                    mods.append(('O' if pos == '?' and suffix in ('S', 'P', 'Ac', 'Me', 'Et', 'Gc', 'Fo', 'Lac', 'PEtN', 'PCho', 'PP', 'PPEtN') else '' if pos == '?' else pos) + suffix)
+                elif pos in amines:
+                    mods.append(pos + suffix[1:] if suffix != 'N' else '')
                 elif base in ('Kdn', 'Neu') and pos == '5' and chem in _WURCS_SIA_N:
                     base = _WURCS_SIA_N[chem]
                 else:
@@ -877,6 +911,7 @@ def get_mono(token: str # WURCS monosaccharide token
         if not mono:
             raise ValueError(
                 f"WURCS monosaccharide token '{token}' is not supported yet, so this WURCS string cannot be converted to IUPAC-condensed; please report the token as an issue at https://github.com/BojarLab/glycowork/issues.")
+    mono = ''.join(f"{b.replace('-', ',')}-Anhydro-" for b in bridges) + mono
     mono += anomer if anomer and anomer in ['a', 'b'] else '?'
     return mono
 
@@ -885,20 +920,18 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
                    ) -> str: # Basic IUPAC-condensed format
     "Convert glycan from WURCS to barebones IUPAC-condensed format"
     wurcs = wurcs[wurcs.index('/') + 1:]
-    pattern = r'(?<!\|)\b([a-z])\d(?:\|\1\d)+\}?(?!\|)|(?<!\|)\b[a-z](\d)(?:\|[a-z]\2)+\}?(?!\|)'  # whole alternative groups only, so d4|d6|g4|g6 is not read as d4|d6
-    additional_pattern = r'\b[a-z][\d?](?:\|\w[\d?])+\}?'  # alternatives across residues and positions (d4|d6|g4|g6) leave the part floating
+    pattern = r'(?<!\|)\b([a-zA-Z]+)\d(?:\|\1\d)+\}?(?!\|)|(?<!\|)\b[a-zA-Z]+(\d)(?:\|[a-zA-Z]+\2)+\}?(?!\|)'  # whole alternative groups only, so d4|d6|g4|g6 is not read as d4|d6; residues past the 52nd are aa, ab, ...
+    additional_pattern = r'\b[a-zA-Z]+[\d?](?:\|[a-zA-Z]+[\d?])+\}?'  # alternatives across residues and positions (d4|d6|g4|g6) leave the part floating
 
     def replacement(match):
         text = match.group(0)
         if '|' in text and text[-1].isdigit():  # Case like r3|r6
-            letter = text[0]
-            nums = [c for c in text if c.isdigit()]
-            return letter + '*'.join(nums)
+            return match.group(1) + '*'.join(re.findall(r'\d+', text))
         return f'{match.group(1)}?' if match.group(1) else f'?{match.group(2)}'
 
     wurcs = re.sub(pattern, replacement, wurcs)
     wurcs = re.sub(additional_pattern, '?', wurcs)
-    wurcs = re.sub(r'([a-z][\d\?])\*O([PS])O\*\/3(=?)O\/3\=O', r'\1\2', wurcs)  # phospho/sulfo-linkages
+    wurcs = re.sub(r'([a-zA-Z]+[\d\?])\*O([PS])O\*\/3(=?)O\/3\=O', r'\1\2', wurcs)  # phospho/sulfo-linkages
     res_end = wurcs.rindex(
         ']') + 1  # residue block can contain '/', so delimit it by brackets instead of splitting on '/'
     monosaccharides = wurcs[wurcs.index('['):res_end].strip('[]').split('][')
@@ -907,25 +940,22 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
     if any('~' in link or link.count('-') > 1 for link in topology):
         raise ValueError(f"'{wurcs}' has repeating units or linkages bridging more than two residues, which IUPAC-condensed cannot express.")
     connectivity = {chr(97 + i) if i < 26 else chr(65 + i - 26) if i < 52 else chr(97) + chr(97 + i - 52) if i < 78 else chr(97) + chr(65 + i - 78): int(num) for i, num in enumerate(connectivity)}
-    if len(connectivity) > 1 and not any(link.split('-')[0][:-1] in connectivity for link in topology if '-' in link):
+    if len(connectivity) > 1 and not any(link.split('-')[0].rstrip('0123456789?') in connectivity for link in topology if '-' in link):
         monos = [get_mono(monosaccharides[i - 1]) for i in
                  connectivity.values()]  # composition-like record, fully ambiguous linkages
         return ''.join('{' + f"{m[:-1]}({m[-1]}1-?)" + '}' for m in monos[1:]) + monos[0][:-1]
     kids, floaty = defaultdict(list), []
     for link in topology:
         if '-' not in link:
-            return get_mono(monosaccharides[0])
-        source, target = link.split('-')
-        source_carbon = source[-1]
-        if target[0] == '?':
-            floaty.append((source[0], target[1:]))
+            return get_mono(monosaccharides[0]).removesuffix('?')
+        (source, source_carbon), (target, target_carbon) = (re.fullmatch(r'([a-zA-Z]*)(.*)', side).groups() for side in link.split('-'))  # residue indices go past z (A, ..., Z, aa, ab, ...)
+        if not target:
+            floaty.append((source, target_carbon[1:]))
             continue
-        target_carbon = '/'.join(target[1:].split('*')) if '*' in target[1:] else target[1:]
-        if '*' in target[
-            1:] or '?' in target:  # ultra-narrow wildcards and unknown anomeric carbon flip donor and acceptor
-            kids[target[0]].append((f"{source_carbon}-{target_carbon}", source[0]))
+        if '*' in target_carbon or '?' in target_carbon:  # ultra-narrow wildcards and unknown anomeric carbon flip donor and acceptor
+            kids[target].append((f"{source_carbon}-{target_carbon.replace('*', '/')}", source))
         else:
-            kids[source[0]].append((f"{target_carbon}-{source_carbon}", target[0]))
+            kids[source].append((f"{target_carbon}-{source_carbon}", target))
 
     def subtree(node, seen):
         branches = sorted((subtree(c, seen | {c}) + f"({l})" for l, c in kids.get(node, []) if c not in seen),
@@ -939,9 +969,252 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
         raise ValueError(f"'{wurcs}' is cyclic (every residue is attached to another), which IUPAC-condensed cannot express.")
     floating_part = ''.join('{' + f"{subtree(n, {n})}(1-{pos})" + '}' for n, pos in
                             floaty)  # a floating bit can be a whole subtree, not just its attachment residue
-    iupac = (floating_part + subtree(root, {root}))[:-1]
-    iupac = re.sub(r'([ab\?])\(', r'(\1', iupac)
-    return re.sub(r'(\d)([PS])\-', r'\1-\2-', iupac)
+    iupac = re.sub(r'(-ol)?([ab?])\((\d+)([PS])-', r'\3\4\1\2(\3-', (floating_part + subtree(root, {root}))[:-1])  # a phosphodiester is written on its donor, GlcNAc1P(a1-6)Man or Rib5P-ol(5-1)Rib-ol
+    return re.sub(r'([ab?])\(', r'(\1', iupac).replace('-ol(?', '-ol(')  # an alditol has no anomer
+
+
+@lru_cache(maxsize = 4096)
+def _wurcs_backbone(skeleton: str, # Skeleton as smiles._split_token returns it, e.g., Glc, Neu, LDManHep, D-6dAraHex without the D-
+                    enantiomer: str = '', # 'D', 'L', or '' for glycowork's default of that skeleton
+                    form: str = '' # '' for the ring, '-ol' for the alditol, '-onic' for the aldonic acid, '-ulosonic' for a systematic ulosonic acid
+                    ) -> tuple: # (SkeletonCode, anomeric position, (ring start, ring end) or None, positions holding an amine)
+    "Reads a WURCS backbone off the smiles.py template of a skeleton: each carbon's descriptor, its stereocentres by Fischer side (2 right, 1 left, C1 on top)"
+    from glycowork.motif.smiles import _skeleton, _mirror, parse_smiles, _parity, _ATOM_RE
+    template, _, hetero, default = _skeleton(skeleton, form)
+    template = (_mirror(template) if enantiomer and enantiomer != default else template).replace('{a}', '').replace('{r}', '9').replace('{A}', 'O')
+    pieces, smiles, slots = re.split(r'\{p(\d+)\}', template), '', {}
+    for i, piece in enumerate(pieces):
+        if i % 2:
+            slots[len(_ATOM_RE.findall(smiles))] = int(piece)  # a slot follows its carbon, so its atom index names that carbon's position
+            piece = hetero.get(int(piece), 'O')
+        smiles += piece
+    atoms, bonds, _, neighbors = parse_smiles(smiles)
+    adjacent = defaultdict(list)
+    for a, b, _ in bonds:
+        adjacent[a].append(b)
+        adjacent[b].append(a)
+    carbons = [i for i, atom in enumerate(atoms) if atom[0] == 'C']
+    chain = [c for c in carbons if sum(atoms[n][0] == 'C' for n in adjacent[c]) == 1][:1]
+    while chain and (step := [n for n in adjacent[chain[-1]] if atoms[n][0] == 'C' and n not in chain]):
+        chain.append(step[0])
+    position = {next(n for n in adjacent[slot] if atoms[n][0] == 'C'): p for slot, p in slots.items()}
+    chain = chain if all(chain.index(c) + 1 == p for c, p in position.items() if c in chain) else chain[::-1]
+    ring_oxygen = next((i for i, atom in enumerate(atoms) if atom[0] == 'O' and sum(n in chain for n in adjacent[i]) == 2), None)
+    extra = [i for i, atom in enumerate(atoms) if i not in chain and i not in slots and i != ring_oxygen and not (atom[0] == 'O' and len(adjacent[i]) == 1)]
+    if len(chain) != len(carbons) or extra or any(chain.index(c) + 1 != p for c, p in position.items()) or any(o == 2 for a, b, o in bonds if a in chain and b in chain):
+        raise ValueError(f"'{skeleton}' is branched, decorated or unsaturated, which a WURCS backbone does not hold")
+    ring = tuple(sorted(chain.index(n) + 1 for n in adjacent[ring_oxygen])) if ring_oxygen is not None else None
+    code = ''
+    for i, c in enumerate(chain):
+        het = [(n, o) for a, b, o in bonds for n in ((b,) if a == c else (a,) if b == c else ()) if n not in chain]
+        if ring and i + 1 == ring[0]:
+            code += 'a'
+        elif i in (0, len(chain) - 1):
+            code += 'A' if len(het) == 2 and any(o == 2 for _, o in het) else 'o' if het and het[0][1] == 2 else 'h' if het else 'm'
+        elif any(o == 2 for _, o in het):
+            code += 'O'
+        elif not het:
+            code += 'd'
+        elif not atoms[c][2]:
+            code += 'x'
+        else:  # '@' with the neighbors read as (carbon above, H, substituent, carbon below) puts the substituent on the right, as in D-glyceraldehyde O=C[C@H](O)CO
+            tag = atoms[c][2] if _parity(neighbors[c], [chain[i - 1], 'H', het[0][0], chain[i + 1]]) == 1 else ('@@' if atoms[c][2] == '@' else '@')
+            code += '2' if tag == '@' else '1'
+    return code, ring[0] if ring else 0, ring, tuple(sorted(p for p, atom in hetero.items() if atom == 'N'))
+
+
+def _wurcs_ms(res: tuple # Residue as glycan_to_wurcs builds it: (SkeletonCode, anomeric position, anomeric symbol, ((positions), MAP) bridging positions, ((position, MAP), ...) with -1 for unknown)
+              ) -> str: # UniqueRES string, e.g., a2122h-1b_1-5_2*NCC/3=O
+    "Writes a WURCS residue with its MODs in WURCSExporter's order: more positions first, then by position (unknown last), then by MAP"
+    code, apos, anomer, multi, subs = res
+    mods = sorted([(list(ps), m) for ps, m in multi] + [([p], '*' + m) for p, m in subs], key = lambda m: (-len(m[0]), [(p == -1, p) for p in m[0]], m[1] != '', m[1]))
+    return code + (f"-{apos}{anomer}" if apos else '') + ''.join('_' + '-'.join('?' if p == -1 else str(p) for p in ps) + mp for ps, mp in mods)
+
+
+def _wurcs_edge_cmp(p1: list, # Positions of an edge, -1 if unknown
+                    p2: list # Positions of the other edge
+                    ) -> int: # Negative if p1 comes first
+    "WURCSEdgeComparatorSimple: an unknown position first (and equal to any other unknown), more alternatives first, then lower positions"
+    if p1[0] == -1 or p2[0] == -1:
+        return (p1[0] != -1) - (p2[0] != -1)
+    return len(p2) - len(p1) or next((a - b for a, b in zip(sorted(p1), sorted(p2)) if a != b), 0)
+
+
+def _wurcs_mod_cmp(m1: tuple, # (MAP, [position per edge]) of a modification
+                   m2: tuple # The other modification
+                   ) -> int: # Negative if m1 comes first
+    "Modification order of WURCSFramework's MonosaccharideComparator: shorter MAP, larger MAP string, fewer edges, then edge by edge"
+    if c := len(m1[0]) - len(m2[0]) or (m1[0] < m2[0]) - (m1[0] > m2[0]) or len(m1[1]) - len(m2[1]):
+        return c
+    edges = cmp_to_key(lambda a, b: _wurcs_edge_cmp([a], [b]))
+    return next((c for a, b in zip(sorted(m1[1], key = edges), sorted(m2[1], key = edges)) if (c := _wurcs_edge_cmp([a], [b]))), 0)
+
+
+def glycan_to_wurcs(glycan: str # Glycan in IUPAC-condensed format
+                    ) -> str: # Glycan in WURCS 2.0 format, e.g., WURCS=2.0/2,2,1/[a2122h-1x_1-5_2*NCC/3=O][a2112h-1b_1-5]/1-2/a4-b1
+    "Convert glycan from IUPAC-condensed to WURCS 2.0 with residues and linkages in WURCSFramework's canonical order, as GlyTouCan writes them, e.g., for GlyTouCan registration or lookup"
+    from glycowork.motif.graph import glycan_to_nxGraph
+    from glycowork.motif.smiles import _split_token, ENANTIOMER, SKELETONS, GlycanSMILESError
+    if '{' in glycan or glycan.startswith('['):
+        raise ValueError(f"'{glycan}' has floating parts or is a repeating unit, which glycan_to_wurcs does not write.")
+    default_dl = lambda skeleton: ENANTIOMER.get(skeleton) or ENANTIOMER.get(skeleton.removesuffix('f'), 'D')
+    if not _WURCS_SKELETONS:  # each skeleton's backbone, by majority over the wurcs_tokens.json entries built on it, its own unmodified entry first; relative (3/4) or unknown configurations and ring sizes are left out
+        votes, bare = Counter(), set()
+        for token, name in monosaccharide_mapping.items():
+            head, *parts = token.split('_')
+            code, _, anomeric = head.partition('-')
+            rings = [p for p in parts if '*' not in p]
+            if re.search(r'[34?UuQ]', code) or not re.fullmatch(r'\d[abx]', anomeric) or len(rings) != 1 or not re.fullmatch(r'\d-\d', rings[0]):
+                continue
+            try:
+                skeleton, mods, enantiomer, form, anhydro = _split_token(name)
+            except GlycanSMILESError:
+                continue
+            if not anhydro and not form and all(m != 'A' for _, m in mods):
+                entry = ((skeleton, enantiomer or default_dl(skeleton)), (code, int(anomeric[0]), tuple(map(int, rings[0].split('-'))), () if mods else tuple(p for p in parts if re.fullmatch(r'\d\*C\w*', p))))
+                votes[entry] += 1
+                bare |= {entry} if not mods else set()
+        for (key, value), _ in sorted(votes.items(), key = lambda kv: (kv[0] not in bare, -kv[1])):  # Fruf derivatives are often filed under Fru
+            _WURCS_SKELETONS.setdefault(key, value)
+    graph = glycan_to_nxGraph(glycan)
+    labels = dict(graph.nodes(data = 'string_labels'))
+    root, kids, bridges, anomers, residues, flipped = max(graph.nodes), {}, {}, {}, {}, {}
+    score = lambda r: 20 * r[1] + sum((i + 1) * _WURCS_SCORE[0 < i < len(r[0]) - 1].get(c, 0) for i, c in enumerate(r[0]))  # Backbone.getBackboneScore(), lower first
+
+    def phosphates(node):
+        try:
+            return {p for p, m in _split_token(labels[node])[1] if m == 'P'}
+        except GlycanSMILESError:
+            return set()
+
+    for link in sorted(n for n in graph.nodes if re.match(r'[ab?]?[\d?]-', labels[n])):  # edges run from parent via linkage to child
+        parent, child = next(graph.predecessors(link)), next(graph.successors(link))
+        if not (m := re.fullmatch(r'([ab?]?)([\d?])-(P-)?([\d?/]+)', labels[link])):
+            raise ValueError(f"'{labels[link]}' in '{glycan}' is not a linkage that glycan_to_wurcs can write.")
+        anomer, donor, phospho, acceptor = m.groups()
+        acceptor, donor = sorted(-1 if p == '?' else int(p) for p in acceptor.split('/')), -1 if donor == '?' else int(donor)
+        if not phospho and donor in phosphates(child):  # a phosphodiester, written on the donor (GlcNAc1P(a1-6)Man) or on the acceptor (GlcNAc(b1-6)Man6P), is one linkage in WURCS
+            bridges.setdefault(child, set()).add(donor)
+            phospho = True
+        elif not phospho and len(acceptor) == 1 and acceptor[0] in phosphates(parent):
+            bridges.setdefault(parent, set()).add(acceptor[0])
+            phospho = True
+        kids.setdefault(parent, []).append((acceptor, donor, child, '*OPO*/3O/3=O' if phospho else ''))
+        anomers[child] = {'a': 'a', 'b': 'b'}.get(anomer, 'x')
+    for node in [root] + list(anomers):  # each residue as (SkeletonCode, anomeric position, anomeric symbol, ((positions), MAP) bridging positions, ((position, MAP), ...) with -1 for unknown)
+        try:
+            skeleton, mods, enantiomer, form, anhydro = _split_token(labels[node])
+        except GlycanSMILESError as e:
+            raise ValueError(f"'{labels[node]}' in '{glycan}' is not a monosaccharide that glycan_to_wurcs can write ({e}).") from None
+        if form not in ('', '-ol', '-onic', '-ulosonic'):
+            raise ValueError(f"'{labels[node]}' in '{glycan}' is a form that glycan_to_wurcs does not write.")
+        try:  # the backbone of the molecule smiles.py builds; wurcs_tokens.json only where that skeleton is branched or decorated (D-Apif, Mur) or unknown to smiles.py (Sorf)
+            code, apos, ring, amines = _wurcs_backbone(skeleton, enantiomer = enantiomer, form = form)
+            branches = ()
+        except ValueError:
+            dl = enantiomer or default_dl(skeleton)
+            if form not in ('', '-ol') or not (found := _WURCS_SKELETONS.get((skeleton, dl)) or _WURCS_SKELETONS.get((skeleton, {'D': 'L', 'L': 'D'}.get(dl)))) or (form and found[1] != 1):
+                raise ValueError(f"'{labels[node]}' in '{glycan}' is not a monosaccharide that glycan_to_wurcs can write yet.") from None
+            code, apos, ring, branches = ('h' + found[0][1:], 0, None, found[3]) if form else found  # the alditol of an aldose
+            code, amines = code if (skeleton, dl) in _WURCS_SKELETONS else code.translate(str.maketrans('12', '21')), tuple(p for p, atom in SKELETONS.get(skeleton, ('', '', {}))[2].items() if atom == 'N')  # the mirror image flips every stereocentre
+        multi = [(ring, '')] if ring else []
+        subs = {int(b.split('*')[0]): b.split('*')[1] for b in branches} | dict.fromkeys(amines, 'N') | (
+            {3: _WURCS_MAPS['Lac']} if skeleton == 'Mur' else {})  # Neu, Pse, Leg, and Mur carry their amines in the skeleton, Mur also its 3-O-lactyl
+        unknown, previous = [], ''
+        if ring and any(j == ring[1] for _, j in anhydro):  # a bridge to the ring-closing carbon (2,5-Anhydro-Man) leaves no ring, written as one of unknown size like GlyTouCan does
+            multi[0] = ((multi[0][0][0], -1), '')
+        multi += [((i, j), '') for i, j in anhydro]
+        if len(pyr := sorted(p for p, mod in mods if mod == 'Pyr')) == 2:  # 4,6-pyruvate ketal
+            multi.append((tuple(pyr), '*OC^XO*/3CO/6=O/3C'))
+            mods = [(p, mod) for p, mod in mods if mod != 'Pyr']
+        for pos, mod in mods:
+            if mod == 'A':
+                code, previous = code[:-1] + 'A', mod
+                continue
+            if mod not in _WURCS_MAPS and mod[0] == 'O' and mod[1:] in _WURCS_MAPS:
+                pos, mod = None, mod[1:]
+            elif pos is None and mod[0] == 'N':  # an unnumbered amine makes a uronic acid its amide (GlcAN), acylates the skeleton's amine (LegNAc), or sits on C2 of an aldose or its alditol (GlcNAc, L-GulANAc, GlcNAc-ol), else its position is unknown
+                pos = len(code) if previous == 'A' and mod == 'N' else next((p for p, held in sorted(subs.items()) if held == 'N'), 2 if apos < 2 and 2 not in subs else None)
+                previous = mod
+            if mod not in _WURCS_MAPS:
+                raise ValueError(f"'{labels[node]}' in '{glycan}' carries '{mod}', which glycan_to_wurcs cannot write yet.")
+            if pos is None:
+                unknown.append(_WURCS_MAPS[mod])
+            elif mod == 'P' and pos in bridges.get(node, ()):
+                continue
+            elif subs.get(pos) == 'N':
+                subs[pos] = _WURCS_MAPS[mod] if mod[0] == 'N' else 'N' + _WURCS_MAPS[mod][1:]  # an acyl, sulfate, or methyl on an amine, as in Neu5Ac or MurNAc
+            elif pos in subs:
+                raise ValueError(f"'{labels[node]}' in '{glycan}' has two modifications on position {pos}, which glycan_to_wurcs cannot write.")
+            else:
+                subs[pos] = _WURCS_MAPS[mod]
+        if form in ('-ol', '-onic'):
+            inv = code[::-1].translate(str.maketrans('12345678', '21436587'))  # an open chain is numbered from the end with the lower backbone score (L-Glc-ol is D-Gul-ol, GalA-ol is L-Gal-onic), as WURCSFramework's invertBackbones does without looking at substituents
+            if score((code, 0)) > score((inv, 0)) or (score((code, 0)) == score((inv, 0)) and inv > code):
+                flipped[node] = lambda p, n = len(code): n + 1 - p if p > 0 else p
+                code, multi, subs = inv, [(tuple(sorted(map(flipped[node], ps))), mp) for ps, mp in multi], {flipped[node](p): mp for p, mp in subs.items()}
+        residues[node] = (code, apos, anomers.get(node, 'x') if apos else '', tuple(multi), tuple(sorted(subs.items())) + tuple((-1, m) for m in unknown))
+
+    def seq_cmp(s1, s2):  # WURCSVisitorCollectSequenceComparator: first linkage position, more nodes, deeper, more terminals, fewer branches, deeper branching points, then edge by edge and node by node
+        multi = lambda e1, e2: len(e1) - len(e2) or next((c for a, b in zip(e1, e2) if (c := _wurcs_edge_cmp(a, b))), 0)
+        if c := multi(s1.edges[0], s2.edges[0]) or next((c for c in (len(s2.nodes) - len(s1.nodes), s2.depth - s1.depth, s2.terminal - s1.terminal, s1.branches - s2.branches,
+                                                                     *(b - a for a, b in zip(s1.points, s2.points))) if c), 0):
+            return c
+        key = cmp_to_key(_wurcs_mod_cmp)
+        for e1, (t1, n1), e2, (t2, n2) in zip(s1.edges, s1.nodes, s2.edges, s2.nodes):
+            if c := multi(e1, e2) or (t1 > t2) - (t1 < t2) or (t1 == 'M' and _wurcs_mod_cmp((n1[4], [0, 0]), (n2[4], [0, 0]))):
+                return c
+            if t1 == 'B':  # MonosaccharideComparator: longer backbone, lower score, larger SkeletonCode and anomeric symbol, more rings, more substituents at lower positions, then the modifications
+                r1, r2 = residues[n1], residues[n2]
+                if c := len(r2[0]) - len(r1[0]) or score(r1) - score(r2) or (r1[0] < r2[0]) - (r1[0] > r2[0]) or (r1[2] < r2[2]) - (r1[2] > r2[2]) or len(r2[3]) - len(r1[3]):
+                    return c
+                pairs = list(zip(sorted(((m, list(ps)) for ps, m in r1[3]), key = key), sorted(((m, list(ps)) for ps, m in r2[3]), key = key)))
+                pairs += list(zip(sorted(((m, [p]) for p, m in r1[4]), key = key), sorted(((m, [p]) for p, m in r2[4]), key = key)))
+                if c := next((c for a, b in pairs[:len(r1[3])] if (c := _wurcs_mod_cmp(a, b))), 0) or len(r2[4]) - len(r1[4]) or sum(p for p, _ in r1[4]) - sum(p for p, _ in r2[4]) or next(
+                        (c for a, b in pairs[len(r1[3]):] if (c := _wurcs_mod_cmp(a, b))), 0):
+                    return c
+        return len(s2.edges) - len(s1.edges)
+
+    def walk(seq, node):  # WURCSVisitorCollectSequence: residues ('B', node) and linkages ('M', (parent, acceptor, child, donor, MAP)) in traversal order, with the edge positions leading into each
+        while True:
+            seq.nodes.append(('B', node))
+            seq.depth += 1
+            if not (branches := kids.get(node, [])):
+                seq.terminal += 1
+                return
+            if len(branches) == 1:
+                acceptor, donor, child, mp = branches[0]
+                seq.edges += [[acceptor], [[donor]]]
+                seq.nodes.append(('M', (node, acceptor, child, donor, mp)))
+                seq.depth, node = seq.depth + 1, child
+                continue
+            seq.branches += 1
+            seq.points.append(seq.depth)
+            subs = []
+            for acceptor, donor, child, mp in branches:
+                subs.append(SimpleNamespace(nodes = [('M', (node, acceptor, child, donor, mp))], edges = [[acceptor], [[donor]]], depth = 1, terminal = 0, branches = 0, points = []))
+                walk(subs[-1], child)
+            for sub in sorted(subs, key = cmp_to_key(seq_cmp)):
+                seq.edges, seq.nodes, seq.points = seq.edges + sub.edges, seq.nodes + sub.nodes, seq.points + [p + seq.depth for p in sub.points]
+                seq.branches, seq.terminal = seq.branches + sub.branches, seq.terminal + sub.terminal
+            seq.depth += max(sub.depth for sub in subs)
+            return
+
+    same = lambda p: p
+    kids = {parent: [(sorted(map(flipped.get(parent, same), acceptor)), flipped.get(child, same)(donor), child, mp) for acceptor, donor, child, mp in branches] for parent, branches in kids.items()}  # positions of renumbered alditols
+    seq = SimpleNamespace(nodes = [], edges = [[]], depth = 0, terminal = 0, branches = 0, points = [])
+    walk(seq, root)
+    order = [n for t, n in seq.nodes if t == 'B']
+    index = {node: i + 1 for i, node in enumerate(order)}
+    letter = lambda i: (letter((i - 1) // 52) if i > 52 else '') + 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'[(i - 1) % 52]
+    unique = list(dict.fromkeys(_wurcs_ms(residues[node]) for node in order))
+    lins = []
+    for parent, acceptor, child, donor, mp in (n for t, n in seq.nodes if t == 'M'):  # LINComparator: fewer unknown positions, fewer alternatives, then residue by residue, then MAP
+        glips = sorted([[(index[parent], p) for p in acceptor], [(index[child], donor)]], key = lambda g: (len(g), [(i, p == -1, p) for i, p in g]))
+        lins.append(((sum(p == -1 for g in glips for _, p in g), sum(len(g) for g in glips if len(g) > 1), [(len(g), [(i, p == -1, p) for i, p in g]) for g in glips], mp != '', mp),
+                     '-'.join('|'.join(f"{letter(i)}{'?' if p == -1 else p}" for i, p in g) for g in glips) + mp))
+    return (f"WURCS=2.0/{len(unique)},{len(order)},{len(lins)}/{''.join(f'[{u}]' for u in unique)}/" + '-'.join(str(unique.index(_wurcs_ms(residues[node])) + 1) for node in order)
+            + '/' + '_'.join(lin for _, lin in sorted(lins, key = lambda x: x[0])))
 
 
 def oxford_to_iupac(oxford: str # Glycan in Oxford format
