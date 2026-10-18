@@ -184,7 +184,7 @@ ANOMERIC = {  # what a modification on the anomeric position replaces that whole
     'F': 'F', 'Cl': 'Cl', 'Br': 'Br', 'I': 'I', 'But': 'CCCC(=O)O', 'Lau': 'C' * 11 + 'C(=O)O', 'Myr': 'C' * 13 + 'C(=O)O',
     'Pam': 'C' * 15 + 'C(=O)O', 'Ste': 'C' * 17 + 'C(=O)O', 'Ole': 'CCCCCCCC/C=C\\CCCCCCCC(=O)O',
 }
-ESTERIFIED = {'Me': 'OC', 'Et': 'OCC'}  # what a modification on the carbon of a uronic acid does to that acid's hydroxyl
+CARBOXYL = {'Me': 'OC', 'Et': 'OCC', 'Am': 'N', 'NAm': 'N', 'N': 'N', 'NMe': 'NC'}  # what a modification on the carboxyl carbon of a uronic or ulosonic acid does to its hydroxyl: a methyl or ethyl ester, an amide, or a methylamide (Neu1NMe5Ac, the a2-3 product of SALSA)
 URONIC = 'C(=O){A}'  # what 'A' does to the primary alcohol: oxidize it to a carboxylic acid, whose hydroxyl stays a slot until the end
 ULOSONIC = '{r}(C(=O)O)'  # C1 of an ulosonic acid, which is its carboxyl rather than its anomeric center
 WILDCARDS = {'Sia', 'dNon', 'ddNon', 'ddHex', 'Monosaccharide', 'Unknown', 'Assigned', 'Sug'}  # 'Hex', 'dHex' and 'Pen' are stereochemistry-free skeletons instead
@@ -407,12 +407,9 @@ def _residue(token: str, # Monosaccharide token
             hetero.pop(acid)
             continue
         if acid is not None and (position == acid or (position is None and mod in ('Am', 'NAm'))):
-            if mod in ('Am', 'NAm', 'N'):
-                template = template.replace('{A}', 'N')
-            elif mod in ESTERIFIED:
-                template = template.replace('{A}', ESTERIFIED[mod])
-            else:
+            if mod not in CARBOXYL:
                 raise GlycanSMILESError(f"'{mod}' is not defined on the carboxyl of '{token}'")
+            template = template.replace('{A}', CARBOXYL[mod])
             continue
         if mod == 'Pyr' and len(pyruvates) == 2 and position in pyruvates:
             template = template.replace('{p%d}' % position, 'OC%s(C)C(=O)O' % bridge if position == pyruvates[0] else 'O%s' % bridge)
@@ -431,12 +428,9 @@ def _residue(token: str, # Monosaccharide token
                 raise GlycanSMILESError(f"'{token}' has nowhere to put '{mod}'")
         anomeric = 2 if '[C@{a}]' in template else 1
         if position == 1 and anomeric == 2 and ULOSONIC in template:
-            if mod in ('Am', 'NAm', 'N'):
-                template = template.replace(ULOSONIC, '{r}(C(=O)N)')
-            elif mod in ESTERIFIED:
-                template = template.replace(ULOSONIC, '{r}(C(=O)%s)' % ESTERIFIED[mod])
-            else:
+            if mod not in CARBOXYL:
                 raise GlycanSMILESError(f"'{mod}' is not defined on the carboxyl of '{token}'")
+            template = template.replace(ULOSONIC, '{r}(C(=O)%s)' % CARBOXYL[mod])
             continue
         if position == anomeric and '{p%d}' % position not in template:
             replacement = ANOMERIC.get(mod)

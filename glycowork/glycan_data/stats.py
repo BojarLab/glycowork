@@ -804,7 +804,6 @@ def _permutation_labels(codes: tuple, # integer group code per sample
     distinct = factorial(n) // int(np.prod([factorial(v) for v in Counter(codes).values()]))
     if n <= 8 and distinct <= permutations + 1:
         # A small design has very few distinct labellings, so enumerating them is both cheaper than sampling and free of Monte Carlo error
-        return np.array([list(codes)] + [list(r) for r in sorted(set(iter_permutations(codes)) - {codes})])
         P = np.array([list(codes)] + [list(r) for r in sorted(set(iter_permutations(codes)) - {codes})])
     else:
         P = np.vstack([np.asarray(codes), (np.random.default_rng(seed) if seed is not None else rng).permuted(np.tile(np.asarray(codes), (permutations, 1)), axis = 1)])

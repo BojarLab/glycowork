@@ -1,7 +1,7 @@
 from pathlib import Path
 from glycowork.glycan_data.loader import unwrap, resolve_motif_name, lib
 from glycowork.motif.regex import get_match
-from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, compare_glycans, graph_to_string, resolve_anchor
+from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, graph_to_string, resolve_anchor
 from glycowork.motif.tokenization import get_core, get_modification, SIALIC_KEYS
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit, is_composition, canonicalize_composition, _COMP_ORDER, PDB_TO_IUPAC
 import warnings
@@ -1143,6 +1143,17 @@ def _written_positions(graph: nx.DiGraph # Glycan graph from glycan_to_nxGraph
     return {n: i for i, n in enumerate(sorted(graph, key = lambda n: (n in main, n)))}
 
 
+def _drawn_from(draw_this: str, # reordered IUPAC-condensed glycan sequence
+                glycan: str # original IUPAC-condensed glycan sequence
+                ) -> list[int]: # Per residue of draw_this, in written order, its index in glycan
+    "Matches the reordered residues to the original ones by exact label, as compare_glycans would let b1-? stand in for b1-2"
+    g1, g2 = glycan_to_nxGraph(glycan), glycan_to_nxGraph(draw_this)
+    mappy = next(nx.isomorphism.DiGraphMatcher(g2, g1, node_match = nx.isomorphism.categorical_node_match(
+        'string_labels', None)).isomorphisms_iter())
+    pos1, at2 = _written_positions(g1), {i: n for n, i in _written_positions(g2).items()}
+    return [pos1[mappy[at2[i]]] // 2 for i in range(0, len(g2), 2)]
+
+
 def process_per_residue(
         draw_this: str, # reordered IUPAC-condensed glycan sequence
         per_residue: list[float], # Scalar values per residue
@@ -1154,10 +1165,7 @@ def process_per_residue(
         raise ValueError(
             f"per_residue has {len(per_residue)} values but {glycan} has {n_residues} monosaccharides to color")
     if glycan != draw_this:
-        g1, g2 = glycan_to_nxGraph(glycan), glycan_to_nxGraph(draw_this)
-        _, mappy = compare_glycans(g2, g1, return_matches = True)
-        pos1, at2 = _written_positions(g1), {i: n for n, i in _written_positions(g2).items()}
-        per_residue = [per_residue[pos1[mappy[at2[i * 2]]] // 2] for i in range(len(per_residue))]
+        per_residue = [per_residue[k] for k in _drawn_from(draw_this, glycan)]
     return {i * 2: v for i, v in enumerate(per_residue)}
 
 
@@ -1173,11 +1181,8 @@ def process_per_linkage(
             f"highlight_linkages {highlight_linkages} has to index the {n_linkages} linkages of {glycan}, starting from 0")
     per_linkage = [i in highlight_linkages for i in range(n_linkages)]
     if glycan != draw_this:
-        g1, g2 = glycan_to_nxGraph(glycan), glycan_to_nxGraph(draw_this)
-        _, mappy = compare_glycans(g2, g1, return_matches = True)
-        # A linkage moves with the residue it leaves, which precedes it in the written sequence
-        pos1, at2 = _written_positions(g1), {i: n for n, i in _written_positions(g2).items()}
-        per_linkage = [per_linkage[pos1[mappy[at2[i * 2]]] // 2] for i in range(len(per_linkage))]
+        # A linkage moves with the residue it leaves, which precedes it in the written sequence; the root, last in both, has none
+        per_linkage = [per_linkage[k] for k in _drawn_from(draw_this, glycan)[:n_linkages]]
     return {i * 2 + 1: v for i, v in enumerate(per_linkage)}
 
 
@@ -1204,23 +1209,27 @@ chem_cols_alpha = ['#0385AE', '#0385AE', '#0385AE',     # blue
                    '#9F6D55', '#9F6D55', '#9F6D55',     # brown
                    '#C23537']                           # red
 
+_CHEM_INDEX = {m: i for i, m in enumerate(mono_list)}
+
 
 def get_mono_atoms(
         draw_this: str, # IUPAC-condensed glycan sequence
         mono_list: str | list[str]  # Monosaccharide(s) to highlight
-) -> tuple[str, dict[int, int]]:  # (SMILES, {atom index: index into mono_list})
-    "Maps every atom of a glycan's SMILES onto the monosaccharide it was built from"
+) -> tuple[str, dict[int, int]]:  # (SMILES, {atom index: index of its color in chem_cols})
+    "Maps every atom of a glycan's SMILES onto the color of the monosaccharide it was built from"
     mono_list = [mono_list] if isinstance(mono_list, str) else mono_list
+    if unknown := [k for k in mono_list if k not in _CHEM_INDEX]:
+        raise ValueError(f"No highlight color for {unknown}; choose from {list(_CHEM_INDEX)}")
     from glycowork.motif.smiles import glycan_to_smiles
     smiles, owners = glycan_to_smiles(draw_this, mapping = True)
     graph = glycan_to_nxGraph(draw_this)
     cores = {node: get_core(graph.nodes[node]['string_labels']) for node in set(owners)}
-    return smiles, {atom: mono_list.index(cores[owner]) for atom, owner in enumerate(owners) if cores[owner] in mono_list}
+    return smiles, {atom: _CHEM_INDEX[cores[owner]] for atom, owner in enumerate(owners) if cores[owner] in mono_list}
 
 
 def color_by_mono(
         mol: Any, # RDKit molecule object
-        atom_monos: dict[int, int], # {atom index: index into mono_list}
+        atom_monos: dict[int, int], # {atom index: index of its color in chem_cols}
         atom_colors: dict[int, list], # Color map to fill for atoms
         bond_colors: dict[int, list], # Color map to fill for bonds
         alpha: bool = True, # Use alpha-adjusted colors
@@ -1316,8 +1325,8 @@ def draw_chem3d(
     except ImportError:
         raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
     mono_list = [mono_list] if isinstance(mono_list, str) else mono_list
-    smiles, atom_monos = get_mono_atoms(draw_this, mono_list)
-    smiles_mol = MolFromSmiles(smiles)
+    if unknown := [k for k in mono_list if k not in _CHEM_INDEX]:
+        raise ValueError(f"No highlight color for {unknown}; choose from {list(_CHEM_INDEX)}")
     from_pdb = False
     if pdb_file:
         mol = MolFromPDBFile(str(pdb_file))
@@ -1336,7 +1345,8 @@ def draw_chem3d(
             mol = glycoshape_mol
             from_pdb = True
         else:
-            mol = AddHs(smiles_mol)
+            smiles, atom_monos = get_mono_atoms(draw_this, mono_list)
+            mol = AddHs(MolFromSmiles(smiles))
             if EmbedMolecule(mol, randomSeed = 42) == -1 and EmbedMolecule(mol, randomSeed = 42,
                                                                            useRandomCoords = True) == -1:
                 raise ValueError(f"RDKit could not embed a 3D conformer for {draw_this}")
@@ -1350,7 +1360,7 @@ def draw_chem3d(
             info = atom.GetPDBResidueInfo()
             mono_name = PDB_TO_IUPAC.get(info.GetResidueName().strip(), '').split('(')[0].strip() if info else ''
             if mono_name and get_core(mono_name) in mono_list:
-                add_colors_to_map([atom.GetIdx()], atom_colors, mono_list.index(get_core(mono_name)), alpha = False)
+                add_colors_to_map([atom.GetIdx()], atom_colors, _CHEM_INDEX[get_core(mono_name)], alpha = False)
         # ROH reducing end oxygen belongs to adjacent monosaccharide
         for atom in mol.GetAtoms():
             info = atom.GetPDBResidueInfo()
@@ -1781,9 +1791,9 @@ def GlycoDraw(
         if per_residue:
             per_residue = per_residue + [0]
     cut = glycan.rfind('}') + 1 if '^' in glycan else 0
-    draw_this = glycan[:cut] + (
-        graph_to_string(glycan_to_nxGraph(glycan[cut:]), order_by = "linkage") if not glycan[cut:].startswith(
-            '[') else glycan[cut:])
+    # A repeat unit is laid out as written, so that its backbone stays the main chain; reordered by linkage, the chain could run into a branch, with the brackets around a side residue
+    draw_this = glycan[:cut] + (glycan[cut:] if glycan[cut:].startswith('[') or (repeat and not repeat_range) else graph_to_string(
+        glycan_to_nxGraph(glycan[cut:]), order_by = "linkage"))
     if per_residue:
         per_residue_by_node = process_per_residue(draw_this, per_residue, glycan)
     if highlight_linkages:
@@ -2243,7 +2253,6 @@ def annotate_figure(
     matches = re.findall(r"<!--.*-->[\s\S]*?<\/g>", svg_tmp)
     # Prepare for appending
     svg_tmp = svg_tmp.replace('</svg>', '')
-    element_id = 0
     edit_svg = False
     drawn = []
     for match in matches:
@@ -2286,10 +2295,6 @@ def annotate_figure(
                 d = GlycoDraw(current_label, compact = compact, dim = _dim, suppress = True, restrict_vocab = True)
             svg_from_pdf = pdf_to_svg_bytes(d.as_svg())
             data = svg_from_pdf.replace('<?xml version="1.0" encoding="UTF-8"?>', '').replace('<?xml version="1.0"?>', '')
-            id_matches = re.findall(r'(?:font_\d+_\d+|d\d+)', data)
-            for idx in id_matches:
-                data = data.replace(idx, 'd' + str(element_id))
-                element_id += 1
             size = re.search(r'<svg[^>]*?width="([\d.]+)"[^>]*?height="([\d.]+)"', data)
             gw, gh = (float(size.group(1)) * glyc_scale, float(size.group(2)) * glyc_scale) if size else (0.0, 0.0)
             drawn.append((anchor[0], anchor[1] + glyc_offset * glyc_scale, gw, gh, anchor[0], anchor[1], data))
@@ -2377,7 +2382,7 @@ def plot_glycans_excel(
         if isinstance(glycan_structure, str) and glycan_structure:
             # Generate glycan image using GlycoDraw
             try:
-                drawing = GlycoDraw(glycan_structure, compact = compact, suppress = True, restrict_vocab = True, **kwargs)
+                drawing = GlycoDraw(glycan_structure, **{'compact': compact, 'suppress': True, 'restrict_vocab': True, **kwargs})
             except Exception as e:
                 raise ValueError(f"Could not draw the glycan in row {i + 2} of the sheet: {glycan_structure}") from e
             svg_data = drawing.as_svg()

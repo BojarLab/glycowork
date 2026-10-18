@@ -32,6 +32,15 @@
 ##### Changed 🔄
 - `calculate_adduct_mass` can now also read signed formula parts such as `'C5H6N2-O'` (2aff05a)
 
-### stats
+#### smiles
+##### Added ✨
+- Sialic acid methylamides (e.g., SALSA's a2-3 product) are now supported in SMILES generation ()
+
+#### draw
 ##### Changed 🔄
-- Improved estimate of `mahalanobis_variance` ()
+- Better drawing of repeat units with branches ()
+
+### glycan_data
+#### stats
+##### Changed 🔄
+- Improved estimate of `mahalanobis_variance` (cb9feeb)
