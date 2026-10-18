@@ -31,3 +31,7 @@
 
 ##### Changed 🔄
 - `calculate_adduct_mass` can now also read signed formula parts such as `'C5H6N2-O'` (2aff05a)
+
+### stats
+##### Changed 🔄
+- Improved estimate of `mahalanobis_variance` ()

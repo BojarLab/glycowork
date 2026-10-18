@@ -77,21 +77,12 @@ def mahalanobis_distance(x: np.ndarray | pd.DataFrame, # comparison group contai
 def mahalanobis_variance(x: np.ndarray | pd.DataFrame, # comparison group containing numerical data
                          y: np.ndarray | pd.DataFrame, # comparison group containing numerical data
                          paired: bool = False,  # whether samples are paired (e.g., tumor & tumor-adjacent tissue)
-                         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
+                         random_state: int | np.random.Generator | None = None  # unused, since the variance is analytic; kept so existing calls keep working
                          ) -> float:  # variance of Mahalanobis distance
-    "Estimates variance of Mahalanobis distance via bootstrapping"
-    local_rng = np.random.default_rng(random_state) if random_state is not None else rng
-    # Combine gp1 and gp2 into a single matrix
-    data = np.concatenate((x.T, y.T), axis = 0)
-    # Perform bootstrap resampling
-    n_iterations = 1000
-    size_x = x.shape[1]
-    # Generate all bootstrap indices at once
-    boot_indices = local_rng.choice(data.shape[0], size = (n_iterations, data.shape[0]), replace = True)
-    bootstrap_samples = np.array([mahalanobis_distance(data[idx[:size_x]].T, data[idx[size_x:]].T, paired = paired)
-                                  for idx in boot_indices])
-    # Estimate the variance of the Mahalanobis distance
-    return np.var(bootstrap_samples)
+    "Approximates the sampling variance of the Mahalanobis distance as that of Cohen's d: 1/n + D^2/(2n) for paired, (n1 + n2)/(n1 n2) + D^2/(2(n1 + n2)) for unpaired samples"
+    # Bootstrapping from the pooled samples measured the spread between random mixtures of both groups (no difference) and broke the pairs, which underestimated a real effect's variance 3-7x; resampling within groups explodes at small n, where the pseudo-inverse of a resampled covariance with ties is near-singular
+    d, n1, n2 = mahalanobis_distance(x, y, paired = paired), np.shape(x)[1], np.shape(y)[1]
+    return float(1 / n1 + d ** 2 / (2 * n1) if paired else (n1 + n2) / (n1 * n2) + d ** 2 / (2 * (n1 + n2)))
 
 
 def variance_stabilization(data: pd.DataFrame, # dataframe with glycans/motifs as indices and samples as columns
@@ -383,7 +374,7 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
     df = df_in.copy()
     if min_samples:
         min_count = max(np.floor((df.shape[1] - 1) * min_samples), 1)
-        mask = (df.iloc[:, 1:] != 0).sum(axis = 1) >= min_count
+        mask = (df.iloc[:, 1:].fillna(0) != 0).sum(axis = 1) >= min_count  # a missing cell is no detection; counted as one, an all-NaN row passed and was imputed from nothing
         df = df[mask].reset_index(drop = True)
         if protect is not None:
             protect = protect[mask.values].reset_index(drop = True)
@@ -441,7 +432,6 @@ class JTKTest:
         self.max_stat = (self.n**2 - squared_sizes.sum()) * 0.5 if self.n > 0 else 0
         self.interval = interval
         self.periods = periods  # Keep original periods
-        self.timepoint_periods = np.array(periods) / interval
         self.variance = (self.n**2 * (2 * self.n + 3) - (squared_sizes * (2 * self.group_sizes + 3)).sum()) / 72
         self.waveforms = self._generate_reference_waveforms(timepoints)
         # The (period, phase) pairs test() scores, in its order, with their waveforms stacked so that one product scores them all
@@ -483,6 +473,19 @@ class JTKTest:
         return best_stats
 
 
+def _bf_prior_b(n: int, # sample size
+                method: str, # method for choice of 'b': "JAB", "min", "robust", "balanced"
+                upper: float # upper limit for range of realistic effect sizes
+                ) -> float: # fraction b of the sample that informs the prior of Jeffreys' approximate Bayes factor
+    "Chooses b for get_BF and get_alphaN"
+    if method == "balanced":
+        return max(2 / n, min(0.5, integrate.quad(lambda x: np.exp(-n * x ** 2 / 4), 0, upper)[0]))
+    method_dict = {"JAB": lambda n: 1 / n, "min": lambda n: 2 / n, "robust": lambda n: max(2 / n, 1 / np.sqrt(n))}
+    if method not in method_dict:
+        raise ValueError(f"'{method}' is not a valid method; choose from 'JAB', 'min', 'robust', or 'balanced'.")
+    return method_dict[method](n)
+
+
 def get_BF(n: int, # sample size
            p: float, # p-value
            z: bool = False, # True if p-value from z-statistic, False if t-statistic
@@ -490,16 +493,9 @@ def get_BF(n: int, # sample size
            upper: float = 10 # upper limit for range of realistic effect sizes
            ) -> float: # Bayes factor in favor of H1
     "Transforms a p-value into Jeffreys' approximate Bayes factor (BF)"
-    method_dict = {"JAB": lambda n: 1/n, "min": lambda n: 2/n, "robust": lambda n: max(2/n, 1/np.sqrt(n))}
-    if method == "balanced":
-        integrand = lambda x: np.exp(-n * x**2 / 4)
-        method_dict["balanced"] = lambda n: max(2/n, min(0.5, integrate.quad(integrand, 0, upper)[0]))
+    b = _bf_prior_b(n, method, upper)
     t_statistic = norm.ppf(1 - p/2) if z else t.ppf(1 - p/2, n - 2)
-    if method not in method_dict:
-        raise ValueError(f"'{method}' is not a valid method; choose from 'JAB', 'min', 'robust', or 'balanced'.")
-    b = method_dict[method](n)
-    BF = np.exp(0.5 * t_statistic ** 2) * np.sqrt(b)
-    return BF
+    return np.exp(0.5 * t_statistic ** 2) * np.sqrt(b)
 
 
 def get_alphaN(n: int, # sample size
@@ -509,14 +505,7 @@ def get_alphaN(n: int, # sample size
                verbose: bool = False # whether to print the adjusted alpha
                ) -> float: # alpha level required to achieve desired evidence
     "Set the alpha level based on sample size via Bayesian-Adaptive Alpha Adjustment"
-    method_dict = {"JAB": lambda n: 1/n, "min": lambda n: 2/n, "robust": lambda n: max(2/n, 1/np.sqrt(n))}
-    if method == "balanced":
-        integrand = lambda x: np.exp(-n * x**2 / 4)
-        method_dict["balanced"] = lambda n: max(2/n, min(0.5, integrate.quad(integrand, 0, upper)[0]))
-    if method not in method_dict:
-        raise ValueError(f"'{method}' is not a valid method; choose from 'JAB', 'min', 'robust', or 'balanced'.")
-    b = method_dict[method](n)
-    alpha = 1 - chi2.cdf(2 * np.log(BF / np.sqrt(b)), 1)
+    alpha = 1 - chi2.cdf(2 * np.log(BF / np.sqrt(_bf_prior_b(n, method, upper))), 1)
     if verbose:
         print(f"You're working with an alpha of {alpha} that has been adjusted for your sample size of {n}.")
     return alpha
@@ -526,22 +515,11 @@ def pi0_tst(p_values: np.ndarray, # array of p-values
             alpha: float = 0.05 # significance threshold for testing
             ) -> float: # estimate of π0, proportion of true null hypotheses
     "estimate the proportion of true null hypotheses in a set of p-values"
-    alpha_prime = alpha / (1 + alpha)
     n = len(p_values)
     if not n:
         return 1.0  # an empty family has nothing to reject, so no signal is the only defensible estimate
-    # Apply the BH procedure at level α'
-    sorted_indices = np.argsort(p_values)
-    sorted_p_values = p_values[sorted_indices]
-    bh_values = (n / rankdata(sorted_p_values)) * sorted_p_values
-    corrected_p_values = np.minimum.accumulate(bh_values[::-1])[::-1]
-    corrected_p_values_sorted_indices = np.argsort(sorted_indices)
-    corrected_p_values = corrected_p_values[corrected_p_values_sorted_indices]
-    # Estimate π0
-    rejected = corrected_p_values < alpha_prime
-    n_rejected = np.sum(rejected)
-    pi0_estimate = (n - n_rejected) / n
-    return pi0_estimate
+    # The BH procedure at level alpha / (1 + alpha) counts the rejections; ranking ties by their average rank instead of their position rejected fewer of a tied block (permutation, exact or rounded p-values)
+    return (n - _bh(np.sort(p_values), alpha / (1 + alpha))[0].sum()) / n
 
 
 def TST_grouped_benjamini_hochberg(identifiers_grouped: dict[str, list], # dictionary of group : list of glycans
@@ -827,7 +805,11 @@ def _permutation_labels(codes: tuple, # integer group code per sample
     if n <= 8 and distinct <= permutations + 1:
         # A small design has very few distinct labellings, so enumerating them is both cheaper than sampling and free of Monte Carlo error
         return np.array([list(codes)] + [list(r) for r in sorted(set(iter_permutations(codes)) - {codes})])
-    return np.vstack([np.asarray(codes), (np.random.default_rng(seed) if seed is not None else rng).permuted(np.tile(np.asarray(codes), (permutations, 1)), axis = 1)])
+        P = np.array([list(codes)] + [list(r) for r in sorted(set(iter_permutations(codes)) - {codes})])
+    else:
+        P = np.vstack([np.asarray(codes), (np.random.default_rng(seed) if seed is not None else rng).permuted(np.tile(np.asarray(codes), (permutations, 1)), axis = 1)])
+    P.setflags(write = False)  # cached, so a caller writing into it would change every later test of the same design
+    return P
 
 
 def permanova_with_permutation(df: pd.DataFrame, # square distance matrix
@@ -962,8 +944,8 @@ def correct_multiple_testing(pvals: list[float] | np.ndarray, # list of raw p-va
     corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
     significance = [bool(p < alpha) for p in corrpvals]
     if len(significance) >= 10 and sum(significance) > 0.9 * len(significance):
-        print("Significance inflation detected. The CLR/ALR transformation possibly cannot handle this dataset. Consider running again with a higher gamma value.\
-             Proceed with caution; for now switching to Bonferroni correction to be conservative about this.")
+        print("Significance inflation detected. The CLR/ALR transformation possibly cannot handle this dataset. Consider running again with a higher gamma value. "
+              "Proceed with caution; for now switching to Bonferroni correction to be conservative about this.")
         corrpvals = np.minimum(np.asarray(pvals) * len(pvals), 1)
         significance = [bool(p < alpha) for p in corrpvals]
     return corrpvals, significance
