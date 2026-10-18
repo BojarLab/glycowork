@@ -1938,6 +1938,13 @@ def test_composition_to_mass():
     for bad in (dict(peptide = 'PEPTIDEB'), dict(peptide = 'N[57.02]K'), dict(peptide = 'NK', sample_prep = 'permethylated'), dict(peptide = 'NK', modification = 'reduced')):
         with pytest.raises(ValueError, match = 'glycopeptide'):
             composition_to_mass('H5N4', **bad)
+    # named modifications (PEPTIDE_MODIFICATIONS) weigh their deltas; a delta that loses atoms keeps its sign in the formula
+    assert composition_to_mass('H5N4A2', peptide = 'NC[Carbamidomethyl]SK') == composition_to_mass('H5N4A2', peptide = 'NC[+C2H3NO]SK')
+    assert get_formula('H5N4', peptide = 'N[Deamidated]GTK') == get_formula('H5N4', peptide = 'NGTK[+O-HN]') == 'C78H131N9O53'
+    with pytest.raises(ValueError, match = 'Unknown peptide modification'):
+        composition_to_mass('H5N4', peptide = 'N[Foo]K')
+    with pytest.raises(ValueError, match = 'no elemental formula'):
+        get_formula('H5N4', peptide = 'K[TMT6plex]NGT')
     # Permethylated reduced should add extra methyl (ring-opening creates methylatable OH at C5)
     comp = {'Hex': 5, 'HexNAc': 2}
     base_perm = composition_to_mass(comp, sample_prep = 'permethylated')

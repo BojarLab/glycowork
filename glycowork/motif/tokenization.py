@@ -58,7 +58,10 @@ SIALIC_KEYS = {base: (f'{base}_a2-6', f'{base}_a2-3') for base in ('Neu5Ac', 'Ne
 _SIALIC_BASE = {key: (base, i) for base, keys in SIALIC_KEYS.items() for i, key in enumerate(keys)}
 AMINO_ACID_FORMULAS = {'G': 'C2H3NO', 'A': 'C3H5NO', 'S': 'C3H5NO2', 'P': 'C5H7NO', 'V': 'C5H9NO', 'T': 'C4H7NO2', 'C': 'C3H5NOS', 'L': 'C6H11NO', 'I': 'C6H11NO', 'N': 'C4H6N2O2',
                        'D': 'C4H5NO3', 'Q': 'C5H8N2O2', 'K': 'C6H12N2O', 'E': 'C5H7NO3', 'M': 'C5H9NOS', 'H': 'C6H7N3O', 'F': 'C9H9NO', 'R': 'C6H12N4O', 'Y': 'C9H9NO2', 'W': 'C11H10N2O'}  # amino acid residues in a chain (free amino acid minus H2O)
-_PEPTIDE = re.compile(r'(?:[A-Z](?:\[[+-][^\[\]]+\])*)+')  # one-letter peptide with signed mass or formula deltas after residues, e.g., 'NC[+C2H3NO]SK', 'M[+15.9949]NGTK'
+_PEPTIDE = re.compile(r'(?:[A-Z](?:\[[+-][^\[\]]+\])*)+')  # one-letter peptide with signed mass or formula deltas after residues, e.g., 'NC[+C2H3NO]SK', 'M[+15.9949]NGTK' (named modifications are written as their deltas first)
+PEPTIDE_MODIFICATIONS = {'Carbamidomethyl': '+C2H3NO', 'Propionamide': '+C3H5NO', 'Oxidation': '+O', 'Deamidated': '+O-HN', 'Amidated': '+HN-O', 'Acetyl': '+C2H2O', 'Phospho': '+HPO3',
+                         'Methyl': '+CH2', 'Dimethyl': '+C2H4', 'Carbamyl': '+CHNO', 'Guanidinyl': '+CH2N2', 'Gln->pyro-Glu': '-NH3', 'Glu->pyro-Glu': '-H2O', 'Ammonia-loss': '-NH3',
+                         'TMT': '+224.152478', 'TMT2plex': '+225.155833', 'TMT6plex': '+229.162932', 'TMTpro': '+304.207146', 'iTRAQ4plex': '+144.102063', 'iTRAQ8plex': '+304.20536'}  # Unimod (PSI-MS) names of peptide modifications, as written in brackets after a residue ('NC[Carbamidomethyl]SK'), with their signed formula deltas; isotope-coded tags as masses, which have no formula
 RESIDUE_FORMULAS = {'Hex': ('C6H10O5', 3, 3), 'HexNAc': ('C8H13NO5', 3, 2), 'dHex': ('C6H10O4', 2, 2), 'Pen': ('C5H8O4', 2, 2), 'Neu5Ac': ('C11H17NO8', 5, 3), 'Neu5Gc': ('C11H17NO9', 6, 4),
                     'Kdn': ('C9H14O8', 5, 4), 'HexA': ('C6H8O6', 3, 2), 'HexN': ('C6H11NO4', 4, 3), 'S': ('SO3', -1, -1), 'P': ('HPO3', 1, -1), 'PCho': ('C5H12NO3P', 0, -1),
                     'PEtN': ('C2H6NO3P', 3, 0), 'Me': ('CH2', 0, 0), 'red_end': ('H2O', 2, 2)}  # composition key: (underivatized formula in a chain, caps it gains permethylated (CH2 each) and peracetylated (C2H2O each)), which mz_to_composition.csv's masses are computed from
@@ -631,18 +634,27 @@ def calculate_adduct_mass(formula: str, # Chemical formula of adduct (e.g., "C2H
     return sum((-1 if sign == '-' else 1) * element_masses[mass_value][el] * (int(n) if n else 1) for sign, el, n in elements)
 
 
+def _peptide_deltas(peptide: str # Peptide in one-letter code, with signed deltas ('C[+C2H3NO]') or named modifications ('C[Carbamidomethyl]') after residues
+                    ) -> str: # The peptide with every named modification written as its signed delta from PEPTIDE_MODIFICATIONS
+    "Writes the named modifications of a peptide as their signed deltas"
+    if unknown := sorted(set(re.findall(r'\[([A-Za-z][^\[\]]*)\]', peptide)) - PEPTIDE_MODIFICATIONS.keys()):
+        raise ValueError(f"Unknown peptide modification(s) {unknown} in {peptide!r}; name one of {sorted(PEPTIDE_MODIFICATIONS)}, or give its signed formula or mass, e.g., 'C[+C2H3NO]' or 'M[+15.9949]'.")
+    return re.sub(r'\[([A-Za-z][^\[\]]*)\]', lambda m: f'[{PEPTIDE_MODIFICATIONS[m[1]]}]', peptide)
+
+
 @rescue_compositions
 def composition_to_mass(dict_comp_in: dict[str, int] | str, # Composition dictionary of monosaccharide:count, or a string in any format canonicalize_composition reads (e.g., "H5N4F1")
                         mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
                         sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/peracetylated
                         adduct: str | float | None = None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
                         modification: str | None = None, # Reducing end modification: reduced/2AA/2AB/procainamide/PA
-                        peptide: str | None = None, # Peptide carrying the glycan(s), in one-letter code with optional signed mass or formula deltas after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK' for carbamidomethylation, 'M[+15.9949]NGTK'), to get the glycopeptide mass; several glycans on one peptide are passed as their total composition
+                        peptide: str | None = None, # Peptide carrying the glycan(s), in one-letter code with optional signed mass or formula deltas, or named modifications (PEPTIDE_MODIFICATIONS), after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK' or 'NC[Carbamidomethyl]SK' for carbamidomethylation, 'M[+15.9949]NGTK'), to get the glycopeptide mass; several glycans on one peptide are passed as their total composition
                         sialic_derivatization: str | tuple[str, str] | None = None # Linkage-specific sialic acid derivatization of an underivatized sample, a key of SIALIC_DERIVATIZATIONS ('EE', 'EEA', 'ME', 'DMA', 'SALSA') or a pair of SIALIC_PRODUCTS (a2-6, a2-3/8/9); every sialic acid then needs its linkage ('H5N4E1L1', {'Neu5Ac_a2-6': 1, 'Neu5Ac_a2-3': 1}), and uronic acids take the a2-6 product; peptide carboxyls are left to peptide's deltas
                         ) -> float: # Theoretical mass
     """Calculate theoretical mass from composition, optionally as a glycopeptide"""
+    peptide = _peptide_deltas(peptide) if peptide else peptide
     if peptide is not None and (sample_prep != 'underivatized' or modification or not _PEPTIDE.fullmatch(peptide) or set(re.sub(r'\[[^\]]*\]', '', peptide)) - AMINO_ACID_FORMULAS.keys()):
-        raise ValueError(f"Cannot calculate a glycopeptide mass for peptide {peptide!r}: it has to be underivatized and unlabelled, written in one-letter code from {''.join(AMINO_ACID_FORMULAS)}, with signed deltas such as 'C[+C2H3NO]' or 'M[+15.9949]' after a residue.")
+        raise ValueError(f"Cannot calculate a glycopeptide mass for peptide {peptide!r}: it has to be underivatized and unlabeled, written in one-letter code from {''.join(AMINO_ACID_FORMULAS)}, with signed deltas such as 'C[+C2H3NO]' or 'M[+15.9949]', or named modifications such as 'C[Carbamidomethyl]', after a residue.")
     dict_comp, carboxyl_mass = dict_comp_in.copy(), 0
     if sialic_derivatization is not None:
         products = SIALIC_DERIVATIZATIONS.get(sialic_derivatization) if isinstance(sialic_derivatization, str) else tuple(sialic_derivatization)
@@ -716,7 +728,7 @@ def glycan_to_mass(glycan: str | dict[str, int], # Glycan in IUPAC-condensed for
                    stem_libr: dict[str, str] | None = None, # Modified to core monosaccharide mapping
                    adduct: str | float | None = None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
                    modification: str | None = None, # Reducing end modification: reduced/2AA/2AB/procainamide/PA; a glycan ending in an alditol (-ol) is reduced already
-                   peptide: str | None = None, # Peptide carrying the glycan, in one-letter code with optional signed mass or formula deltas after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK'), to get the glycopeptide mass
+                   peptide: str | None = None, # Peptide carrying the glycan, in one-letter code with optional signed mass or formula deltas, or named modifications (PEPTIDE_MODIFICATIONS), after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK', 'NC[Carbamidomethyl]SK'), to get the glycopeptide mass
                    sialic_derivatization: str | tuple[str, str] | None = None # Linkage-specific sialic acid derivatization of an underivatized sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); each sialic acid then needs a known linkage class, a2-3/6 or a2-? raises
                    ) -> float: # Theoretical mass
     """Calculate theoretical mass from glycan or composition, optionally as a glycopeptide"""
@@ -765,10 +777,11 @@ def get_formula(glycan: str | dict[str, int], # Glycan in any nomenclature canon
                 stem_libr: dict[str, str] | None = None, # Modified to core monosaccharide mapping
                 adduct: str | None = None, # Chemical formula of a neutral adduct (e.g., "C2H4O2"); a signed formula ("-H2O") removes atoms
                 modification: str | None = None, # Reducing end modification: reduced/2AA/2AB/procainamide/PA; a glycan ending in an alditol (-ol) is reduced already
-                peptide: str | None = None, # Peptide carrying the glycan(s), in one-letter code with optional signed formula deltas after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK'); several glycans on one peptide are passed as their total composition
+                peptide: str | None = None, # Peptide carrying the glycan(s), in one-letter code with optional signed formula deltas, or named modifications (PEPTIDE_MODIFICATIONS) other than isotope-coded tags, after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK', 'NC[Carbamidomethyl]SK'); several glycans on one peptide are passed as their total composition
                 sialic_derivatization: str | tuple[str, str] | None = None # Linkage-specific sialic acid derivatization of an underivatized sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); every sialic acid then needs its linkage ('H5N4E1L1', 'Neu5Ac(a2-6)...')
                 ) -> str: # Elemental formula in Hill order (C, H, then alphabetical), e.g., 'C62H104N4O46' for H5N4
     """Elemental formula of a glycan, composition, or formula: the molecule glycan_to_mass weighs"""
+    peptide = _peptide_deltas(peptide) if peptide else peptide
     # adds the formula f n times; a signed formula ('-H2O', '+N3') counts with its sign
     elements, add = Counter(), lambda c, f, n = 1: c.update({el: (-n if f.startswith('-') else n) * (int(k) if k else 1) for el, k in re.findall(r'([A-Z][a-z]?)(\d*)', f)})
     cap = _DERIV_CAP.get(sample_prep)
@@ -814,7 +827,8 @@ def get_formula(glycan: str | dict[str, int], # Glycan in any nomenclature canon
                 add(elements, part)
             caps += (_LABEL_CAPS.get(modification, 1) if sample_prep == 'permethylated' else 1) if cap else 0
         for f in [AMINO_ACID_FORMULAS[aa] for aa in re.sub(r'\[[^\]]*\]', '', peptide or '')] + re.findall(r'\[([^\]]+)\]', peptide or ''):
-            add(elements, f)
+            for part in re.findall(r'[+-]?[^+-]+', f):  # a delta that loses atoms is written as signed parts (deamidation, +O-HN), each added with its sign
+                add(elements, part)
         if cap:
             add(elements, cap, caps)
     elif sialic_derivatization is not None:  # a sequence: every step mirrors glycan_to_mass, adding the formula of what it weighs

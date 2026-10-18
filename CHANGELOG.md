@@ -28,17 +28,18 @@
 #### tokenization
 ##### Added ✨
 - Pyridylamination as reducing-end label: `modification = 'PA'` (2-aminopyridine, +78.058 Da) in `composition_to_mass`, `glycan_to_mass`, `get_formula`, `mz_to_composition`, and `mz_to_structures` (2aff05a)
+- Mass calculation functions etc now support more peptide modifications with their Unimod (PSI-MS) names, such as `'NC[Carbamidomethyl]SK'` ()
 
 ##### Changed 🔄
 - `calculate_adduct_mass` can now also read signed formula parts such as `'C5H6N2-O'` (2aff05a)
 
 #### smiles
 ##### Added ✨
-- Sialic acid methylamides (e.g., SALSA's a2-3 product) are now supported in SMILES generation ()
+- Sialic acid methylamides (e.g., SALSA's a2-3 product) are now supported in SMILES generation (5134bdd)
 
 #### draw
 ##### Changed 🔄
-- Better drawing of repeat units with branches ()
+- Better drawing of repeat units with branches (5134bdd)
 
 ### glycan_data
 #### stats
