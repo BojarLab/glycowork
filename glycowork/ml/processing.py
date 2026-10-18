@@ -32,7 +32,9 @@ def augment_glycan(glycan_data: torch.utils.data.Dataset, # glycan as a networkx
     # Augment node labels
     for i, label in enumerate(augmented_data.string_labels):
         if random() < generalization_prob:
-            temp = de_wildcard_glycoletter(label) if '?' in label or 'x' in label else map_to_basic(label, obfuscate_ptm = getrandbits(1))
+            # A wildcard is made specific and anything else general; testing for '?' or 'x' missed Pen, Sia, Monosaccharide and the '/' linkages, and never generalized specific names with an 'x' such as Lyx
+            temp = de_wildcard_glycoletter(label)
+            temp = temp if temp != label else map_to_basic(label, obfuscate_ptm = getrandbits(1))
             augmented_data.string_labels[i] = temp
             augmented_data.labels[i] = libr.get(temp, len(libr))
     return augmented_data
@@ -305,7 +307,7 @@ class HeteroDataset(Dataset):
         """Dataset for heterogenous GIFFLAR data"""
         super().__init__()
         self.pre_transform = GIFFLARTransform()
-        self.data_list = list(filter(lambda x: x is not None, map(self.pre_transform, data_list)))
+        self.data_list = [self.pre_transform(d) for d in data_list]
 
     def __len__(self):
         return len(self.data_list)

@@ -169,7 +169,7 @@ def glycan_to_nxGraph_int(glycan: str, # Glycan in IUPAC-condensed format
         glycan += 'Hex'
     # Map glycan string to node labels and adjacency matrix
     node_dict, edges = glycan_to_edges(glycan)
-    if appended_hex and glycan.endswith('x'):
+    if appended_hex:
         last_node = len(node_dict) - 1
         node_dict.pop(last_node, None)
         edges = [e for e in edges if last_node not in e]
@@ -971,16 +971,16 @@ def deduplicate_glycans(glycans: list[str] | set[str] # List/set of glycans to d
         for gi, i in enumerate(group):
             if not keep[i]:
                 continue
-            correct_glycan = None
             for j in group[gi + 1:]:
-                if not keep[j]:
+                if not keep[j] or not compare_glycans(ggraphs[i], ggraphs[j]):
                     continue
-                if compare_glycans(ggraphs[i], ggraphs[j]):
-                    if correct_glycan is None:
-                        correct_glycan = graph_to_string(ggraphs[i])
-                    if correct_glycan == glycans[i]:
-                        keep[j] = False
-                    else:
-                        keep[i] = False
-                        break
+                # compare_glycans lets a wildcard match anything it could be, so only a glycan the other one covers is a duplicate, and the more specific one stays; two glycans that are each more specific somewhere both stay
+                i_covers, j_covers = compare_glycans(ggraphs[i], ggraphs[j], subsumes = True), compare_glycans(ggraphs[j], ggraphs[i], subsumes = True)
+                if not i_covers and not j_covers:
+                    continue
+                # the same glycan, spelled twice, keeps its canonical spelling
+                drop = (j if graph_to_string(ggraphs[i]) == glycans[i] else i) if i_covers and j_covers else i if i_covers else j
+                keep[drop] = False
+                if drop == i:
+                    break
     return [g for i, g in enumerate(glycans) if keep[i]]

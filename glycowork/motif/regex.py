@@ -132,8 +132,7 @@ def compile_component(pattern_component: str # Chunk of glyco-regular expression
     motifs = [motifs] if isinstance(motifs, str) else list(motifs)
     absent = len(motifs) == 1 and motifs[0].startswith('!') and motifs[0].endswith(')') and motifs[0].count('(') == 1
     return {'motifs': [motifs[0][1:]] if absent else motifs, 'min': min_occur, 'max': max_occur,
-            'lazy': any(k in core for k in ('}?', '*?', '+?')), 'absent': absent,
-            'branch': core.startswith('('), 'location': location, 'looks': looks}
+            'absent': absent, 'branch': core.startswith('('), 'location': location, 'looks': looks}
 
 
 def filter_matches_by_location(matches: list[list[int]], # List of node index lists
@@ -266,7 +265,8 @@ def trace_matches(components: list[dict], # Compiled pattern chunks
             yield []
             return
         c = components[i]
-        counts = (1,) if c['absent'] else range(c['min'], c['max'] + 1) if c['lazy'] else range(c['max'], c['min'] - 1, -1)
+        # a lazy quantifier fixed max to min in parse_pattern, so greedy order serves both
+        counts = (1,) if c['absent'] else range(c['max'], c['min'] - 1, -1)
         for n in counts:
             for segs, new_anchor in occurrences(c, n, anchor, used):
                 if not look_ok(c, segs):

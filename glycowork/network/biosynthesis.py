@@ -354,7 +354,7 @@ def construct_network(glycans: str | list[str] | pd.DataFrame, # Glycan(s), or a
         permitted_roots = frozenset([permitted_roots])
     # Generating graph from adjacency of observed glycans
     min_size = min(k.count('(') for k in permitted_roots) + 1
-    add_to_virtuals = [r for r in permitted_roots if r not in glycans and any(g.endswith(r) for g in glycans)]
+    add_to_virtuals = [r for r in sorted(permitted_roots) if r not in glycans and any(g.endswith(r) for g in glycans)]  # sorted, since Fuc and Man (O-glycan roots) tie on length and set order would decide which the queue expands first
     glycans.extend(add_to_virtuals)
     glycans.sort(key = len, reverse = True)
     graph_dic = {k: glycan_to_nxGraph(k) for k in glycans}
@@ -438,14 +438,13 @@ def construct_network(glycans: str | list[str] | pd.DataFrame, # Glycan(s), or a
         for u, v in network.edges():
             elem = network[u][v]
             edge = elem['diffs']
-            for link in linkages:
-                if link in edge:
-                    if edge_type == 'monosaccharide':
-                        elem['diffs'] = edge.split('(')[0]
-                    elif edge_type == 'enzyme':
-                        elem['diffs'] = monolink_to_glycoenzyme(edge, df_enzyme, glycan_class = net_class,
-                                                                product = max(u, v, key = lambda n: len(
-                                                                    safe_index(n, graph_dic))))
+            # one relabeling per edge: 'b1-4' also contains the linkage '1-4', and every match repeated the enzyme lookup with its acceptor searches
+            if any(link in edge for link in linkages):
+                if edge_type == 'monosaccharide':
+                    elem['diffs'] = edge.split('(')[0]
+                elif edge_type == 'enzyme':
+                    elem['diffs'] = monolink_to_glycoenzyme(edge, df_enzyme, glycan_class = net_class,
+                                                            product = max(u, v, key = lambda n: len(safe_index(n, graph_dic))))
     # Make network directed
     network = prune_directed_edges(network.to_directed())
     if constraints is not False:
@@ -1321,7 +1320,9 @@ def get_differential_biosynthesis(df: pd.DataFrame | str | Path, # Glycan abunda
                           key = int) or ['?']
             anomer = next(iter(anomer_set)) if len(anomer_set) == 1 else '?'
             canonical = backbone.replace('(LINK)', f'({anomer}{"/".join(starts)}-{"/".join(ends)})')
-            shadow_reactions[canonical] = variants
+            # A reaction already written with the merged linkage (Neu5Ac(a2-3/8) next to a2-3 and a2-8) is a flux of its own, which the family mean must not overwrite
+            if canonical not in variants:
+                shadow_reactions[canonical] = variants
         res2 = {k: {**v, **{r: np.mean([v[k2] for k2 in shadow_reactions[r]]) for r in shadow_reactions}} for k, v in
                 res2.items()}
         shadow_set = set(shadow_reactions)

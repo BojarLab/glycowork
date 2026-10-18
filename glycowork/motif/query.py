@@ -23,7 +23,8 @@ def get_insight(glycan: str, # Glycan in any format canonicalize_iupac reads (IU
     if glycan in loader.df_glycan.glycan.values:
         idx = loader.df_glycan.glycan.values.tolist().index(glycan)
     else:
-        idx = next((i for i, k in enumerate(loader.df_glycan.glycan.values.tolist()) if compare_glycans(glycan, k)), None)
+        # compare_glycans lets a wildcard match anything it could be, so only an entry that covers the query and is covered by it (a branch-order respelling) is this glycan; Gal(b1-?) got the species and GlyTouCan ID of a Gal(b1-3) entry
+        idx = next((i for i, k in enumerate(loader.df_glycan.glycan.values.tolist()) if compare_glycans(glycan, k) and compare_glycans(glycan, k, subsumes = True) and compare_glycans(k, glycan, subsumes = True)), None)
         if idx is None:
             print(
                 f"\nWe don't have {glycan} in our database yet. Please double-check the sequence or try a related structure.")

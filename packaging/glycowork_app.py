@@ -306,19 +306,22 @@ def _describe(text, motifs = False):
         from glycowork.motif.annotate import annotate_glycan
     info = {'input': text}
     try:
-        glycan = canonicalize_iupac(text)
+        try:
+            glycan = canonicalize_iupac(text)
+        except ValueError:
+            # canonicalize_iupac refuses Byonic-style compositions (HexNAc(4)Hex(5)) and points to canonicalize_composition
+            if not is_composition(text):
+                raise
+            glycan = canonicalize_composition(text, as_string = True)
         info['glycan'] = glycan
         if is_composition(glycan):
             info.update(kind = 'composition', composition = canonicalize_composition(glycan, as_string = True), mass = glycan_to_mass(glycan),
                         permethylated = glycan_to_mass(glycan, sample_prep = 'permethylated'))
             return info
-        # canonicalize_iupac hands back what it cannot read unchanged, so a sequence only counts as read if every residue has a composition
+        # glycan_to_composition raises on what canonicalize_iupac could not read and hands back unchanged; {} is a real glycan whose residues have no composition key
+        # (Kdo, heptoses, QuiNAc), which glycan_to_mass weighs atom by atom
         composition = glycan_to_composition(glycan)
-        if not composition:
-            info['error'] = 'No glycan could be read from this: a residue or notation is not recognized'
-            return info
-        info.update(kind = get_class(glycan) or 'unclassified', composition = f'{stringify_dict(composition)} ({canonicalize_composition(composition, as_string = True)})',
-                    mass = glycan_to_mass(glycan), permethylated = glycan_to_mass(glycan, sample_prep = 'permethylated'))
+        info.update(kind = get_class(glycan) or 'unclassified', composition = f'{stringify_dict(composition)} ({canonicalize_composition(composition, as_string = True)})' if composition else '',
         found = glytoucan_to_glycan(glycan, revert = True, verbose = False)
         info['glytoucan'] = found if found != glycan else ''
         if motifs:
@@ -1038,17 +1041,18 @@ class SequencesTab(QWidget):
     def add_file(self, path):
         self.store.setValue('folder', os.path.dirname(path))
         try:
-            suffix = os.path.splitext(path)[1].lower()
-            if suffix in ('.xlsx', '.xls'):
-                df = pd.read_excel(path)
-            elif suffix in ('.csv', '.tsv'):
-                df = pd.read_csv(path, sep = None, engine = 'python')
+            if os.path.splitext(path)[1].lower() in ('.xlsx', '.xls', '.csv', '.tsv'):
+                # glycowork's own table reader: pandas' separator sniffing split a one-column CSV at the 'y' of its glycan header, and with it every Xyl
+                with IMPORT_LOCK:
+                    from glycowork.glycan_data.data_entry import _read_table
+                df = _read_table(path, dtype = None)[0].rename(columns = str)
             else:
                 df = pd.DataFrame({'glycan': [line.strip() for line in open(path, encoding = 'utf-8-sig', errors = 'replace') if line.strip()]})
         except Exception as error:
             QMessageBox.warning(self, 'Load glycans', f'Could not read {os.path.basename(path)}:\n\n{error}')
             return
-        columns = [str(c) for c in df.columns if df[c].dtype == object]
+        # Text is object dtype in pandas 2 but its own str dtype in pandas 3
+        columns = [c for c in df.columns if df[c].dtype == object or pd.api.types.is_string_dtype(df[c])]
         if not columns:
             QMessageBox.warning(self, 'Load glycans', f'{os.path.basename(path)} has no column of text')
             return

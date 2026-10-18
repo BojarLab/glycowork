@@ -32,7 +32,7 @@ class EarlyStopping:
         self.counter = 0
         self.best_score = None
         self.early_stop = False
-        self.val_loss_min = 0
+        self.val_loss_min = float('inf')
 
     def __call__(self, val_loss: float, model: torch.nn.Module) -> None:
         score = -val_loss
@@ -103,6 +103,7 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
     since = time.time()
     if mode in {'multiclass', 'binary'}:  # the mode names of training_setup, which would otherwise fall through to regression
         mode, mode2 = 'classification', 'multi' if mode == 'multiclass' else 'binary'
+    lead, lead_name = {'classification': ('acc', 'Accuracy'), 'multilabel': ('lrap', 'LRAP')}.get(mode, ('mse', 'MSE'))
     early_stopping = EarlyStopping(patience = patience, verbose = True)
     best_model_wts = copy.deepcopy(model.state_dict())
     best_loss = float("inf")
@@ -205,11 +206,7 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                 metrics[phase]["mse"].append(mean_squared_error(y_det, pred_det))
                 metrics[phase]["mae"].append(mean_absolute_error(y_det, pred_det))
                 metrics[phase]["r2"].append(r2_score(y_det, pred_det))
-            if mode == 'classification':
-                print('{} Loss: {:.4f} Accuracy: {:.4f} MCC: {:.4f}'.format(phase, metrics[phase]["loss"][-1],
-                                                                            metrics[phase]["acc"][-1],
-                                                                            metrics[phase]["mcc"][-1]))
-            elif mode == 'multilabel':
+            if mode in {'classification', 'multilabel'}:
                 print('{} Loss: {:.4f} Accuracy: {:.4f} MCC: {:.4f}'.format(phase, metrics[phase]["loss"][-1],
                                                                             metrics[phase]["acc"][-1],
                                                                             metrics[phase]["mcc"][-1]))
@@ -222,13 +219,7 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                 if metrics[phase]["loss"][-1] <= best_loss:
                     best_loss = metrics[phase]["loss"][-1]
                     best_model_wts = copy.deepcopy(model.state_dict())
-                    # Extract the lead metric (ACC, LRAP, or MSE) of the new best model
-                    if mode == 'classification':
-                        best_lead_metric = metrics[phase]["acc"][-1]
-                    elif mode == 'multilabel':
-                        best_lead_metric = metrics[phase]["lrap"][-1]
-                    else:
-                        best_lead_metric = metrics[phase]["mse"][-1]
+                    best_lead_metric = metrics[phase][lead][-1]
                 # Check Early Stopping & adjust learning rate if needed
                 early_stopping(metrics[phase]["loss"][-1], model)
                 if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau) or isinstance(scheduler,
@@ -243,12 +234,7 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(
         time_elapsed // 60, time_elapsed % 60))
-    if mode == 'classification':
-        print('Best val loss: {:4f}, best Accuracy score: {:.4f}'.format(best_loss, best_lead_metric))
-    elif mode == 'multilabel':
-        print('Best val loss: {:4f}, best LRAP score: {:.4f}'.format(best_loss, best_lead_metric))
-    else:
-        print('Best val loss: {:4f}, best MSE score: {:.4f}'.format(best_loss, best_lead_metric))
+    print('Best val loss: {:4f}, best {} score: {:.4f}'.format(best_loss, lead_name, best_lead_metric))
     model.load_state_dict(best_model_wts)
     if return_metrics:
         return model, metrics
@@ -261,18 +247,9 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
     plt.legend(['Validation Loss'], loc = 'best')
     plt.subplot(2, 1, 2)
     plt.xlabel('Number of Epochs')
-    if mode == 'classification':
-        plt.plot(range(epoch + 1), metrics["val"]["acc"])
-        plt.ylabel('Validation Accuracy')
-        plt.legend(['Validation Accuracy'], loc = 'best')
-    elif mode == 'multilabel':
-        plt.plot(range(epoch + 1), metrics["val"]["lrap"])
-        plt.ylabel('Validation LRAP')
-        plt.legend(['Validation LRAP'], loc = 'best')
-    else:
-        plt.plot(range(epoch + 1), metrics["val"]["mse"])
-        plt.ylabel('Validation MSE')
-        plt.legend(['Validation MSE'], loc = 'best')
+    plt.plot(range(epoch + 1), metrics["val"][lead])
+    plt.ylabel(f'Validation {lead_name}')
+    plt.legend([f'Validation {lead_name}'], loc = 'best')
     return model
 
 
@@ -560,7 +537,8 @@ def get_mismatch(model: xgb.XGBModel,  # trained ML model from train_ml_model
     # Get false predictions
     idx = [k for k, (pred, y) in enumerate(zip(preds, y_test)) if pred != y]  # by position, as a Series y_test would otherwise be indexed by its labels
     preds = X_test.iloc[idx, :].index.values.tolist()
-    preds_proba = [preds_proba[k].tolist()[1] for k in idx]
+    # The positive class of a binary model, else the predicted class, since class 1 means nothing among several
+    preds_proba = [float(preds_proba[k, 1] if preds_proba.shape[1] == 2 else preds_proba[k].max()) for k in idx]
     # Return the mismatches
     mismatch = [tuple([i, j]) for i, j in zip(preds, preds_proba)]
     return mismatch[:min(len(mismatch), n)]
