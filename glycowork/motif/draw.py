@@ -11,7 +11,7 @@ import hashlib
 from io import BytesIO
 from typing import Any
 import networkx as nx
-import drawsvg as draw
+from glycorender import svgdraw as draw
 import numpy as np
 import pandas as pd
 import struct
@@ -141,7 +141,7 @@ def _get_glycorender():
 
 
 def _flatten_text_paths(
-        data: str,  # SVG code as emitted by drawsvg
+        data: str,  # SVG code as emitted by GlycanDrawing.as_svg
         turn: float = 0  # Rotation the drawing gets on top of the labels, in degrees (90 in vertical mode)
 ) -> str:  # SVG code with every label as plainly positioned text
     "Rewrites text-on-a-path as absolutely positioned, rotated text, since vector editors such as Affinity Designer silently drop <textPath>"
@@ -175,10 +175,10 @@ def _flatten_text_paths(
 
 
 def _drawn_extent(
-        element: Any, # drawsvg element or container to measure
+        element: Any, # svgdraw element or container to measure
         acc: list # Accumulator of (x0, y0, x1, y1) boxes in user space
 ) -> list: # The accumulator, so the caller can fold it in one expression
-    "Collects the bounding boxes of everything visible in a drawsvg tree, so a drawing can be cropped to what it actually contains"
+    "Collects the bounding boxes of everything visible in an svgdraw tree, so a drawing can be cropped to what it actually contains"
     from glycorender.render import pdfmetrics, font_to_use
     a = getattr(element, 'args', {}) or {}
     if isinstance(element, draw.Circle) and not a.get('fill') == a.get('stroke') == 'none':
@@ -295,7 +295,7 @@ def draw_shape(
         conf: str = '', # Ring configuration text
         deg: float = 0, # Rotation angle in degrees
         text_anchor: str = 'middle', # Text alignment for postbiosynthetic modifications
-        scalar: float = 0 # Intensity scaling factor for drawsvg output
+        scalar: float = 0 # Intensity scaling factor, drawn as a gradient halo behind the symbol
 ) -> None:
     "Draws SNFG glycan symbol with specified shape, color, position, and optional annotations"
     x_base = -x_pos * dim
@@ -1414,7 +1414,7 @@ class GlycanDrawing:
     def as_standalone_svg(self):
         "SVG code that looks the same in any viewer: effects baked in by glycorender, labels as plainly positioned text"
         data = self.as_svg()
-        # drawsvg has no cut layer of its own, so route the SVG through glycorender as well
+        # The built SVG has no shadow or cut layer of its own, so glycorender bakes them in
         if self.shadow or self.sticker:
             from glycorender.render import pdf_to_svg_bytes
             data = pdf_to_svg_bytes(data, shadow = self.shadow, sticker = self.sticker)

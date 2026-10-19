@@ -1,6 +1,7 @@
 # Changelog
 
 ## [1.11.1]
+- `drawsvg` is no longer a dependency: `GlycoDraw` builds its SVG with `glycorender`'s `svgdraw` (`glycorender>=0.5.0`), with identical output and ~1.45x faster drawing ()
 
 ### motif
 #### draw

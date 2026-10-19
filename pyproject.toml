@@ -31,9 +31,8 @@ dependencies = [
     "scipy>=1.16",
     "seaborn",
     "pandas>=2.2.2",
-    "drawSvg~=2.0",
     "openpyxl",
-    "glycorender~=0.4.2"
+    "glycorender~=0.5.0"
 ]
 
 [project.urls]

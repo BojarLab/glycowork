@@ -11,7 +11,7 @@ os.environ.setdefault("LOKY_MAX_CPU_COUNT", "1")  # joblib's physical-core probe
 import shutil
 import torch
 import torch.nn as nn
-import drawsvg as draw
+from glycorender import svgdraw as draw
 import warnings
 from huggingface_hub.errors import LocalEntryNotFoundError, HfHubHTTPError
 import importlib
