@@ -1595,6 +1595,9 @@ def test_glycan_to_mass():
     # inositol has no ring oxygen, so it has one OH more to derivatize than the Hex its composition counts
     assert abs(glycan_to_mass("Man(a1-3)Man(a1-2)Ins", sample_prep = 'permethylated') - 672.3568) < 0.001
     assert glycan_to_mass("Man(a1-3)Man(a1-2)Ins") == glycan_to_mass("Man(a1-3)Man(a1-2)Glc")
+    # deuteropermethylation (CD3I) puts CD3 where permethylation puts CH3, D3-H3 heavier per methyl on every path: 9 methyls on lactitol, 10 on Kdo2 (from the molecule), 12 on Man2Ins
+    for glycan, methyls in [("Gal(b1-4)Glc-ol", 9), ("Kdo(a2-4)Kdo", 10), ("Man(a1-3)Man(a1-2)Ins", 12)]:
+        assert abs(glycan_to_mass(glycan, sample_prep = 'deuteropermethylated') - glycan_to_mass(glycan, sample_prep = 'permethylated') - methyls * 3.018831) < 1e-6
     # peracetylation spares acids and acetylates N-methylamines, so pyrophosphates, phosphodiesters, methyl esters and N-methyls are weighed from the molecule
     assert abs(glycan_to_mass("Man(b1-4)GlcNAc(b1-4)GlcNAc1PP", sample_prep = 'peracetylated') - 1082.2393) < 0.001
     assert abs(glycan_to_mass("Gal(b1-2)GlcA6Me", sample_prep = 'peracetylated') - 664.1851) < 0.001
@@ -1603,6 +1606,7 @@ def test_glycan_to_mass():
     # a composition, as a dict or in any string format canonicalize_composition reads, is weighed by composition_to_mass
     assert glycan_to_mass({'Hex': 5, 'HexNAc': 4}) == glycan_to_mass('H5N4') == glycan_to_mass('HexNAc(4)Hex(5)') == composition_to_mass('H5N4')
     assert glycan_to_mass('H5N4F1', sample_prep = 'permethylated', modification = 'reduced') == composition_to_mass('H5N4F1', sample_prep = 'permethylated', modification = 'reduced')
+    assert glycan_to_mass('H5N4F1', sample_prep = 'deuteropermethylated', modification = 'reduced_D') == composition_to_mass('H5N4F1', sample_prep = 'deuteropermethylated', modification = 'reduced_D')
     assert glycan_to_mass('H5N4F1', peptide = 'EEQYNSTYR') == composition_to_mass('H5N4F1', peptide = 'EEQYNSTYR')
 
 
@@ -1613,6 +1617,8 @@ def test_calculate_adduct_mass():
     assert abs(calculate_adduct_mass('CH3COOH') - 60.0211) < 0.001
     assert abs(calculate_adduct_mass('-H2O') + 18.0106) < 0.001
     assert abs(calculate_adduct_mass('C5H6N2-O') - 78.0582) < 0.001  # signed parts, as a net change that loses atoms
+    assert abs(calculate_adduct_mass('HD') - 3.021927) < 1e-6  # deuterium is an element: NaBD4 reduction adds H and D
+    assert abs(calculate_adduct_mass('D3-H3') - 3.018831) < 1e-6 and abs(calculate_adduct_mass('D3-H3', mass_value = 'average') - 3.018486) < 1e-6  # a CD3 cap over a CH3 one; the reagent's D is isotope-pure, so its average mass is its monoisotopic one
     # Test with different mass types
     h2o_mono = calculate_adduct_mass('H2O', mass_value='monoisotopic')
     h2o_avg = calculate_adduct_mass('H2O', mass_value='average')
@@ -1879,7 +1885,8 @@ def test_composition_to_mass():
     assert get_formula('H3N4F1', modification = '2AB') == 'C63H102N6O40'
     assert get_formula('H5N4F1', peptide = 'EEQYNSTYR') == 'C118H184N18O69'
     for comp, kwargs in [('H5N4E1L1', {'sialic_derivatization': 'EEA', 'adduct': 'Na'}), ({'Hex': 2, 'Ac': 1, 'Me': 1, 'S': 1}, {'sample_prep': 'permethylated', 'modification': '2AA'}),
-                         ('H2N1P1', {'sample_prep': 'peracetylated', 'modification': 'reduced'})]:
+                         ('H2N1P1', {'sample_prep': 'peracetylated', 'modification': 'reduced'}), ('H5N4F1', {'sample_prep': 'deuteropermethylated', 'modification': 'reduced_D'}), ('H3N2', {'modification': 'APTS'}),
+                         ('H3N2', {'sample_prep': 'permethylated', 'modification': 'aminoxyTMT'}), ('H3N2', {'modification': 'GirardP', 'adduct': 'Na'})]:
         assert abs(calculate_adduct_mass(get_formula(comp, **kwargs)) - composition_to_mass(comp, **kwargs)) < 1e-9
     with pytest.raises(ValueError, match = 'no elemental formula'):
         get_formula('H5N4', adduct = 22.99)
@@ -1887,10 +1894,14 @@ def test_composition_to_mass():
     g = 'Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc'
     assert {get_formula(x) for x in ['H5N4', {'Hex': 5, 'HexNAc': 4}, 'HexNAc(4)Hex(5)', 'C62H104N4O46']} == {'C62H104N4O46'} and get_formula(g) == get_formula('H5N4F1A2') == get_formula('FA2G2S2')
     for glycan, kwargs in [(g, {'sialic_derivatization': 'EE', 'modification': '2AB'}), ('Kdo(a2-4)Kdo', {'sample_prep': 'permethylated'}), ('Gal(b1-3)GalNAc-ol', {'sample_prep': 'permethylated'}),
-                           ('GlcNAc(b1-6)Man6P', {'sample_prep': 'peracetylated'}), ('Gal(b1-4)GlcNAc', {'peptide': 'NGT', 'adduct': 'Na'})]:  # sialic products, the atom path, an alditol, a phosphodiester, a glycopeptide
+                           ('GlcNAc(b1-6)Man6P', {'sample_prep': 'peracetylated'}), ('Gal(b1-4)GlcNAc', {'peptide': 'NGT', 'adduct': 'Na'}),
+                           ('Kdo(a2-4)Kdo', {'sample_prep': 'deuteropermethylated'}), ('Gal(b1-3)GalNAc-ol', {'sample_prep': 'deuteropermethylated'})]:  # sialic products, the atom path, an alditol, a phosphodiester, a glycopeptide, both deuteropermethylated
         assert abs(calculate_adduct_mass(get_formula(glycan, **kwargs)) - glycan_to_mass(glycan, **kwargs)) < 1e-9
     with pytest.raises(ValueError, match = 'whole molecule'):
         get_formula('C62H104N4O46', sample_prep = 'permethylated')
+    with pytest.raises(ValueError, match = 'whole molecule'):
+        get_formula('C62H104N4O46', sample_prep = 'deuteropermethylated')
+    assert get_formula('H3N2', modification = 'reduced_D') == get_formula('C34H59DN2O26') == 'C34H59DN2O26'  # a formula with deuterium reads back as one
     # linkage-specific sialic acid derivatization: H5N4E2, the main plasma N-glycan of ethyl esterified samples, at [M+Na]+ 2301.835 (Reiding et al. 2014)
     assert abs(composition_to_mass('H5N4E2', sialic_derivatization = 'EE') + 22.989221 - 2301.835) < 1e-3
     assert abs(composition_to_mass('H5N4E1L1', sialic_derivatization = 'EEA') - composition_to_mass('H5N4A2') - 28.0313 + 0.9840) < 1e-3
@@ -1956,6 +1967,13 @@ def test_composition_to_mass():
     assert abs(composition_to_mass(comp, modification = 'reduced', sample_prep = 'peracetylated') - composition_to_mass(comp, sample_prep = 'peracetylated') - 2 * 1.007825 - 42.010565) < 0.01
     # Man5GlcNAc2 permethylated reduced [M+Na]+ should match literature m/z 1595
     assert abs(reduced_perm + 22.989218 - 1595.81) < 0.5
+    # deuteropermethylated, each of its 24 methyls is a CD3, D3-H3 heavier: [M+Na]+ 1668.266 (23 methyls on the free reducing end)
+    assert abs(composition_to_mass(comp, modification = 'reduced', sample_prep = 'deuteropermethylated') + 22.989218 - 1668.2658) < 0.001
+    assert abs(composition_to_mass(comp, sample_prep = 'deuteropermethylated', mass_value = 'average') - composition_to_mass(comp, sample_prep = 'permethylated', mass_value = 'average') - 23 * 3.018486) < 1e-6
+    with pytest.raises(ValueError, match = 'underivatized'):
+        composition_to_mass('H5N4E2', sample_prep = 'deuteropermethylated', sialic_derivatization = 'EE')
+    with pytest.raises(ValueError, match = 'deuteropermethylated'):  # an unknown sample prep lists the known ones
+        composition_to_mass(comp, sample_prep = 'permethylated_d3')
     # reductive amination opens the ring like reduction does (C5-OH), and permethylation also caps the label's acid or amide
     assert abs(composition_to_mass('H3N2', modification = '2AB', sample_prep = 'permethylated') - 1310.7096) < 0.001
     assert abs(composition_to_mass('H3N2', modification = '2AA', sample_prep = 'peracetylated') - 1703.5495) < 0.001
@@ -1963,6 +1981,16 @@ def test_composition_to_mass():
     assert abs(composition_to_mass('H9N2', modification = 'PA') + 1.007276 - 1961.7102) < 0.001
     assert get_formula('H3N2', modification = 'PA') == 'C39H64N4O25'
     assert mz_to_composition(989.39, max_charge = 1, modification = 'PA', glycan_class = 'N') == [{'Hex': 3, 'HexNAc': 2}]
+    # NaBD4 reduction adds HD, one D above NaBH4; APTS labels by reductive amination (label minus O), aminoxyTMT0 (C15H30N4O3) and Girard's P as oxime and hydrazone (label minus H2O)
+    assert abs(composition_to_mass('H5N4', modification = 'reduced_D') - composition_to_mass('H5N4', modification = 'reduced') - 1.006277) < 1e-6
+    assert abs(composition_to_mass('H3N2', modification = 'APTS') - composition_to_mass('H3N2') - 440.9647) < 1e-3
+    assert abs(composition_to_mass('H3N2', modification = 'aminoxyTMT') - composition_to_mass('H3N2') - 296.2212) < 1e-3
+    # Girard's P carries its own charge: its [M]+ is the glycan plus C7H8N3+, which the mode's proton completes
+    assert abs(composition_to_mass('H3N2', modification = 'GirardP') + PROTON_MASS - composition_to_mass('H3N2') - calculate_adduct_mass('C7H8N3') + 0.00054858) < 1e-6
+    for mz, charge, kwargs, comp in [(1646.2839, 1, {'sample_prep': 'deuteropermethylated', 'modification': 'reduced'}, {'Hex': 5, 'HexNAc': 2}), (1112.8001, -2, {'modification': 'APTS'}, {'Hex': 5, 'HexNAc': 4, 'dHex': 1}),
+                                     (1774.6635, 1, {'modification': 'GirardP'}, {'Hex': 5, 'HexNAc': 4}), (1260.5094, 2, {'modification': 'aminoxyTMT'}, {'Hex': 5, 'HexNAc': 4, 'Neu5Ac': 2}),
+                                     (1788.6647, -1, {'modification': 'reduced_D'}, {'Hex': 5, 'HexNAc': 4, 'dHex': 1})]:
+        assert mz_to_composition(mz, max_charge = charge, glycan_class = 'N', **kwargs) == [comp]
     assert abs(composition_to_mass({'Kdn': 1, 'Hex': 1}, sample_prep = 'peracetylated', mass_value = 'average') - calculate_adduct_mass('C33H44O23', mass_value = 'average')) < 1e-4
     assert abs(composition_to_mass('H5N4F1A2', mass_value = 'average') - calculate_adduct_mass('C90H148N6O66', mass_value = 'average')) < 1e-4
     with pytest.raises(ValueError):  # 'H' is Hex in shorthand, not the hydrogen row of mz_to_composition.csv

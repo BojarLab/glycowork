@@ -1,7 +1,7 @@
 # Changelog
 
 ## [1.11.1]
-- `drawsvg` is no longer a dependency: `GlycoDraw` builds its SVG with `glycorender`'s `svgdraw` (`glycorender>=0.5.0`), with identical output and ~1.45x faster drawing ()
+- `drawsvg` is no longer a dependency: `GlycoDraw` builds its SVG with `glycorender`'s `svgdraw` (`glycorender>=0.5.0`), with identical output and ~1.45x faster drawing (f41edb7)
 
 ### motif
 #### draw
@@ -29,6 +29,8 @@
 #### tokenization
 ##### Added ✨
 - Pyridylamination as reducing-end label: `modification = 'PA'` (2-aminopyridine, +78.058 Da) in `composition_to_mass`, `glycan_to_mass`, `get_formula`, `mz_to_composition`, and `mz_to_structures` (2aff05a)
+- Also added mass support for reducine end modifications `reduced_D` (NaBD4 reduction, +HD), `APTS`, `aminoxyTMT`, and `GirardP` ()
+- `sample_prep` keyword arguments now also accept the option of `deuteropermethylated` ()
 - Mass calculation functions etc now support more peptide modifications with their Unimod (PSI-MS) names, such as `'NC[Carbamidomethyl]SK'` (54a3ea2)
 
 ##### Changed 🔄
@@ -43,6 +45,10 @@
 - Better drawing of repeat units with branches (5134bdd)
 
 ### glycan_data
+#### loader
+##### Added ✨
+- Added new curated `human_headandneck_O_GPST000316` glycomics datasets to `glycomics_data_loader` ()
+
 #### stats
 ##### Changed 🔄
 - Improved estimate of `mahalanobis_variance` (cb9feeb)

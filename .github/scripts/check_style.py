@@ -39,7 +39,7 @@ def changed_lines(diff_range):
     """{path: {line numbers added/modified}} for the given git diff range."""
     out = defaultdict(set)
     raw = subprocess.run(['git', 'diff', '--unified=0', '--diff-filter=d', diff_range],
-                         capture_output = True, text = True, check = True).stdout
+                         capture_output = True, encoding = 'utf-8', errors = 'replace', check = True).stdout
     path = None
     for line in raw.splitlines():
         if line.startswith('+++ b/'):
