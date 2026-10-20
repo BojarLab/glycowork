@@ -133,6 +133,8 @@ _SEGMENT_PREFIXES = {'04', '15', '02', '13', '24', '35', '25', '03', '14'}
 _SVG_NUMBER = re.compile(r'-?\d+(?:\.\d+)?(?:e-?\d+)?')
 _SVG_LINE_PATH = re.compile(r'<path d="M(-?[\d.eE+-]+),(-?[\d.eE+-]+) L(-?[\d.eE+-]+),(-?[\d.eE+-]+)"[^>]*?id="([^"]+)"')
 _SVG_TEXT_PATH = re.compile(r'<text([^>]*)><textPath xlink:href="#([^"]+)" startOffset="([^"]+)">\s*(?:<tspan dy="([^"]+)">(.*?)</tspan>)?\s*</textPath></text>', re.S)
+# Outline coordinates of each glyph at unit size, per font, as every label placement measures the ink of its glyphs
+_GLYPH_INK = {}
 
 
 def _get_glycorender():
@@ -1574,9 +1576,11 @@ def _finish_drawing(
                 ''.join(str(k.escaped_text or '') for k in el.children[0].children)).replace(' ', '')
             if (dy == '-0.5em' or dy == '-3.15em' and sym is not None) and text:
                 font = pdfmetrics.fonts[font_to_use + ('-Bold' if dy == '-3.15em' else '')]
-                ink = [[k / font.ttf.units_per_em for _, args in font.ttf.outline(font.ttf.gid(ch)) for k in
-                        args] or [
-                           0, 0] for ch in text]
+                for ch in text:
+                    if (font, ch) not in _GLYPH_INK:
+                        _GLYPH_INK[font, ch] = [k / font.ttf.units_per_em for _, args in
+                                                font.ttf.outline(font.ttf.gid(ch)) for k in args] or [0, 0]
+                ink = [_GLYPH_INK[font, ch] for ch in text]
                 ys = [k for g in ink for k in g[1::2]]
                 # At unit size: advance with glycorender's 0.05 em tracking, the side bearings of the first and last
                 # glyph, and the ink band about the baseline
@@ -1697,7 +1701,7 @@ def _finish_drawing(
     drawing = GlycanDrawing(d2, shadow = shadow, sticker = sticker, vertical = vertical, alt_text = alt_text, dim = dim)
     if filepath:
         drawing.save(str(filepath).replace(in_glycan, re.sub(r'[<>:"/\\|?*]', '_', in_glycan)))
-    return drawing if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(
+    return drawing if suppress or filepath or is_jupyter() else display_svg_with_matplotlib(
         d2, shadow = shadow, sticker = sticker)
 
 
@@ -2159,7 +2163,7 @@ def plot_glycans_grid(
                             vertical = kwargs.get('vertical', False), alt_text = alt_text, dim = dim)
     if filepath:
         drawing.save(filepath)
-    return drawing if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(
+    return drawing if suppress or filepath or is_jupyter() else display_svg_with_matplotlib(
         grid, shadow = drawing.shadow, sticker = drawing.sticker)
 
 

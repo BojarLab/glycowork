@@ -29,8 +29,8 @@
 #### tokenization
 ##### Added ✨
 - Pyridylamination as reducing-end label: `modification = 'PA'` (2-aminopyridine, +78.058 Da) in `composition_to_mass`, `glycan_to_mass`, `get_formula`, `mz_to_composition`, and `mz_to_structures` (2aff05a)
-- Also added mass support for reducine end modifications `reduced_D` (NaBD4 reduction, +HD), `APTS`, `aminoxyTMT`, and `GirardP` ()
-- `sample_prep` keyword arguments now also accept the option of `deuteropermethylated` ()
+- Also added mass support for reducine end modifications `reduced_D` (NaBD4 reduction, +HD), `APTS`, `aminoxyTMT`, and `GirardP` (8770c04)
+- `sample_prep` keyword arguments now also accept the option of `deuteropermethylated` (8770c04)
 - Mass calculation functions etc now support more peptide modifications with their Unimod (PSI-MS) names, such as `'NC[Carbamidomethyl]SK'` (54a3ea2)
 
 ##### Changed 🔄
@@ -43,11 +43,12 @@
 #### draw
 ##### Changed 🔄
 - Better drawing of repeat units with branches (5134bdd)
+- `GlycoDraw` `.png` outputs are now much faster ()
 
 ### glycan_data
 #### loader
 ##### Added ✨
-- Added new curated `human_headandneck_O_GPST000316` glycomics datasets to `glycomics_data_loader` ()
+- Added new curated `human_headandneck_O_GPST000316` glycomics datasets to `glycomics_data_loader` (8770c04)
 
 #### stats
 ##### Changed 🔄

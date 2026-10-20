@@ -32,7 +32,7 @@ dependencies = [
     "seaborn",
     "pandas>=2.2.2",
     "openpyxl",
-    "glycorender~=0.5.0"
+    "glycorender~=0.5.1"
 ]
 
 [project.urls]
