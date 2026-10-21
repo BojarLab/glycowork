@@ -49,12 +49,14 @@ NEUTRAL_ADDUCTS = {'Acetonitrile', 'Trifluoroacetic acid'}  # mz_to_composition.
 modification_formula_dict = {'reduced': 'H2', 'reduced_D': 'HD', '2AA': 'C7H7NO', '2AB': 'C7H8N2', 'procainamide': 'C13H21N3', 'PA': 'C5H6N2-O', 'APTS': 'C16H11NO9S3-O',
                            'aminoxyTMT': 'C15H30N4O3-H2O', 'GirardP': 'C7H9N3O-H2O'}  # net gain at the reducing end: H2 by reduction (HD with NaBD4), label minus O by reductive amination (2-aminopyridine has no O, so PA loses one), label minus H2O by oxime (aminoxyTMT0, C15H30N4O3) or hydrazone (Girard's P) formation; Girard's P is a fixed-charge pyridinium (C7H10N3O+), counted as the reagent minus H so that the mode's proton makes its cation
 SIALIC_PRODUCTS = {'ethyl ester': ('+C2H4',), 'methyl ester': ('+CH2',), 'lactone': ('-H2O',), 'amide': ('+NH3', '-H2O'), 'methylamide': ('+CH5N', '-H2O'),
-                   'dimethylamide': ('+C2H7N', '-H2O'), 'isopropylamide': ('+C3H9N', '-H2O')}  # what a derivatization makes of a carboxyl, as the formulas it gains and loses
+                   'dimethylamide': ('+C2H7N', '-H2O'), 'isopropylamide': ('+C3H9N', '-H2O'), 'anilide': ('+C6H7N', '-H2O'), 'd5-anilide': ('+C6H2D5N', '-H2O')}  # what a derivatization makes of a carboxyl, as the formulas it gains and loses
 # Linkage-specific sialic acid derivatizations, as (product of a2-6 sialic acids, product of the lactone-forming a2-3/8/9 ones): ethyl esterification (Reiding 2014),
 # ethyl esterification and amidation (Lageveen-Kammeijer 2019), methyl esterification (Wheeler 2009), dimethylamidation (de Haan 2015), and SALSA with methylamine
-# aminolysis (Nishikaze 2017, Hanamatsu 2018); any other one is passed as such a pair of SIALIC_PRODUCTS, e.g., ('dimethylamide', 'amide') for double amidation (Holst 2016)
+# aminolysis (Nishikaze 2017, Hanamatsu 2018), glycoqueuing's aniline amides on every sialic acid (Jin 2019, GQ; usually with GirardP at the reducing end) and its improved form
+# with d5-aniline on a2-6 and d0-aniline on a2-3 sialic acids (GQ-d5); any other one is passed as such a pair of SIALIC_PRODUCTS, e.g., ('dimethylamide', 'amide') for double
+# amidation (Holst 2016)
 SIALIC_DERIVATIZATIONS = {'EE': ('ethyl ester', 'lactone'), 'EEA': ('ethyl ester', 'amide'), 'ME': ('methyl ester', 'lactone'), 'DMA': ('dimethylamide', 'lactone'),
-                          'SALSA': ('isopropylamide', 'methylamide')}
+                          'SALSA': ('isopropylamide', 'methylamide'), 'GQ': ('anilide', 'anilide'), 'GQ-d5': ('d5-anilide', 'anilide')}
 SIALIC_KEYS = {base: (f'{base}_a2-6', f'{base}_a2-3') for base in ('Neu5Ac', 'Neu5Gc', 'Kdn')}  # composition keys of sialic acids whose linkage a derivatization reads: a2-6, and a2-3 for every lactone-forming one (a2-3/8/9), as the field's E and L codes
 _SIALIC_BASE = {key: (base, i) for base, keys in SIALIC_KEYS.items() for i, key in enumerate(keys)}
 AMINO_ACID_FORMULAS = {'G': 'C2H3NO', 'A': 'C3H5NO', 'S': 'C3H5NO2', 'P': 'C5H7NO', 'V': 'C5H9NO', 'T': 'C4H7NO2', 'C': 'C3H5NOS', 'L': 'C6H11NO', 'I': 'C6H11NO', 'N': 'C4H6N2O2',
@@ -272,7 +274,7 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
                       adduct: str | None = None, # Chemical formula of a neutral adduct added to every candidate's mass, e.g., "C2H4O2"
                       adduct_ions: str | list[str] | None = None, # Adduct ion(s) considered with extras = ['adduct'], as named in mz_to_composition.csv (e.g., 'Na+', 'K+', 'NH4+', 'Acetate', 'Formate'); default: Acetate (negative) or Na+ (positive)
                       mass_tag: float | None = None, # Mass in Da a reducing-end label adds to the free glycan, i.e., the label minus O (e.g., 121.0528 for 2AA, 120.0687 for 2AB, 219.1735 for procainamide), added to every candidate's neutral mass
-                      sialic_derivatization: str | tuple[str, str] | None = None, # Linkage-specific sialic acid derivatization ('EE', 'EEA', 'ME', 'DMA', 'SALSA', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); compositions then come with linkage-resolved sialic acids (Neu5Ac_a2-6, Neu5Ac_a2-3)
+                      sialic_derivatization: str | tuple[str, str] | None = None, # Linkage-specific sialic acid derivatization ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); compositions then come with linkage-resolved sialic acids (Neu5Ac_a2-6, Neu5Ac_a2-3)
                       return_all: bool = False # Whether to return every composition and ion within mass_tolerance, as GlycoMod lists them, instead of the first hit
                       ) -> list[dict[str, int]] | pd.DataFrame: # List of matching compositions; with return_all a DataFrame of every match (composition, ion, theoretical mz, error_ppm) in Occam order, deprioritized ones last
     """Map m/z value to matching monosaccharide composition"""
@@ -433,7 +435,7 @@ def mz_to_structures(mz_list: float | list[float], # Precursor mass(es)
                      deprioritized: str | set[str] | None = {"Me", "HexA", "PCho"},  # Monosaccharide(s) to use only as fallback if no other composition matches
                      verbose: bool = False, # Whether to print non-matching compositions
                      mass_tag: float | None = None, # Mass in Da a reducing-end label adds to the free glycan, i.e., the label minus O (e.g., 121.0528 for 2AA), added to every candidate's neutral mass
-                     sialic_derivatization: str | tuple[str, str] | None = None # Linkage-specific sialic acid derivatization ('EE', 'EEA', 'ME', 'DMA', 'SALSA', or a pair of SIALIC_PRODUCTS); the mass then gives each sialic acid's linkage, and only structures with these linkages are returned, unknown ones filled in where the mass decides them
+                     sialic_derivatization: str | tuple[str, str] | None = None # Linkage-specific sialic acid derivatization ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS); the mass then gives each sialic acid's linkage, and only structures with these linkages are returned, unknown ones filled in where the mass decides them
                      ) -> pd.DataFrame | list: # DataFrame of structures x intensities or empty list
     """Map precursor masses to structures, supporting accompanying relative intensities"""
     mz_list = [mz_list] if isinstance(mz_list, (int, float)) else mz_list
@@ -650,7 +652,7 @@ def composition_to_mass(dict_comp_in: dict[str, int] | str, # Composition dictio
                         adduct: str | float | None = None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
                         modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP
                         peptide: str | None = None, # Peptide carrying the glycan(s), in one-letter code with optional signed mass or formula deltas, or named modifications (PEPTIDE_MODIFICATIONS), after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK' or 'NC[Carbamidomethyl]SK' for carbamidomethylation, 'M[+15.9949]NGTK'), to get the glycopeptide mass; several glycans on one peptide are passed as their total composition
-                        sialic_derivatization: str | tuple[str, str] | None = None # Linkage-specific sialic acid derivatization of an underivatized sample, a key of SIALIC_DERIVATIZATIONS ('EE', 'EEA', 'ME', 'DMA', 'SALSA') or a pair of SIALIC_PRODUCTS (a2-6, a2-3/8/9); every sialic acid then needs its linkage ('H5N4E1L1', {'Neu5Ac_a2-6': 1, 'Neu5Ac_a2-3': 1}), and uronic acids take the a2-6 product; peptide carboxyls are left to peptide's deltas
+                        sialic_derivatization: str | tuple[str, str] | None = None # Linkage-specific sialic acid derivatization of an underivatized sample, a key of SIALIC_DERIVATIZATIONS ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5') or a pair of SIALIC_PRODUCTS (a2-6, a2-3/8/9); every sialic acid then needs its linkage ('H5N4E1L1', {'Neu5Ac_a2-6': 1, 'Neu5Ac_a2-3': 1}), and uronic acids take the a2-6 product; peptide carboxyls are left to peptide's deltas
                         ) -> float: # Theoretical mass
     """Calculate theoretical mass from composition, optionally as a glycopeptide"""
     if sample_prep == 'deuteropermethylated':  # CD3 for every CH3 permethylation adds: the permethylated mass plus D3-H3 per cap, the caps counted as the CH2s permethylation added
@@ -733,7 +735,7 @@ def glycan_to_mass(glycan: str | dict[str, int], # Glycan in IUPAC-condensed for
                    adduct: str | float | None = None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
                    modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP; a glycan ending in an alditol (-ol) is reduced already
                    peptide: str | None = None, # Peptide carrying the glycan, in one-letter code with optional signed mass or formula deltas, or named modifications (PEPTIDE_MODIFICATIONS), after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK', 'NC[Carbamidomethyl]SK'), to get the glycopeptide mass
-                   sialic_derivatization: str | tuple[str, str] | None = None # Linkage-specific sialic acid derivatization of an underivatized sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); each sialic acid then needs a known linkage class, a2-3/6 or a2-? raises
+                   sialic_derivatization: str | tuple[str, str] | None = None # Linkage-specific sialic acid derivatization of an underivatized sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); each sialic acid then needs a known linkage class, a2-3/6 or a2-? raises
                    ) -> float: # Theoretical mass
     """Calculate theoretical mass from glycan or composition, optionally as a glycopeptide"""
     if sample_prep == 'deuteropermethylated':  # as in composition_to_mass, from the permethylated mass, so that alditol, inositol and atom-by-atom caps count too
@@ -785,7 +787,7 @@ def get_formula(glycan: str | dict[str, int], # Glycan in any nomenclature canon
                 adduct: str | None = None, # Chemical formula of a neutral adduct (e.g., "C2H4O2"); a signed formula ("-H2O") removes atoms
                 modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP; a glycan ending in an alditol (-ol) is reduced already
                 peptide: str | None = None, # Peptide carrying the glycan(s), in one-letter code with optional signed formula deltas, or named modifications (PEPTIDE_MODIFICATIONS) other than isotope-coded tags, after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK', 'NC[Carbamidomethyl]SK'); several glycans on one peptide are passed as their total composition
-                sialic_derivatization: str | tuple[str, str] | None = None # Linkage-specific sialic acid derivatization of an underivatized sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); every sialic acid then needs its linkage ('H5N4E1L1', 'Neu5Ac(a2-6)...')
+                sialic_derivatization: str | tuple[str, str] | None = None # Linkage-specific sialic acid derivatization of an underivatized sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); every sialic acid then needs its linkage ('H5N4E1L1', 'Neu5Ac(a2-6)...')
                 ) -> str: # Elemental formula in Hill order (C, H, then alphabetical), e.g., 'C62H104N4O46' for H5N4
     """Elemental formula of a glycan, composition, or formula: the molecule glycan_to_mass weighs"""
     peptide = _peptide_deltas(peptide) if peptide else peptide

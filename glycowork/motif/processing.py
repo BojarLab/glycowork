@@ -432,7 +432,8 @@ def canonicalize_composition(comp: str | dict[str, int], # Composition in Hex5He
     else:
         if '[' in comp:  # GlyHunter writes a derivatized sialic acid with its mass shift, NeuAc[+13.0316](2), which names its linkage like the E and L codes
             from glycowork.motif.tokenization import SIALIC_PRODUCTS, SIALIC_DERIVATIZATIONS, calculate_adduct_mass  # tokenization imports this module at load time
-            shifts = [(sum(calculate_adduct_mass(f) for f in SIALIC_PRODUCTS[p]), i) for pair in SIALIC_DERIVATIZATIONS.values() for i, p in enumerate(pair)]
+            # a method with one product for both linkages (glycoqueuing's d0-anilide) does not tell the linkage, so its shift names none
+            shifts = [(sum(calculate_adduct_mass(f) for f in SIALIC_PRODUCTS[p]), i) for pair in SIALIC_DERIVATIZATIONS.values() if pair[0] != pair[1] for i, p in enumerate(pair)]
             comp = re.sub(r'Neu5?([AG])c\[([+-]?[\d.]+)\]', lambda m: next(((('E', 'L') if m[1] == 'A' else ('Ge', 'Gl'))[i] for d, i in shifts if abs(d - float(m[2])) < 0.01), m[0]), comp)
         comp = re.sub(r'\[[+-]?[\d.]+\](?!\s*$)|\([+-][\d.]+\)|\^[A-Za-z]+|\$\S*$', '', _COMP_ADDUCT.sub('', _COMP_MASS_SUFFIX.sub('', comp))).strip()  # GlyHunter's derivatized NeuAc[+13.0316], a mass after an adduct as in Ammonium(+17), GlycReSoft's permethylated Hex^Me and reducing-end $C1H4
         fields = re.split(r'[\s_,;]+', comp)
@@ -792,10 +793,14 @@ def glycoctxml_to_iupac(glycan_xml: str # GlycoCT XML format string
 def get_mono(token: str # WURCS monosaccharide token
              ) -> str: # Monosaccharide with anomeric state
     "Map WURCS token to monosaccharide with anomeric state"
+    if token.startswith('u') and 'U' in token.partition('_')[0]:  # unknown ring on a backbone whose carbonyl position is unknown too (uU122h, u2U22h): no residue to name, as the rewrites below would invent an anhydro bridge
+        raise ValueError(f"WURCS monosaccharide token '{token}' has an unknown ring and carbonyl position, so this WURCS string cannot be converted to IUPAC-condensed.")
     if token.startswith('u'):  # open/unknown ring form: give it an explicit pyranose skeleton to look up
         skeleton, _, mods = token.partition('_')
         token = 'a' + skeleton[1:] + '-1x_1-5' + (f'_{mods}' if mods else '')
-    token = f"{token.replace('U', 'a')}-2x_2-6" if 'U' in token else token
+    if 'U' in token.partition('_')[0]:  # open-chain ketose (AUd...): its 2,6-pyranose, the ring part right after the backbone and before any substituent
+        skeleton, _, mods = token.partition('_')
+        token = skeleton.replace('U', 'a') + '-2x_2-6' + (f'_{mods}' if mods else '')
     head, *parts = token.split('_')
     bridges = [p for p in parts[1 if '-' in head else 0:] if re.fullmatch(r'\d+-\d+', p)] if token not in monosaccharide_mapping else []  # bridges besides the ring are anhydro forms (2,7-Anhydro-Kdo, 1,5-Anhydro-Glc-ol), read on their parent
     token = '_'.join([head] + [p for p in parts if p not in bridges])
@@ -1649,9 +1654,10 @@ def glytoucan_to_glycan(ids: str | list[str], # GlyTouCan ID(s) or glycan(s)
     if not hasattr(glytoucan_to_glycan, 'glycan_dict'):
         has_id = loader.df_glycan.dropna(subset = ['glytoucan_id'])  # a glycan without a GlyTouCan ID would otherwise map to NaN instead of being reported as missing
         glycan_dict = dict(zip(has_id.glytoucan_id, has_id.glycan))
-        with lzma.open(_parent / "glytoucan_ids.json.xz", 'rt', encoding = 'utf-8') as f:  # IDs outside df_glycan (bin/build_glytoucan_ids.py): their sequence, or the ID whose sequence they take
+        with lzma.open(_parent / "glytoucan_ids.json.xz", 'rt', encoding = 'utf-8') as f:  # bin/build_glytoucan_ids.py: a sequence, or the ID whose sequence it takes, per ID outside df_glycan or on several df_glycan glycans
             extra = json.load(f)
-        glytoucan_to_glycan.glycan_dict = glycan_dict | {k: glycan_dict.get(v) or extra.get(v, v) for k, v in extra.items()}
+        glycan_dict |= {k: v for k, v in extra.items() if v not in glycan_dict and v not in extra}
+        glytoucan_to_glycan.glycan_dict = glycan_dict | {k: glycan_dict.get(v, v) for k, v in extra.items() if v in glycan_dict or v in extra}
         glytoucan_to_glycan.id_dict = dict(zip(has_id.glycan, has_id.glytoucan_id))
     lookup = glytoucan_to_glycan.id_dict if revert else glytoucan_to_glycan.glycan_dict
     result, not_found = [], []
@@ -1990,7 +1996,7 @@ def _canonicalize_iupac(glycan: str | int  # Glycan sequence in any supported fo
         glycan = re.sub(r'(?<=[a-z])1?-(?:O-)?(?=(?!(?:Ser|Thr|Asn|Cer|OMe|Me)$)[A-Z][^()\[\]{}\-]*$)', '-', glycan)  # GalNAca1-Sp8 or Glcb1-OCH2CH2NH2 to GalNAca-Sp8, trimmed below; amino acid, ceramide and methyl aglycones are kept
         last_dash = glycan.rindex('-')
         if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[last_dash - 1:])) and not glycan[last_dash + 1:].startswith(('ol', 'onic', 'aric', 'ulos', 'uronic')) and glycan[
-            last_dash + 1:] not in lib and _MONO_STEM.sub('', glycan[last_dash + 1:]) not in lib:  # alditol and acid suffixes (-ol, -onic, -aric, -ulosonic, -ulosaric, -uronic) are part of the residue, not a linker, and neither is a modified residue like the Tal6P of 2,5-Anhydro-Tal6P
+            last_dash + 1:] not in lib and _MONO_STEM.sub('', glycan[last_dash + 1:]) not in lib and glycan[last_dash + 1:-1] not in lib:  # alditol and acid suffixes (-ol, -onic, -aric, -ulosonic, -ulosaric, -uronic) are part of the residue, not a linker, and neither is a modified residue like the Tal6P of 2,5-Anhydro-Tal6P or a lone residue with its anomer (1,5-Anhydro-Hexb)
             tail_mono = re.match(r'[A-Z][A-Za-z]*', glycan[last_dash + 1:])
             glycan = glycan[:last_dash - 1] + glycan[last_dash + 1:] if glycan[last_dash - 1] in 'ab' and tail_mono and tail_mono.group() in lib else glycan[:last_dash]
     # Anomeric and steric indicators placed before monosaccharide (e.g., "bDGal(1-4)bDGlcNAc")
@@ -2041,6 +2047,8 @@ def _canonicalize_iupac(glycan: str | int  # Glycan sequence in any supported fo
             idx = find_nth(glycan, '-', k)
             if idx + 1 == len(glycan):  # trailing open linkage, as in Galb1-4GlcNAcb1-
                 break
+            if glycan[idx + 1:].startswith('Anhydro-'):  # the dash of an anhydro prefix (1,5-Anhydro-Hex) is no linkage
+                continue
             if (glycan[idx - 1].isnumeric()) and (glycan[idx + 1].isnumeric() or glycan[idx + 1] == '?'):
                 end = idx + 2 + len(re.match(r'(?:/[\d?])*', glycan[
                     idx + 2:]).group())  # keep multi-position acceptors such as 2-3/6 whole

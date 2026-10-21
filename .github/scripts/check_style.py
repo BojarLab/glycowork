@@ -51,31 +51,21 @@ def changed_lines(diff_range):
     return {k: v for k, v in out.items() if k.endswith('.py')}
 
 
-def string_lines(tokens):
-    """Line numbers that live inside a (multi-line) string literal."""
-    out = set()
-    for tok in tokens:
-        if tok.type == tokenize.STRING and tok.end[0] > tok.start[0]:
-            out.update(range(tok.start[0], tok.end[0] + 1))
-    return out
-
-
-def bracket_depth_by_line(tokens):
-    """Depth of open brackets at the start of each line."""
-    depth, out = 0, {}
-    for tok in tokens:
-        out.setdefault(tok.start[0], depth)
-        if tok.type == tokenize.OP:
-            if tok.string in '([{':
-                depth += 1
-            elif tok.string in ')]}':
-                depth -= 1
-    return out
-
-
 def check_blank_lines(tree, lines, tokens, report):
-    protected, nested_bounds = string_lines(tokens), []
-    depth = bracket_depth_by_line(tokens)
+    protected, depth, opened, starts, nested_bounds = set(), {}, 0, [], []
+    for tok in tokens:
+        depth.setdefault(tok.start[0], opened)
+        kind = tokenize.tok_name[tok.type]
+        if kind == 'STRING':
+            protected.update(range(tok.start[0], tok.end[0] + 1))
+        elif kind in ('FSTRING_START', 'TSTRING_START'):  # Python 3.12+ splits f-strings into tokens, so a blank line inside one starts no token
+            starts.append(tok.start[0])
+        elif kind in ('FSTRING_END', 'TSTRING_END'):
+            protected.update(range(starts.pop(), tok.end[0] + 1))
+        elif kind == 'OP' and tok.string in '([{':
+            opened += 1
+        elif kind == 'OP' and tok.string in ')]}':
+            opened -= 1
     funcs = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
     for fn in funcs:
         for sub in fn.body:
@@ -96,24 +86,21 @@ def check_blank_lines(tree, lines, tokens, report):
 
 
 def check_kwarg_spacing(tokens, report):
-    prev, depth, stack = None, 0, []
+    prev, stack = None, []
     for tok in tokens:
         if tok.type == tokenize.OP:
             if tok.string in '([{':
-                depth += 1
                 stack.append(tok.string == '(' and prev is not None and (prev.type == tokenize.NAME or prev.string in ')]'))
             elif tok.string in ')]}':
-                depth -= 1
                 if stack:
                     stack.pop()
-            elif tok.string == '=' and depth and stack and stack[-1]:
+            elif tok.string == '=' and stack and stack[-1]:
                 before = tok.line[:tok.start[1]]
                 after = tok.line[tok.end[1]:]
                 if not before.endswith(' ') or not after.startswith(' '):
                     report(tok.start[0], 'GW2', "keyword argument '=' needs spaces around it")
         if tok.type not in (tokenize.COMMENT, tokenize.NL, tokenize.NEWLINE, tokenize.INDENT, tokenize.DEDENT):
             prev = tok
-    return
 
 
 def build_signatures(paths):
@@ -158,9 +145,8 @@ def run_pycodestyle(files):
     proc = subprocess.run(cmd, capture_output = True, text = True)
     if proc.returncode and not proc.stdout:  # pycodestyle missing or crashed: failing loudly beats a silent 'Style check passed' without the E/W rules
         sys.exit(proc.stderr.strip())
-    raw = proc.stdout
     out = []
-    for line in raw.splitlines():
+    for line in proc.stdout.splitlines():
         m = re.match(r'^(.*?):(\d+):\d+: (\S+) (.*)$', line)
         if m:
             out.append((m.group(1), int(m.group(2)), m.group(3), m.group(4)))
@@ -175,7 +161,7 @@ def main():
     args = ap.parse_args()
     scope = None if args.all or not args.diff else changed_lines(args.diff)
     files = py_files(args.paths) if scope is None else py_files(scope)
-    sigs = build_signatures(args.paths if args.paths else ['glycowork'])
+    sigs = build_signatures(args.paths)
     findings = []
     for f in files:
         allowed = None if scope is None else scope.get(str(f).replace('\\', '/'), set())
@@ -195,7 +181,7 @@ def main():
         check_positional_kwargs(tree, sigs, report)
     findings += run_pycodestyle(files)
     if scope is not None:
-        findings = [x for x in findings if x[1] in scope.get(x[0].replace('\\', '/'), set())]
+        findings = [x for x in findings if x[2] == 'GW0' or x[1] in scope.get(x[0].replace('\\', '/'), set())]
     for path, ln, code, msg in sorted(set(findings)):
         print(f'{path}:{ln}: {code} {msg}')
     if findings:

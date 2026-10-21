@@ -337,6 +337,10 @@ def test_graph_to_string():
 
 
 def test_canonicalize_iupac():
+    assert canonicalize_iupac("1,5-Anhydro-Hex") == "1,5-Anhydro-Hex"  # a lone anhydro residue outside lib keeps its prefix whole
+    assert canonicalize_iupac("WURCS=2.0/1,1,0/[a21122h-1b_1-5_6-7]/1/") == "6,7-Anhydro-DDGalHep"  # G94602SX: the anomer letter of a lone residue is no linker
+    with pytest.raises(ValueError, match = 'unknown ring and carbonyl'):
+        wurcs_to_iupac("WURCS=2.0/1,1,0/[uU122h]/1/")
     # Test basic cleanup
     assert canonicalize_iupac("Galb4GlcNAc") == "Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("'Galb4GlcNAc'") == "Gal(b1-4)GlcNAc"
@@ -672,7 +676,7 @@ def test_canonicalize_iupac():
         canonicalize_iupac("WURCS=2.0/3,3,3/[a2211m-1a_1-5][a2122h-1a_1-5][a1122h-1b_1-5_2*NCC/3=O]/1-2-3/a2-b1_b4-c1_a1-c?~n")
     assert canonicalize_iupac(782) == "Gal(?1-?)[GlcNAcOS(?1-?)]GalNAc"
     assert canonicalize_iupac(
-        72) == "Fuc(a1-2)Gal(b1-3/4)GlcNAc(b1-?)[Fuc(a1-2)Gal(b1-3/4)GlcNAc(b1-?)]Gal(b1-3)[GlcNAc(b1-6)]GalNAc"
+        72) == "Fuc(a1-2)Gal(b1-3/4)GlcNAc(b1-3)[Fuc(a1-2)Gal(b1-3/4)GlcNAc(b1-6)]Gal(b1-3)[GlcNAc(b1-6)]GalNAc"
     assert canonicalize_iupac(["Galb4GlcNAc", 782]) == ["Gal(b1-4)GlcNAc", "Gal(?1-?)[GlcNAcOS(?1-?)]GalNAc"]
     assert canonicalize_iupac(("Galb4GlcNAc",)) == ["Gal(b1-4)GlcNAc"]
     assert canonicalize_iupac([]) == []
@@ -1906,6 +1910,10 @@ def test_composition_to_mass():
     assert abs(composition_to_mass('H5N4E2', sialic_derivatization = 'EE') + 22.989221 - 2301.835) < 1e-3
     assert abs(composition_to_mass('H5N4E1L1', sialic_derivatization = 'EEA') - composition_to_mass('H5N4A2') - 28.0313 + 0.9840) < 1e-3
     assert abs(composition_to_mass('H5N4E2', sialic_derivatization = 'SALSA') - composition_to_mass('H5N4L2', sialic_derivatization = 'SALSA') - 2 * 28.0313) < 1e-3  # 28 Da per linkage (Nishikaze 2017)
+    # glycoqueuing: aniline amidates every sialic acid (+75.0473), its improved form puts d5-aniline on the a2-6 ones (+5.0314 more)
+    assert abs(composition_to_mass('H5N4E1L1', sialic_derivatization = 'GQ') - composition_to_mass('H5N4A2') - 2 * 75.0473) < 1e-3
+    assert abs(composition_to_mass('H5N4E1L1', sialic_derivatization = 'GQ-d5') - composition_to_mass('H5N4E1L1', sialic_derivatization = 'GQ') - 5.0314) < 1e-3
+    assert abs(calculate_adduct_mass(get_formula('H5N4E1L1', sialic_derivatization = 'GQ-d5')) - composition_to_mass('H5N4E1L1', sialic_derivatization = 'GQ-d5')) < 1e-6
     assert composition_to_mass('H5N4E1L1', sialic_derivatization = ('dimethylamide', 'amide')) == composition_to_mass({'Hex': 5, 'HexNAc': 4, 'Neu5Ac_a2-6': 1, 'Neu5Ac_a2-3': 1}, sialic_derivatization = ('dimethylamide', 'amide'))
     assert composition_to_mass('H5N4E1L1') == composition_to_mass('H5N4A2')  # without a derivatization, the linkage weighs nothing
     with pytest.raises(ValueError, match = 'linkage'):
@@ -2324,6 +2332,8 @@ LIN
 
 
 def test_wurcs_to_iupac():
+    assert wurcs_to_iupac("WURCS=2.0/2,2,1/[AUd21122h_5*NCCO/3=O][a2112h-1b_1-5_2*NCC/3=O]/1-2/a4-b1") == "GalNAc(b1-4)Neu5Gc"  # G03467JD: an open-chain residue keeps its substituents after the ring part
+    assert wurcs_to_iupac("WURCS=2.0/2,2,1/[AUd21122h_5*NCC/3=O][Aad21122h-2x_2-6_5*NCC/3=O]/1-2/a?-b2") == "Neu5Ac(?2-?)Neu5Ac"  # G01556OR
     with pytest.raises(ValueError, match = 'cyclic'):  # every residue is attached to another, so there is no reducing end
         wurcs_to_iupac("WURCS=2.0/1,2,2/[a2122h-1b_1-5]/1-1/a4-b1_b4-a1")
     assert wurcs_to_iupac("WURCS=2.0/2,2,2/[a2122h-1x_1-5_2*NCC/3=O][a2112h-1b_1-5]/1-2/a4-b1_a?|b?}*OPO/3O/3=O") == "{OP}Gal(b1-4)GlcNAc"  # G44100ZK: a substituent on alternative residues floats
@@ -8930,6 +8940,7 @@ def test_read_glycoproteomics_other_engines():
 def test_canonicalize_composition_glycomics_formats():
     assert canonicalize_composition('(dHex)1 (Hex)5 (NeuAc)2 (HexNAc)4 ', as_string = True) == 'H5N4F1A2'
     assert canonicalize_composition('Hex(6)HexNAc(4)NeuAc[+13.0316](2)', as_string = True) == 'H6N4L2'  # a methylamide (SALSA) is a2-3
+    assert canonicalize_composition('Hex(5)HexNAc(4)NeuAc[+80.0787](1)NeuAc[+75.0473](1)', as_string = True) == 'H5N4E1L1'  # glycoqueuing's d5-anilide is a2-6, its d0-anilide a2-3 (GQ, d0 on both, names no linkage)
     assert canonicalize_composition('Hex(5)HexNAc(4)NeuAc[+41.0629](1)NeuAc[-0.9840](1)NeuAc[+16.0500](1)', as_string = True) == 'H5N4A1E1L1'  # isopropylamide, amide, an unknown shift
     assert canonicalize_composition('{Fuc^Me:1; Hex^Me:6; HexNAc^Me:5}$C1H4', as_string = True) == 'H6N5F1'
     # linkage-specific sialic acid derivatives keep the linkage they tell, as E (a2-6) and L (lactone-forming a2-3/8/9), and read back
@@ -9116,6 +9127,10 @@ def test_glytoucan_to_glycan_forward():
     assert len(result) == 2
     assert 'Gal(b1-4)Glc-ol' in result
     assert 'Neu5Ac(a2-3)Gal(b1-3)GalNAc' in result
+    # a former hand-curated alias pointed at a vaguer glycan with Neu5Ac(a2-6), an ID on several df_glycan glycans returned its alditol or a garbled copy
+    assert compare_glycans(glytoucan_to_glycan('G45560HM'), 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc')
+    assert compare_glycans(glytoucan_to_glycan('G57449OF'), 'Xyl(b1-2)[Man(a1-3)][Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc')
+    assert compare_glycans(glytoucan_to_glycan('G25520XG'), 'Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc')
 
 
 def test_glytoucan_to_glycan_reverse():
