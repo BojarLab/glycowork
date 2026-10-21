@@ -7,6 +7,7 @@
 #### draw
 ##### Added ✨
 - `GlycanDrawing.as_markdown(size = 16)` returns the drawing as an inline `<img>` (base64 SVG data URI) for Markdown text, e.g., `IPython.display.Markdown(f'... {d.as_markdown()} ...')`, scaled so each monosaccharide symbol is `size` px tall (ba25f21)
+- `plot_fragments_excel` for creating an Excel file with SNFG images of glycan fragments (cf0dd3f)
 
 ##### Changed 🔄
 
