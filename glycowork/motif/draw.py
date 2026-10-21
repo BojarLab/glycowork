@@ -4,6 +4,7 @@ from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, graph_to_string, resolve_anchor
 from glycowork.motif.tokenization import get_core, get_modification, SIALIC_KEYS
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit, is_composition, canonicalize_composition, _COMP_ORDER, PDB_TO_IUPAC
+from candycrunch.analysis import fragment_to_fragIUPAC
 import warnings
 import html
 import base64
@@ -2432,3 +2433,52 @@ def plot_glycans_excel(
     with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
         for name, data in parts.items():
             z.writestr(name, data)
+
+
+def plot_fragments_excel(
+        df: pd.DataFrame | str | Path, # DataFrame or filepath with fragments
+        folder_filepath: str | Path, # Output folder path
+        glycan: str, # Glycan the fragments come from
+        fragment_col_num: int | str = 0, # Fragment column index, or its name
+        scaling_factor: float | None = None, # Image scaling; defaults to 0.2 if compact else 1.2
+        compact: bool = False, # Use compact style
+        **kwargs # Passed on to GlycoDraw, e.g., vertical, show_linkage
+) -> None:
+    "Creates Excel file with SNFG images of glycan fragments in a new column"
+    if Path(folder_filepath).suffix:
+        raise ValueError(f"folder_filepath has to be a directory (got '{folder_filepath}').")
+    if isinstance(df, (str, Path)):
+        filename, suffix = Path(df).stem, Path(df).suffix.lower()
+        df = pd.read_csv(df) if suffix == ".csv" else pd.read_csv(df, sep = "\t") if suffix == ".tsv" else pd.read_excel(df)
+    else:
+        filename, df = "fragments", df.copy()
+    column = df[fragment_col_num] if isinstance(fragment_col_num, str) else df.iloc[:, fragment_col_num]
+    iupacs = []
+    for row, fragment in enumerate(column, start = 2):  # Excel row: 1-indexed plus a header row
+        if isinstance(fragment, str):
+            fragment = fragment.strip()
+            if fragment.startswith("["):
+                try:
+                    fragment = ast.literal_eval(fragment)
+                except (ValueError, SyntaxError) as e:
+                    raise ValueError(f"Could not parse fragment list in row {row}: {fragment!r}") from e
+            elif fragment:
+                fragment = [fragment]
+        # Empty cells (None, NaN, '', []) get no image
+        if not isinstance(fragment, (list, tuple)) or not fragment:
+            if not (fragment is None or fragment == '' or isinstance(fragment, (list, tuple)) or pd.isna(fragment)):
+                raise ValueError(f"Unexpected fragment format in row {row}: {fragment!r}")
+            iupacs.append(None)
+            continue
+        iupac = fragment_to_fragIUPAC(glycan, list(fragment))
+        # Ions without a residue (I_...) correctly have no image
+        flat = [y for sub in fragment for y in (sub if isinstance(sub, (list, tuple)) else [sub])]
+        if iupac is None and not any(str(cut).startswith('I_') for cut in flat):
+            warnings.warn(f"Could not convert the fragment in row {row}: {fragment!r}; it is left without an image")
+        iupacs.append(iupac)
+    df["fragment_IUPAC"] = iupacs
+    plot_glycans_excel(df, 
+                       Path(folder_filepath) / f"{filename}_SNFG.xlsx", 
+                       glycan_col_num = "fragment_IUPAC",
+                       scaling_factor = scaling_factor if scaling_factor is not None else (0.2 if compact else 1.2),
+                       compact = compact, **kwargs)
