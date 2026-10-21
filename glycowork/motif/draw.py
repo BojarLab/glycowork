@@ -4,7 +4,6 @@ from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, graph_to_string, resolve_anchor
 from glycowork.motif.tokenization import get_core, get_modification, SIALIC_KEYS
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit, is_composition, canonicalize_composition, _COMP_ORDER, PDB_TO_IUPAC
-from candycrunch.analysis import fragment_to_fragIUPAC
 import warnings
 import html
 import base64
@@ -2445,6 +2444,10 @@ def plot_fragments_excel(
         **kwargs # Passed on to GlycoDraw, e.g., vertical, show_linkage
 ) -> None:
     "Creates Excel file with SNFG images of glycan fragments in a new column"
+    try:
+        from candycrunch.analysis import fragment_to_fragIUPAC
+    except ImportError as e:
+        raise ImportError("plot_fragments_excel needs candycrunch.analysis.fragment_to_fragIUPAC") from e
     if Path(folder_filepath).suffix:
         raise ValueError(f"folder_filepath has to be a directory (got '{folder_filepath}').")
     if isinstance(df, (str, Path)):
