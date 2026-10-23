@@ -1,6 +1,7 @@
+from __future__ import annotations
 import inspect
+import sys
 import numpy as np
-import pandas as pd
 import json
 import lzma
 import re
@@ -14,7 +15,7 @@ from itertools import combinations
 from typing import Callable, Generator
 from glycowork.glycan_data import loader
 from glycowork.glycan_data.loader import (unwrap, multireplace, find_nth, lib, HexOS, HexNAcOS,
-                                          linkages, Hex, HexNAc, dHex, Sia, HexA, Pen)
+                                          linkages, Hex, HexNAc, dHex, Sia, HexA, Pen, pd)
 
 _parent = Path(__file__).parent
 with open(_parent / "common_names.json", encoding = 'utf-8') as f:  # holds non-ASCII keys ('gd1α'), which Windows' default cp1252 decodes into mojibake
@@ -1872,7 +1873,7 @@ def _sia_onto_neu(glycan: str # Glycan in IUPAC-condensed nomenclature
 def canonicalize_iupac(glycan: str | int | list[str] | pd.Series  # Glycan sequence in any supported format, or a list, tuple, array, Series, or Index of them
                        ) -> str | list[str] | pd.Series:  # Standardized IUPAC-condensed format; a list for a list/tuple/array, a Series/Index with the same index for a Series/Index
     "Convert glycan(s) from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, pGlyco, StrucGP, CSDB-linear, KCF, SMILES, LINUCS, GlyConnect IDs, and GlyTouCanIDs to standardized IUPAC-condensed format"
-    if isinstance(glycan, (pd.Series, pd.Index)):
+    if 'pandas' in sys.modules and isinstance(glycan, (pd.Series, pd.Index)):
         return glycan.map(_canonicalize_iupac)
     if isinstance(glycan, (list, tuple, np.ndarray)):
         return [_canonicalize_iupac(g) for g in (glycan.tolist() if isinstance(glycan, np.ndarray) else glycan)]  # tolist gives Python ints, so GlyConnect IDs from an int array are recognized

@@ -1,4 +1,5 @@
-import pandas as pd
+from __future__ import annotations
+import csv
 import numpy as np
 import networkx as nx
 import re
@@ -8,7 +9,7 @@ from collections import Counter, defaultdict
 from functools import lru_cache, reduce
 
 from glycowork.glycan_data import loader
-from glycowork.glycan_data.loader import lib, unwrap, Hex, dHex, HexA, HexN, HexNAc, Pen, linkages, multireplace
+from glycowork.glycan_data.loader import lib, unwrap, Hex, dHex, HexA, HexN, HexNAc, Pen, linkages, multireplace, pd
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, rescue_compositions, parse_floating_bit, FLOATY_ALT, is_composition, canonicalize_composition
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, IS_LINKAGE
 from glycowork.motif.smiles import glycan_to_molecule
@@ -39,9 +40,9 @@ _MZ_POOL = {}  # (kingdom, glycan_class) or ('custom', glycan_class) -> (source 
 _MASS_CACHE = {}  # (composition item-tuple, mass_value, sample_prep, modification) -> composition_to_mass result
 
 with resources.files("glycowork.motif").joinpath("mz_to_composition.csv").open(encoding = 'utf-8-sig') as f:
-    mapping_file = pd.read_csv(f)
-mass_dict = dict(zip(mapping_file.composition, mapping_file["underivatized_monoisotopic"]))
-_MASS_DICTS = {col: dict(zip(mapping_file.composition, mapping_file[col])) for col in mapping_file.columns[1:]} | {"underivatized_monoisotopic": mass_dict}
+    _header, *_rows = csv.reader(f)  # csv rather than pandas, which importing glycowork no longer loads
+_MASS_DICTS = {col: {row[0]: float(row[i]) for row in _rows} for i, col in enumerate(_header[1:], 1)}
+mass_dict = _MASS_DICTS["underivatized_monoisotopic"]
 HYDROGEN_MASS = 1.007825
 ELECTRON_MASS = 0.000548580
 PROTON_MASS = HYDROGEN_MASS - ELECTRON_MASS  # charge carrier; the H atom is 0.55 mDa heavier

@@ -1,11 +1,11 @@
+from __future__ import annotations
 import re
 import sys
 from copy import deepcopy
 from typing import Any, Callable, Iterator
-from glycowork.glycan_data.loader import unwrap, modification_map, HashableDict
+from glycowork.glycan_data.loader import unwrap, modification_map, HashableDict, pd
 from glycowork.motif.processing import min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans, parse_floating_bit
 import numpy as np
-import pandas as pd
 import networkx as nx
 from collections import Counter, OrderedDict
 from functools import lru_cache, wraps

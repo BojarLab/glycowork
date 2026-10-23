@@ -1,9 +1,9 @@
+from __future__ import annotations
 import re
 import warnings
-import pandas as pd
 import networkx as nx
 from itertools import chain
-from glycowork.glycan_data.loader import lib, unwrap
+from glycowork.glycan_data.loader import lib, unwrap, pd
 from glycowork.motif.processing import canonicalize_iupac, min_process_glycans
 from weakref import WeakKeyDictionary
 from glycowork.motif.graph import graph_to_string, subgraph_isomorphism, glycan_to_nxGraph, LINKAGE_LABEL, _tree_embeddings, _sl, _has_o, _ptm_wildcarded, build_wildcard_cache, categorical_node_match_wildcard

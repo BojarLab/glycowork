@@ -1,9 +1,11 @@
+from __future__ import annotations
 from pathlib import Path
-from glycowork.glycan_data.loader import unwrap, resolve_motif_name, lib
+from glycowork.glycan_data.loader import unwrap, resolve_motif_name, lib, pd
 from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, graph_to_string, resolve_anchor
 from glycowork.motif.tokenization import get_core, get_modification, SIALIC_KEYS
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit, is_composition, canonicalize_composition, _COMP_ORDER, PDB_TO_IUPAC
+import os
 import warnings
 import html
 import base64
@@ -13,7 +15,6 @@ from typing import Any
 import networkx as nx
 from glycorender import svgdraw as draw
 import numpy as np
-import pandas as pd
 import struct
 import re
 from math import sin, cos, radians, sqrt, atan, degrees
@@ -1114,6 +1115,11 @@ def is_jupyter() -> bool:
         return False
 
 
+def _returns_drawing() -> bool:
+    "Whether drawings are returned to display themselves (_repr_png_): in Jupyter, or where the frontend sets GLYCOWORK_RICH_DISPLAY=1"
+    return is_jupyter() or os.environ.get('GLYCOWORK_RICH_DISPLAY') == '1'
+
+
 def display_svg_with_matplotlib(
         svg_data: Any, # SVG drawing object
         chem: bool = False, # Whether svg_data comes from RDKit chemical
@@ -1701,7 +1707,7 @@ def _finish_drawing(
     drawing = GlycanDrawing(d2, shadow = shadow, sticker = sticker, vertical = vertical, alt_text = alt_text, dim = dim)
     if filepath:
         drawing.save(str(filepath).replace(in_glycan, re.sub(r'[<>:"/\\|?*]', '_', in_glycan)))
-    return drawing if suppress or filepath or is_jupyter() else display_svg_with_matplotlib(
+    return drawing if suppress or filepath or _returns_drawing() else display_svg_with_matplotlib(
         d2, shadow = shadow, sticker = sticker)
 
 
@@ -2163,7 +2169,7 @@ def plot_glycans_grid(
                             vertical = kwargs.get('vertical', False), alt_text = alt_text, dim = dim)
     if filepath:
         drawing.save(filepath)
-    return drawing if suppress or filepath or is_jupyter() else display_svg_with_matplotlib(
+    return drawing if suppress or filepath or _returns_drawing() else display_svg_with_matplotlib(
         grid, shadow = drawing.shadow, sticker = drawing.sticker)
 
 

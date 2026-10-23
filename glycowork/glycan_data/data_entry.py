@@ -349,8 +349,11 @@ def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataF
         elif tool == 'skyline':  # one row per precursor (or transition) and replicate, or replicates pivoted into '<replicate> Total Area' columns
             ions = list(df[[c[k] for k in ('proteinname', 'protein', 'moleculelistname', 'moleculenote', 'precursorcharge', 'precursoradduct', 'precursormz', 'isotopelabeltype') if k in c] + [mol]].fillna('').astype(str).agg('/'.join, axis = 1))
             ions = [(fi, i) for i in range(len(df))] if not wide and area == c.get('area') else ions  # transition areas add up, a precursor's Total Area repeats on each of its transitions
+            study = ~df[c['sampletype']].astype(str).str.strip().str.lower().isin(('blank', 'double blank', 'solvent', 'quality control', 'standard')) if 'sampletype' in c and not wide else pd.Series(True, index = df.index)  # Skyline's Sample Type marks the replicates that are not study samples
+            if not study.all():
+                warnings.warn(f"{df.loc[~study, rep].nunique()} Skyline replicates marked as blank, solvent, quality control, or standard were left out, e.g., {sorted(df.loc[~study, rep].astype(str).unique())[:3]}.", stacklevel = 2)
             for k, run in (wide.items() if wide else [(area, None)]):
-                recs.extend((r if run is None else run, ion, g, v, True) for r, ion, g, v in zip(df[rep] if run is None else [run] * len(df), ions, df[mol], num(k)) if isinstance(g, str) and v > 0)
+                recs.extend((r if run is None else run, ion, g, v, True) for r, ion, g, v, ok in zip(df[rep] if run is None else [run] * len(df), ions, df[mol], num(k), study) if ok and isinstance(g, str) and v > 0)
         else:  # GlyHunter, GlycoGenius, a CandyCrunch batch, or glycowork's own layout: glycans in the first column, one column per sample
             gg = tool == 'glycogenius'  # a 'Group' row under the sample names, and '_<RT>' after each glycan of the peak-separated table
             if gg:
