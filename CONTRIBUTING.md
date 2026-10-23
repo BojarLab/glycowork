@@ -34,6 +34,8 @@ cd tests
 pytest
 ```
 
+* Adding `--fix` to the style check rewrites the touched files to fix GW1, GW2, and the pycodestyle rules for you; GW3 findings need a manual fix.
+
 * Please update CHANGELOG.md with any significant changes. Add your changes in the relevant module/submodule section in the following format:
 
 ### module_name

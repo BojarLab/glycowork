@@ -32,7 +32,7 @@
 - Also added mass support for reducine end modifications `reduced_D` (NaBD4 reduction, +HD), `APTS`, `aminoxyTMT`, and `GirardP` (8770c04)
 - `sample_prep` keyword arguments now also accept the option of `deuteropermethylated` (8770c04)
 - Mass calculation functions etc now support more peptide modifications with their Unimod (PSI-MS) names, such as `'NC[Carbamidomethyl]SK'` (54a3ea2)
-- Added `anilide` and `d5-anilide` to the supported sialic acid derivatization (from glycoqueuing), as `GQ` and `GQ-d5` ()
+- Added `anilide` and `d5-anilide` to the supported sialic acid derivatization (from glycoqueuing), as `GQ` and `GQ-d5` (6a9dae8)
 
 ##### Changed 🔄
 - `calculate_adduct_mass` can now also read signed formula parts such as `'C5H6N2-O'` (2aff05a)
@@ -52,7 +52,7 @@
 - Added new curated `human_headandneck_O_GPST000316` glycomics datasets to `glycomics_data_loader` (8770c04)
 
 ##### Fixed 🐛
-- Fixed some GlyTouCan IDs being linked to the wrong glycan ()
+- Fixed some GlyTouCan IDs being linked to the wrong glycan (6a9dae8)
 
 #### stats
 ##### Changed 🔄
