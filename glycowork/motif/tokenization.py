@@ -686,7 +686,7 @@ def composition_to_mass(dict_comp_in: dict[str, int] | str, # Composition dictio
     # O-acetylation adds acetyl minus H (net +C2H2O = 42.0106 monoisotopic), not full acetate (59 Da); an O-acetyl or a methyl (ether or glycoside) also takes an OH that derivatization would otherwise have capped (CH2 permethylated, C2H2O peracetylated), the rarer methyl ester of a uronic acid aside
     cap = _DERIV_CAP.get(sample_prep)
     ac_count = dict_comp.pop('Ac', 0)
-    if missing := [k for k in dict_comp if (k not in _VALID_COMPONENTS | {'Sulphate', 'Phosphate', 'Methyl'} or pd.isna(mass_dict_in.get(k))) and not k.startswith(('+', '-'))]:  # the ion and adduct rows of mz_to_composition.csv are no residues: a key 'H' (Hex in shorthand) was weighed as a hydrogen atom
+    if missing := [k for k in dict_comp if (k not in _VALID_COMPONENTS | {'Sulphate', 'Phosphate', 'Methyl'} or (m := mass_dict_in.get(k)) is None or m != m) and not k.startswith(('+', '-'))]:  # the ion and adduct rows of mz_to_composition.csv are no residues: a key 'H' (Hex in shorthand) was weighed as a hydrogen atom; m != m is NaN, without importing pandas for pd.isna
         raise ValueError(
             f"{missing} have no {mass_key} mass as composition components ({sorted(_VALID_COMPONENTS)}), so no mass can be calculated for this composition")
     total_mass = sum(v * (mass_dict_in.get(k) or calculate_adduct_mass(k, mass_value = mass_value, enforce_sign = True))

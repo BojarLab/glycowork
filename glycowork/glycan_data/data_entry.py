@@ -262,6 +262,18 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
     return _abundance_matrix(df[['run', 'ion', 'ID', 'value']], sample_map)  # the protein_site_composition labels are what switches the analysis functions to the per-glycosite analysis
 
 
+# glycosphingolipid headgroups as lipidomics software names them (LIPID MAPS shorthand, MS-DIAL, LipidSearch, Lipidyzer), with human sialic acid; Hex3Cer's third hexose is left open (Gb3, iGb3)
+_GSL_GLYCANS = {'HEXCER': 'Hex1Cer', 'HEX1CER': 'Hex1Cer', 'HCER': 'Hex1Cer', 'GLCCER': 'Glc1Cer', 'GALCER': 'Gal1Cer', 'HEX2CER': 'Gal(b1-4)Glc1Cer', 'LACCER': 'Gal(b1-4)Glc1Cer', 'LCER': 'Gal(b1-4)Glc1Cer',
+                'HEX3CER': 'Hex(?1-?)Gal(b1-4)Glc1Cer', 'SHEXCER': 'Gal3S1Cer', 'SULFATIDE': 'Gal3S1Cer', 'GB3': 'Gal(a1-4)Gal(b1-4)Glc1Cer', 'GB4': 'GalNAc(b1-3)Gal(a1-4)Gal(b1-4)Glc1Cer',
+                'GM3': 'Neu5Ac(a2-3)Gal(b1-4)Glc1Cer', 'GM2': 'GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)Glc1Cer', 'GM1': 'Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)Glc1Cer',
+                'GM1A': 'Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)Glc1Cer', 'GM1B': 'Neu5Ac(a2-3)Gal(b1-3)GalNAc(b1-4)Gal(b1-4)Glc1Cer', 'GD3': 'Neu5Ac(a2-8)Neu5Ac(a2-3)Gal(b1-4)Glc1Cer',
+                'GD2': 'GalNAc(b1-4)[Neu5Ac(a2-8)Neu5Ac(a2-3)]Gal(b1-4)Glc1Cer', 'GD1A': 'Neu5Ac(a2-3)Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)Glc1Cer',
+                'GD1B': 'Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-8)Neu5Ac(a2-3)]Gal(b1-4)Glc1Cer', 'GT1B': 'Neu5Ac(a2-3)Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-8)Neu5Ac(a2-3)]Gal(b1-4)Glc1Cer',
+                'GQ1B': 'Neu5Ac(a2-8)Neu5Ac(a2-3)Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-8)Neu5Ac(a2-3)]Gal(b1-4)Glc1Cer'}
+# a headgroup, an optional MS-DIAL subclass (_NS, _NDS), then the ceramide (d18:1/16:0, 34:1;O2, (d36:1), Lipidyzer's (24:1)) and whatever adduct follows
+_GSL = re.compile(r'\s*(Hex[1-3]?Cer|GlcCer|GalCer|LacCer|SHexCer|Sulfatide|HCER|LCER|GM1[ab]?|GM[23]|GD1[ab]|GD[23]|GT1b|GQ1b|Gb[34])(?:_[A-Z]+)?[\s(]*[dtm]?\d{1,2}:\d', re.IGNORECASE)
+
+
 def _glycomics_layout(df: pd.DataFrame # a glycomics table as read from file
                       ) -> tuple: # (tool, or None for a plain glycans x samples table; lowercased header map; molecule, replicate, and area column; {pivoted area column: replicate})
     "Recognizes the export of a glycomics tool by its columns"
@@ -278,7 +290,7 @@ def _glycomics_layout(df: pd.DataFrame # a glycomics table as read from file
     return tool, c, mol, rep, area, wide
 
 
-def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataFrame], # export(s) of Skyline (report, long or pivoted by replicate), LaCyTools or MassyTools (Summary.txt), GlycoWorkbench (.gwp workspace or .gwa annotated peak list), Thermo Compound Discoverer, GlycoGenius, GlyHunter, GlycReSoft, or CandyCrunch, or any table with glycans in its first column and samples in the others
+def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataFrame], # export(s) of Skyline (report, long or pivoted by replicate), LaCyTools or MassyTools (Summary.txt), GlycoWorkbench (.gwp workspace or .gwa annotated peak list), Thermo Compound Discoverer, GlycoGenius, GlyHunter, GlycReSoft, or CandyCrunch, or any table with glycans in its first column and samples in the others; glycosphingolipids named as lipidomics software names them (GM3 d18:1/16:0, HexCer_NS d18:1/24:1, Hex2Cer 34:1;O2) are read as their glycans, summed over ceramides
                    sample_map: dict[str, str] | Callable[[str], str] | None = None,  # renames runs (raw files, Skyline replicates, or sample columns) into samples; runs sharing a sample, e.g., fractions, are summed
                    qc: dict[str, float] = {'ppm': 20, 'ipq': 0.2, 'sn': 9}, # GlycoDash's limits for a LaCyTools charge state to pass in a run: absolute mass error (ppm), isotopic pattern quality (at most), S/N (at least); {} keeps every analyte
                    min_pass: float = 0.25 # fraction of runs a LaCyTools charge state has to pass qc in to be kept in every run, as LaCyTools reports each listed analyte in each run, noise included; GlycoDash's analyte curation uses 0.8 per biological group, after removing failed spectra
@@ -370,9 +382,11 @@ def read_glycomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataF
     df = pd.DataFrame(recs, columns = ['run', 'ion', 'label', 'value', 'sia'])
     canon = {}
     for g, sia in df[['label', 'sia']].drop_duplicates().itertuples(index = False):
-        is_comp = is_composition(g.strip())
+        gsl = _GSL.match(g)  # a glycosphingolipid of a lipidomics export: its glycan, so that its ceramide species are summed below
+        lab = _GSL_GLYCANS[gsl[1].upper()] if gsl else g.strip()
+        is_comp = is_composition(lab)
         try:
-            iupac = canonicalize_iupac(g.strip())
+            iupac = canonicalize_iupac(lab)
             glycan_to_composition(iupac)  # raises on what canonicalize_iupac hands back unread, e.g., 'H5N4' or 'Internal Standard'; Kdo, heptoses, or QuiNAc are glycans without a composition ({})
             iupac = None if is_comp and '(' not in iupac else iupac
         except Exception:
