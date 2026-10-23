@@ -264,9 +264,13 @@ def main():
     ap.add_argument('paths', nargs = '*', default = ['glycowork'])
     ap.add_argument('--diff', help = 'git diff range; only lines touched there are reported')
     ap.add_argument('--all', action = 'store_true', help = 'report on whole files instead of the diff')
-    ap.add_argument('--fix', action = 'store_true', help = 'fix GW1, GW2 and the pycodestyle subset in place before checking; with --diff, whole touched files are fixed')
+    ap.add_argument('--fix', action = 'store_true', help = 'fix GW1, GW2 and the pycodestyle subset in place before checking; with --diff, only the touched lines (including uncommitted edits)')
     args = ap.parse_args()
-    scope = None if args.all or not args.diff else changed_lines(args.diff)
+    diff = args.diff
+    if args.fix and diff:  # fixes edit the working tree, so touched lines are read off it, from the merge base for an A...B range
+        left, dots, right = diff.partition('...')
+        diff = subprocess.run(['git', 'merge-base', left, right or 'HEAD'], capture_output = True, encoding = 'utf-8', check = True).stdout.strip() if dots else left.split('..')[0]
+    scope = None if args.all or not diff else changed_lines(diff)
     files = py_files(args.paths) if scope is None else py_files(scope)
     if args.fix:
         for f in files:
@@ -275,11 +279,20 @@ def main():
                 fixed = fix_source(source)
             except (SyntaxError, tokenize.TokenError):
                 continue  # the check below reports it as GW0
+            if scope is not None:  # with --diff, fix only touched lines: fixes change whitespace alone, so each non-blank line and the blank lines before it pair up in order
+                allowed, runs = scope.get(str(f).replace('\\', '/'), set()), []
+                for text in (source, fixed):
+                    runs.append([[]])
+                    for i, line in enumerate(text.splitlines(keepends = True), 1):
+                        runs[-1][-1].append((i, line))
+                        if line.strip():
+                            runs[-1].append([])
+                fixed = ''.join(line for old, new in zip(*runs, strict = True) for _, line in (new if allowed & {i for i, _ in old} else old))
             if fixed != source:
                 f.write_bytes(fixed.encode('utf-8'))
                 print(f'fixed {f}')
-        if args.diff and not args.all:
-            scope = changed_lines(args.diff)  # GW1 fixes shift line numbers
+        if scope is not None:
+            scope = changed_lines(diff)  # GW1 fixes shift line numbers
     sigs = build_signatures(args.paths)
     findings = []
     for f in files:
