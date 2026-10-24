@@ -1570,8 +1570,13 @@ def test_glycan_to_mass():
     assert abs(glycan_to_mass("GlcA(b1-3)Gal(b1-4)Glc", sialic_derivatization = 'DMA') - glycan_to_mass("GlcA(b1-3)Gal(b1-4)Glc") - 27.0473) < 1e-3  # a uronic acid takes the a2-6 product
     with pytest.raises(ValueError, match = 'unknown'):
         glycan_to_mass("Neu5Ac(a2-3/6)Gal(b1-4)Glc", sialic_derivatization = 'EE')
-    with pytest.raises(ValueError, match = 'underivatized'):
+    with pytest.raises(ValueError, match = 'lactone'):
         glycan_to_mass(dst, sample_prep = 'permethylated', sialic_derivatization = 'EE')
+    # amidated before permethylation, every sialic acid ends as a dimethylamide, 13.0316 over its methyl ester; one product for both needs no linkage
+    assert abs(glycan_to_mass(dst, sample_prep = 'permethylated', sialic_derivatization = ('amide', 'amide')) - glycan_to_mass(dst, sample_prep = 'permethylated') - 2 * 13.0316) < 1e-3
+    assert glycan_to_mass("Neu5Ac(a2-?)Gal(b1-4)Glc", sample_prep = 'permethylated', sialic_derivatization = ('amide', 'amide')) == glycan_to_mass(
+        "Neu5Ac(a2-3)Gal(b1-4)Glc", sample_prep = 'permethylated', sialic_derivatization = ('dimethylamide', 'dimethylamide'))
+    assert get_formula("Neu5Ac(a2-?)Gal(b1-4)Glc", sample_prep = 'permethylated', sialic_derivatization = ('amide', 'amide')) == 'C37H68N2O18'
     assert abs(glycan_to_mass("Neu1,7lactone5,9Ac2(a2-3)Gal(b1-4)Glc") - 657.2115545999999) < 0.1
     assert abs(glycan_to_mass("Neu5Az(a2-3)Gal(b1-4)Glc") - 674.2129516) < 0.1
     assert abs(glycan_to_mass("Neu5Ac(a2-3)Gal(b1-4)Glc") - 633.2115546) < 0.1
@@ -1978,8 +1983,17 @@ def test_composition_to_mass():
     # deuteropermethylated, each of its 24 methyls is a CD3, D3-H3 heavier: [M+Na]+ 1668.266 (23 methyls on the free reducing end)
     assert abs(composition_to_mass(comp, modification = 'reduced', sample_prep = 'deuteropermethylated') + 22.989218 - 1668.2658) < 0.001
     assert abs(composition_to_mass(comp, sample_prep = 'deuteropermethylated', mass_value = 'average') - composition_to_mass(comp, sample_prep = 'permethylated', mass_value = 'average') - 23 * 3.018486) < 1e-6
-    with pytest.raises(ValueError, match = 'underivatized'):
+    with pytest.raises(ValueError, match = 'lactone'):
         composition_to_mass('H5N4E2', sample_prep = 'deuteropermethylated', sialic_derivatization = 'EE')
+    with pytest.raises(ValueError, match = 'underivatized'):
+        composition_to_mass('H5N4E2', sample_prep = 'peracetylated', sialic_derivatization = 'GQ')
+    # deuteropermethylated, an amide's two N-H get CD3 and a dimethylamide's methyls stay CH3
+    sialyl = {'Hex': 5, 'HexNAc': 4, 'Neu5Ac': 2}
+    assert abs(composition_to_mass(sialyl, sample_prep = 'deuteropermethylated', sialic_derivatization = ('amide', 'amide')) - composition_to_mass(
+        sialyl, sample_prep = 'deuteropermethylated', sialic_derivatization = ('dimethylamide', 'dimethylamide')) - 4 * 3.018830) < 1e-4
+    assert abs(calculate_adduct_mass(get_formula(sialyl, sample_prep = 'deuteropermethylated', sialic_derivatization = ('amide', 'amide'))) - composition_to_mass(
+        sialyl, sample_prep = 'deuteropermethylated', sialic_derivatization = ('amide', 'amide'))) < 1e-6
+    assert sialic_linkage_splits(sialyl, sialic_derivatization = 'GQ') == [sialyl]
     with pytest.raises(ValueError, match = 'deuteropermethylated'):  # an unknown sample prep lists the known ones
         composition_to_mass(comp, sample_prep = 'permethylated_d3')
     # reductive amination opens the ring like reduction does (C5-OH), and permethylation also caps the label's acid or amide

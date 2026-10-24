@@ -38,6 +38,7 @@
 
 ##### Changed 🔄
 - `calculate_adduct_mass` can now also read signed formula parts such as `'C5H6N2-O'` (2aff05a)
+- `sialic_derivatization` also weighs a derivatization done before permethylation (`sample_prep = 'permethylated'` or `'deuteropermethylated'`), whose amides are capped on their N-H instead of the carboxyl's methyl ester (`SIALIC_PRODUCT_CAPS`; a lactone raises); a derivatization making the same product of every sialic acid (`GQ`, `('amide', 'amide')`) needs no linkages, and `sialic_linkage_splits(composition, sialic_derivatization)` leaves its compositions unsplit ()
 
 #### smiles
 ##### Added ✨
@@ -50,7 +51,7 @@
 
 #### analysis
 ##### Changed 🔄
-- `get_glycanova`'s Tukey post-hoc p-values are now ~13x faster to compute (16 groups: 1,173 to 97 s) and stay accurate for very small p-values, which were noise below ~1e-11 before ()
+- `get_glycanova`'s Tukey post-hoc p-values are now ~13x faster to compute (16 groups: 1,173 to 97 s) and stay accurate for very small p-values, which were noise below ~1e-11 before (096a01e)
 
 ### glycan_data
 #### loader

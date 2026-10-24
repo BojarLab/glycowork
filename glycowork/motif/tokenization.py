@@ -51,6 +51,7 @@ modification_formula_dict = {'reduced': 'H2', 'reduced_D': 'HD', '2AA': 'C7H7NO'
                            'aminoxyTMT': 'C15H30N4O3-H2O', 'GirardP': 'C7H9N3O-H2O'}  # net gain at the reducing end: H2 by reduction (HD with NaBD4), label minus O by reductive amination (2-aminopyridine has no O, so PA loses one), label minus H2O by oxime (aminoxyTMT0, C15H30N4O3) or hydrazone (Girard's P) formation; Girard's P is a fixed-charge pyridinium (C7H10N3O+), counted as the reagent minus H so that the mode's proton makes its cation
 SIALIC_PRODUCTS = {'ethyl ester': ('+C2H4',), 'methyl ester': ('+CH2',), 'lactone': ('-H2O',), 'amide': ('+NH3', '-H2O'), 'methylamide': ('+CH5N', '-H2O'),
                    'dimethylamide': ('+C2H7N', '-H2O'), 'isopropylamide': ('+C3H9N', '-H2O'), 'anilide': ('+C6H7N', '-H2O'), 'd5-anilide': ('+C6H2D5N', '-H2O')}  # what a derivatization makes of a carboxyl, as the formulas it gains and loses
+SIALIC_PRODUCT_CAPS = {'ethyl ester': 0, 'methyl ester': 0, 'lactone': None, 'amide': 2, 'methylamide': 1, 'dimethylamide': 0, 'isopropylamide': 1, 'anilide': 1, 'd5-anilide': 1}  # N-H a product leaves for a later permethylation to cap, in place of the carboxyl's own cap (its methyl ester); a lactone does not survive permethylation
 # Linkage-specific sialic acid derivatizations, as (product of a2-6 sialic acids, product of the lactone-forming a2-3/8/9 ones): ethyl esterification (Reiding 2014),
 # ethyl esterification and amidation (Lageveen-Kammeijer 2019), methyl esterification (Wheeler 2009), dimethylamidation (de Haan 2015), and SALSA with methylamine
 # aminolysis (Nishikaze 2017, Hanamatsu 2018), glycoqueuing's aniline amides on every sialic acid (Jin 2019, GQ; usually with GirardP at the reducing end) and its improved form
@@ -221,9 +222,12 @@ def stemify_dataset(df: pd.DataFrame, # DataFrame with glycan column
     return df_out
 
 
-def sialic_linkage_splits(composition: dict[str, int] # Composition dictionary, e.g., {'Hex': 5, 'HexNAc': 4, 'Neu5Ac': 2}
+def sialic_linkage_splits(composition: dict[str, int], # Composition dictionary, e.g., {'Hex': 5, 'HexNAc': 4, 'Neu5Ac': 2}
+                          sialic_derivatization: str | tuple[str, str] | None = None # The derivatization that tells the linkages apart; one making the same product of every sialic acid tells none, and the composition stays as it is
                           ) -> list[dict[str, int]]: # Every way to give its sialic acids a linkage, fewest a2-3 first, e.g., {..., 'Neu5Ac_a2-6': 2}, {..., 'Neu5Ac_a2-6': 1, 'Neu5Ac_a2-3': 1}, {..., 'Neu5Ac_a2-3': 2}; [composition] if it has none of unknown linkage
     "Spells out the linkage-resolved compositions a composition stands for, as a linkage-specific sialic acid derivatization tells them apart by mass"
+    if sialic_derivatization is not None and len(set(SIALIC_DERIVATIZATIONS.get(sialic_derivatization, sialic_derivatization) if isinstance(sialic_derivatization, str) else sialic_derivatization)) == 1:
+        return [dict(composition)]
     splits = [{}]
     for k, v in composition.items():
         splits = [d | {(a6 := SIALIC_KEYS[k][0]): d.get(a6, 0) + v - n, (a3 := SIALIC_KEYS[k][1]): d.get(a3, 0) + n} for d in splits for n in range(v + 1)] if k in SIALIC_KEYS else [
@@ -303,7 +307,7 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
     if (cached := entry[2].get(mass_key := (mass_value, sample_prep, modification, frozenset(filter_out), deriv))) is None:
         comps = [t for t in entry[1] if filter_out.isdisjoint(k for k, _ in t)]
         if deriv is not None:  # each way of linking its sialic acids is a composition of its own mass
-            comps = [tuple(d.items()) for t in comps for d in sialic_linkage_splits(dict(t))]
+            comps = [tuple(d.items()) for t in comps for d in sialic_linkage_splits(dict(t), sialic_derivatization = deriv)]
         cached = entry[2][mass_key] = (comps, np.array([_MASS_CACHE[key] if (key := (t, mass_value, sample_prep, modification, deriv)) in _MASS_CACHE else
                                                          _MASS_CACHE.setdefault(key, composition_to_mass(dict(t), mass_value = mass_value, sample_prep = sample_prep, modification = modification,
                                                                                                          sialic_derivatization = deriv))
@@ -653,12 +657,12 @@ def composition_to_mass(dict_comp_in: dict[str, int] | str, # Composition dictio
                         adduct: str | float | None = None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
                         modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP
                         peptide: str | None = None, # Peptide carrying the glycan(s), in one-letter code with optional signed mass or formula deltas, or named modifications (PEPTIDE_MODIFICATIONS), after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK' or 'NC[Carbamidomethyl]SK' for carbamidomethylation, 'M[+15.9949]NGTK'), to get the glycopeptide mass; several glycans on one peptide are passed as their total composition
-                        sialic_derivatization: str | tuple[str, str] | None = None # Linkage-specific sialic acid derivatization of an underivatized sample, a key of SIALIC_DERIVATIZATIONS ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5') or a pair of SIALIC_PRODUCTS (a2-6, a2-3/8/9); every sialic acid then needs its linkage ('H5N4E1L1', {'Neu5Ac_a2-6': 1, 'Neu5Ac_a2-3': 1}), and uronic acids take the a2-6 product; peptide carboxyls are left to peptide's deltas
+                        sialic_derivatization: str | tuple[str, str] | None = None # Sialic acid derivatization of an underivatized or (before it) permethylated sample, a key of SIALIC_DERIVATIZATIONS ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5') or a pair of SIALIC_PRODUCTS (a2-6, a2-3/8/9); unless both are the same product, every sialic acid then needs its linkage ('H5N4E1L1', {'Neu5Ac_a2-6': 1, 'Neu5Ac_a2-3': 1}), and uronic acids take the a2-6 product; peptide carboxyls are left to peptide's deltas
                         ) -> float: # Theoretical mass
     """Calculate theoretical mass from composition, optionally as a glycopeptide"""
     if sample_prep == 'deuteropermethylated':  # CD3 for every CH3 permethylation adds: the permethylated mass plus D3-H3 per cap, the caps counted as the CH2s permethylation added
         mass = composition_to_mass(dict_comp_in, mass_value = mass_value, sample_prep = 'permethylated', adduct = adduct, modification = modification, peptide = peptide, sialic_derivatization = sialic_derivatization)
-        return mass + round((mass - composition_to_mass(dict_comp_in, mass_value = mass_value, adduct = adduct, modification = modification)) / calculate_adduct_mass('CH2', mass_value = mass_value)) * calculate_adduct_mass('D3-H3', mass_value = mass_value)
+        return mass + round((mass - composition_to_mass(dict_comp_in, mass_value = mass_value, adduct = adduct, modification = modification, sialic_derivatization = sialic_derivatization)) / calculate_adduct_mass('CH2', mass_value = mass_value)) * calculate_adduct_mass('D3-H3', mass_value = mass_value)
     peptide = _peptide_deltas(peptide) if peptide else peptide
     if peptide is not None and (sample_prep != 'underivatized' or modification or not _PEPTIDE.fullmatch(peptide) or set(re.sub(r'\[[^\]]*\]', '', peptide)) - AMINO_ACID_FORMULAS.keys()):
         raise ValueError(f"Cannot calculate a glycopeptide mass for peptide {peptide!r}: it has to be underivatized and unlabeled, written in one-letter code from {''.join(AMINO_ACID_FORMULAS)}, with signed deltas such as 'C[+C2H3NO]' or 'M[+15.9949]', or named modifications such as 'C[Carbamidomethyl]', after a residue.")
@@ -667,12 +671,18 @@ def composition_to_mass(dict_comp_in: dict[str, int] | str, # Composition dictio
         products = SIALIC_DERIVATIZATIONS.get(sialic_derivatization) if isinstance(sialic_derivatization, str) else tuple(sialic_derivatization)
         if products is None or len(products) != 2 or not set(products) <= SIALIC_PRODUCTS.keys():
             raise ValueError(f"Unknown sialic_derivatization {sialic_derivatization!r}; use one of {list(SIALIC_DERIVATIZATIONS)} or a pair of products for a2-6 and a2-3/8/9 sialic acids from {list(SIALIC_PRODUCTS)}.")
-        if sample_prep != 'underivatized':
-            raise ValueError(f"sialic_derivatization is a derivatization of underivatized glycans, not of {sample_prep} ones.")
-        if unknown := [k for k in SIALIC_KEYS if dict_comp.get(k)]:
+        if sample_prep not in ('underivatized', 'permethylated'):
+            raise ValueError(f"sialic_derivatization is a derivatization of underivatized glycans or of glycans permethylated after it, not of {sample_prep} ones.")
+        if sample_prep == 'permethylated' and 'lactone' in products:
+            raise ValueError(f"A lactone does not survive permethylation; give the product its sialic acids end up as, e.g., ('dimethylamide', 'methyl ester') instead of {products}.")
+        if products[0] != products[1] and (unknown := [k for k in SIALIC_KEYS if dict_comp.get(k)]):
             raise ValueError(f"A linkage-specific derivatization weighs each sialic acid by its linkage, which {unknown} of {dict_comp_in} do not give; write them as a2-6 or a2-3 (e.g., 'H5N4E1L1' or {{'Neu5Ac_a2-6': 1, 'Neu5Ac_a2-3': 1}}).")
-        deltas = [sum(calculate_adduct_mass(f, mass_value = mass_value) for f in SIALIC_PRODUCTS[p]) for p in products]
-        carboxyl_mass = dict_comp.get('HexA', 0) * deltas[0] + sum(v * deltas[_SIALIC_BASE[k][1]] for k, v in dict_comp.items() if k in _SIALIC_BASE)
+        # permethylated, the product's N-H are capped instead of the carboxyl, whose methyl ester the permethylated residue masses count
+        deltas = [sum(calculate_adduct_mass(f, mass_value = mass_value) for f in SIALIC_PRODUCTS[p]) + ((SIALIC_PRODUCT_CAPS[p] - 1) * calculate_adduct_mass('CH2', mass_value = mass_value)
+                  if sample_prep == 'permethylated' else 0) for p in products]
+        # a derivatization making the same of every sialic acid needs no linkages
+        carboxyl_mass = dict_comp.get('HexA', 0) * deltas[0] + sum(v * deltas[_SIALIC_BASE[k][1]] for k, v in dict_comp.items() if k in _SIALIC_BASE) + sum(
+            v * deltas[0] for k, v in dict_comp.items() if k in SIALIC_KEYS)
     # a sialic acid of known linkage weighs as its residue, plus what a derivatization made of its carboxyl
     for k in [k for k in dict_comp if k in _SIALIC_BASE]:
         base = _SIALIC_BASE[k][0]
@@ -736,21 +746,22 @@ def glycan_to_mass(glycan: str | dict[str, int], # Glycan in IUPAC-condensed for
                    adduct: str | float | None = None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
                    modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP; a glycan ending in an alditol (-ol) is reduced already
                    peptide: str | None = None, # Peptide carrying the glycan, in one-letter code with optional signed mass or formula deltas, or named modifications (PEPTIDE_MODIFICATIONS), after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK', 'NC[Carbamidomethyl]SK'), to get the glycopeptide mass
-                   sialic_derivatization: str | tuple[str, str] | None = None # Linkage-specific sialic acid derivatization of an underivatized sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); each sialic acid then needs a known linkage class, a2-3/6 or a2-? raises
+                   sialic_derivatization: str | tuple[str, str] | None = None # Sialic acid derivatization of an underivatized or (before it) permethylated sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); unless both are the same product, each sialic acid then needs a known linkage class, a2-3/6 or a2-? raises
                    ) -> float: # Theoretical mass
     """Calculate theoretical mass from glycan or composition, optionally as a glycopeptide"""
     if sample_prep == 'deuteropermethylated':  # as in composition_to_mass, from the permethylated mass, so that alditol, inositol and atom-by-atom caps count too
         mass = glycan_to_mass(glycan, mass_value = mass_value, sample_prep = 'permethylated', stem_libr = stem_libr, adduct = adduct, modification = modification, peptide = peptide, sialic_derivatization = sialic_derivatization)
-        return mass + round((mass - glycan_to_mass(glycan, mass_value = mass_value, stem_libr = stem_libr, adduct = adduct, modification = modification)) / calculate_adduct_mass('CH2', mass_value = mass_value)) * calculate_adduct_mass('D3-H3', mass_value = mass_value)
+        return mass + round((mass - glycan_to_mass(glycan, mass_value = mass_value, stem_libr = stem_libr, adduct = adduct, modification = modification, sialic_derivatization = sialic_derivatization)) / calculate_adduct_mass('CH2', mass_value = mass_value)) * calculate_adduct_mass('D3-H3', mass_value = mass_value)
     if isinstance(glycan, dict) or is_composition(glycan):  # a composition has no sequence to read, so it goes straight to composition_to_mass
         return composition_to_mass(glycan, mass_value = mass_value, sample_prep = sample_prep, adduct = adduct, modification = modification, peptide = peptide,
                                    sialic_derivatization = sialic_derivatization)
     if sialic_derivatization is not None:
         # each derivatized carboxyl adds what its product gains, whichever way the rest of the glycan is weighed
         sites = _carboxyl_sites(glycan)
-        if unknown := [base for base, i, _, _ in sites if i is None]:
+        same = len(set(SIALIC_DERIVATIZATIONS.get(sialic_derivatization, ()) if isinstance(sialic_derivatization, str) else sialic_derivatization)) == 1
+        if not same and (unknown := [base for base, i, _, _ in sites if i is None]):
             raise ValueError(f"A linkage-specific derivatization weighs each sialic acid by its linkage, which is unknown for {len(unknown)} {unknown[0]} of '{glycan}' (a2-3/6, a2-?, or the reducing end).")
-        carboxyls = Counter(base if base == 'HexA' else SIALIC_KEYS[base][i] for base, i, _, _ in sites)
+        carboxyls = Counter(base if base == 'HexA' or i is None else SIALIC_KEYS[base][i] for base, i, _, _ in sites)
         return glycan_to_mass(glycan, mass_value = mass_value, sample_prep = sample_prep, stem_libr = stem_libr, adduct = adduct, modification = modification, peptide = peptide) + composition_to_mass(
             carboxyls, mass_value = mass_value, sample_prep = sample_prep, sialic_derivatization = sialic_derivatization) - composition_to_mass(carboxyls, mass_value = mass_value, sample_prep = sample_prep)
     if stem_libr is None:
@@ -788,7 +799,7 @@ def get_formula(glycan: str | dict[str, int], # Glycan in any nomenclature canon
                 adduct: str | None = None, # Chemical formula of a neutral adduct (e.g., "C2H4O2"); a signed formula ("-H2O") removes atoms
                 modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP; a glycan ending in an alditol (-ol) is reduced already
                 peptide: str | None = None, # Peptide carrying the glycan(s), in one-letter code with optional signed formula deltas, or named modifications (PEPTIDE_MODIFICATIONS) other than isotope-coded tags, after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK', 'NC[Carbamidomethyl]SK'); several glycans on one peptide are passed as their total composition
-                sialic_derivatization: str | tuple[str, str] | None = None # Linkage-specific sialic acid derivatization of an underivatized sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); every sialic acid then needs its linkage ('H5N4E1L1', 'Neu5Ac(a2-6)...')
+                sialic_derivatization: str | tuple[str, str] | None = None # Sialic acid derivatization of an underivatized or (before it) permethylated sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); unless both are the same product, every sialic acid then needs its linkage ('H5N4E1L1', 'Neu5Ac(a2-6)...')
                 ) -> str: # Elemental formula in Hill order (C, H, then alphabetical), e.g., 'C62H104N4O46' for H5N4
     """Elemental formula of a glycan, composition, or formula: the molecule glycan_to_mass weighs"""
     peptide = _peptide_deltas(peptide) if peptide else peptide
@@ -804,7 +815,7 @@ def get_formula(glycan: str | dict[str, int], # Glycan in any nomenclature canon
             pass
     if sample_prep == 'deuteropermethylated':  # the permethylated molecule with CD3 in every cap, so three H of each cap become D, the caps counted as the carbons permethylation added (adduct and label carbons are in both)
         add(elements, get_formula(glycan, sample_prep = 'permethylated', stem_libr = stem_libr, adduct = adduct, modification = modification, peptide = peptide, sialic_derivatization = sialic_derivatization))
-        caps = elements['C'] - int(re.match(r'C(\d*)', get_formula(glycan, stem_libr = stem_libr, adduct = adduct, modification = modification)).group(1) or 1)
+        caps = elements['C'] - int(re.match(r'C(\d*)', get_formula(glycan, stem_libr = stem_libr, adduct = adduct, modification = modification, sialic_derivatization = sialic_derivatization)).group(1) or 1)
         elements.update({'H': -3 * caps, 'D': 3 * caps})
     elif formula:
         if (sample_prep, modification, adduct, peptide, sialic_derivatization) != ('underivatized', None, None, None, None):
@@ -828,12 +839,13 @@ def get_formula(glycan: str | dict[str, int], # Glycan in any nomenclature canon
                 add(elements, 'C2H2O', v)
                 caps -= v
                 continue
-            base, j = _SIALIC_BASE.get(k, (k, 0 if k == 'HexA' else None))
+            base, j = _SIALIC_BASE.get(k, (k, 0 if k == 'HexA' or k in SIALIC_KEYS else None))  # a sialic acid without linkage only passes composition_to_mass when both products are one
             add(elements, RESIDUE_FORMULAS[base][0], v)
             caps += v * RESIDUE_FORMULAS[base][i] - v * (k == 'Me') if i else 0
-            if products and j is not None:  # what a linkage-specific derivatization made of the carboxyl of a sialic acid (by its linkage) or a uronic acid (as a2-6)
+            if products and j is not None:  # what a derivatization made of the carboxyl of a sialic acid (by its linkage) or a uronic acid (as a2-6), and, permethylated, the caps of its N-H instead of the carboxyl's
                 for f in SIALIC_PRODUCTS[products[j]]:
                     add(elements, f, v)
+                caps += v * (SIALIC_PRODUCT_CAPS[products[j]] - 1) if i == 1 else 0
         if adduct:
             add(elements, adduct)
         if modification:  # the label, and the caps composition_to_mass gives the OH a ring opening frees and the label's own acid or amides
@@ -847,9 +859,10 @@ def get_formula(glycan: str | dict[str, int], # Glycan in any nomenclature canon
             add(elements, cap, caps)
     elif sialic_derivatization is not None:  # a sequence: every step mirrors glycan_to_mass, adding the formula of what it weighs
         sites = _carboxyl_sites(glycan)
-        if unknown := [base for base, i, _, _ in sites if i is None]:
+        same = len(set(SIALIC_DERIVATIZATIONS.get(sialic_derivatization, ()) if isinstance(sialic_derivatization, str) else sialic_derivatization)) == 1
+        if not same and (unknown := [base for base, i, _, _ in sites if i is None]):
             raise ValueError(f"A linkage-specific derivatization changes each sialic acid by its linkage, which is unknown for {len(unknown)} {unknown[0]} of '{glycan}' (a2-3/6, a2-?, or the reducing end).")
-        carboxyls = Counter(base if base == 'HexA' else SIALIC_KEYS[base][i] for base, i, _, _ in sites)
+        carboxyls = Counter(base if base == 'HexA' or i is None else SIALIC_KEYS[base][i] for base, i, _, _ in sites)
         for f, n in ((get_formula(glycan, sample_prep = sample_prep, stem_libr = stem_libr, adduct = adduct, modification = modification, peptide = peptide), 1),
                      (get_formula(carboxyls, sample_prep = sample_prep, sialic_derivatization = sialic_derivatization), 1), (get_formula(carboxyls, sample_prep = sample_prep), -1)):
             add(elements, f, n)
