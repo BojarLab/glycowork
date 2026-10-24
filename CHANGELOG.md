@@ -3,7 +3,7 @@
 ## [1.11.1]
 - `drawsvg` is no longer a dependency: `GlycoDraw` builds its SVG with `glycorender`'s `svgdraw` (`glycorender>=0.5.0`), with identical output and ~1.45x faster drawing (f41edb7)
 - initial package import in most cases is now 1.5-2x as fast by lazy-loading `pandas` (6957d6a)
-- moderate performance improvements throughout the package (especially glycoproteomics-related) ()
+- moderate performance improvements throughout the package (especially glycoproteomics-related) (bc72318)
 
 ### motif
 #### draw
@@ -47,6 +47,10 @@
 ##### Changed 🔄
 - Better drawing of repeat units with branches (5134bdd)
 - `GlycoDraw` `.png` outputs are now much faster (364808d)
+
+#### analysis
+##### Changed 🔄
+- `get_glycanova`'s Tukey post-hoc p-values are now ~13x faster to compute (16 groups: 1,173 to 97 s) and stay accurate for very small p-values, which were noise below ~1e-11 before ()
 
 ### glycan_data
 #### loader

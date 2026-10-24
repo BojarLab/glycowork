@@ -67,7 +67,7 @@ from glycowork.glycan_data.stats import (
     correct_multiple_testing, bh_adjust, partial_corr, estimate_technical_variance, MissForest, impute_and_normalize,
     impute_biosynthetic,
     variance_based_filtering, get_glycoform_diff, get_glm, process_glm_results,
-    replace_outliers_winsorization, perform_tests_monte_carlo, hsic, pvca, cosinor_fit, spearman_exact_pvals
+    replace_outliers_winsorization, perform_tests_monte_carlo, hsic, pvca, cosinor_fit, spearman_exact_pvals, _studentized_range_sf
 )
 from glycowork.motif.graph import (
     glycan_to_graph, glycan_to_nxGraph,
@@ -6253,6 +6253,16 @@ def test_get_glycanova():
     assert posthoc_empty == {}  # Should be empty dict when posthoc=False
     clr_dict = {1: 2.0, 2: 1.0, 3: 1.5}
     results, posthoc = get_glycanova(df, groups, impute=False, custom_scale=clr_dict)
+    # the studentized range matches scipy's adaptive integrals where they are accurate, and for two groups its exact form 2 * t.sf(q / sqrt(2), df) far below their 1e-11 floor
+    from scipy.stats import studentized_range, t as t_dist
+    q = np.array([0.0, 0.5, 2.0, 3.5, 5.0, 7.0])
+    for k, dof in ((2, 3), (4, 12), (16, 60), (9, 2000)):
+        assert np.allclose(_studentized_range_sf(q, k, dof), studentized_range.sf(q, k, dof), rtol = 0, atol = 1e-10)
+    q = np.array([10.0, 30.0, 100.0, 1e4])
+    for dof in (2, 7, 500):
+        assert np.allclose(_studentized_range_sf(q, 2, dof), 2 * t_dist.sf(q / np.sqrt(2), dof), rtol = 1e-9, atol = 0)
+    assert _studentized_range_sf(np.array([np.inf]), 3, 10)[0] == 0 and np.isnan(_studentized_range_sf(np.array([np.nan]), 3, 10)[0])
+    assert _studentized_range_sf(np.linspace(0, 6, 200), 5, 20).shape == (200,)  # computed in chunks of 64
 
 
 def test_select_grouping():

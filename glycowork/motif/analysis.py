@@ -24,7 +24,7 @@ from scipy.spatial.distance import squareform, pdist
 
 from glycowork.glycan_data import loader
 from glycowork.glycan_data.loader import strip_suffixes, download_model, GlycoDataFrame
-from glycowork.glycan_data.stats import (cohen_d, _ttest_pvalue, mahalanobis_distance, mahalanobis_variance,
+from glycowork.glycan_data.stats import (cohen_d, _ttest_pvalue, _studentized_range_sf, mahalanobis_distance, mahalanobis_variance,
                                          impute_and_normalize, variance_based_filtering, JTKTest,
                                          impute_biosynthetic, get_alphaN, TST_grouped_benjamini_hochberg,
                                          compare_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
@@ -1433,14 +1433,14 @@ def get_glycanova(
                 cols_ph = [X[i][(garr == g) & np.isfinite(X[i])] for g in ug_ph]
                 if min(len(c) for c in cols_ph) < 2:
                     continue  # Tukey's HSD has no nan_policy, so an unmeasured cell would turn every pairwise p-value into NaN
-                # Tukey's HSD computed as scipy.stats.tukey_hsd does, except that the studentized range, a numerical double integral per cell, is only integrated for the pairs reported instead of the full k x k matrix, and its critical value, which depends only on the design, once per design instead of once per glycan
+                # Tukey's HSD computed as scipy.stats.tukey_hsd does, except that the studentized range is only integrated for the pairs reported instead of the full k x k matrix, and by _studentized_range_sf instead of scipy's adaptive integrals (13 ms per pair, 99% of many-group runs), and its critical value, which depends only on the design, once per design instead of once per glycan
                 n_ph = np.asarray([c.size for c in cols_ph])
                 dof = np.sum(n_ph) - len(ug_ph)
                 mse = np.sum(np.asarray([np.var(c, ddof = 1) for c in cols_ph]) * (n_ph - 1)) / dof
                 se_ph = np.broadcast_to(np.sqrt((2 / n_ph[0] if np.unique(n_ph).size == 1 else 1 / n_ph + 1 / n_ph[None].T) * mse / 2), (len(ug_ph),) * 2)
                 means_ph = np.asarray([np.mean(c) for c in cols_ph])
                 md = (means_ph[None].T - means_ph)[iu]
-                pv = studentized_range.sf(np.abs(md) / se_ph[iu], len(ug_ph), dof)
+                pv = _studentized_range_sf(np.abs(md) / se_ph[iu], len(ug_ph), dof)
                 if dof not in srd:
                     srd[dof] = studentized_range.ppf(1 - alpha, len(ug_ph), dof)
                 rad = srd[dof] * se_ph[iu]
