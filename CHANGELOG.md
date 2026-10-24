@@ -3,6 +3,7 @@
 ## [1.11.1]
 - `drawsvg` is no longer a dependency: `GlycoDraw` builds its SVG with `glycorender`'s `svgdraw` (`glycorender>=0.5.0`), with identical output and ~1.45x faster drawing (f41edb7)
 - initial package import in most cases is now 1.5-2x as fast by lazy-loading `pandas` (6957d6a)
+- moderate performance improvements throughout the package (especially glycoproteomics-related) ()
 
 ### motif
 #### draw
@@ -54,7 +55,7 @@
 
 ##### Changed 🔄
 - Skyline imports in `read_glycomics` can now distinguish blanks, pooled QCs, and calibration standards from real samples (6957d6a)
-- `read_glycomics` is now more robust to glycolipidomics input ()
+- `read_glycomics` is now more robust to glycolipidomics input (c7fb126)
 
 ##### Fixed 🐛
 - Fixed some GlyTouCan IDs being linked to the wrong glycan (6a9dae8)

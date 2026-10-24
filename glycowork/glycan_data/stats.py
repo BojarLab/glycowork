@@ -7,7 +7,7 @@ from math import factorial
 from collections import Counter
 from scipy.stats import rankdata, norm, chi2, t, f, entropy, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind, gamma as gamma_dist
 from scipy.spatial import procrustes
-from scipy.special import digamma, polygamma, expit, log_expit
+from scipy.special import digamma, polygamma, expit, log_expit, fdtrc, stdtr
 import scipy.integrate as integrate
 rng = np.random.default_rng(42)
 np.random.seed(0)
@@ -58,9 +58,30 @@ def cohen_d(x: np.ndarray | list[float], # comparison group containing numerical
     return (d, var_d) if np.ndim(x) > 1 else (d[0], var_d[0])
 
 
+def _ttest_pvalue(x: np.ndarray, # comparison group containing numerical data
+                  y: np.ndarray, # comparison group containing numerical data, same order as x if paired
+                  paired: bool = False # whether samples are paired
+                  ) -> float: # two-sided p-value of x against y
+    "Welch's (or the paired) t-test p-value of one feature, computed step by step as scipy's ttest_ind(x, y, equal_var = False) or ttest_rel(x, y) compute it, so bit-identical (a NaN gives NaN, and NaN-free input gives what nan_policy = 'omit' does), without their ~0.5 ms of per-call overhead that dominated the per-parent loops"
+    x, y = np.asarray(x, dtype = float), np.asarray(y, dtype = float)
+    if min(len(x), len(y)) < 2:
+        return np.nan
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        if paired:
+            d, n = x - y, len(x)
+            t_stat = np.divide(np.mean(d) - 0.0, np.sqrt(np.mean((d - np.mean(d, keepdims = True)) ** 2) * np.divide(n, n - 1) / n))
+            return 2 * stdtr(np.asarray(n - 1, dtype = float), -np.abs(t_stat))
+        nx, ny = len(x), len(y)
+        vx = np.mean((x - np.mean(x, keepdims = True)) ** 2) * np.divide(nx, nx - 1) / nx
+        vy = np.mean((y - np.mean(y, keepdims = True)) ** 2) * np.divide(ny, ny - 1) / ny
+        dof = (vx + vy) ** 2 / (vx ** 2 / (nx - 1) + vy ** 2 / (ny - 1))
+        t_stat = np.divide(np.mean(x) - np.mean(y), np.sqrt(vx + vy))
+    return 2 * stdtr(np.where(np.isnan(dof), 1., dof), -np.abs(t_stat))
+
+
 def mahalanobis_distance(x: np.ndarray | pd.DataFrame, # comparison group containing numerical data
                          y: np.ndarray | pd.DataFrame, # comparison group containing numerical data
-                         paired: bool = False # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
+                         paired: bool = False # whether samples are paired (e.g., tumor & tumor-adjacent tissue)
                          ) -> float: # Mahalanobis distance effect size
     "calculates effect size between two groups in a multivariate comparison"
     if paired:
@@ -257,15 +278,24 @@ def _partner_fit(L: np.ndarray, # log2 abundances, glycans as rows and samples a
     step = max(1, int(1e7 // n))  # rows per block, so the n x n pairwise statistics of large glycoproteomics tables (tens of thousands of glycoforms) never sit in memory at once
     for s in range(0, n, step):
         b = slice(s, min(s + step, n))
-        # co-observed sums of each pairwise log-ratio and its square, as matrix products instead of an n x n x samples tensor
-        Q = Oi[b] @ Oi.T
-        S1 = Lz[b] @ Oi.T - Oi[b] @ Lz.T
-        S2 = Lz2[b] @ Oi.T + Oi[b] @ Lz2.T - 2 * Lz[b] @ Lz.T
+        # co-observed sums of each pairwise log-ratio and its square, as matrix products instead of an n x n x samples tensor; the same operations as (S2 - S1 * mean) / (Q - 1) in the same order, but written into existing blocks, since allocating a fresh block of the pairwise statistics for every step cost as much as the arithmetic
+        Q, S1, S2, T = Oi[b] @ Oi.T, Lz[b] @ Oi.T, Lz2[b] @ Oi.T, 2 * Lz[b] @ Lz.T  # (2 * Lz[b]) @ Lz.T as before: Lz[b] @ Lz.T of a whole-table block is one buffer times its transpose, which numpy hands to BLAS syrk, rounding differently
+        S1 -= Oi[b] @ Lz.T
+        S2 += Oi[b] @ Lz2.T
+        S2 -= T
         with np.errstate(divide = 'ignore', invalid = 'ignore'):
             mean = S1 / Q
-            var = (S2 - S1 * mean) / (Q - 1)
-        var[(Q < 3) | (np.arange(b.start, b.stop)[:, None] == np.arange(n)) | ~np.isfinite(var)] = np.inf
-        K[b] = np.argsort(var, axis = 1, kind = 'stable')[:, :k]
+            Q -= 1
+            var = np.divide(np.subtract(S2, np.multiply(S1, mean, out = T), out = T), Q, out = T)
+        bad = Q < 2
+        bad |= ~np.isfinite(var)
+        bad[np.arange(b.stop - b.start), np.arange(b.start, b.stop)] = True
+        var[bad] = np.inf
+        # the k most stable partners as a stable argsort would order them (ties by index), from a partition instead of sorting every row in full, which took half of the imputation on large glycoproteomics tables
+        kth = np.partition(var, K.shape[1] - 1, axis = 1)[:, K.shape[1] - 1:K.shape[1]]
+        less, tie = var < kth, var == kth
+        idx = np.nonzero(less | (tie & (np.cumsum(tie, axis = 1) <= K.shape[1] - less.sum(axis = 1, keepdims = True))))[1].reshape(-1, K.shape[1])
+        K[b] = np.take_along_axis(idx, np.argsort(np.take_along_axis(var, idx, axis = 1), axis = 1, kind = 'stable'), axis = 1)
         var_k[b], R[b] = np.take_along_axis(var, K[b], axis = 1), np.take_along_axis(mean, K[b], axis = 1)
     w = 1 / (var_k + 0.05)
     R[w == 0] = 0
@@ -637,7 +667,7 @@ def hotellings_t2(group1: np.ndarray, # comparison group containing numerical da
     F = 0 if denom < 1 or df2 < 1 else T2 * df2 / (denom * p)
     if F == 0:
         return F, 1.0
-    p_value = f.sf(F, p, df2)
+    p_value = fdtrc(p, df2, F)  # what f.sf(F, p, df2) evaluates, without its ~35 us of argument handling per call in the per-parent loops
     return F, p_value
 
 
@@ -723,13 +753,14 @@ def clr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
         group1i = [df.columns.get_loc(c) for c in group1]
         group2i = [df.columns.get_loc(c) for c in group2] if group2 else group1i
         geometric_mean = -np.log2(geometric_mean)
+        vals = df.to_numpy()  # the groups are taken by position, since selecting them as frames cost more than the transform itself on the many small per-glycosite frames
         if group2:
-            clr_adjusted[:, group1i] = np.log2(df[group1]) + (geometric_mean[group1i] if not custom_scale else norm.rvs(loc = np.log2(1), scale = gamma, random_state = local_rng, size = (df.shape[0], len(group1))))
+            clr_adjusted[:, group1i] = np.log2(vals[:, group1i]) + (geometric_mean[group1i] if not custom_scale else norm.rvs(loc = np.log2(1), scale = gamma, random_state = local_rng, size = (df.shape[0], len(group1))))
             condition = norm.rvs(loc = geometric_mean[group2i], scale = gamma, random_state = local_rng, size = (df.shape[0], len(group2))) if not custom_scale else \
                 norm.rvs(loc = np.log2(custom_scale), scale = gamma, random_state = local_rng, size = (df.shape[0], len(group2)))
-            clr_adjusted[:, group2i] = np.log2(df[group2]) + condition
+            clr_adjusted[:, group2i] = np.log2(vals[:, group2i]) + condition
         else:
-            clr_adjusted[:, group1i] = np.log2(df[group1]) + norm.rvs(loc = geometric_mean[group1i], scale = gamma, random_state = local_rng, size = (df.shape[0], len(group1)))
+            clr_adjusted[:, group1i] = np.log2(vals[:, group1i]) + norm.rvs(loc = geometric_mean[group1i], scale = gamma, random_state = local_rng, size = (df.shape[0], len(group1)))
     elif not group2 and isinstance(custom_scale, dict):
         gamma = max(gamma, 0.1)
         for idx, group_id in enumerate(group1):
@@ -1059,8 +1090,9 @@ def get_glycoform_diff(df_res: pd.DataFrame, # result from .motif.analysis.get_d
     label_col = 'Glycosite' if 'Glycosite' in df_res.columns else 'Glycan'
     labels = [split_glycoform_id(k)[0] for k in df_res[label_col]]  # per-glycosite motifs keep the underscores of their names out of the site
     labels = [s.rpartition('_')[0] or s for s in labels] if level == 'protein' else labels  # the accession is everything in front of the site, which can hold underscores itself (A1AG1_HUMAN)
-    grouped = df_res['p-val'].groupby(labels).agg(lambda p: combine_pvalues(p)[1])  # Fisher’s Combined Probability Test
-    mean_effect_size = df_res['Effect size'].groupby(labels).mean()
+    # plain Series, since every group pandas hands the lambda deep-copies the attrs of df_res, once per glycosite
+    grouped = pd.Series(df_res['p-val'].to_numpy()).groupby(labels).agg(lambda p: combine_pvalues(p)[1])  # Fisher’s Combined Probability Test
+    mean_effect_size = pd.Series(df_res['Effect size'].to_numpy()).groupby(labels).mean()
     pvals, sig = correct_multiple_testing(grouped, alpha)
     df_out = type(df_res)(
         {'Glycosite': grouped.index, 'corr p-val': pvals, 'significant': sig, 'Effect size': mean_effect_size.values})

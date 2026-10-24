@@ -53,7 +53,7 @@ def changed_lines(diff_range):
 
 
 def check_blank_lines(tree, lines, tokens, report):
-    protected, depth, opened, starts, nested_bounds = set(), {}, 0, [], []
+    protected, depth, opened, starts = set(), {}, 0, []
     for tok in tokens:
         depth.setdefault(tok.start[0], opened)
         kind = tokenize.tok_name[tok.type]
@@ -67,22 +67,26 @@ def check_blank_lines(tree, lines, tokens, report):
             opened += 1
         elif kind == 'OP' and tok.string in ')]}':
             opened -= 1
-    funcs = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
-    for fn in funcs:
-        for sub in fn.body:
-            for node in ast.walk(sub):
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node is not fn:
-                    start = min([d.lineno for d in node.decorator_list] + [node.lineno])
-                    while start > 1 and lines[start - 2].strip().startswith('#'):  # comments belong to the nested def
-                        start -= 1
-                    nested_bounds.append((start, node.end_lineno))
+    funcs, nested_starts, nested_after, todo = [], set(), set(), [(tree, False)]
+    while todo:  # one walk, knowing whether a node is inside a function: walking each function's body re-walked every nested def once per enclosing def
+        node, in_function = todo.pop()
+        for child in ast.iter_child_nodes(node):
+            is_def = isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+            if is_def:
+                funcs.append(child)
+            if in_function and (is_def or isinstance(child, ast.ClassDef)):
+                start = min([d.lineno for d in child.decorator_list] + [child.lineno])
+                while start > 1 and lines[start - 2].strip().startswith('#'):  # comments belong to the nested def
+                    start -= 1
+                nested_starts.add(start)
+                nested_after.add(child.end_lineno + 1)
+            todo.append((child, in_function or is_def))
     for fn in funcs:
         for i in range(fn.body[0].lineno, fn.end_lineno):
             if lines[i - 1].strip() or i in protected or depth.get(i, 0) > 0:
                 continue
             nxt = next((j for j in range(i + 1, fn.end_lineno + 1) if lines[j - 1].strip()), None)
-            brackets = any(nxt == s or i == e + 1 for s, e in nested_bounds)
-            if not brackets:
+            if nxt not in nested_starts and i not in nested_after:
                 report(i, 'GW1', 'blank line inside function body')
 
 
@@ -160,8 +164,10 @@ def run_pycodestyle(files):
     return out
 
 
-def pycodestyle_findings(source):
-    """[(line, column, code, message)] for the pycodestyle subset, checked in-process on a string (for editors and the fixer)."""
+def pycodestyle_findings(source, tokens = None):
+    """[(line, column, code, message)] for the pycodestyle subset, checked in-process on a string (for editors and the fixer).
+    tokens: the source's tokenize tokens when the caller has them already (the slate editor makes them for GW1 and GW2), so
+    they are not made twice."""
     import pycodestyle
     found = []
 
@@ -169,8 +175,21 @@ def pycodestyle_findings(source):
         def error(self, line_number, offset, text, check):
             if super().error(line_number, offset, text, check):
                 found.append((line_number, offset, text[:4], text[5:]))
+
+    class Replay(pycodestyle.Checker):
+        def generate_tokens(self):  # Checker.generate_tokens over the given tokens, reading lines as far as its tokenizer would
+            prev_physical = ''
+            for token in tokens:
+                if token[2][0] > self.total_lines:
+                    return
+                while self.line_number < token[3][0]:
+                    self.readline()
+                self.noqa = token[4] and pycodestyle.noqa(token[4])
+                self.maybe_check_physical(token, prev_physical)
+                yield token
+                prev_physical = token[4]
     style = pycodestyle.StyleGuide(select = PYCODESTYLE_SELECT.split(','), reporter = Collect)
-    pycodestyle.Checker(lines = io.StringIO(source).readlines(), options = style.options).check_all()
+    (pycodestyle.Checker if tokens is None else Replay)(lines = io.StringIO(source).readlines(), options = style.options).check_all()
     return found
 
 

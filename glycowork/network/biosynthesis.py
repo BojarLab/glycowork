@@ -73,12 +73,16 @@ def create_neighbors(ggraph: nx.DiGraph,  # Glycan graph
                      ) -> tuple[nx.Graph, ...]:  # Precursor graphs
     "Create biosynthetic precursor glycans"
     # Generate all precursors by iteratively cleaving off the non-reducing-end monosaccharides
-    nodes = frozenset(ggraph)
-    # Cleaving off messes with the node labeling, so they have to be re-labeled
-    return tuple(
-        nx.relabel_nodes(ggraph.subgraph(nodes - set(pair)), {m: i for i, m in enumerate(sorted(nodes - set(pair)))})
-        for pair in terminal_pairs_for_precursors(ggraph,
-                                                  min_size = min_size))  # a tuple, since the result is lru-cached and a caller editing a list would change it for every later call on that graph
+    out = []
+    for pair in terminal_pairs_for_precursors(ggraph, min_size = min_size):
+        # Cleaving off messes with the node labeling, so they have to be re-labeled; built in the node and edge order nx.relabel_nodes gives a subgraph view, without the view
+        keep = {m: i for i, m in enumerate(sorted(n for n in ggraph if n not in pair))}
+        g = nx.DiGraph()
+        g.add_nodes_from((keep[n], d.copy()) for n, d in ggraph.nodes(data = True) if n in keep)
+        g.add_edges_from((keep[u], keep[v], d.copy()) for u, v, d in ggraph.edges(data = True) if u in keep and v in keep)
+        g.graph.update(ggraph.graph)
+        out.append(g)
+    return tuple(out)  # a tuple, since the result is lru-cached and a caller editing a list would change it for every later call on that graph
 
 
 @lru_cache(maxsize = 2048)

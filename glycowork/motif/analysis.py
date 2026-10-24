@@ -24,7 +24,7 @@ from scipy.spatial.distance import squareform, pdist
 
 from glycowork.glycan_data import loader
 from glycowork.glycan_data.loader import strip_suffixes, download_model, GlycoDataFrame
-from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
+from glycowork.glycan_data.stats import (cohen_d, _ttest_pvalue, mahalanobis_distance, mahalanobis_variance,
                                          impute_and_normalize, variance_based_filtering, JTKTest,
                                          impute_biosynthetic, get_alphaN, TST_grouped_benjamini_hochberg,
                                          compare_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
@@ -382,7 +382,7 @@ def get_pvals_motifs(
                            bal_p)  # parent occurs only inside its children: no context of its own left to test
                 continue
             r = np.log2(np.maximum(resid, 0.0000001))
-            rows[p] = (explained, ttest_ind(r[pos_i][okp], r[neg_i][okn], equal_var = False)[1],
+            rows[p] = (explained, _ttest_pvalue(r[pos_i][okp], r[neg_i][okn]),
                        cohen_d(r[pos_i][okp], r[neg_i][okn])[0], bal_p)
     out = GlycoDataFrame(pd.DataFrame({
         'motif': motif_names,
@@ -1029,6 +1029,7 @@ def get_differential_expression(
                                                  paired = paired, gamma = gamma, custom_scale = custom_scale,
                                                  custom_motifs = custom_motifs,
                                                  monte_carlo = monte_carlo, random_state = random_state)
+    dag = df_org.attrs.pop('motif_dag', None)  # pandas deep-copies attrs into every frame derived from df_org, which for a glycoproteomics composition DAG cost 0.3 s per copy
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(len(group1 + group2))
     # Variance-based filtering of features
@@ -1087,7 +1088,7 @@ def get_differential_expression(
                                      na + nb - 2))
                 dfr = (nd - 1) if paired else (na + nb - 2)
                 s2, dfp = moderated_variance(resid, df_resid = dfr,
-                                             neighbors = dag_neighbors(glycans, df_org.attrs.get('motif_dag')))
+                                             neighbors = dag_neighbors(glycans, dag))
                 se = np.sqrt(s2 / nd) if paired else np.sqrt(s2 * (1 / na + 1 / nb))
                 delta = np.nanmean(D, axis = 1) if paired else (np.nanmean(B, axis = 1) - np.nanmean(A, axis = 1))
                 pvals = list(2 * t_dist.sf(np.abs(delta / se), dfp))
@@ -1124,7 +1125,7 @@ def get_differential_expression(
     if not monte_carlo and pvals:
         if grouped_BH:
             grouped_glycans, grouped_pvals = select_grouping(df_b, df_a, glycans, pvals, paired = paired,
-                                                             grouped_BH = grouped_BH, dag = df_org.attrs.get('motif_dag') if motifs or glycoproteomics else None)
+                                                             grouped_BH = grouped_BH, dag = dag if motifs or glycoproteomics else None)
             corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_glycans, grouped_pvals, alpha)
             corrpvals = [corrpvals[g] for g in glycans]
             corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
@@ -1163,9 +1164,8 @@ def get_differential_expression(
     df_out['significant'] = df_out['significant'].astype('bool')
     if effect_size_variance:
         df_out['Effect size variance'] = list(variances) + [0] * len(df_prison)
-    if (motifs or glycoproteomics) and not sets and not monte_carlo and df_org.attrs.get(
-            'motif_dag') is not None and not df.empty:
-        dag, full = df_org.attrs['motif_dag'], pd.concat([df_org, df_org_prison])
+    if (motifs or glycoproteomics) and not sets and not monte_carlo and dag is not None and not df.empty:
+        full = pd.concat([df_org, df_org_prison])
         # Recover the per-sample logratio offset from the transform itself, so residual features land in the frame everything else was tested in
         ref = np.nanmedian(np.log2(df_org.values + 0.0000001) - df.values, axis = 0)
         fc, rows = dict(zip(df_out['Glycan'], df_out['Log2FC'])), {}
@@ -1202,9 +1202,7 @@ def get_differential_expression(
                 continue
             r = np.log2(np.maximum(resid, 0.0000001)) - ref
             r_a, r_b = (r[g1i][pair_ok], r[g2i][pair_ok]) if paired else (r[g1i][ok1], r[g2i][ok2])
-            rows[p] = (explained, ttest_rel(r_b, r_a, nan_policy = 'omit')[1] if paired else
-            ttest_ind(r_b, r_a, equal_var = False, nan_policy = 'omit')[1],
-                       cohen_d(r_b, r_a, paired = paired)[0], bal_p)
+            rows[p] = (explained, _ttest_pvalue(r_b, r_a, paired = paired), cohen_d(r_b, r_a, paired = paired)[0], bal_p)  # r is NaN-free here, so this is the nan_policy = 'omit' test
         for k, v in _decomposition_columns(rows, df_out['Glycan'].tolist(), alpha).items():
             df_out[k] = v
     df_out.attrs.update(
@@ -1824,10 +1822,10 @@ def _diversity_pval(
         d = b - a
         if np.ptp(d) == 0:
             return 1.0 if d[0] == 0 else min(1.0, 2 / 2 ** len(d))
-        return ttest_rel(b, a)[1]
+        return _ttest_pvalue(b, a, paired = True)
     if np.ptp(a) == 0 and np.ptp(b) == 0:
         return 1.0 if a[0] == b[0] else 2 / comb(len(a) + len(b), len(a))
-    return ttest_ind(b, a, equal_var = False)[1]
+    return _ttest_pvalue(b, a)
 
 
 @_abundance_input('df')
