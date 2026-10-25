@@ -631,8 +631,8 @@ def calculate_adduct_mass(formula: str, # Chemical formula of adduct (e.g., "C2H
     if enforce_sign and not formula.startswith(('+', '-')):
         return 0
     element_masses = {
-        'monoisotopic': {'C': 12.0000, 'H': 1.007825, 'D': 2.014102, 'O': 15.994915, 'N': 14.003074, 'S': 31.972071, 'P': 30.973762, 'Na': 22.989769, 'K': 38.963707, 'Cl': 34.968853, 'F': 18.998403, 'Br': 78.918337, 'I': 126.904473},
-        'average': {'C': 12.0107, 'H': 1.00794, 'D': 2.014102, 'O': 15.9994, 'N': 14.0067, 'S': 32.065, 'P': 30.973762, 'Na': 22.989769, 'K': 39.0983, 'Cl': 35.453, 'F': 18.998403, 'Br': 79.904, 'I': 126.904473}
+        'monoisotopic': {'C': 12.0000, 'H': 1.007825, 'D': 2.014102, 'O': 15.994915, 'N': 14.003074, 'S': 31.972071, 'P': 30.973762, 'Na': 22.989769, 'K': 38.963707, 'Li': 7.016003, 'Cl': 34.968853, 'F': 18.998403, 'Br': 78.918337, 'I': 126.904473},
+        'average': {'C': 12.0107, 'H': 1.00794, 'D': 2.014102, 'O': 15.9994, 'N': 14.0067, 'S': 32.065, 'P': 30.973762, 'Na': 22.989769, 'K': 39.0983, 'Li': 6.941, 'Cl': 35.453, 'F': 18.998403, 'Br': 79.904, 'I': 126.904473}
     }
     if not re.fullmatch(r'[+-]?(?:[A-Z][a-z]?\d*)+(?:[+-](?:[A-Z][a-z]?\d*)+)*', formula):
         raise ValueError(f"Cannot parse the formula '{formula}'; write it as element symbols with counts, e.g., 'C2H4O2', or as signed parts, e.g., 'C5H6N2-O'.")
