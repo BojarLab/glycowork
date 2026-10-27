@@ -960,30 +960,28 @@ def get_procrustes_scores(df: pd.DataFrame, # dataframe with features as rows an
                           custom_scale: float | dict = 0, # ratio total signal group2/group1 for scale model (or group_idx:mean/min dict)
                           random_state: int | np.random.Generator | None = None, # optional random state for reproducibility
                           reference: list | None = None # rows (labels) that may be the reference and define the CLR it is compared with; default: all
-                          ) -> tuple[list[float], list[float], list[float]]: # (Procrustes scores, correlations, variances)
+                          ) -> tuple[list[float], list[float], list[float]]: # (Procrustes scores, correlations, variances: with two groups of the feature's CLR value over all samples, paired the mean square of its paired differences; with one group of its log2 values)
     "For each feature, estimates its value as ALR reference component"
     local_rng = np.random.default_rng(random_state) if random_state is not None else rng
     if isinstance(group1[0], int):
         group1 = [df.columns.tolist()[k] for k in group1]
         group2 = [df.columns.tolist()[k] for k in group2]
+    labels = df.iloc[:, 0]
     df = df.iloc[:, 1:].astype(float)
     ref_matrix = clr_transformation(df, group1, group2, gamma = 0.01, custom_scale = custom_scale, random_state = local_rng, reference = reference)
     df = np.log2(df)
     if group2:
-        if paired:
-            differences = df[group1].values - df[group2].values
-            variances = np.var(differences, axis = 1, ddof = 1)
-        else:
-            var_group1 = df[group1].var(axis = 1)
-            var_group2 = df[group2].var(axis = 1)
-            variances = abs(var_group1 - var_group2)
+        # A reference has to keep its log-ratio to the other features, since any shift of it between the groups moves every feature's log2FC; the
+        # difference of its group variances said nothing about that and is near 0 by chance for many features of small groups
+        clr_values = ref_matrix[group1 + group2].to_numpy()
+        variances = np.mean((clr_values[:, :len(group1)] - clr_values[:, len(group1):]) ** 2, axis = 1) if paired else clr_values.var(axis = 1, ddof = 1)
     else:
         variances = abs(df[group1].var(axis = 1))
     ref_values = ref_matrix.to_numpy()
     # Arrays instead of frames, column-major as the frames' values were, since procrustes' column reductions round by memory layout
     procrustes_corr = [1 - procrustes(np.asfortranarray(ref_values[~ref_matrix.index.isin([ref_matrix.index[i]])]),
                                       alr_transformation(df, i, group1, group2, gamma = 0.01, custom_scale = custom_scale, random_state = local_rng).to_numpy())[2] for i in range(df.shape[0])]
-    allowed = df.index.isin(df.index if reference is None else reference)
+    allowed = df.index.isin(df.index if reference is None else reference) & ~labels.duplicated(keep = False).to_numpy()
     return [a / max(b, 1e-8) if ok else -np.inf for a, b, ok in zip(procrustes_corr, variances, allowed)], procrustes_corr, variances
 
 

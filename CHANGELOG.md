@@ -55,7 +55,7 @@
 - `get_glycanova`'s Tukey post-hoc p-values are now ~13x faster to compute (16 groups: 1,173 to 97 s) and stay accurate for very small p-values, which were noise below ~1e-11 before (096a01e)
 
 ##### Fixed 🐛
-- A glycan or motif without any detection in a whole group no longer shifts every other feature: its floor (1e-7) entered each sample's CLR geometric mean and the ALR reference search, so samples with more such features moved as a whole. In `get_differential_expression` and `get_glycanova` such features are now tested on their detection instead (Fisher's exact test, exact McNemar when paired), with Cohen's h (Cramer's V for ANOVA) as effect size and pairwise detection tests as ANOVA post-hoc, and a floored copy of a glycan listed more than once is no longer averaged into its measured copies ()
+- A glycan or motif without any detection in a whole group no longer shifts every other feature: its floor (1e-7) entered each sample's CLR geometric mean and the ALR reference search, so samples with more such features moved as a whole. In `get_differential_expression` and `get_glycanova` such features are now tested on their detection instead (Fisher's exact test, exact McNemar when paired), with Cohen's h (Cramer's V for ANOVA) as effect size and pairwise detection tests as ANOVA post-hoc, and a floored copy of a glycan listed more than once is no longer averaged into its measured copies (c759330)
 
 ### glycan_data
 #### loader
@@ -71,8 +71,12 @@
 
 #### stats
 ##### Added ✨
-- `detection_test` tests whether detection differs between groups (Fisher's exact test, Monte Carlo beyond two groups, or exact McNemar for paired samples) and returns Cohen's h or Cramer's V ()
+- `detection_test` tests whether detection differs between groups (Fisher's exact test, Monte Carlo beyond two groups, or exact McNemar for paired samples) and returns Cohen's h or Cramer's V (c759330)
 
 ##### Changed 🔄
 - Improved estimate of `mahalanobis_variance` (cb9feeb)
-- `impute_and_normalize(return_masks = True)` also returns which cells hold a group's floor and which were detected; `get_additive_logratio_transformation` and `get_procrustes_scores` take `reference`, the rows that may serve as reference ()
+- `impute_and_normalize(return_masks = True)` also returns which cells hold a group's floor and which were detected; `get_additive_logratio_transformation` and `get_procrustes_scores` take `reference`, the rows that may serve as reference (c759330)
+- The ALR reference of a two-group comparison (`get_procrustes_scores`) is now the feature whose log-ratio to the geometric mean varies least over all samples (paired: across each pair), resulting in better FDR and +0.14 power ()
+
+##### Fixed 🐛
+- `attrs['transform']` of `get_differential_expression` and other `preprocess_data` users no longer reports CLR for an ALR whose reference glycan was listed more than once ()

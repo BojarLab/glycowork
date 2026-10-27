@@ -6249,6 +6249,24 @@ def test_absent_in_a_group_stays_out_of_the_reference():
     assert np.allclose(p, [0.1, 1.0]) and np.allclose(h, [-np.pi, 0])
 
 
+def test_alr_reference_is_stable_between_groups():
+    # A feature whose two group variances are equal but whose level differs between the groups used to be the ALR reference, and its shift moved
+    # every other feature's log2FC; the reference now has to keep a stable log-ratio over all samples
+    rng = np.random.default_rng(1)
+    X = 2 ** rng.normal(4, 0.3, (30, 6))
+    X[0] = 2 ** (6 + np.array([0.05, -0.05, 0, 0.85, 0.75, 0.8]))
+    df = pd.DataFrame(X, columns = [f's{k}' for k in range(6)])
+    df.insert(0, 'glycan', [f'Hex{k + 1}HexNAc2' for k in range(30)])
+    g1, g2 = ['s0', 's1', 's2'], ['s3', 's4', 's5']
+    scores, _, variances = get_procrustes_scores(df, g1, g2, random_state = 0)
+    assert np.argmax(scores) != 0 and variances[0] > np.median(variances)
+    res = get_differential_expression(df, group1 = g1, group2 = g2, transform = 'ALR', random_state = 0).set_index('Glycan')
+    assert not res.drop('Hex1HexNAc2', errors = 'ignore')['significant'].any()
+    # paired: the mean square of the paired differences
+    _, _, paired_var = get_procrustes_scores(df, g1, g2, paired = True, random_state = 0)
+    assert paired_var[0] > 0.5 and np.argmax(get_procrustes_scores(df, g1, g2, paired = True, random_state = 0)[0]) != 0
+
+
 def test_get_glycanova():
     # Create test data with THREE groups
     df = pd.DataFrame({

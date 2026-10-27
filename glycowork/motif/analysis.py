@@ -163,9 +163,11 @@ def preprocess_data(
     if motifs or glycoproteomics:
         pass  # both cases overwrite df below with their own transform, so running the run-wide one here only pays for ALR's O(features) Procrustes search and, for glycoproteomics, would close over a simplex that does not exist
     elif transform == "ALR":
+        rows = len(df)
         df = get_additive_logratio_transformation(df, df.columns[1:].tolist() if experiment == "anova" else group1,
                                                   group2, paired = paired, gamma = gamma, custom_scale = custom_scale,
                                                   random_state = random_state, reference = reference)
+        transform = "ALR" if len(df) < rows else "CLR"  # it switches to CLR when no reference qualifies; ALR drops the reference row
     elif transform == "CLR":
         if monte_carlo:
             df = GlycoDataFrame(pd.concat([df.iloc[:, 0], estimate_technical_variance(df.iloc[:, 1:], group1, group2,
@@ -209,9 +211,11 @@ def preprocess_data(
                                     gamma = gamma, custom_scale = 0 if paired else custom_scale,
                                     random_state = random_state, reference = reference)
         elif transform == "ALR":
+            rows = len(df)
             df = get_additive_logratio_transformation(df.reset_index(), group1 if experiment == "diff" else df.columns.tolist(), group2, paired = paired, gamma = gamma,
                                                       custom_scale = custom_scale, random_state = random_state,
                                                       reference = None if reference is None else np.flatnonzero(~absent).tolist())
+            transform = "ALR" if len(df) < rows else "CLR"
             df = df.set_index(df.columns[0])
     else:
         if motifs:
@@ -264,7 +268,7 @@ def preprocess_data(
     if absent_rows is not None:
         df_org.attrs['absent'] = absent_rows  # detection per sample of the features absent from a whole group
     df_org.attrs['dataset'], df_org.attrs['provenance'] = prov
-    df_org.attrs['transform'] = 'CLR' if transform == 'ALR' and len(df) == len(df_org) else transform  # get_additive_logratio_transformation switches to CLR when no reference qualifies, and ALR drops the reference
+    df_org.attrs['transform'] = transform
     return df, df_org, group1, group2
 
 
