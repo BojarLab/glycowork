@@ -35,7 +35,7 @@
 - `sample_prep` keyword arguments now also accept the option of `deuteropermethylated` (8770c04)
 - Mass calculation functions etc now support more peptide modifications with their Unimod (PSI-MS) names, such as `'NC[Carbamidomethyl]SK'` (54a3ea2)
 - Added `anilide` and `d5-anilide` to the supported sialic acid derivatization (from glycoqueuing), as `GQ` and `GQ-d5` (6a9dae8)
-- `'Li+'` as an adduct ion (`get_ion_mzs(adducts = 'Li+')`, `mz_to_composition(extras = ['adduct'], adduct_ions = 'Li+')`) and lithium in `calculate_adduct_mass`, for lithium acetate mobile phases ()
+- `'Li+'` as an adduct ion (`get_ion_mzs(adducts = 'Li+')`, `mz_to_composition(extras = ['adduct'], adduct_ions = 'Li+')`) and lithium in `calculate_adduct_mass`, for lithium acetate mobile phases (42fd181)
 
 ##### Changed 🔄
 - `calculate_adduct_mass` can now also read signed formula parts such as `'C5H6N2-O'` (2aff05a)
@@ -54,6 +54,9 @@
 ##### Changed 🔄
 - `get_glycanova`'s Tukey post-hoc p-values are now ~13x faster to compute (16 groups: 1,173 to 97 s) and stay accurate for very small p-values, which were noise below ~1e-11 before (096a01e)
 
+##### Fixed 🐛
+- A glycan or motif without any detection in a whole group no longer shifts every other feature: its floor (1e-7) entered each sample's CLR geometric mean and the ALR reference search, so samples with more such features moved as a whole. In `get_differential_expression` and `get_glycanova` such features are now tested on their detection instead (Fisher's exact test, exact McNemar when paired), with Cohen's h (Cramer's V for ANOVA) as effect size and pairwise detection tests as ANOVA post-hoc, and a floored copy of a glycan listed more than once is no longer averaged into its measured copies ()
+
 ### glycan_data
 #### loader
 ##### Added ✨
@@ -67,5 +70,9 @@
 - Fixed some GlyTouCan IDs being linked to the wrong glycan (6a9dae8)
 
 #### stats
+##### Added ✨
+- `detection_test` tests whether detection differs between groups (Fisher's exact test, Monte Carlo beyond two groups, or exact McNemar for paired samples) and returns Cohen's h or Cramer's V ()
+
 ##### Changed 🔄
 - Improved estimate of `mahalanobis_variance` (cb9feeb)
+- `impute_and_normalize(return_masks = True)` also returns which cells hold a group's floor and which were detected; `get_additive_logratio_transformation` and `get_procrustes_scores` take `reference`, the rows that may serve as reference ()

@@ -5,7 +5,8 @@ from functools import lru_cache
 from itertools import permutations as iter_permutations
 from math import factorial
 from collections import Counter
-from scipy.stats import rankdata, norm, chi2, t, f, entropy, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind, gamma as gamma_dist
+from scipy.stats import rankdata, norm, chi2, t, f, entropy, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind, gamma as gamma_dist, \
+    fisher_exact, binomtest, MonteCarloMethod, chi2_contingency
 from scipy.spatial import procrustes
 from scipy.special import digamma, polygamma, expit, log_expit, fdtrc, stdtr, erfc, gammaln
 import scipy.integrate as integrate
@@ -423,8 +424,9 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
                          min_samples: float = 0.1,  # fraction (0-1) of samples that need non-zero values for glycan to be kept
                          protect: pd.DataFrame | None = None,  # boolean frame in the shape/order of the abundance block, marking cells that were never measured and must stay NaN
                          circadian: bool = False,  # data for a rhythm test: every imputed value gets a draw of the prediction error, so imputed replicates keep the spread of measured ones
-                         random_state: int | np.random.Generator | None = None # optional random state for reproducibility
-                         ) -> pd.DataFrame:  # normalized dataframe in same style as input
+                         random_state: int | np.random.Generator | None = None, # optional random state for reproducibility
+                         return_masks: bool = False # also return which cells got the floor of a group without any detection, and which were detected
+                         ) -> pd.DataFrame | tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:  # normalized dataframe in same style as input (with return_masks: and the floored and detected masks, samples as columns)
     "discards rows with too many missings, imputes the rest, and normalizes"
     if not 0 <= min_samples <= 1:
         raise ValueError(
@@ -445,6 +447,7 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
         df = df.mask(
             protect)  # a cell that was never measured is not a zero; NaN keeps it out of floors, imputation targets, column totals, and geometric means
     floor = 1e-7 if len(groups) == 2 else 1e-5
+    detected = df.fillna(0) > 0
     floored = pd.DataFrame(False, index = df.index, columns = df.columns)
     for group in groups:
         group_data = df[group]
@@ -470,6 +473,8 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
     if len(old_cols) > 0:
         df.columns = old_cols
     df.insert(loc = 0, column = colname, value = glycans)
+    if return_masks:
+        return df, floored.set_axis(df.columns[1:], axis = 1), detected.set_axis(df.columns[1:], axis = 1)
     return df
 
 
@@ -754,6 +759,28 @@ def get_equivalence_test(row_a: np.ndarray, # array of control samples for one g
     return p if np.ndim(row_a) > 1 else p[0]
 
 
+def detection_test(detected: np.ndarray, # booleans, features as rows and samples as columns
+                   groups: list[list[int]], # column positions of each group
+                   paired: bool = False, # two groups whose columns are paired by position
+                   random_state: int | np.random.Generator | None = None # optional random state for reproducibility (Monte Carlo for more than two groups)
+                   ) -> tuple[np.ndarray, np.ndarray]: # (p-value, effect size) per feature
+    "Tests whether detection differs between groups: Fisher's exact test (2 x k tables beyond two groups by Monte Carlo), or for paired samples the exact McNemar test on the discordant pairs; the effect size is Cohen's h of the detection rates (second group minus first), or Cramer's V beyond two groups"
+    local_rng = np.random.default_rng(random_state) if not isinstance(random_state, np.random.Generator) else random_state
+    pvals, effects = [], []
+    for row in np.asarray(detected, dtype = bool):
+        table = np.array([[row[g].sum() for g in groups], [len(g) - row[g].sum() for g in groups]])
+        if paired:
+            a, b = row[groups[0]], row[groups[1]]
+            n = int((a ^ b).sum())
+            pvals.append(binomtest(int((a & ~b).sum()), n).pvalue if n else 1.0)
+        else:
+            pvals.append(fisher_exact(table).pvalue if len(groups) == 2 else fisher_exact(table, method = MonteCarloMethod(rng = local_rng)).pvalue)
+        rates = table[0] / table.sum(axis = 0)
+        effects.append(2 * np.arcsin(np.sqrt(rates[1])) - 2 * np.arcsin(np.sqrt(rates[0])) if len(groups) == 2 else
+                       np.sqrt(chi2_contingency(table, correction = False)[0] / table.sum()))
+    return np.array(pvals, dtype = float), np.array(effects, dtype = float)
+
+
 def clr_transformation(df: pd.DataFrame, # dataframe with features as rows and samples as columns
                        group1: list[str | int], # column indices/names for first group of samples, usually control
                        group2: list[str | int], # column indices/names for second group of samples
@@ -931,7 +958,8 @@ def get_procrustes_scores(df: pd.DataFrame, # dataframe with features as rows an
                           group2: list[str | int], # column indices/names for second group of samples
                           paired: bool = False, # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
                           custom_scale: float | dict = 0, # ratio total signal group2/group1 for scale model (or group_idx:mean/min dict)
-                          random_state: int | np.random.Generator | None = None # optional random state for reproducibility
+                          random_state: int | np.random.Generator | None = None, # optional random state for reproducibility
+                          reference: list | None = None # rows (labels) that may be the reference and define the CLR it is compared with; default: all
                           ) -> tuple[list[float], list[float], list[float]]: # (Procrustes scores, correlations, variances)
     "For each feature, estimates its value as ALR reference component"
     local_rng = np.random.default_rng(random_state) if random_state is not None else rng
@@ -939,7 +967,7 @@ def get_procrustes_scores(df: pd.DataFrame, # dataframe with features as rows an
         group1 = [df.columns.tolist()[k] for k in group1]
         group2 = [df.columns.tolist()[k] for k in group2]
     df = df.iloc[:, 1:].astype(float)
-    ref_matrix = clr_transformation(df, group1, group2, gamma = 0.01, custom_scale = custom_scale, random_state = local_rng)
+    ref_matrix = clr_transformation(df, group1, group2, gamma = 0.01, custom_scale = custom_scale, random_state = local_rng, reference = reference)
     df = np.log2(df)
     if group2:
         if paired:
@@ -955,7 +983,8 @@ def get_procrustes_scores(df: pd.DataFrame, # dataframe with features as rows an
     # Arrays instead of frames, column-major as the frames' values were, since procrustes' column reductions round by memory layout
     procrustes_corr = [1 - procrustes(np.asfortranarray(ref_values[~ref_matrix.index.isin([ref_matrix.index[i]])]),
                                       alr_transformation(df, i, group1, group2, gamma = 0.01, custom_scale = custom_scale, random_state = local_rng).to_numpy())[2] for i in range(df.shape[0])]
-    return [a / max(b, 1e-8) for a, b in zip(procrustes_corr, variances)], procrustes_corr, variances
+    allowed = df.index.isin(df.index if reference is None else reference)
+    return [a / max(b, 1e-8) if ok else -np.inf for a, b, ok in zip(procrustes_corr, variances, allowed)], procrustes_corr, variances
 
 
 def get_additive_logratio_transformation(df: pd.DataFrame, # dataframe with features as rows and samples as columns
@@ -964,7 +993,8 @@ def get_additive_logratio_transformation(df: pd.DataFrame, # dataframe with feat
                                          paired: bool = False, # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
                                          gamma: float = 0.1, # degree of uncertainty that CLR assumption holds
                                          custom_scale: float | dict = 0, # ratio total signal group2/group1 for scale model
-                                         random_state: int | np.random.Generator | None = None # optional random state for reproducibility
+                                         random_state: int | np.random.Generator | None = None, # optional random state for reproducibility
+                                         reference: list | None = None # rows (labels) that may be the reference, and the CLR reference if it falls back to CLR; default: all
                                          ) -> pd.DataFrame: # ALR-transformed dataframe
     "Identifies ALR reference component and transforms data according to ALR"
     local_rng = np.random.default_rng(random_state) if random_state is not None else rng
@@ -973,7 +1003,7 @@ def get_additive_logratio_transformation(df: pd.DataFrame, # dataframe with feat
     # A zero left by impute = False has no log; it gets the floor the CLR route adds, instead of an -inf that made the Procrustes search raise
     df = pd.concat([df.iloc[:, :1], df.iloc[:, 1:].astype(float).replace(0, 0.0000001)], axis = 1)
     scores, procrustes_corr, variances = get_procrustes_scores(df, group1, group2, paired = paired,
-                                                               custom_scale = custom_scale, random_state = local_rng)
+                                                               custom_scale = custom_scale, random_state = local_rng, reference = reference)
     ref_component = np.argmax(scores)
     ref_component_string = df.iloc[:, 0].values[ref_component]
     print(f"Reference component for ALR is {ref_component_string}, with Procrustes correlation of {procrustes_corr[ref_component]} and variance of {variances[ref_component]}")
@@ -981,7 +1011,7 @@ def get_additive_logratio_transformation(df: pd.DataFrame, # dataframe with feat
         print("Metrics of chosen reference component not good enough for ALR; switching to CLR instead.")
         df = df.astype({c: float for c in df.columns[1:]})
         df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma, custom_scale = custom_scale,
-                                            random_state = local_rng)
+                                            random_state = local_rng, reference = reference)
         return df
     glycans = df.iloc[:, 0].values.tolist()
     glycans = glycans[:ref_component] + glycans[ref_component+1:]

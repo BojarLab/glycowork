@@ -67,7 +67,7 @@ from glycowork.glycan_data.stats import (
     correct_multiple_testing, bh_adjust, partial_corr, estimate_technical_variance, MissForest, impute_and_normalize,
     impute_biosynthetic,
     variance_based_filtering, get_glycoform_diff, get_glm, process_glm_results,
-    replace_outliers_winsorization, perform_tests_monte_carlo, hsic, pvca, cosinor_fit, spearman_exact_pvals, _studentized_range_sf
+    replace_outliers_winsorization, perform_tests_monte_carlo, hsic, pvca, cosinor_fit, spearman_exact_pvals, _studentized_range_sf, detection_test
 )
 from glycowork.motif.graph import (
     glycan_to_graph, glycan_to_nxGraph,
@@ -6210,6 +6210,43 @@ def test_get_differential_expression_monte_carlo_glycoproteomics():
     df = pd.DataFrame({'glycan': ['Gal(b1-4)GlcNAc'], 'a': [1.0], 'b': [2.0]})
     with pytest.raises(ValueError):
         get_differential_expression(df, group1=['a'], group2=['b'], glycoproteomics=True, monte_carlo=True)
+
+
+def test_absent_in_a_group_stays_out_of_the_reference():
+    # Replicates of one condition: every glycan detected everywhere is the same in both groups, while three glycans are missing from every sample of
+    # group 2 (one of them seen in a single sample of group 1). Their floors used to enter each sample's log-ratio reference and shift group 2 as a whole
+    rng = np.random.default_rng(0)
+    glycans = ['Gal(b1-3)GalNAc', 'Neu5Ac(a2-3)Gal(b1-3)GalNAc', 'Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc', 'Fuc(a1-2)Gal(b1-3)GalNAc',
+               'GlcNAc(b1-6)[Gal(b1-3)]GalNAc', 'Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc', 'Neu5Ac(a2-6)GalNAc', 'GalNAc(a1-3)[Fuc(a1-2)]Gal(b1-3)GalNAc',
+               'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc', 'Fuc(a1-2)Gal(b1-3)[Gal(b1-4)GlcNAc(b1-6)]GalNAc', 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc',
+               'Neu5Ac(a2-3)Gal(b1-3)[Gal(b1-4)GlcNAc(b1-6)]GalNAc']
+    X = rng.lognormal(2, 0.5, (len(glycans), 1)) * rng.lognormal(0, 0.1, (len(glycans), 6))
+    X[-3:, 3:] = 0
+    X[-1, 1:3] = 0
+    df = pd.DataFrame(X, columns = [f's{k}' for k in range(6)])
+    df.insert(0, 'glycan', glycans)
+    g1, g2 = ['s0', 's1', 's2'], ['s3', 's4', 's5']
+    for kwargs in ({}, {'transform': 'ALR'}, {'motifs': True}, {'impute': False}):
+        res = get_differential_expression(df, group1 = g1, group2 = g2, random_state = 0, **kwargs).set_index('Glycan')
+        if not kwargs.get('motifs'):
+            # (ALR leaves its reference glycan out)
+            assert not res.loc[res.index.intersection(glycans[:-3]), 'significant'].any(), kwargs
+            # the absent glycans are tested on detection: 3/3 against 0/3, and 1/3 against 0/3
+            assert np.isclose(res.loc[glycans[-2], 'p-val'], 0.1) and np.isclose(res.loc[glycans[-1], 'p-val'], 1.0)
+            assert (res.loc[glycans[-3:], 'corr Levene p-val'] == 1).all() and (res.loc[glycans[-3:], 'Equivalence p-val'] == 1).all()
+            # their effect size is Cohen's h of the detection rates (Cohen's d of a floor ran into the hundreds)
+            assert np.allclose(res.loc[glycans[-3:], 'Effect size'], [-np.pi, -np.pi, -2 * np.arcsin(np.sqrt(1 / 3))])
+    # paired: the exact McNemar test on the discordant pairs
+    res = get_differential_expression(df, group1 = g1, group2 = g2, paired = True, random_state = 0).set_index('Glycan')
+    assert np.isclose(res.loc[glycans[-2], 'p-val'], 0.25) and not res.loc[glycans[:-3], 'significant'].any()
+    # three groups: detection by a 2 x k Fisher test, and pairwise detection tests as its post-hoc
+    df3 = pd.concat([df, df[g2].set_axis(['s6', 's7', 's8'], axis = 1)], axis = 1)
+    anova, posthoc = get_glycanova(df3, groups = [1] * 3 + [2] * 3 + [3] * 3, random_state = 0)
+    anova = anova.set_index('Glycan')
+    assert not anova.loc[glycans[:-3], 'significant'].any() and anova.loc[glycans[-3:], 'p-val'].between(0, 1).all()
+    assert all(posthoc[g]['lower'].isna().all() for g in glycans[-3:] if g in posthoc) and anova.loc[glycans[-3:], 'Effect size'].between(0, 1).all()
+    p, h = detection_test(np.array([[1, 1, 1, 0, 0, 0], [1, 0, 0, 1, 0, 0]], bool), [[0, 1, 2], [3, 4, 5]])
+    assert np.allclose(p, [0.1, 1.0]) and np.allclose(h, [-np.pi, 0])
 
 
 def test_get_glycanova():
