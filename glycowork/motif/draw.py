@@ -2389,7 +2389,8 @@ def plot_glycans_excel(
     for i, glycan_structure in enumerate(column):
         if isinstance(glycan_structure, (list, tuple)) and glycan_structure:
             glycan_structure = glycan_structure[0] if isinstance(glycan_structure[0], str) else glycan_structure[0][0]
-        if isinstance(glycan_structure, str) and glycan_structure:
+        hit = resolve_motif_name(glycan_structure) if isinstance(glycan_structure, str) and glycan_structure else None
+        if isinstance(glycan_structure, str) and glycan_structure and not (hit and hit[0].startswith('r')):
             # Generate glycan image using GlycoDraw
             try:
                 drawing = GlycoDraw(glycan_structure, **{'compact': compact, 'suppress': True, 'restrict_vocab': True, **kwargs})

@@ -3411,6 +3411,11 @@ def test_tst_grouped_benjamini_hochberg():
     assert len(adj_pvals) == len(sig_dict) == 4
     assert all(0 <= p <= 1 for p in adj_pvals.values())
     assert all(isinstance(s, bool) for s in sig_dict.values())
+    # A family whose stage 1 rejects 3 of 4 gets π0 = 0.3 (its floor): its q-values are weighted by it, and 0.12 stays insignificant at 0.075, which
+    # the old threshold of alpha / π0 = 0.25 next to a reported 0.12 called significant
+    adj, sig = TST_grouped_benjamini_hochberg({'f': ['a', 'b', 'c', 'd']}, {'f': [0.001, 0.002, 0.003, 0.12]}, 0.075)
+    assert np.allclose([adj[k] for k in 'abcd'], [0.0012, 0.002, 0.003, 0.12]) and [sig[k] for k in 'abcd'] == [True, True, True, False]
+    assert all(sig[k] == (adj[k] < 0.075) for k in 'abcd')
 
 
 def test_compare_inter_vs_intra_group():
@@ -5241,6 +5246,7 @@ def test_plot_glycans_excel(tmp_path):
     # Clean up the test folder after the test
     shutil.rmtree(test_dir)
 
+
 def test_plot_glycans_excel_column_name_and_kwargs(tmp_path):
     from openpyxl import load_workbook
     df = pd.DataFrame({'Values': [1], 'Glycan': ['GlcNAc(b1-4)GlcA']})
@@ -5275,6 +5281,12 @@ def test_plot_glycans_excel_column_name_and_kwargs(tmp_path):
     # Without a drawable glycan there is nothing to patch
     plot_glycans_excel(pd.DataFrame({'Glycan': [np.nan]}), str(tmp_path / "none.xlsx"))
     assert not load_workbook(tmp_path / "none.xlsx").active._images
+    # Motif-level results hold motifs defined by a glyco-regex, which match a family of structures: their cells stay empty while named motifs are drawn
+    plot_glycans_excel(pd.DataFrame({'Glycan': ['LewisX', 'Nglycan_complex', 'Gal(b1-4)GlcNAc']}), str(tmp_path / "motifs.xlsx"))
+    assert [image.anchor._from.row for image in load_workbook(tmp_path / "motifs.xlsx").active._images] == [1, 3]
+    with pytest.raises(ValueError, match = 'Could not draw'):
+        plot_glycans_excel(pd.DataFrame({'Glycan': ['Gal(b1-4)GlcNAcc']}), str(tmp_path / "typo.xlsx"))
+
 
 def test_plot_glycans_grid(tmp_path):
     glycans = ["Gal(b1-4)GlcNAc", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc", "Fuc(a1-2)Gal", "Man(a1-3)[Man(a1-6)]Man", "H5N4"]

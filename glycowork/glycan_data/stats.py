@@ -599,14 +599,13 @@ def TST_grouped_benjamini_hochberg(identifiers_grouped: dict[str, list], # dicti
             continue
         # Estimate π0 for the group within the Two-Stage method
         pi0_estimate = pi0_tst(group_p_values[~np.isnan(group_p_values)], alpha = alpha)
-        # π0 = 1 just means stage 1 found no signal in this family; standard TST then falls back to ordinary within-group BH (adjusted_alpha = alpha below), instead of discarding the whole family, which silently wipes out sparse-signal conditions
-        # Weight the alpha value by π0 estimate
-        adjusted_alpha = alpha / max(pi0_estimate, 0.3)
-        # Calculate the BH adjusted p-values; an untestable feature (NaN p-value) stays NaN instead of turning its whole family NaN
-        group_adjusted_p_values = np.maximum(bh_adjust(group_p_values, alpha, two_stage = False), group_p_values)
+        # π0 = 1 just means stage 1 found no signal in this family; standard TST then falls back to ordinary within-group BH, instead of discarding the whole family, which silently wipes out sparse-signal conditions
+        # The π0 weight (π0 at least 0.3) goes into the BH q-values, as bh_adjust's two-stage step does, so the corrected p-value says what is significant; as in
+        # correct_multiple_testing it never falls below the raw p-value. An untestable feature (NaN p-value) stays NaN instead of turning its whole family NaN
+        group_adjusted_p_values = np.maximum(np.minimum(bh_adjust(group_p_values, alpha, two_stage = False) * max(pi0_estimate, 0.3), 1), group_p_values)
         for identifier, corrected_pval in zip(identifiers_grouped[group], group_adjusted_p_values):
             adjusted_p_values[identifier] = corrected_pval
-            significance_dict[identifier] = bool(corrected_pval < adjusted_alpha)
+            significance_dict[identifier] = bool(corrected_pval < alpha)
     return adjusted_p_values, significance_dict
 
 

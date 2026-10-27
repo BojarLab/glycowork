@@ -13,6 +13,7 @@
 ##### Changed 🔄
 
 ##### Fixed 🐛
+- `plot_glycans_excel` leaves the cell of a motif defined by a glyco-regex (such as `Nglycan_complex` in motif-level `get_differential_expression` results) empty instead of failing the whole export, as `annotate_figure` already did ()
 
 ##### Deprecated ⚠️
 
@@ -79,4 +80,4 @@
 - The ALR reference of a two-group comparison (`get_procrustes_scores`) is now the feature whose log-ratio to the geometric mean varies least over all samples (paired: across each pair), resulting in better FDR and +0.14 power ()
 
 ##### Fixed 🐛
-- `attrs['transform']` of `get_differential_expression` and other `preprocess_data` users no longer reports CLR for an ALR whose reference glycan was listed more than once ()
+- `attrs['transform']` of `get_differential_expression` and other `preprocess_data` users no longer reports CLR for an ALR whose reference glycan was listed more than once (10ce1fe)
