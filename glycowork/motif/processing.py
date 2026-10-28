@@ -139,7 +139,8 @@ _MONO_STEM = re.compile(rf'(?:[\d?/]+[A-Za-z]+|{_MOD_NAMES})+$')  # strips trail
 _LINEARCODE_MAPPING = {'G': 'Glc', 'ME': 'me', 'M': 'Man', 'A': 'Gal', 'NN': 'Neu5Ac', 'GlcN': 'GlcNAc', 'GN': 'GlcNAc',
                        'GalN': 'GalNAc', 'AN': 'GalNAc', 'F': 'Fuc', 'K': 'Kdn', 'W': 'Kdo', 'L': 'GalA', 'I': 'IdoA', 'PYR': 'Pyr', 'R': 'Araf', 'H': 'Rha',
                        'X': 'Xyl', 'B': 'Rib', 'U': 'GlcA', 'O': 'All', 'E': 'Fruf', '[': '', ']': '', 'me': 'Me', 'PC': 'PCho', 'T': 'Ac', 'NJ': 'Neu5Gc'}
-_GLYSEEKER_MAPPING = {')': '[', '(': ']', 'G': 'Glc(a', 'A': 'Gal(b', 'Y': 'GlcNAc(b', 'M': 'Man(a', 'X': 'Xyl(b', 'F': 'Fuc(a', 'L': 'GlcA(b'}
+_GLYSEEKER_MAPPING = {')': '[', '(': ']', 'G': 'Glc(a', 'A': 'Gal(b', 'Y': 'GlcNAc(b', 'M': 'Man(a', 'X': 'Xyl(b', 'F': 'Fuc(a', 'L': 'Gal(b', 'V': 'GalNAc(b',
+                      'S': 'Neu5Ac(a'}
 _PGLYCO_TREE = re.compile(r'\([HNAGF()]+\)')
 _PGLYCO_MONO = {'H': 'Hex', 'N': 'HexNAc', 'A': 'Neu5Ac', 'G': 'Neu5Gc', 'F': 'Fuc'}  # fallback for tokens in biosynthetically impossible positions
 _PGLYCO_RULES = {('core0', 'N'): ('GlcNAc', 'b1-4', 'core1'), ('core0', 'F'): ('Fuc', 'a1-6', 'end'),

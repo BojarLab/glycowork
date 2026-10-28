@@ -565,6 +565,8 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("GNb2Ma3(Ab4GNb2Ma6)Mb4GNb4(Fa6)GNb;") == "Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("01Y41Y41M(31M21M21M)61M(31M21M)61M21M") == "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("01Y41Y41M(31M21M21M31G)61M(31M21M)61M") == "Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("01Y(61F)41Y41M(31M21Y41L32S)61M21Y41L32S") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("01Y41Y41M(31M21Y41V)61M21Y41L21F") == "Fuc(a1-2)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("0dHex(?1-?)[Hex(?1-?)]HexNAc(?1-?)Hex(?1-?)HexNAc") == "0dHex(?1-?)[Hex(?1-?)]HexNAc(?1-?)Hex(?1-?)HexNAc"
     assert canonicalize_iupac("a-D-Manp-(1-2)-a-D-Glcp1OMe") == "Man(a1-2)Glc1Me"
     assert canonicalize_iupac("b-L-Fucp-(1-2)-b-L-Galp1OMe") == "Fuc(b1-2)L-Gal1Me"
