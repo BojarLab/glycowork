@@ -5,6 +5,7 @@
 - bumped `glycorender` version dependency to `0.5.3` for additional speed-ups in drawing and smaller filesize of finished drawings (1753c8f)
 - initial package import in most cases is now 1.5-2x as fast by lazy-loading `pandas` (6957d6a)
 - moderate performance improvements throughout the package (especially glycoproteomics-related) (bc72318)
+- the documentation has been restyled and now also contains a dark mode ()
 
 ### motif
 #### draw

@@ -1,0 +1,262 @@
+/*-- scss:defaults --*/
+
+// glycowork palette, taken from the logo (dusk clouds over sea, SNFG shapes)
+$gw-ink: #2b2833 !default;
+$gw-slate: #4a4655 !default;
+$gw-muted: #6e6b76 !default;
+$gw-ocean: #0a789e !default;
+$gw-rose: #a14d6c !default;
+$gw-paper: #ffffff !default;
+$gw-tint: #f6f5f8 !default;
+$gw-line: #e7e4ec !default;
+$gw-glow: rgba(43, 40, 51, 0.16) !default;
+$gw-gradient: linear-gradient(90deg, #008cb0 0%, #8fcce9 28%, #f6c443 52%, #e8875b 76%, #b8607e 100%) !default;
+
+$font-family-sans-serif: "Century Gothic", CenturyGothic, AppleGothic, sans-serif !default;
+$line-height-base: 1.65 !default;
+$headings-font-weight: 600 !default;
+
+$primary: $gw-ocean !default;
+$body-bg: $gw-paper !default;
+$body-color: $gw-ink !default;
+$headings-color: $gw-slate !default;
+$link-color: $gw-ocean !default;
+$link-decoration: none !default;
+$link-hover-decoration: underline !default;
+$border-color: $gw-line !default;
+
+$navbar-bg: $gw-paper !default;
+$navbar-fg: $gw-slate !default;
+$navbar-hl: $gw-ocean !default;
+$sidebar-fg: $gw-muted !default;
+$sidebar-hl: $gw-ocean !default;
+$toc-color: $gw-muted !default;
+$toc-active-border: #e8875b !default;
+$toc-inactive-border: $gw-line !default;
+$footer-bg: $gw-paper !default;
+$footer-fg: $gw-muted !default;
+
+// cell outputs are bare <pre><code>, which would otherwise be black in both themes
+$pre-color: $gw-ink !default;
+$code-color: $gw-rose !default;
+$code-bg: $gw-tint !default;
+$code-block-bg: $gw-tint !default;
+$code-block-border-left: false !default;
+$code-block-bg-padding: 0.85rem !default;
+$table-border-color: $gw-line !default;
+$table-striped-bg: $gw-tint !default;
+
+/*-- scss:rules --*/
+
+@function gw-snfg($shape, $fill) {
+  $shapes: (
+    circle: "<circle cx='10' cy='10' r='8'/>",
+    square: "<rect x='2.25' y='2.25' width='15.5' height='15.5'/>",
+    diamond: "<path d='M10 1.5 18.5 10 10 18.5 1.5 10z'/>",
+    triangle: "<path d='M10 2 18.5 17.5h-17z'/>",
+    star: "<path d='M10 1.8 12.17 7.81 18.56 8.02 13.52 11.94 15.29 18.08 10 14.5 4.71 18.08 6.48 11.94 1.44 8.02 7.83 7.81z'/>"
+  );
+  @return url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><g fill='%23#{$fill}' stroke='%233a3742' stroke-width='1.5' stroke-linejoin='round'>#{map-get($shapes, $shape)}</g></svg>");
+}
+
+// navbar and footer carry the logo's dusk gradient as a thin stripe
+.navbar {
+  box-shadow: none;
+  border-bottom: 0;
+  &::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: $gw-gradient;
+  }
+}
+
+.navbar-brand .navbar-title {
+  font-weight: 600;
+  font-size: 1.4rem;
+  letter-spacing: 0.01em;
+}
+
+.nav-footer {
+  position: relative;
+  border-top: 0;
+  font-size: 0.85rem;
+  &::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 2px;
+    background: $gw-gradient;
+    opacity: 0.7;
+  }
+}
+
+// sidebar: every page gets its own SNFG monosaccharide
+#quarto-sidebar {
+  .sidebar-link {
+    font-size: 0.95rem;
+    &::before {
+      content: "";
+      flex: none;
+      display: inline-block;
+      width: 0.8rem;
+      height: 0.8rem;
+      margin-right: 0.6rem;
+      vertical-align: -0.05rem;
+      background: gw-snfg(circle, "0072bc") center / contain no-repeat;
+    }
+    &[href$="core.html"]::before { background-image: gw-snfg(square, "0072bc"); }
+    &[href$="glycan_data.html"]::before { background-image: gw-snfg(circle, "ffd400"); }
+    &[href$="ml.html"]::before { background-image: gw-snfg(circle, "00a651"); }
+    &[href$="motif.html"]::before { background-image: gw-snfg(diamond, "a54399"); }
+    &[href$="network.html"]::before { background-image: gw-snfg(triangle, "ed1c24"); }
+    &[href$="examples.html"]::before { background-image: gw-snfg(star, "f47920"); }
+    &.active {
+      font-weight: 600;
+    }
+  }
+}
+
+// headings
+h1.title {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+main h2, main .h2 {
+  border-bottom: 0;
+  padding-bottom: 0;
+  margin-top: 2.6rem;
+  &::after {
+    content: "";
+    display: block;
+    width: 3rem;
+    height: 3px;
+    margin-top: 0.45rem;
+    border-radius: 3px;
+    background: $gw-gradient;
+  }
+}
+
+#TOC h2::after, #toc-title::after {
+  display: none;
+}
+
+// page intro (the notebook's description) as a lead paragraph
+div.description {
+  font-style: normal;
+  font-size: 1.12rem;
+  line-height: 1.6;
+  color: $gw-muted;
+  opacity: 1;
+  margin-top: 0.75rem;
+  padding: 0.1rem 0 0.1rem 1.1rem;
+  border-left: 3px solid;
+  border-image: linear-gradient(180deg, #008cb0, #f6c443, #b8607e) 1;
+}
+
+// API reference: each show_doc entry becomes a card
+section.level3:has(> h3 + .code-copy-outer-scaffold),
+section.level4:has(> h4 + .code-copy-outer-scaffold) {
+  position: relative;
+  margin: 1.75rem 0;
+  padding: 1.1rem 1.4rem 0.35rem 1.6rem;
+  border: 1px solid $gw-line;
+  border-radius: 14px;
+  background: $body-bg;
+  box-shadow: 0 1px 2px rgba(43, 40, 51, 0.04), 0 10px 24px -16px $gw-glow;
+  // ::before is Quarto's anchor offset on :target sections
+  &::after {
+    content: "";
+    position: absolute;
+    left: -1px;
+    top: -1px;
+    bottom: -1px;
+    width: 5px;
+    border-radius: 14px 0 0 14px;
+    background: linear-gradient(180deg, #008cb0, #f6c443 55%, #b8607e);
+  }
+  > h3, > h4 {
+    margin-top: 0;
+    font-family: $font-family-monospace;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: $gw-ocean;
+  }
+  > hr {
+    display: none;
+  }
+}
+
+// code
+div.sourceCode {
+  border: 1px solid $gw-line;
+  border-radius: 10px;
+}
+
+code:not(.sourceCode) {
+  padding: 0.1em 0.35em;
+  border-radius: 5px;
+  font-size: 0.86em;
+}
+
+.cell {
+  margin-bottom: 1rem;
+}
+
+.cell > .source-code {
+  margin-bottom: 0;
+}
+
+.cell-output > pre, .cell-output > .source-code > pre, .cell-output-stdout > pre {
+  margin: 0 0 0 0.8rem;
+  background: none;
+  border-left: 2px solid #e8875b;
+  border-radius: 0;
+}
+
+.cell-output > .source-code {
+  border: none;
+  background: none;
+  margin-top: 0;
+}
+
+// dataframes
+.cell-output-display table {
+  font-size: 0.82rem;
+  thead th {
+    border-bottom: 2px solid $gw-slate;
+    color: $gw-slate;
+  }
+}
+
+// landing page: the logo leads, the badges sit centered under it
+main:has(img[alt="glycowork logo"]) #title-block-header {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+p:has(> img[alt="glycowork logo"]) {
+  text-align: center;
+  margin: 0.5rem 0 1rem;
+}
+
+img[alt="glycowork logo"] {
+  width: 300px;
+  max-width: 70%;
+  mix-blend-mode: multiply;
+}
+
+p:has(> a > img[src*="shields.io"]) {
+  text-align: center;
+  line-height: 2;
+  margin-bottom: 2rem;
+}

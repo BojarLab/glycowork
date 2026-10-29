@@ -37,6 +37,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/BojarLab/glycowork"
+Repository = "https://github.com/BojarLab/glycowork"
 Documentation = "https://bojarlab.github.io/glycowork/"
 Changelog = "https://github.com/BojarLab/glycowork/blob/master/CHANGELOG.md"
 Issues = "https://github.com/BojarLab/glycowork/issues"
