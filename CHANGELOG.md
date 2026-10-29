@@ -2,6 +2,7 @@
 
 ## [1.11.1]
 - `drawsvg` is no longer a dependency: `GlycoDraw` builds its SVG with `glycorender`'s `svgdraw` (`glycorender>=0.5.0`), with identical output and ~1.45x faster drawing (f41edb7)
+- bumped `glycorender` version dependency to `0.5.2` for additional speed-ups in drawing and smaller filesize of finished drawings ()
 - initial package import in most cases is now 1.5-2x as fast by lazy-loading `pandas` (6957d6a)
 - moderate performance improvements throughout the package (especially glycoproteomics-related) (bc72318)
 
@@ -24,7 +25,7 @@
 ##### Changed 🔄
 - Improved GlycoCT/GlycoCT XML parsing of phosphodiesters and more exotic monosaccharides (8649553)
 - `get_class` can now also deal with aglycones, such as in `Gal(b1-3)GalNAc1Ser` (8649553)
-- Improved galactose/sialic acid GlySeeker conversion in `canonicalize_iupac` ()
+- Improved galactose/sialic acid GlySeeker conversion in `canonicalize_iupac` (48162a4)
 
 ##### Fixed 🐛
 - `wurcs_to_iupac` now reads residues past the 52nd (`aa`, `ab`, ...), alditols with substituents (`h2122h_3*OSO/3=O/3=O`), anhydro forms (`2,7-Anhydro-Kdo`, `1,5-Anhydro-Glc-ol`), PCho and lactyl groups, and Pse with any acyls on its amines; phosphodiesters are written on the donor (`Rib5P-ol(5-1)`), and `Glc3S-ol` no longer becomes `Glc3-S-ol` (322fc99)
@@ -38,10 +39,12 @@
 - Mass calculation functions etc now support more peptide modifications with their Unimod (PSI-MS) names, such as `'NC[Carbamidomethyl]SK'` (54a3ea2)
 - Added `anilide` and `d5-anilide` to the supported sialic acid derivatization (from glycoqueuing), as `GQ` and `GQ-d5` (6a9dae8)
 - `'Li+'` as an adduct ion (`get_ion_mzs(adducts = 'Li+')`, `mz_to_composition(extras = ['adduct'], adduct_ions = 'Li+')`) and lithium in `calculate_adduct_mass`, for lithium acetate mobile phases (42fd181)
+- `modification = 'benzyl'` for benzyl glycosides (e.g., the Bn-GalNAc primer of CORA) in `composition_to_mass`, `glycan_to_mass`, `get_formula`, `mz_to_composition`, and `mz_to_structures` ()
 
 ##### Changed 🔄
 - `calculate_adduct_mass` can now also read signed formula parts such as `'C5H6N2-O'` (2aff05a)
 - `sialic_derivatization` also weighs a derivatization done before permethylation (`sample_prep = 'permethylated'` or `'deuteropermethylated'`), whose amides are capped on their N-H instead of the carboxyl's methyl ester (`SIALIC_PRODUCT_CAPS`; a lactone raises); a derivatization making the same product of every sialic acid (`GQ`, `('amide', 'amide')`) needs no linkages, and `sialic_linkage_splits(composition, sialic_derivatization)` leaves its compositions unsplit (f0e2839)
+- `glycan_to_mass` and `get_formula` weigh residues outside `lib` (e.g., the written-out ethyl ester `Neu1Et5Ac`) atom by atom instead of raising ()
 
 #### smiles
 ##### Added ✨

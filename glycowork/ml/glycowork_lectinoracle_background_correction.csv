@@ -3682,7 +3682,7 @@ Gal(a1-6)Glc(a1-3)[Gal(b1-7)LDManHep(a1-7)]LDManHep(a1-3)LDManHepOP(a1-5)[Kdo(a2
 Gal(a1-6)Glc(a1-3)[Glc(b1-2)]LDManHep(a1-3)[Man(b1-4)][Ara4N(b1-7)]LDManHep(a1-5)Kdo,-0.9529976844787598
 Gal(a1-6)Glc(a1-3)[LDManHep(a1-7)]LDManHep(a1-3)LDManHepOP(a1-5)[Kdo(a2-4)]Kdo,-0.5774555206298828
 Gal(a1-6)Glc(a1-4)Gal(a1-3)ManNAc,0.004050254821777344
-Gal(a1-6)Glc(a1-4)GlcN(a1-4)[LDManHep(a1-2)]GalA(a1-3)[GalA(b1-7)LDManHep(a1-7)]LDManHep(a1-3)[Glc(b1-4)]LDManHep(a1-5)]Kdo,-0.47293853759765625
+Gal(a1-6)Glc(a1-4)GlcN(a1-4)[LDManHep(a1-2)]GalA(a1-3)[GalA(b1-7)LDManHep(a1-7)]LDManHep(a1-3)[Glc(b1-4)]LDManHep(a1-5)Kdo,-0.47293853759765625
 Gal(a1-6)Glc(a1-4)Rha(a1-3)GalNAc(b1-3)Gal,-0.098480224609375
 Gal(a1-6)Glc(a1-4)RhaOPEtN(a1-3)GalNAc(b1-3)Gal,-0.0693202018737793
 Gal(a1-6)Glc(a1-4)RhaOPEtN(a1-3)GalNAc(b1-3)Man(a1-3)Man(a1-3)Man(a1-3)Man(a1-3)Man6PEtN(a1-3)Man6PEtN(a1-3)Man(a1-3)Man(a1-2)[D-AllN(a1-3)]Kdo5PGro,-0.01953887939453125
@@ -8444,7 +8444,7 @@ Glc(a1-6)Glc(a1-4)Glc(a1-6)Glc(a1-4)Glc,-0.05074787139892578
 Glc(a1-6)Glc(a1-4)Glc(a1-6)Glc(a1-4)Glc(a1-4)Glc,-0.04214763641357422
 Glc(a1-6)Glc(a1-4)Glc(a1-6)Glc(a1-4)Glc(a1-6)Glc,-0.0713038444519043
 Glc(a1-6)Glc(a1-4)Glc-ol,-0.0726466178894043
-Glc(a1-6)Glc(a1-4)GlcN(a1-4)[LDManHep(a1-2)]GalA(a1-3)[GalA(b1-7)LDManHep(a1-7)]LDManHep(a1-3)[Glc(b1-4)]LDManHep(a1-5)]Kdo,-0.500889778137207
+Glc(a1-6)Glc(a1-4)GlcN(a1-4)[LDManHep(a1-2)]GalA(a1-3)[GalA(b1-7)LDManHep(a1-7)]LDManHep(a1-3)[Glc(b1-4)]LDManHep(a1-5)Kdo,-0.500889778137207
 Glc(a1-6)Glc(a1-4)Rha(a1-4)Glc(a1-6)Glc,-0.15476083755493164
 Glc(a1-6)Glc(a1-4)[Glc(a1-6)]Glc(a1-6)Glc(a1-6)Glc(a1-6)Glc,-0.15155410766601562
 Glc(a1-6)Glc(a1-4)[GlcNAc(b1-3)]Gal(a1-3)GlcNAc(b1-2)Glc,-0.16611337661743164
@@ -14595,7 +14595,7 @@ ManNAcA6Thr(b1-4)GlcNAcA(b1-3)GlcNAc,-0.17954111099243164
 ManNAcA6Thr(b1-4)GlcNAcA(b1-3)GlcNAcN,-0.15659093856811523
 ManNAcAAla(b1-4)GlcNAcA(b1-4)ManNAcAAla,-0.13626861572265625
 ManNAcAN(b1-4)GlcNAcAN(b1-4)GalNAc(a1-4)ManNAcA(b1-3)D-FucNAcNMe(b1-6)GlcN(a1-4)ManNAcA(b1-3)D-FucNAcNMe(b1-6)GlcNAc(a1-4)ManNAcA(b1-3)D-FucNAcNMe(b1-6)GlcN(a1-4)ManNAcA(b1-3)D-FucNAcNMe(b1-6)GlcN,-0.5374598503112793
-ManNAcAN(b1-4)GlcNAcAN(b1-4)GalNAc(a1-4)ManNAcA(b1-3)D-FucNAcNMe(b1-6)GlcNAc(a1-4)ManNAcA(b1-3)D-FucNAcNMe(b1-6)[LDManHep(a1-4)]GlcN(a1-4)[GalN(a1-6)]Glc(b1-4)[GlcN(a1-7)]LDManHepOP(a1-3)]LDManHep,-0.2205829620361328
+ManNAcAN(b1-4)GlcNAcAN(b1-4)GalNAc(a1-4)ManNAcA(b1-3)D-FucNAcNMe(b1-6)GlcNAc(a1-4)ManNAcA(b1-3)D-FucNAcNMe(b1-6)[LDManHep(a1-4)]GlcN(a1-4)[GalN(a1-6)]Glc(b1-4)[GlcN(a1-7)]LDManHepOP(a1-3)LDManHep,-0.2205829620361328
 ManNAcAN(b1-4)GlcNAcAN(b1-4)GalNAc(a1-4)ManNAcAN(b1-3)FucNAcN(b1-6)GlcN,-0.3221321105957031
 ManNAcANAm(a1-4)L-GulNAcA(a1-3)D-FucNAc(a1-4)ManNAcANAm,-0.24875593185424805
 ManNAcANAm(a1-4)L-GulNAcA(a1-3)D-FucNAc(b1-4)ManNAcANAm,-0.4142169952392578

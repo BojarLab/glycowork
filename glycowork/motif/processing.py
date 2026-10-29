@@ -2170,6 +2170,8 @@ def _canonicalize_iupac(glycan: str | int  # Glycan sequence in any supported fo
     glycan, repeat = transform_repeat_glycan(glycan)
     glycan = re.sub(r"n\=[\d\?\-]+\/", "", glycan)  # Strip out internal repeats such as n=?/
     glycan = re.sub(r"(?<=[\)\]\d])\/([A-Z])", r"\1", glycan)  # Strip out any remaining / from internal repeats
+    if glycan.count('[') != glycan.count(']'):  # before the graph round trip, which drops a stray bracket and returns a valid glycan of the wrong topology
+        raise ValueError(f"Mismatching brackets in formatted glycan string: {glycan}")
     # Canonicalize branch ordering
     if '[' in glycan and not glycan.startswith('[') and ']' in glycan and not repeat:
         from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string
@@ -2202,8 +2204,6 @@ def _canonicalize_iupac(glycan: str | int  # Glycan sequence in any supported fo
         glycan = sorted_floating_bits + glycan[glycan.rfind('}') + 1:]
     glycan = re.sub(r'[A-Z][A-Za-z0-9]*(?:/[A-Z][A-Za-z0-9]*)+', lambda m: '/'.join(sorted(m.group().split('/'))),
                     glycan)
-    if glycan.count('[') != glycan.count(']'):
-        raise ValueError(f"Mismatching brackets in formatted glycan string: {glycan}")
     return glycan
 
 

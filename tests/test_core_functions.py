@@ -1092,6 +1092,9 @@ LIN
     # Test raised errors
     with pytest.raises(ValueError, match = "Mismatching brackets in formatted glycan string"):
         canonicalize_iupac("Fuc(a1-3)[Gal(b1-4)Glc-ol")
+    for stray in ["Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc", "Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)[GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"]:  # the graph round trip dropped the stray ']' (wrong topology) or raised IndexError on the extra '['
+        with pytest.raises(ValueError, match = "Mismatching brackets in formatted glycan string"):
+            canonicalize_iupac(stray)
     with pytest.raises(ValueError):  # empty cells/NaN have to be filtered out first
         canonicalize_iupac("")
     for comp in ["HexNAc(4)Hex(5)Fuc(1)NeuAc(2)", "Hex(5)HexNAc(4)dHex(1)NeuAc(2)", "{Hex:5; HexNAc:4; NeuAc:2}"]:  # Byonic/MSFragger and GlycReSoft compositions crashed or became '{Hex5}HexNAc4'
@@ -1574,6 +1577,13 @@ def test_glycan_to_mass():
         glycan_to_mass("Neu5Ac(a2-3/6)Gal(b1-4)Glc", sialic_derivatization = 'EE')
     with pytest.raises(ValueError, match = 'lactone'):
         glycan_to_mass(dst, sample_prep = 'permethylated', sialic_derivatization = 'EE')
+    # a residue outside lib is weighed from its molecule: the ethyl ester of Neu5Ac written out is EE's a2-6 product
+    sialyl = "Neu5Ac(a2-6)Gal(b1-4)Glc"
+    assert abs(glycan_to_mass("Neu1Et5Ac(a2-6)Gal(b1-4)Glc") - glycan_to_mass(sialyl, sialic_derivatization = 'EE')) < 1e-6
+    assert abs(glycan_to_mass("Neu1Et5Ac(a2-6)Gal(b1-4)Glc", sample_prep = 'permethylated') - glycan_to_mass(sialyl, sample_prep = 'permethylated') - 14.0157) < 1e-3  # an ethyl ester instead of the methyl ester
+    assert get_formula("Neu1Et5Ac(a2-6)Gal(b1-4)Glc") == get_formula(sialyl, sialic_derivatization = 'EE')
+    with pytest.raises(ValueError, match = 'Cannot map'):  # a misspelled residue keeps its spelling hint
+        glycan_to_mass("Gal(b1-4)Glx")
     # amidated before permethylation, every sialic acid ends as a dimethylamide, 13.0316 over its methyl ester; one product for both needs no linkage
     assert abs(glycan_to_mass(dst, sample_prep = 'permethylated', sialic_derivatization = ('amide', 'amide')) - glycan_to_mass(dst, sample_prep = 'permethylated') - 2 * 13.0316) < 1e-3
     assert glycan_to_mass("Neu5Ac(a2-?)Gal(b1-4)Glc", sample_prep = 'permethylated', sialic_derivatization = ('amide', 'amide')) == glycan_to_mass(
@@ -2005,6 +2015,11 @@ def test_composition_to_mass():
     assert abs(composition_to_mass('H9N2', modification = 'PA') + 1.007276 - 1961.7102) < 0.001
     assert get_formula('H3N2', modification = 'PA') == 'C39H64N4O25'
     assert mz_to_composition(989.39, max_charge = 1, modification = 'PA', glycan_class = 'N') == [{'Hex': 3, 'HexNAc': 2}]
+    # a benzyl glycoside (CORA's Bn-GalNAc) adds C7H6 and keeps its ring, so its C1-OH is no longer derivatized; permethylated, it sits C6H4 (76.0313) above the free glycan and 60.000 above the alditol
+    for sample_prep, formula in [('underivatized', 'C15H21NO6'), ('permethylated', 'C19H29NO6'), ('peracetylated', 'C21H27NO9')]:
+        assert get_formula('GalNAc', sample_prep = sample_prep, modification = 'benzyl') == formula
+        assert abs(glycan_to_mass('GalNAc', sample_prep = sample_prep, modification = 'benzyl') - calculate_adduct_mass(formula)) < 1e-9
+    assert abs(composition_to_mass('H1N1A1', sample_prep = 'permethylated', modification = 'benzyl') - composition_to_mass('H1N1A1', sample_prep = 'permethylated', modification = 'reduced') - 60.0000) < 1e-3
     # NaBD4 reduction adds HD, one D above NaBH4; APTS labels by reductive amination (label minus O), aminoxyTMT0 (C15H30N4O3) and Girard's P as oxime and hydrazone (label minus H2O)
     assert abs(composition_to_mass('H5N4', modification = 'reduced_D') - composition_to_mass('H5N4', modification = 'reduced') - 1.006277) < 1e-6
     assert abs(composition_to_mass('H3N2', modification = 'APTS') - composition_to_mass('H3N2') - 440.9647) < 1e-3

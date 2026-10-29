@@ -48,7 +48,7 @@ ELECTRON_MASS = 0.000548580
 PROTON_MASS = HYDROGEN_MASS - ELECTRON_MASS  # charge carrier; the H atom is 0.55 mDa heavier
 NEUTRAL_ADDUCTS = {'Acetonitrile', 'Trifluoroacetic acid'}  # mz_to_composition.csv entries that are neutral molecules, so their adduct ions still need the protons of [M+H]+/[M-H]-
 modification_formula_dict = {'reduced': 'H2', 'reduced_D': 'HD', '2AA': 'C7H7NO', '2AB': 'C7H8N2', 'procainamide': 'C13H21N3', 'PA': 'C5H6N2-O', 'APTS': 'C16H11NO9S3-O',
-                           'aminoxyTMT': 'C15H30N4O3-H2O', 'GirardP': 'C7H9N3O-H2O'}  # net gain at the reducing end: H2 by reduction (HD with NaBD4), label minus O by reductive amination (2-aminopyridine has no O, so PA loses one), label minus H2O by oxime (aminoxyTMT0, C15H30N4O3) or hydrazone (Girard's P) formation; Girard's P is a fixed-charge pyridinium (C7H10N3O+), counted as the reagent minus H so that the mode's proton makes its cation
+                           'aminoxyTMT': 'C15H30N4O3-H2O', 'GirardP': 'C7H9N3O-H2O', 'benzyl': 'C7H6'}  # net gain at the reducing end: H2 by reduction (HD with NaBD4), label minus O by reductive amination (2-aminopyridine has no O, so PA loses one), label minus H2O by oxime (aminoxyTMT0, C15H30N4O3) or hydrazone (Girard's P) formation; Girard's P is a fixed-charge pyridinium (C7H10N3O+), counted as the reagent minus H so that the mode's proton makes its cation; a benzyl glycoside (CORA's Bn-GalNAc primer) replaces the C1-OH hydrogen with C7H7 and keeps its ring
 SIALIC_PRODUCTS = {'ethyl ester': ('+C2H4',), 'methyl ester': ('+CH2',), 'lactone': ('-H2O',), 'amide': ('+NH3', '-H2O'), 'methylamide': ('+CH5N', '-H2O'),
                    'dimethylamide': ('+C2H7N', '-H2O'), 'isopropylamide': ('+C3H9N', '-H2O'), 'anilide': ('+C6H7N', '-H2O'), 'd5-anilide': ('+C6H2D5N', '-H2O')}  # what a derivatization makes of a carboxyl, as the formulas it gains and loses
 SIALIC_PRODUCT_CAPS = {'ethyl ester': 0, 'methyl ester': 0, 'lactone': None, 'amide': 2, 'methylamide': 1, 'dimethylamide': 0, 'isopropylamide': 1, 'anilide': 1, 'd5-anilide': 1}  # N-H a product leaves for a later permethylation to cap, in place of the carboxyl's own cap (its methyl ester); a lactone does not survive permethylation
@@ -71,7 +71,7 @@ RESIDUE_FORMULAS = {'Hex': ('C6H10O5', 3, 3), 'HexNAc': ('C8H13NO5', 3, 2), 'dHe
                     'Kdn': ('C9H14O8', 5, 4), 'HexA': ('C6H8O6', 3, 2), 'HexN': ('C6H11NO4', 4, 3), 'S': ('SO3', -1, -1), 'P': ('HPO3', 1, -1), 'PCho': ('C5H12NO3P', 0, -1),
                     'PEtN': ('C2H6NO3P', 3, 0), 'Me': ('CH2', 0, 0), 'red_end': ('H2O', 2, 2)}  # composition key: (underivatized formula in a chain, caps it gains permethylated (CH2 each) and peracetylated (C2H2O each)), which mz_to_composition.csv's masses are computed from
 _DERIV_CAP = {'permethylated': 'CH2', 'peracetylated': 'C2H2O'}  # what derivatization puts on each free OH (and N-H), shared by the mass and formula paths
-_LABEL_CAPS = {'2AA': 2, '2AB': 3, 'procainamide': 2}  # caps permethylation adds to a ring-opened labelled glycan: the freed C5-OH plus the label's own acid and amides (1 for reduction and PA, whose pyridine nitrogen is not modelled as quaternized)
+_LABEL_CAPS = {'2AA': (2, 1), '2AB': (3, 1), 'procainamide': (2, 1), 'benzyl': (-1, -1)}  # caps (permethylated, peracetylated) a reducing-end modification adds, (1, 1) if not listed: a ring opening (reduction, every label but benzyl) frees the C5-OH, permethylation also caps a label's own acid and amides (PA's pyridine nitrogen is not modelled as quaternized), and a benzyl glycoside keeps its ring and takes the C1-OH red_end caps
 
 
 def constrain_prot(proteins: str | list[str], # Protein sequence(s)
@@ -266,7 +266,7 @@ def get_ion_mzs(mass: float | np.ndarray, # Neutral mass(es), including any redu
 def mz_to_composition(mz_value: float, # m/z value from mass spec
                       max_charge: int = -2, # Signed charge ceiling: sign sets ion mode (negative/positive), magnitude the highest charge state z considered
                       mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
-                      modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP
+                      modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl
                       sample_prep: str = 'underivatized', # Sample preparation method: underivatized/permethylated/deuteropermethylated/peracetylated
                       mass_tolerance: float = 0.5, # Mass tolerance for matching
                       tolerance_unit: str = "Da",  # Unit of mass_tolerance: "Da" (absolute) or "ppm"
@@ -434,7 +434,7 @@ def mz_to_structures(mz_list: float | list[float], # Precursor mass(es)
                      sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/deuteropermethylated/peracetylated
                      mass_tolerance: float = 0.5, # Mass tolerance for matching
                      tolerance_unit: str = "Da",  # Unit of mass_tolerance: "Da" (absolute) or "ppm"
-                     modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP
+                     modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl
                      df_use: pd.DataFrame | None = None, # Custom glycan database
                      filter_out: str | set[str] | None = None,  # Monosaccharide(s) to ignore
                      deprioritized: str | set[str] | None = {"Me", "HexA", "PCho"},  # Monosaccharide(s) to use only as fallback if no other composition matches
@@ -655,7 +655,7 @@ def composition_to_mass(dict_comp_in: dict[str, int] | str, # Composition dictio
                         mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
                         sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/deuteropermethylated/peracetylated
                         adduct: str | float | None = None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
-                        modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP
+                        modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl
                         peptide: str | None = None, # Peptide carrying the glycan(s), in one-letter code with optional signed mass or formula deltas, or named modifications (PEPTIDE_MODIFICATIONS), after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK' or 'NC[Carbamidomethyl]SK' for carbamidomethylation, 'M[+15.9949]NGTK'), to get the glycopeptide mass; several glycans on one peptide are passed as their total composition
                         sialic_derivatization: str | tuple[str, str] | None = None # Sialic acid derivatization of an underivatized or (before it) permethylated sample, a key of SIALIC_DERIVATIZATIONS ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5') or a pair of SIALIC_PRODUCTS (a2-6, a2-3/8/9); unless both are the same product, every sialic acid then needs its linkage ('H5N4E1L1', {'Neu5Ac_a2-6': 1, 'Neu5Ac_a2-3': 1}), and uronic acids take the a2-6 product; peptide carboxyls are left to peptide's deltas
                         ) -> float: # Theoretical mass
@@ -709,8 +709,8 @@ def composition_to_mass(dict_comp_in: dict[str, int] | str, # Composition dictio
             raise ValueError(
                 f"Unknown reducing-end modification {modification!r}; choose one of {list(modification_formula_dict)} or pass a label mass via adduct.")
         total_mass += calculate_adduct_mass(modification_formula_dict[modification], mass_value = mass_value)
-        if cap:  # reduction and reductive amination open the ring, which frees one OH (at C5, previously the ring oxygen); permethylation also caps a label's own acid and amide (2AA's COOH, 2AB's CONH2 twice, procainamide's CONH), which peracetylation spares, while the label's NH takes the place of the C1-OH red_end already caps
-            total_mass += (_LABEL_CAPS.get(modification, 1) if sample_prep == 'permethylated' else 1) * calculate_adduct_mass(cap, mass_value = mass_value)
+        if cap:  # reduction and reductive amination open the ring, which frees one OH (at C5, previously the ring oxygen); permethylation also caps a label's own acid and amide (2AA's COOH, 2AB's CONH2 twice, procainamide's CONH), which peracetylation spares, while the label's NH takes the place of the C1-OH red_end already caps; a benzyl glycoside opens nothing and takes that C1-OH (_LABEL_CAPS)
+            total_mass += _LABEL_CAPS.get(modification, (1, 1))[sample_prep == 'peracetylated'] * calculate_adduct_mass(cap, mass_value = mass_value)
     if peptide:  # each glycan loses its reducing-end water on attachment and the peptide keeps one, so residues plus the one water counted above are the whole glycopeptide, however many glycans it carries
         total_mass += sum(calculate_adduct_mass(AMINO_ACID_FORMULAS[aa], mass_value = mass_value) for aa in re.sub(r'\[[^\]]*\]', '', peptide)) + sum(
             float(d) if re.fullmatch(r'[+-]\d*\.?\d+', d) else calculate_adduct_mass(d, mass_value = mass_value) for d in re.findall(r'\[([^\]]+)\]', peptide))
@@ -744,7 +744,7 @@ def glycan_to_mass(glycan: str | dict[str, int], # Glycan in IUPAC-condensed for
                    sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/deuteropermethylated/peracetylated
                    stem_libr: dict[str, str] | None = None, # Modified to core monosaccharide mapping
                    adduct: str | float | None = None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
-                   modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP; a glycan ending in an alditol (-ol) is reduced already
+                   modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl; a glycan ending in an alditol (-ol) is reduced already
                    peptide: str | None = None, # Peptide carrying the glycan, in one-letter code with optional signed mass or formula deltas, or named modifications (PEPTIDE_MODIFICATIONS), after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK', 'NC[Carbamidomethyl]SK'), to get the glycopeptide mass
                    sialic_derivatization: str | tuple[str, str] | None = None # Sialic acid derivatization of an underivatized or (before it) permethylated sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); unless both are the same product, each sialic acid then needs a known linkage class, a2-3/6 or a2-? raises
                    ) -> float: # Theoretical mass
@@ -766,7 +766,10 @@ def glycan_to_mass(glycan: str | dict[str, int], # Glycan in IUPAC-condensed for
             carboxyls, mass_value = mass_value, sample_prep = sample_prep, sialic_derivatization = sialic_derivatization) - composition_to_mass(carboxyls, mass_value = mass_value, sample_prep = sample_prep)
     if stem_libr is None:
         stem_libr = stem_lib
-    comp = glycan_to_composition(glycan, stem_libr = stem_libr)
+    try:
+        comp, unmapped = glycan_to_composition(glycan, stem_libr = stem_libr), None
+    except ValueError as e:  # a residue outside stem_libr (Neu1Et5Ac, an ethyl-esterified sialic acid written out) maps onto no core, but its molecule may still be built and weighed below
+        comp, unmapped = {}, e
     if comp:
         mass = composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep, adduct = adduct,
                                    modification = modification or ('reduced' if glycan.endswith('-ol') else None), peptide = peptide)  # the composition of Gal(b1-4)Glc-ol is that of Gal(b1-4)Glc, but the alditol carries two more H (and one more OH to derivatize)
@@ -783,7 +786,7 @@ def glycan_to_mass(glycan: str | dict[str, int], # Glycan in IUPAC-condensed for
     except ValueError:
         if comp:
             return mass
-        raise ValueError(
+        raise unmapped or ValueError(
             f"No valid composition could be derived from '{glycan}' (it contains components outside {sorted(_VALID_COMPONENTS)}), and it has no defined structure to weigh it by, so no mass can be calculated.") from None
     cap = _DERIV_CAP.get(sample_prep)
     modification = None if glycan.endswith('-ol') and modification == 'reduced' else modification  # the molecule of an alditol is reduced already
@@ -797,7 +800,7 @@ def get_formula(glycan: str | dict[str, int], # Glycan in any nomenclature canon
                 sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/deuteropermethylated/peracetylated
                 stem_libr: dict[str, str] | None = None, # Modified to core monosaccharide mapping
                 adduct: str | None = None, # Chemical formula of a neutral adduct (e.g., "C2H4O2"); a signed formula ("-H2O") removes atoms
-                modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP; a glycan ending in an alditol (-ol) is reduced already
+                modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl; a glycan ending in an alditol (-ol) is reduced already
                 peptide: str | None = None, # Peptide carrying the glycan(s), in one-letter code with optional signed formula deltas, or named modifications (PEPTIDE_MODIFICATIONS) other than isotope-coded tags, after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK', 'NC[Carbamidomethyl]SK'); several glycans on one peptide are passed as their total composition
                 sialic_derivatization: str | tuple[str, str] | None = None # Sialic acid derivatization of an underivatized or (before it) permethylated sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); unless both are the same product, every sialic acid then needs its linkage ('H5N4E1L1', 'Neu5Ac(a2-6)...')
                 ) -> str: # Elemental formula in Hill order (C, H, then alphabetical), e.g., 'C62H104N4O46' for H5N4
@@ -851,7 +854,7 @@ def get_formula(glycan: str | dict[str, int], # Glycan in any nomenclature canon
         if modification:  # the label, and the caps composition_to_mass gives the OH a ring opening frees and the label's own acid or amides
             for part in re.findall(r'[+-]?[^+-]+', modification_formula_dict[modification]):  # a label without oxygen gains less than an O (PA is C5H6N2-O)
                 add(elements, part)
-            caps += (_LABEL_CAPS.get(modification, 1) if sample_prep == 'permethylated' else 1) if cap else 0
+            caps += _LABEL_CAPS.get(modification, (1, 1))[sample_prep == 'peracetylated'] if cap else 0
         for f in [AMINO_ACID_FORMULAS[aa] for aa in re.sub(r'\[[^\]]*\]', '', peptide or '')] + re.findall(r'\[([^\]]+)\]', peptide or ''):
             for part in re.findall(r'[+-]?[^+-]+', f):  # a delta that loses atoms is written as signed parts (deamidation, +O-HN), each added with its sign
                 add(elements, part)
@@ -867,7 +870,10 @@ def get_formula(glycan: str | dict[str, int], # Glycan in any nomenclature canon
                      (get_formula(carboxyls, sample_prep = sample_prep, sialic_derivatization = sialic_derivatization), 1), (get_formula(carboxyls, sample_prep = sample_prep), -1)):
             add(elements, f, n)
     else:
-        comp = glycan_to_composition(glycan, stem_libr = stem_lib if stem_libr is None else stem_libr)
+        try:
+            comp, unmapped = glycan_to_composition(glycan, stem_libr = stem_lib if stem_libr is None else stem_libr), None
+        except ValueError as e:  # as in glycan_to_mass, a residue outside stem_libr is read from its molecule
+            comp, unmapped = {}, e
         if comp:
             add(elements, get_formula(comp, sample_prep = sample_prep, adduct = adduct, modification = modification or ('reduced' if glycan.endswith('-ol') else None), peptide = peptide))
             if inner := glycan.count('-ol') - glycan.endswith('-ol'):
@@ -880,7 +886,7 @@ def get_formula(glycan: str | dict[str, int], # Glycan in any nomenclature canon
                 atoms, caps = _molecule_formula(glycan, sample_prep)
             except ValueError:
                 if not comp:
-                    raise ValueError(f"No valid composition could be derived from '{glycan}' (it contains components outside {sorted(_VALID_COMPONENTS)}), and it has no defined structure to read its atoms from.") from None
+                    raise unmapped or ValueError(f"No valid composition could be derived from '{glycan}' (it contains components outside {sorted(_VALID_COMPONENTS)}), and it has no defined structure to read its atoms from.") from None
                 atoms = None
             if atoms is not None:
                 weighed = Counter(atoms)
