@@ -10,7 +10,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 from glycowork.glycan_data.loader import unwrap, linkages, lib, GlycoList, GlycoDataFrame
-from glycowork.glycan_data.stats import cohen_d, get_alphaN, correct_multiple_testing, moderated_variance, dag_neighbors, TST_grouped_benjamini_hochberg
+from glycowork.glycan_data.stats import cohen_d, get_alphaN, correct_multiple_testing, moderated_variance, dag_neighbors, TST_grouped_benjamini_hochberg, _covariate_fit
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, graph_to_string_int, subgraph_isomorphism, get_possible_topologies
 from glycowork.motif.processing import get_lib, rescue_glycans, in_lib, get_class, canonicalize_iupac, canonicalize_composition, is_composition
 from glycowork.motif.tokenization import get_stem_lib, get_core, glycan_to_composition, map_to_basic
@@ -1222,14 +1222,15 @@ def get_reaction_flow(network: nx.DiGraph, # Biosynthetic network
 def get_differential_biosynthesis(df: pd.DataFrame | str | Path, # Glycan abundance data (first column: glycan sequences), filepath, or shipped dataset name
                                   group1: list[str | int] | None = None, # First group column indices/names (or time points in longitudinal analysis); default: from the frame's contrasts
                                   group2: list[str | int] | None = None, # Second group column indices/names (or time points in longitudinal analysis)
-                                  analysis: str = "reaction",  # Type: reaction/flow/branchpoint
+                                  analysis: str = "reaction",  # Type: reaction/flow/branchpoint/steps (each motif's yield from its tightest containing motif)
                                   paired: bool | None = None,  # Whether samples are paired; default: from the frame
                                   longitudinal: bool = False,  # Whether to do perform longitudinal analysis
                                   id_column: str = "ID", # Sample ID column for longitudinal analysis in the ID-style of participant_time_replicate
                                   edge_type: str = "monolink",  # Reaction resolution: monolink/monosaccharide/enzyme
-                                  virtual_damping: float = 0.5  # Per-hop abundance decay for undetected intermediates
+                                  virtual_damping: float = 0.5,  # Per-hop abundance decay for undetected intermediates
+                                  covariates: pd.DataFrame | pd.Series | dict | None = None  # per-sample nuisance variables indexed by sample name (e.g., secretor status, sex, age, batch); unpaired two-group comparisons only, each feature fit as group plus covariates
                                   ) -> pd.DataFrame: # Differential analysis results (differential flow features and statistics OR reaction changes over time
-    "Compare biosynthetic patterns between conditions/timepoints"
+    "Compare biosynthetic patterns between conditions/timepoints: reaction fluxes, flow to sinks, branch-point splits, or biosynthetic step yields (each motif as the log2 ratio to its tightest containing motif, i.e., how much of the available substrate a step converts)"
     from scipy.stats import t as tdist
     from scipy.stats import f as f_dist
     # Handle input data; read before anything looks at the frame, since a shipped dataset name brings its contrasts, pairing, and name
@@ -1240,6 +1241,8 @@ def get_differential_biosynthesis(df: pd.DataFrame | str | Path, # Glycan abunda
         group1, group2 = list(df.group1), list(df.group2)
     in_name, in_prov = getattr(df, '_glyco_name', ''), getattr(df, '_provenance', {})
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
+    if covariates is not None and (longitudinal or paired):
+        raise ValueError("covariates go into the unpaired two-group linear model; longitudinal and paired analyses already compare each subject with itself.")
     if longitudinal:
         assert id_column is not None, "id_column must be specified for longitudinal analysis"
         assert group2 is None, "group2 should not be specified for longitudinal analysis"
@@ -1283,10 +1286,11 @@ def get_differential_biosynthesis(df: pd.DataFrame | str | Path, # Glycan abunda
     df_analysis = df_analysis.set_axis(canonicalize_iupac(df_analysis.index))  # construct_network canonicalizes its node names, so the abundance keys have to be canonical too
     # Rows of one structure (isomer peaks, or two spellings of one sequence) add up, as the node abundance lookup below would keep only the last of them
     df_analysis = df_analysis.groupby(level = 0, sort = False).sum()
-    core_net = construct_network(df_analysis.index.tolist(), edge_type = edge_type)
-    root = infer_network_root(core_net)
+    # step yields come from the motifs alone and need no network
+    core_net = construct_network(df_analysis.index.tolist(), edge_type = edge_type) if analysis != "steps" else None
+    root = infer_network_root(core_net) if analysis != "steps" else None
     nets, features = {}, []
-    for col in df_analysis.columns:
+    for col in (df_analysis.columns if analysis != "steps" else []):
         temp = deepcopy(core_net)
         abundance_mapping = dict(zip(df_analysis.index.tolist(), df_analysis[col].values.tolist()))
         nx.set_node_attributes(temp, {g: {'abundance': abundance_mapping.get(g, 0.0)} for g in temp.nodes()})
@@ -1352,8 +1356,17 @@ def get_differential_biosynthesis(df: pd.DataFrame | str | Path, # Glycan abunda
         sinks = sorted({sink for r in res.values() for sink in r})
         res2 = {col: [res[col][sink]['flow_value'] if sink in res[col] else 0.0 for sink in sinks] for col in nets}
         features = sinks
+    elif analysis == "steps":
+        # Each motif as the log2 ratio to its tightest containing motif (roots to the sample total), so a step reads as conversion of its available substrate,
+        # not as product amount
+        from glycowork.motif.annotate import quantify_motifs, quantify_dag_steps, get_motif_dag
+        motif_df = quantify_motifs(df_analysis, feature_set = ['known', 'exhaustive'])
+        motif_df = motif_df / motif_df.sum() * 100
+        steps = quantify_dag_steps(motif_df)
+        step_dag = get_motif_dag(steps.index.tolist(), abundances = motif_df.loc[steps.index])
+        res2 = steps.to_dict()
     else:
-        raise ValueError("Only 'reaction', 'flow', and 'branchpoint' are currently supported analysis modes.")
+        raise ValueError("Only 'reaction', 'flow', 'branchpoint', and 'steps' are currently supported analysis modes.")
     res2 = pd.DataFrame(res2).T.fillna(0.0)
     if analysis == "flow" and not longitudinal:
         res2.columns = features
@@ -1363,6 +1376,9 @@ def get_differential_biosynthesis(df: pd.DataFrame | str | Path, # Glycan abunda
             p = res2.clip(0.001, 0.999)
             res_lin, res2 = res2, np.log2(p / (1 - p))
             keep = res_lin.std(axis = 0) > 0
+        elif analysis == "steps":
+            # already scale-free log2 ratios, filtered by quantify_dag_steps; the mean abundance reported is the share of the motif the step makes
+            res_lin, keep = motif_df.loc[res2.columns].T, res2.std(axis = 0) > 0
         else:
             # Flux shares strip the per-sample total-flow factor; the log puts trunk and peripheral reactions on a comparable spread so the variance filter stops being an abundance filter
             totals = res2.sum(axis = 1)
@@ -1417,6 +1433,9 @@ def get_differential_biosynthesis(df: pd.DataFrame | str | Path, # Glycan abunda
             for i, f in enumerate(features):
                 by_node[f.rsplit(' -> ', 1)[0]].append(i)
             neighbors = [sorted(set(by_node[f.rsplit(' -> ', 1)[0]]) - {i}) for i, f in enumerate(features)]
+        elif analysis == "steps":
+            # a step shares its substrate with its parent's other steps and feeds its children's, so containment neighbors are its variance reference, as for motifs
+            neighbors = dag_neighbors(features, step_dag)
         elif shadow_set:
             # A collapsed reaction is the mean of its own linkage variants, so that family is a sharper variance reference than the global prior
             fam, where = {}, {f: i for i, f in enumerate(features)}
@@ -1435,15 +1454,27 @@ def get_differential_biosynthesis(df: pd.DataFrame | str | Path, # Glycan abunda
             eff, dfree, scale = df_b.values.mean(axis = 1) - df_a.values.mean(axis = 1), na + nb - 2, 1 / na + 1 / nb
             s2 = ((na - 1) * df_a.values.var(axis = 1, ddof = 1) + (nb - 1) * df_b.values.var(axis = 1,
                                                                                               ddof = 1)) / dfree
+        if covariates is not None:
+            # each feature fit as group plus covariates: the group coefficient with its own standard error and residual df, still moderated
+            adj, ssr, dfree, _, scale, _ = _covariate_fit(np.hstack([df_a.values, df_b.values]), [0] * df_a.shape[1] + [1] * df_b.shape[1], covariates, group1 + group2)
+            eff = np.nanmean(adj[:, df_a.shape[1]:], axis = 1) - np.nanmean(adj[:, :df_a.shape[1]], axis = 1)
+            s2, log2fc = ssr / dfree, eff
         s2_mod, df_post = moderated_variance(s2, dfree, neighbors = neighbors)
         pvals = np.maximum(2 * tdist.sf(np.abs(eff / np.sqrt(s2_mod * scale)), df_post), np.finfo(float).tiny)
         # Shadow reactions are averages of their own variants, so testing both in one family nearly doubles it with redundant hypotheses; two-stage grouped BH gives each family its own pi0 instead of correcting them as unrelated runs
         alpha = get_alphaN(len(all_groups))
-        fam = np.isin(features, list(shadow_set))
-        grouped_f = {k: [f for f, m in zip(features, mask) if m] for k, mask in (('collapsed', fam), ('variant', ~fam))
-                     if mask.any()}
-        grouped_p = {k: [p for p, m in zip(pvals, mask) if m] for k, mask in (('collapsed', fam), ('variant', ~fam)) if
-                     mask.any()}
+        if analysis == "steps":  # a step family is the rarest root it descends from, as for motifs, so each branch gets its own pi0
+            from glycowork.motif.analysis import _root_families
+            root_of, grouped_f, grouped_p = _root_families(step_dag), defaultdict(list), defaultdict(list)
+            for feat, pv in zip(features, pvals):
+                grouped_f[root_of.get(feat, 'rest')].append(feat)
+                grouped_p[root_of.get(feat, 'rest')].append(pv)
+        else:
+            fam = np.isin(features, list(shadow_set))
+            grouped_f = {k: [f for f, m in zip(features, mask) if m] for k, mask in (('collapsed', fam), ('variant', ~fam))
+                         if mask.any()}
+            grouped_p = {k: [p for p, m in zip(pvals, mask) if m] for k, mask in (('collapsed', fam), ('variant', ~fam)) if
+                         mask.any()}
         cp, sd = TST_grouped_benjamini_hochberg(grouped_f, grouped_p, alpha)
         corrpvals, significance = [cp[f] for f in features], [sd[f] for f in features]
         pvals = list(pvals)
@@ -1452,7 +1483,7 @@ def get_differential_biosynthesis(df: pd.DataFrame | str | Path, # Glycan abunda
         out = pd.DataFrame({'Glycan': features, 'Mean abundance': mean_abundance, 'Log2FC': log2fc, 'p-val': pvals,
                             'corr p-val': corrpvals, 'significant': significance, 'Effect size': effect_sizes})
     out = out.set_index('Glycan')
-    out.attrs.update({'alpha': get_alphaN(len(all_groups)), 'n': len(all_groups), 'test': 'repeated-measures F-test' if longitudinal else 'moderated t-test',
+    out.attrs.update({'alpha': get_alphaN(len(all_groups)), 'n': len(all_groups), 'test': 'repeated-measures F-test' if longitudinal else 'moderated t-test' + (' with covariates' if covariates is not None else ''),
                       'transform': None, 'paired': paired, 'dataset': in_name, 'provenance': in_prov})
     return out.dropna().sort_values(by = 'p-val')
 

@@ -58,7 +58,7 @@
 
 #### analysis
 ##### Added ✨
-- Added the new `covariates` keyword argument to `get_differential_expression` and `get_glycanova` to include per-sample covariates (e.g., secretor status, sex, age, batch) ()
+- Added the new `covariates` keyword argument to `get_differential_expression` and `get_glycanova` to include per-sample covariates (e.g., secretor status, sex, age, batch) (b62b240)
 
 ##### Changed 🔄
 - `get_glycanova`'s Tukey post-hoc p-values are now ~13x faster to compute (16 groups: 1,173 to 97 s) and stay accurate for very small p-values, which were noise below ~1e-11 before (096a01e)
@@ -89,3 +89,9 @@
 
 ##### Fixed 🐛
 - `attrs['transform']` of `get_differential_expression` and other `preprocess_data` users no longer reports CLR for an ALR whose reference glycan was listed more than once (10ce1fe)
+
+### network
+#### biosynthesis
+##### Added ✨
+- Added the new `covariates` keyword argument to `get_differential_biosynthesis` to include per-sample covariates (e.g., secretor status, sex, age, batch) ()
+- Added the new `analysis` option of `"steps"` to `get_differential_biosynthesis` to compare biosynthetic step yields between conditions (each motif as the log2 ratio to its tightest containing motif, i.e., how much of the available substrate a step converts) ()

@@ -2163,9 +2163,9 @@ def _canonicalize_iupac(glycan: str | int  # Glycan sequence in any supported fo
                         4) not in lib and _MONO_STEM.sub('', m.group(
                         4)) not in lib else f'({m.group(1)}{m.group(2)}-{m.group(3)}){m.group(4)}', glycan)
     if '-P-' in glycan or '-S-' in glycan:
-        glycan = re.sub(r'([\w-]+)(?:-ol)?\(([\w\?])(\d+)-([PS])-(\d+)\)',
-                        lambda m: f"{m.group(1)}{m.group(3)}{m.group(4)}({m.group(2)}{m.group(3)}-{m.group(5)})",
-                        glycan)  # Rha(a1-P-4) into Rha1P(a1-4)
+        glycan = re.sub(r'([\w-]+?)(-ol)?\(([ab?]?)(\d+)-([PS])-(\d+)\)',
+                        lambda m: f"{m.group(1)}{m.group(4)}{m.group(5)}{m.group(2) or ''}({m.group(3)}{m.group(4)}-{m.group(6)})",
+                        glycan)  # Rha(a1-P-4) into Rha1P(a1-4), Rib-ol(1-P-5) into Rib1P-ol(1-5)
     glycan = re.sub(r'[^()\[\]{}]+', lambda t: s if (s := re.sub(r'[A-Z][A-Za-z0-9]+', _sort_mono_mods, t.group())) in lib or t.group() not in lib else t.group(), glycan)  # Sort modifications: ManNA3Ac1Ac to ManAN1Ac3Ac, but never turn a lib residue (also a prefixed one like D-Rha4NLac) into a non-lib one
     glycan, repeat = transform_repeat_glycan(glycan)
     glycan = re.sub(r"n\=[\d\?\-]+\/", "", glycan)  # Strip out internal repeats such as n=?/

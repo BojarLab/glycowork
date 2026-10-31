@@ -507,6 +507,8 @@ def graph_to_smiles(graph: nx.DiGraph,  # Glycan graph, as produced by glycan_to
             child = next(iter(successors), None)
             if child is None:
                 raise GlycanSMILESError(f"linkage '{link}' has no child residue")
+            if link.count('-') != 1:
+                raise GlycanSMILESError(f"linkage '{link}' runs through a phosphate or sulfate; write that group on the donor, as in Glc1P(a1-6)Glc")
             donor, anomeric = link.split('-')[0].lstrip('ab?'), _anomeric_position(labels[child])
             if donor.isdigit() and anomeric is not None and int(donor) != anomeric:
                 raise GlycanSMILESError(f"linkage '{link}' leaves '{labels[child]}' from position {donor} rather than its anomeric carbon")

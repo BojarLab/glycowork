@@ -446,6 +446,10 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("GalNAc(a1-3)GalNAc(b1-3)[D-Fuc3NAc(a1-4)]Gal(a1-4)Glc") == "GalNAc(a1-3)GalNAc(b1-3)[D-Fuc3NAc(a1-4)]Gal(a1-4)Glc"
     assert canonicalize_iupac("Gal4,6Pyr") == "Gal4Pyr6Pyr"
     assert canonicalize_iupac("Rha(a1-P-4)Man(b1-4)GlcNAc") == "Rha1P(a1-4)Man(b1-4)GlcNAc"  # linkage-phosphate outside a repeat unit
+    # an alditol donor too, and never as an ether: the SMILES writer read a1-P-6 as a1-6, so Rib-ol(1-P-5)Rib-ol weighed 80 Da light
+    assert canonicalize_iupac("Rib-ol(1-P-5)Rib-ol") == "Rib1P-ol(1-5)Rib-ol" and glycan_to_mass("Rib-ol(1-P-5)Rib-ol") == glycan_to_mass("Rib5P-ol(1-3)Rib-ol")
+    with pytest.raises(GlycanSMILESError, match = "runs through a phosphate"):
+        glycan_to_smiles("Glc(a1-P-6)Glc")
     assert canonicalize_iupac("Neu5Acα2-3(6-O-sulfo)Galβ1-4Glc") == "Neu5Ac(a2-3)Gal6S(b1-4)Glc"
     assert canonicalize_iupac("D-Fuc(a1-2)[S-6]Glc(b1-4)GlcNAc(b1-4)Glc(b1-2)Glc") == "D-Fuc(a1-2)Glc6S(b1-4)GlcNAc(b1-4)Glc(b1-2)Glc"
     assert canonicalize_iupac("Fuc(a1-3)[Gal3/6S(b1-4)]GlcNAc(b1-2)Man") == "Fuc(a1-3)[Gal3/6S(b1-4)]GlcNAc(b1-2)Man"
@@ -1361,6 +1365,10 @@ def test_strict_refuses_to_guess_a_position():
     assert 'NC(=O)' not in glycan_to_smiles('GlcNOMyr') and 'NC(C)=O' not in glycan_to_smiles('GalOAcN')  # an O-prefixed group takes a hydroxyl, never the amine
     with pytest.raises(GlycanSMILESError):
         glycan_to_smiles('Gal(b1-?)Glc', strict = True)
+    for glycan, msg in [('9dGlc', 'no position 9 to deoxygenate'), ('L-6dGalOct', 'no pyranose form'), ('1,6-Anhydro-2,5-Anhydro-Glc', 'more than one bridge'),
+                        ('GlcA6S(b1-4)Glc', 'not defined on the carboxyl')]:  # residues that have no molecule are refused, never guessed
+        with pytest.raises(GlycanSMILESError, match = msg):
+            glycan_to_smiles(glycan)
 
 
 def test_molecule_graph_matches_rdkit():
@@ -1432,6 +1440,12 @@ def test_parse_smiles_refuses_what_it_cannot_read():
         smiles_to_iupac('OC1OCCCC1O.OC1OCCCC1O')
     with pytest.raises(GlycanSMILESError):  # two glycans in one string
         smiles_to_iupac('OC1OC(CO)C(O)C(O)C1O.OC1OC(CO)C(O)C(O)C1O')
+    # a group without a name (a TMS ether, an ether chain too long to walk) is dropped by default and refused when strict
+    for group in ['[Si](C)(C)C', 'C' * 70]:
+        tagged = f'O[C@@H]1O[C@H](CO{group})[C@@H](O)[C@H](O)[C@H]1O'
+        assert smiles_to_iupac(tagged) == 'Glc'
+        with pytest.raises(GlycanSMILESError, match = 'unrecognized substituent'):
+            smiles_to_iupac(tagged, strict = True)
 
 
 def test_constrain_prot():
@@ -1735,6 +1749,10 @@ def test_mz_to_composition():
     # The tolerance unit is case-insensitive, so 'da' is not read as ppm
     assert mz_to_composition(675, max_charge = -2, glycan_class = 'O', mass_tolerance = 0.5, tolerance_unit = 'da',
                              modification = "reduced", filter_out = {'Kdn'}) == expected
+    # return_all lists every hit with its ion and error, as GlycoMod does, the first-hit composition first
+    hits = mz_to_composition(675, max_charge = -2, glycan_class = 'O', mass_tolerance = 0.5, modification = "reduced", filter_out = {'Kdn'}, return_all = True)
+    assert hits.columns.tolist() == ['composition', 'ion', 'mz', 'error_ppm'] and canonicalize_composition(hits['composition'].iloc[0]) == expected[0]
+    assert hits['ion'].iloc[0] == '[M-H]-' and np.allclose(hits['error_ppm'], (675 - hits['mz']) / hits['mz'] * 1e6)
     result = mz_to_composition(
         675,
         max_charge=-2,
@@ -1923,13 +1941,20 @@ def test_composition_to_mass():
     assert {get_formula(x) for x in ['H5N4', {'Hex': 5, 'HexNAc': 4}, 'HexNAc(4)Hex(5)', 'C62H104N4O46']} == {'C62H104N4O46'} and get_formula(g) == get_formula('H5N4F1A2') == get_formula('FA2G2S2')
     for glycan, kwargs in [(g, {'sialic_derivatization': 'EE', 'modification': '2AB'}), ('Kdo(a2-4)Kdo', {'sample_prep': 'permethylated'}), ('Gal(b1-3)GalNAc-ol', {'sample_prep': 'permethylated'}),
                            ('GlcNAc(b1-6)Man6P', {'sample_prep': 'peracetylated'}), ('Gal(b1-4)GlcNAc', {'peptide': 'NGT', 'adduct': 'Na'}),
-                           ('Kdo(a2-4)Kdo', {'sample_prep': 'deuteropermethylated'}), ('Gal(b1-3)GalNAc-ol', {'sample_prep': 'deuteropermethylated'})]:  # sialic products, the atom path, an alditol, a phosphodiester, a glycopeptide, both deuteropermethylated
+                           ('Kdo(a2-4)Kdo', {'sample_prep': 'deuteropermethylated'}), ('Gal(b1-3)GalNAc-ol', {'sample_prep': 'deuteropermethylated'}),
+                           ('Rib5P-ol(1-3)Rib-ol', {}), ('{OP}Man(a1-2)Man', {'sample_prep': 'peracetylated'})]:  # sialic products, the atom path, an alditol, a phosphodiester, a glycopeptide, both deuteropermethylated, an inner alditol, and a floating phosphate (no molecule, so the composition stands)
         assert abs(calculate_adduct_mass(get_formula(glycan, **kwargs)) - glycan_to_mass(glycan, **kwargs)) < 1e-9
     with pytest.raises(ValueError, match = 'whole molecule'):
         get_formula('C62H104N4O46', sample_prep = 'permethylated')
     with pytest.raises(ValueError, match = 'whole molecule'):
         get_formula('C62H104N4O46', sample_prep = 'deuteropermethylated')
     assert get_formula('H3N2', modification = 'reduced_D') == get_formula('C34H59DN2O26') == 'C34H59DN2O26'  # a formula with deuterium reads back as one
+    azido = {'Hex': 2, 'Neu5Ac': 1, '+N3': 1, '-H': 1}  # formula keys are added as written
+    assert get_formula(azido) == 'C23H38N4O19' and abs(calculate_adduct_mass(get_formula(azido)) - composition_to_mass(azido)) < 1e-9
+    with pytest.raises(ValueError, match = 'its linkage, which is unknown'):  # a linkage-specific derivatization needs every sialic linkage
+        get_formula('Neu5Ac(a2-3/6)Gal(b1-4)Glc', sialic_derivatization = 'EE')
+    with pytest.raises(ValueError, match = 'remove atoms the molecule does not have'):
+        get_formula('Glc', adduct = '-C7')
     # linkage-specific sialic acid derivatization: H5N4E2, the main plasma N-glycan of ethyl esterified samples, at [M+Na]+ 2301.835 (Reiding et al. 2014)
     assert abs(composition_to_mass('H5N4E2', sialic_derivatization = 'EE') + 22.989221 - 2301.835) < 1e-3
     assert abs(composition_to_mass('H5N4E1L1', sialic_derivatization = 'EEA') - composition_to_mass('H5N4A2') - 28.0313 + 0.9840) < 1e-3
@@ -2408,6 +2433,12 @@ def test_wurcs_to_iupac():
     for glycan in ["{Fuc(a1-?)}Gal(b1-4)GlcNAc", "Gal(b1-4)Glc1Cer", "Gal(b1-3)Gal1,4lactone", "Sia(a2-3)Gal", "Gal(b1-3)Gal4CMe", "Glc(b1-4)Ins"]:  # floating parts, aglycones, lactones, wildcards, C-substituents, and cyclitols are refused
         with pytest.raises(ValueError):
             glycan_to_wurcs(glycan)
+    with pytest.raises(ValueError, match = "two modifications on position 3"):
+        glycan_to_wurcs("Gal3S3Me(b1-4)GlcNAc")
+    # a phosphodiester written on its acceptor is the same LIN as written on its donor
+    assert glycan_to_wurcs("GlcNAc(b1-6)Man6P") == glycan_to_wurcs("GlcNAc1P(b1-6)Man") == "WURCS=2.0/2,2,1/[a1122h-1x_1-5][a2122h-1b_1-5_2*NCC/3=O]/1-2/a6-b1*OPO*/3O/3=O"
+    with pytest.raises(ValueError, match = "substituent 'OCCCCCCCC' is not supported"):  # a floating substituent outside _WURCS_MOD
+        wurcs_to_iupac("WURCS=2.0/2,2,2/[a2122h-1b_1-5][a2112h-1b_1-5]/1-2/a4-b1_a?|b?}*OCCCCCCCC")
 
 
 def test_oxford_to_iupac():
@@ -4045,6 +4076,8 @@ def test_deduplicate_glycans():
     anchored = "{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     swapped = "{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Man(a1-6)[Gal(b1-4)GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert len(deduplicate_glycans([anchored, swapped, "Man(a1-3)GlcNAc"])) == 2  # anchors defeat the canonical-string buckets, so every pair is compared
+    each_more_specific = ["Neu5Ac(a2-3/6)Gal(b1-4)GlcNAc(b1-2)Man", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2/4)Man"]  # neither covers the other, so both stay
+    assert sorted(deduplicate_glycans(each_more_specific)) == sorted(each_more_specific)
 
 
 def test_try_string_conversion():
@@ -4437,6 +4470,10 @@ def test_quantify_motifs():
     )
     assert isinstance(result, pd.DataFrame)
     assert len(result.columns) > 0
+    # compositions have no structural motifs, so their monosaccharides are quantified whatever the feature set
+    with pytest.warns(UserWarning, match = "Compositions carry no structural motifs"):
+        comp = quantify_motifs(df, glycans = ['H5N4', 'H5N4F1'], feature_set = ['known'])
+    assert comp.to_dict('index') == {'Hex': {'sample1': 15, 'sample2': 25}, 'HexNAc': {'sample1': 12, 'sample2': 20}, 'dHex': {'sample1': 2, 'sample2': 3}}
 
 
 def test_quantify_motifs_auto_glycans():
@@ -4973,6 +5010,8 @@ def test_draw_chem2d():
     # Test with unsupported glycan
     with patch('glycowork.motif.processing.IUPAC_to_SMILES', side_effect=Exception), pytest.raises(Exception):
         draw_chem2d("InvalidGlycan", ["GlcNAc"])
+    with pytest.raises(ValueError, match = r"No highlight color for \['Foo'\]"):  # every highlighted monosaccharide needs its SNFG hue
+        draw_chem2d("GlcNAc(b1-4)GlcA", "Foo")
 
 
 def test_draw_chem2d_file_formats(tmp_path):
@@ -4998,6 +5037,8 @@ def test_draw_chem3d():
     # Test basic 3D drawing
     draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc"])
     plt.close('all')
+    with pytest.raises(ValueError, match = r"No highlight color for \['Foo'\]"):
+        draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc", "Foo"])
     # Test with filepath
     draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc"], filepath="test.pdb")
     # Test with non-PDB filepath
@@ -6264,6 +6305,35 @@ def test_get_differential_expression():
             get_differential_expression(df_c, g1_c, g2_c, impute = False, covariates = bad)
     with pytest.raises(ValueError, match = "paired"):
         get_differential_expression(df_c, g1_c, g2_c, impute = False, covariates = cov, paired = True)
+    # The fit itself: a numeric covariate with more than two values is one standardized slope, each feature's group effect is the least-squares one over its
+    # measured samples (an unmeasured cell gets a solve of its own), and a feature with a group left unmeasured has no model
+    from glycowork.glycan_data.stats import _covariate_fit
+    rng = np.random.default_rng(3)
+    samples_f, groups_f = [f's{i}' for i in range(10)], [0] * 5 + [1] * 5
+    age = pd.Series(rng.normal(50, 10, 10), index = samples_f)
+    X_f = rng.normal(0, 1, (3, 10))
+    X_f[1, 2], X_f[2, :5] = np.nan, np.nan
+    adj, ssr, dfr, _, cvar, p = _covariate_fit(X_f, groups_f, pd.DataFrame({'age': age}), samples_f)
+    assert p == 1 and np.isnan(adj[2]).all() and np.isnan(ssr[2]) and dfr[:2].tolist() == [7, 6]
+    for i in (0, 1):
+        m = np.isfinite(X_f[i])
+        D = np.column_stack([np.ones(m.sum()), np.array(groups_f)[m], age.to_numpy()[m]])
+        beta, res = np.linalg.lstsq(D, X_f[i][m], rcond = None)[:2]
+        n1 = m[:5].sum()
+        assert np.isclose(ssr[i], res[0]) and np.isclose(adj[i][m][n1:].mean() - adj[i][m][:n1].mean(), beta[1]) and np.isclose(cvar[i], np.linalg.inv(D.T @ D)[1, 1])
+    assert np.allclose(_covariate_fit(X_f[1:2], groups_f, age.to_dict(), samples_f)[0][0], adj[1], equal_nan = True)  # no feature measured everywhere: each one solved on its own
+    with pytest.raises(ValueError, match = "missing values"):
+        _covariate_fit(X_f, groups_f, age.where(age.index != 's3'), samples_f)
+    # Motifs: the residual and redistribution tests of the decomposition go through the same model; a covariate that adds no column leaves every test as without it
+    skin = glycomics_data_loader.human_skin_O_PMC5871710_BCC
+    samples_s = skin.columns[1:].tolist()
+    plain = get_differential_expression(skin, motifs = True, random_state = 0, paired = False).set_index('Glycan')
+    const = get_differential_expression(skin, motifs = True, random_state = 0, paired = False, covariates = pd.Series('x', index = samples_s)).set_index('Glycan')
+    assert np.allclose(const.loc[plain.index, ['p-val', 'Redistribution p-val']], plain[['p-val', 'Redistribution p-val']], equal_nan = True)
+    cov_s = pd.DataFrame({'status': rng.choice(['a', 'b'], len(samples_s)), 'age': rng.normal(50, 10, len(samples_s))}, index = samples_s)
+    adjusted = get_differential_expression(skin, motifs = True, random_state = 0, paired = False, covariates = cov_s)
+    decomposed = adjusted['Residual p-val'].notna()
+    assert decomposed.any() and adjusted.loc[decomposed, ['Residual p-val', 'Redistribution p-val']].stack().between(0, 1).all()
 
 
 def test_get_differential_expression_monte_carlo_glycoproteomics():
@@ -6315,6 +6385,22 @@ def test_absent_in_a_group_stays_out_of_the_reference():
     anova = anova.set_index('Glycan')
     assert not anova.loc[glycans[:-3], 'significant'].any() and anova.loc[glycans[-3:], 'p-val'].between(0, 1).all()
     assert all(posthoc[g]['lower'].isna().all() for g in glycans[-3:] if g in posthoc) and anova.loc[glycans[-3:], 'Effect size'].between(0, 1).all()
+    # with five per group, glycans seen only in group 1 are significant, and their post-hoc is Holm over pairwise Fisher tests (5/5 vs 0/5: p = 2 / C(10, 5))
+    # (sample spread 0.3, as the variance filter skips features whose log2 variance is below 0.02)
+    rng5 = np.random.default_rng(0)
+    X5 = rng5.lognormal(2, 0.5, (len(glycans), 1)) * rng5.lognormal(0, 0.3, (len(glycans), 15))
+    X5[-2:, 5:] = 0
+    df5 = pd.DataFrame(X5, columns = [f's{k}' for k in range(15)])
+    df5.insert(0, 'glycan', glycans)
+    anova5, posthoc5 = get_glycanova(df5, groups = [1] * 5 + [2] * 5 + [3] * 5, random_state = 0)
+    assert anova5.set_index('Glycan').loc[glycans[-2:], 'significant'].all()
+    for g in glycans[-2:]:
+        assert np.allclose(posthoc5[g]['p-adj'], [3 * 2 / 252, 3 * 2 / 252, 1]) and posthoc5[g]['reject'].tolist() == [True, True, False] and posthoc5[g]['upper'].isna().all()
+    # a glycan listed twice, one copy undetected in group 2: the floored copy is dropped and the measured one tested as if it stood alone
+    g5_1, g5_2 = [f's{k}' for k in range(5)], [f's{k}' for k in range(5, 10)]
+    single = get_differential_expression(df5.iloc[:-2], group1 = g5_1, group2 = g5_2, random_state = 0).set_index('Glycan')
+    twice = get_differential_expression(pd.concat([df5.iloc[:-2], df5.iloc[[0]].assign(**{s: 0.0 for s in g5_2})], ignore_index = True), group1 = g5_1, group2 = g5_2, random_state = 0).set_index('Glycan')
+    assert not twice.index.duplicated().any() and np.allclose(twice.loc[single.index, ['Log2FC', 'p-val', 'Effect size']], single[['Log2FC', 'p-val', 'Effect size']], rtol = 1e-6)
     p, h = detection_test(np.array([[1, 1, 1, 0, 0, 0], [1, 0, 0, 1, 0, 0]], bool), [[0, 1, 2], [3, 4, 5]])
     assert np.allclose(p, [0.1, 1.0]) and np.allclose(h, [-np.pi, 0])
 
@@ -6416,6 +6502,17 @@ def test_get_glycanova():
     adjusted, posthoc_c = get_glycanova(df_c, labels, impute = False, random_state = 0, covariates = pd.Series(np.where(non, 'non', 'sec'), index = samples_c))
     adjusted = adjusted.set_index('Glycan')
     assert plain.loc[glycans_c[0], 'p-val'] > 0.05 and adjusted.loc[glycans_c[0], 'p-val'] < 1e-5 and list(posthoc_c) == adjusted.index[adjusted['significant']].tolist()
+    # Motifs: the residual parts by ANCOVA and the redistribution by PERMANOVA on balances with their covariate part removed; a covariate that adds no column changes nothing
+    skin = glycomics_data_loader.human_skin_O_PMC5871710_BCC
+    samples_s = skin.columns[1:].tolist()
+    labels_s = [1 + i % 3 for i in range(len(samples_s))]
+    plain = get_glycanova(skin, groups = labels_s, motifs = True, random_state = 0)[0].set_index('Glycan')
+    const = get_glycanova(skin, groups = labels_s, motifs = True, random_state = 0, covariates = pd.Series('x', index = samples_s))[0].set_index('Glycan')
+    assert np.allclose(const.loc[plain.index, ['p-val', 'Redistribution p-val']], plain[['p-val', 'Redistribution p-val']], equal_nan = True)
+    cov_s = pd.DataFrame({'status': rng.choice(['a', 'b'], len(samples_s)), 'age': rng.normal(50, 10, len(samples_s))}, index = samples_s)
+    adjusted = get_glycanova(skin, groups = labels_s, motifs = True, random_state = 0, covariates = cov_s)[0]
+    decomposed = adjusted['Residual p-val'].notna()
+    assert decomposed.any() and adjusted.loc[decomposed, ['Residual p-val', 'Redistribution p-val']].stack().between(0, 1).all()
 
 
 def test_select_grouping():
@@ -6439,6 +6536,9 @@ def test_select_grouping():
     glycan_groups, pval_groups = select_grouping(cohort_b, cohort_a, glycans, p_values, grouped_BH=True)
     assert isinstance(glycan_groups, dict)
     assert isinstance(pval_groups, dict)
+    # a grouping that leaves a glycan alone (one sialylated, one not) is no grouping, so all glycans stay one family
+    sia_glycans = ['Neu5Ac(a2-3)Gal(b1-4)GlcNAc', 'Man(a1-6)Man']
+    assert select_grouping(cohort_b, cohort_a, sia_glycans, p_values, grouped_BH = True) == ({'group1': sia_glycans}, {'group1': p_values})
     n_glycans = ['Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Man(a1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
                  'GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc']
     glycan_groups, pval_groups = select_grouping(pd.DataFrame({'a': [1, 2, 3, 4]}), pd.DataFrame({'b': [2, 3, 4, 5]}), n_glycans, [0.01, 0.02, 0.03, 0.04], grouped_BH = True)
@@ -6659,6 +6759,9 @@ def test_get_SparCC():
     _, grouped = get_SparCC(df1, df2, motifs = True)
     _, flat = get_SparCC(df1, df2, motifs = False)
     assert grouped.shape != flat.shape or not np.allclose(grouped.values, flat.values)
+    # six samples: exact Spearman p-values, so a perfect rank correlation is 2 of 720 orders, never the t approximation's p far below that
+    corr6, pvals6 = get_SparCC(df1.iloc[:, :7], df2.iloc[:, :7], transform = "Nothing")
+    assert (corr6.abs().values > 1 - 1e-9).any() and (pvals6.values >= 2 / 720 - 1e-12).all()
 
 
 def test_get_SparCC_uncertain_topology():
@@ -8050,6 +8153,26 @@ def test_get_differential_biosynthesis(abundance_data):
         whole = get_differential_biosynthesis(branched, group1 = ['s0', 's1', 's2'], group2 = ['s3', 's4', 's5'], analysis = analysis)
         halves = get_differential_biosynthesis(split, group1 = ['s0', 's1', 's2'], group2 = ['s3', 's4', 's5'], analysis = analysis)
         pd.testing.assert_frame_equal(whole, halves.loc[whole.index])
+    # Biosynthetic steps: core 1 alpha1-2 fucosylation 2.5-fold up in group 2, and missing from four non-secretor-like samples (two per group). As a step
+    # (H type 3 over its parent) the increase is buried in the non-secretor variance; with secretor status as covariate it is the clearest step
+    rng = np.random.default_rng(0)
+    oglycans = ['Gal(b1-3)GalNAc', 'Fuc(a1-2)Gal(b1-3)GalNAc', 'Neu5Ac(a2-3)Gal(b1-3)GalNAc', 'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc', 'Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc',
+                'Gal(b1-3)[GlcNAc(b1-6)]GalNAc', 'Gal(b1-3)[Gal(b1-4)GlcNAc(b1-6)]GalNAc', 'Fuc(a1-2)Gal(b1-3)[Gal(b1-4)GlcNAc(b1-6)]GalNAc', 'GlcNAc(b1-3)GalNAc',
+                'Gal(b1-4)GlcNAc(b1-3)GalNAc']
+    samples = [f's{i}' for i in range(16)]
+    X = 2 ** (rng.normal(3, 0.5, (len(oglycans), 1)) + rng.normal(0, 0.25, (len(oglycans), 16)))
+    X[[1, 7], 8:] *= 2.5
+    non = np.isin(np.arange(16), [0, 1, 8, 9])
+    X[np.ix_([1, 7], np.flatnonzero(non))] /= 30
+    odf = pd.DataFrame(X, columns = samples)
+    odf.insert(0, 'glycan', oglycans)
+    cov = pd.Series(np.where(non, 'non', 'sec'), index = samples)
+    plain = get_differential_biosynthesis(odf, samples[:8], samples[8:], analysis = 'steps')
+    adjusted = get_differential_biosynthesis(odf, samples[:8], samples[8:], analysis = 'steps', covariates = cov)
+    assert not plain.loc['H_type3', 'significant'] and adjusted.index[0] == 'H_type3' and adjusted.loc['H_type3', 'significant'] and adjusted.loc['H_type3', 'Log2FC'] > 0.9
+    assert adjusted.attrs['test'] == 'moderated t-test with covariates' and 'with covariates' in get_differential_biosynthesis(odf, samples[:8], samples[8:], covariates = cov).attrs['test']
+    with pytest.raises(ValueError, match = "paired"):
+        get_differential_biosynthesis(odf, samples[:8], samples[8:], analysis = 'steps', paired = True, covariates = cov)
     results = get_differential_biosynthesis(
         abundance_data,
         group1=[1,2],
@@ -9145,6 +9268,10 @@ def test_read_glycomics_skyline():
     wide = pd.DataFrame({'Protein Name': ['AB', 'AB'], 'Peptide': ['H1N1S1', 'H1N1S1'], 'Molecule Note': ['24.1-HexNAc', '25.4-HexNAc'], 'Precursor Charge': ['1', '1'],
                          '01_Ogly Total Area MS1': ['172056016', '43020300'], '01_Ogly Normalized Area': ['1.7E+8', '4.3E+7'], '02_Ogly Total Area MS1': ['1', '#N/A']})
     assert read_glycomics(wide).to_dict('list') == {'glycan': ['H1N1A1'], '01_Ogly': [215076316.0], '02_Ogly': [1.0]}
+    # replicates whose Sample Type marks them as no study sample (blank, QC, standard) are left out, with a warning
+    typed = long.assign(**{'Sample Type': ['Unknown', 'Quality Control', 'Unknown', 'Quality Control', 'Unknown', 'Unknown']})
+    with pytest.warns(UserWarning, match = "1 Skyline replicates marked as blank"):
+        assert read_glycomics(typed).columns.tolist() == ['glycan', 'ctrl']
 
 
 def test_read_glycomics_summary_files(tmp_path):
@@ -10937,7 +11064,7 @@ def test_tokenization_edge_cases():
 
 def test_looks_like_linearcode():
     assert not looks_like_linearcode('Ma3#Mb4GN')  # illegal character
-    assert not looks_like_linearcode('Ma3(Mb4GN')  # unbalanced parenthesis
+    assert not looks_like_linearcode('Ma3(Mb4GN') and not looks_like_linearcode('Ma3)Mb4GN(')  # unbalanced or misordered parentheses
     assert not looks_like_linearcode('FA2G2Ga2')  # a residue letter directly followed by a count is Oxford
     assert looks_like_linearcode('GN') and looks_like_linearcode('NNa') and not looks_like_linearcode('G')  # a lone two-letter residue code
     assert canonicalize_iupac('GN') == 'GlcNAc' and canonicalize_iupac('NJ') == 'Neu5Gc'
@@ -11144,6 +11271,15 @@ def test_lazy_loader_missing_metadata():
     loader = LazyLoader("glycowork", "motif")  # directory without contrasts.csv/datasets_metadata.csv
     loader._load_contrasts()
     assert loader._contrasts_map == {} and loader._paired_map == {} and loader._provenance_map == {}
+    # a sample listed under two groups raises, since the loader keeps one group per sample and the last row would silently win
+    tmp_dir = Path("test_tmp_contrasts")
+    tmp_dir.mkdir(exist_ok = True)
+    (tmp_dir / "contrasts.csv").write_text("dataset,group,samples,paired\nglycomics_x,KO1,\"s1,s2\",False\nglycomics_x,KO2,\"s2,s3\",False\n", encoding = 'utf-8')
+    try:
+        with patch('glycowork.glycan_data.loader.resources.files', return_value = tmp_dir), pytest.raises(ValueError, match = "'s2' is in both 'KO1' and 'KO2'"):
+            LazyLoader("glycowork", "glycan_data")._load_contrasts()
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors = True)
 
 
 def test_permanova_with_permutation_sampled():
