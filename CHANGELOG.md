@@ -11,8 +11,11 @@
 #### draw
 ##### Added ✨
 - `GlycanDrawing.as_markdown(size = 16)` returns the drawing as an inline `<img>` (base64 SVG data URI) for Markdown text, e.g., `IPython.display.Markdown(f'... {d.as_markdown()} ...')`, scaled so each monosaccharide symbol is `size` px tall (ba25f21)
+- `GlycanDrawing.as_sticker()` returns any drawing as a die-cut sticker, exactly as `GlycoDraw(..., sticker = True)` would have drawn it, e.g., for slides or pages with a dark background ()
+- frontends with a dark background can set `GLYCOWORK_DARK_DISPLAY=1`, and drawings then display, and inline with `as_markdown`, as die-cut stickers ()
 
 ##### Changed 🔄
+- a sticker drawing (`sticker = True`) now displays on a transparent background in notebooks, so it looks the same in light and dark themes, instead of on a white box ()
 
 ##### Fixed 🐛
 - `plot_glycans_excel` leaves the cell of a motif defined by a glyco-regex (such as `Nglycan_complex` in motif-level `get_differential_expression` results) empty instead of failing the whole export, as `annotate_figure` already did (a1ae680)

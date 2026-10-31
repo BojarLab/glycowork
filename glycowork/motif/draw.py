@@ -5,6 +5,7 @@ from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, graph_to_string, resolve_anchor
 from glycowork.motif.tokenization import get_core, get_modification, SIALIC_KEYS
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit, is_composition, canonicalize_composition, _COMP_ORDER, PDB_TO_IUPAC
+import copy
 import os
 import warnings
 import html
@@ -1120,6 +1121,19 @@ def _returns_drawing() -> bool:
     return is_jupyter() or os.environ.get('GLYCOWORK_RICH_DISPLAY') == '1'
 
 
+def _dark_display() -> bool:
+    "Whether the frontend shows drawings on a dark background (GLYCOWORK_DARK_DISPLAY=1, as the slate editor's console sets), where they display as die-cut stickers"
+    return os.environ.get('GLYCOWORK_DARK_DISPLAY') == '1'
+
+
+def _margin(dim: float, # Base dimension for scaling
+            shadow: bool = False, # Drop shadow under the symbols
+            sticker: bool = False # Die-cut sticker
+           ) -> float: # Canvas margin around what was drawn
+    "Room around a drawing for its sticker cut or shadow, so neither is clipped at the canvas edge"
+    return dim * (0.45 if sticker else 0.35 if shadow else 0.2)
+
+
 def display_svg_with_matplotlib(
         svg_data: Any, # SVG drawing object
         chem: bool = False, # Whether svg_data comes from RDKit chemical
@@ -1433,12 +1447,25 @@ class GlycanDrawing:
         with open(filepath, 'w', encoding = "utf-8") as f:
             f.write(self.as_standalone_svg())
 
+    def as_sticker(self) -> GlycanDrawing: # The drawing as a die-cut sticker
+        "The drawing as GlycoDraw(..., sticker = True) draws it, e.g., for a dark background; this drawing stays as it is"
+        if self.sticker:
+            return self
+        # A sticker's cut and its shadow need a wider margin than the drawing was made with
+        extra = _margin(self.dim, sticker = True) - _margin(self.dim, shadow = self.shadow)
+        canvas = copy.copy(self.drawing_obj)
+        x, y, w, h = canvas.view_box
+        canvas.view_box = (x - extra, y - extra, w + 2 * extra, h + 2 * extra)
+        canvas.width, canvas.height = canvas.width + 2 * extra, canvas.height + 2 * extra
+        return GlycanDrawing(canvas, sticker = True, vertical = self.vertical, alt_text = self.alt_text, dim = self.dim)
+
     def as_markdown(self,
                     size: float = 14  # Height of one monosaccharide symbol in pixels, about that of a line of text
     ) -> str:  # HTML <img> tag with the drawing as an SVG data URI
-        "Inline image of the drawing for Markdown text, e.g., Markdown(f'binds {d.as_markdown()}')"
-        data = base64.b64encode(self.as_standalone_svg().encode('utf-8')).decode('ascii')
-        h = max(1, round(self.drawing_obj.height * size / self.dim))
+        "Inline image of the drawing for Markdown text, e.g., Markdown(f'binds {d.as_markdown()}'); a die-cut sticker where GLYCOWORK_DARK_DISPLAY=1"
+        drawing = self.as_sticker() if _dark_display() else self
+        data = base64.b64encode(drawing.as_standalone_svg().encode('utf-8')).decode('ascii')
+        h = max(1, round(drawing.drawing_obj.height * size / self.dim))
         # An <img>, not ![alt](...), since glycan brackets would end the alt text. The height goes in twice: Jupyter's
         # stylesheet (img {height: auto}) overrides the attribute, and GitHub strips style
         return (f'<img src="data:image/svg+xml;base64,{data}" alt="{self.alt_text or ""}" '
@@ -1464,11 +1491,13 @@ class GlycanDrawing:
         return self
 
     def _repr_png_(self):
+        drawing = self.as_sticker() if _dark_display() else self
         _, convert_svg_to_png = _get_glycorender()
-        # Rendered at twice its size but displayed at its size, so high-DPI screens show it crisp
-        png = convert_svg_to_png(self.as_svg(), None, scale = 2.0, return_bytes = True, shadow = self.shadow,
-                                 sticker = self.sticker, background = (1.0, 1.0, 1.0))
-        return png, {'width': self.drawing_obj.width, 'height': self.drawing_obj.height}
+        # Rendered at twice its size but displayed at its size, so high-DPI screens show it crisp. A sticker brings its
+        # own white cut and stays transparent around it, on light and dark pages alike
+        png = convert_svg_to_png(drawing.as_svg(), None, scale = 2.0, return_bytes = True, shadow = drawing.shadow,
+                                 sticker = drawing.sticker, background = None if drawing.sticker else (1.0, 1.0, 1.0))
+        return png, {'width': drawing.drawing_obj.width, 'height': drawing.drawing_obj.height}
 
 
 def _finish_drawing(
@@ -1698,7 +1727,7 @@ def _finish_drawing(
         c_x, c_y = (x0 + x1) / 2, (y0 + y1) / 2
         d.args['transform'] = f'rotate(90 {c_x} {c_y})'
         x0, y0, x1, y1 = c_x - (y1 - y0) / 2, c_y - (x1 - x0) / 2, c_x + (y1 - y0) / 2, c_y + (x1 - x0) / 2
-    margin = dim * (0.45 if sticker else 0.35 if shadow else 0.2)
+    margin = _margin(dim, shadow = shadow, sticker = sticker)
     # Namespace the element IDs per drawing, so that several GlycoDraw SVGs inlined into one HTML document do not resolve each other's <use> references
     tag = hashlib.blake2s(repr(id_key).encode(), digest_size = 4).hexdigest()
     d2 = draw.Drawing(x1 - x0 + 2 * margin, y1 - y0 + 2 * margin, origin = (x0 - margin, y0 - margin),

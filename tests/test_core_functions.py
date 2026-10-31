@@ -11334,6 +11334,29 @@ def test_GlycoDraw_rescue_and_bad_method():
     assert GlycoDraw("Gal(b1-4)GlcNAc(b1-3)", repeat = True, highlight_linkages = [0], suppress = True) is not None
 
 
+def test_GlycanDrawing_as_sticker(monkeypatch):
+    from io import BytesIO
+    from PIL import Image
+    # the same SVG as drawing with sticker = True, but for glycorender's per-document filter IDs
+    ids = lambda svg: re.sub(r'grad\d+_', '', svg)
+    for glycan, kwargs in [("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc", {}), ("Gal(b1-3)GalNAc", {'shadow': True}),
+                           ("Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc", {'vertical': True}),
+                           ("Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc", {'compact': True}), ("Gal(b1-3)GalNAc", {'dim': 80})]:
+        plain = GlycoDraw(glycan, suppress = True, **kwargs)
+        native = GlycoDraw(glycan, suppress = True, sticker = True, **{k: v for k, v in kwargs.items() if k != 'shadow'})
+        assert ids(plain.as_sticker().as_standalone_svg()) == ids(native.as_standalone_svg())
+        assert not plain.sticker and plain.drawing_obj.width < native.drawing_obj.width
+    # a sticker's PNG is transparent around its cut, a plain drawing's white
+    corner = lambda d: Image.open(BytesIO(d._repr_png_()[0])).convert('RGBA').getpixel((0, 0))
+    assert corner(GlycoDraw("Gal(b1-3)GalNAc", suppress = True, sticker = True))[3] == 0
+    assert corner(GlycoDraw("Gal(b1-3)GalNAc", suppress = True)) == (255, 255, 255, 255)
+    # a frontend with a dark background gets stickers from plain drawings, in its display and in Markdown
+    monkeypatch.setenv('GLYCOWORK_DARK_DISPLAY', '1')
+    plain = GlycoDraw("Gal(b1-3)GalNAc", suppress = True)
+    assert corner(plain)[3] == 0
+    assert 'feDropShadow' in base64.b64decode(plain.as_markdown().split('base64,')[1].split('"')[0]).decode('utf-8')
+
+
 def test_GlycanDrawing_save_and_png(tmp_path):
     d = GlycoDraw("Gal(b1-4)Glc", suppress = True, shadow = True)
     d.save_svg(str(tmp_path / "x.svg"))
