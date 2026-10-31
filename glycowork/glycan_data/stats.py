@@ -1164,6 +1164,57 @@ def dag_neighbors(index: list[str], # feature labels in the order they are teste
             for g in index]
 
 
+def _covariate_fit(X: np.ndarray, # features x samples, NaN where a cell was never measured
+                   groups: np.ndarray | list, # group label of each sample, in column order
+                   covariates: pd.DataFrame | pd.Series | dict, # per-sample nuisance variables indexed by sample name (a dict maps sample name to the value of one covariate)
+                   samples: list # sample names in column order
+                   ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, int]: # (adjusted values, residual SS, residual df, group SS given the covariates, variance factor of group 2 - group 1, covariate columns)
+    "Fits every feature as group means plus covariates (y = G.beta + Z.gamma) and returns the values with the covariate part removed, so group means of the adjusted values are the adjusted group effects, together with what a t or F test of the groups needs"
+    cov = covariates.copy() if isinstance(covariates, pd.DataFrame) else pd.Series(covariates).to_frame()
+    missing = [s for s in samples if s not in cov.index]
+    if missing:
+        raise ValueError(f"covariates has no value for samples {missing[:5]}{' ...' if len(missing) > 5 else ''}; index it by sample name, with a value for every sample tested.")
+    cov = cov.loc[list(samples)]
+    if cov.isna().any().any():
+        raise ValueError(f"covariates has missing values for {cov.index[cov.isna().any(axis = 1)].tolist()[:5]}; every tested sample needs a value.")
+    parts = []
+    for c in cov.columns:
+        v = cov[c]
+        # a numeric covariate with more than two values is a slope; anything else (status, sex, batch, a 0/1 flag) is a factor with one column per level beyond the first
+        if pd.api.types.is_numeric_dtype(v) and not pd.api.types.is_bool_dtype(v) and v.nunique() > 2:
+            parts.append(((v - v.mean()) / (v.std() or 1)).to_numpy(dtype = float)[:, None])
+        else:
+            parts.append(pd.get_dummies(v.astype(str), drop_first = True, dtype = float).to_numpy())
+    Z = np.hstack(parts) if parts else np.zeros((len(samples), 0))
+    Z = Z[:, Z.std(axis = 0) > 0]
+    Z = Z - Z.mean(axis = 0)  # centered, so removing the covariate part leaves each feature's overall level where it was
+    levels, codes = np.unique(np.asarray(groups), return_inverse = True)
+    G = (codes[:, None] == np.arange(len(levels))).astype(float)
+    full, reduced = np.hstack([G, Z]), np.hstack([np.ones((len(codes), 1)), Z])
+    if np.linalg.matrix_rank(full) < full.shape[1]:
+        raise ValueError("The covariates are confounded with the groups (a covariate level occurs in only one group, or a covariate repeats the grouping), so no group effect can be told apart from them.")
+    n, p = X.shape[0], Z.shape[1]
+    adj, ssr, dfr, ssb, cvar = np.full(X.shape, np.nan), np.full(n, np.nan), np.full(n, np.nan), np.full(n, np.nan), np.full(n, np.nan)
+    ok = np.isfinite(X)
+    # one least-squares solve for every feature measured in every sample, a solve per feature for the rest (glycoproteomics leaves unmeasured cells NaN)
+    for rows, cols in ([np.flatnonzero(ok.all(axis = 1)), np.ones(X.shape[1], dtype = bool)],) + tuple(([i], ok[i]) for i in np.flatnonzero(~ok.all(axis = 1))):
+        if not len(rows):
+            continue
+        Xf, Xr, Y = full[cols], reduced[cols], X[np.ix_(rows, np.flatnonzero(cols))].T
+        if not Xf[:, :len(levels)].any(axis = 0).all() or Xf.shape[0] <= Xf.shape[1] or np.linalg.matrix_rank(Xf) < Xf.shape[1]:
+            continue  # a group without measured samples, too few samples for the model, or the covariates confounded with the groups among them
+        bf, br = np.linalg.lstsq(Xf, Y, rcond = None)[0], np.linalg.lstsq(Xr, Y, rcond = None)[0]
+        res = Y - Xf @ bf
+        ssr[rows] = (res ** 2).sum(axis = 0)
+        ssb[rows] = ((Y - Xr @ br) ** 2).sum(axis = 0) - ssr[rows]
+        dfr[rows] = Xf.shape[0] - Xf.shape[1]
+        adj[np.ix_(rows, np.flatnonzero(cols))] = (Y - Z[cols] @ bf[Xf.shape[1] - p:]).T
+        if len(levels) == 2:
+            V = np.linalg.inv(Xf.T @ Xf)
+            cvar[rows] = V[0, 0] + V[1, 1] - 2 * V[0, 1]
+    return adj, ssr, dfr, ssb, cvar, p
+
+
 def meta_analysis(effect_sizes: np.ndarray | list[float], # per-study effect sizes
                   variances: np.ndarray | list[float], # variance of each effect size
                   model: str = 'random', # 'fixed' or 'random' effects

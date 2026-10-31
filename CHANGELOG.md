@@ -57,6 +57,9 @@
 - `GlycoDraw` `.png` outputs are now much faster (364808d)
 
 #### analysis
+##### Added ✨
+- Added the new `covariates` keyword argument to `get_differential_expression` and `get_glycanova` to include per-sample covariates (e.g., secretor status, sex, age, batch) ()
+
 ##### Changed 🔄
 - `get_glycanova`'s Tukey post-hoc p-values are now ~13x faster to compute (16 groups: 1,173 to 97 s) and stay accurate for very small p-values, which were noise below ~1e-11 before (096a01e)
 

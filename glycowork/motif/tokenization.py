@@ -35,6 +35,7 @@ _SPECIAL_MODS = {
 _VALID_COMPONENTS = {'Hex', 'dHex', 'HexNAc', 'HexN', 'HexA', 'Neu5Ac', 'Neu5Gc', 'Kdn', 'Pen', 'Me', 'S', 'P', 'PCho', 'PEtN', 'Ac', '-H2O', '+N3', '-H',
                      'Neu5Ac_a2-6', 'Neu5Ac_a2-3', 'Neu5Gc_a2-6', 'Neu5Gc_a2-3', 'Kdn_a2-6', 'Kdn_a2-3'}
 _COUNTED_MODS = re.compile(r'^(?:[DL]-)?f?|-ol$|1(?:Ser|Thr|Asn|Cer)|[\dO]*(?:/\d+)*(?:PCho|PEtN|Ac|Me|S|P)')  # what glycan_to_composition accounts for beyond a residue's core: enantiomer, furanose, alditol, the dropped aglycones, and the substituents it counts
+_DEHYDRATED = re.compile(r'(?<![\w,-])(?:[DL]-4dThrHexA4en([^()]*)|\d,\d-Anhydro-([^()]+))(?=\(|$)')  # a residue that is its core minus water: a lyase's 4,5-unsaturated uronic acid (DeltaUA, of HexA) or an intramolecular anhydro sugar (3,6-Anhydro-Gal)
 _COMPOSITION_INDEX = {}
 _MZ_POOL = {}  # (kingdom, glycan_class) or ('custom', glycan_class) -> (source frame, unique composition item-tuples, {(mass_value, sample_prep, modification, filter_out): (compositions, masses)}) for mz_to_composition
 _MASS_CACHE = {}  # (composition item-tuple, mass_value, sample_prep, modification) -> composition_to_mass result
@@ -589,6 +590,15 @@ def glycan_to_composition(glycan: str, # Glycan in IUPAC-condensed format
         if n := glycan.count(mod):  # every occurrence counts, as replace swaps them all at once
             diff_moieties.update({moiety: n for moiety in info['diff_moiety']})
             glycan = glycan.replace(mod, info['replacement'])
+
+    def dehydrate(m):  # the residue as its core plus '-H2O', where glycowork knows the core with its substituents
+        core = 'HexA' + m[1] if m[2] is None else m[2]
+        if (core[:-3] if core.endswith('-ol') else core) not in stem_libr:
+            return m[0]
+        diff_moieties['-H2O'] += 1
+        return core
+
+    glycan = _DEHYDRATED.sub(dehydrate, glycan)
     # an alditol of a lib residue (GalNAc-ol, the reduced end of most O-glycans, is not in lib) has the residue's composition
     letters = [k[:-3] if k.endswith('-ol') and k not in stem_libr and k[:-3] in stem_libr else k for k in min_process_glycans([glycan])[0]]
     if unknown := [k for k in letters if '/' not in k and k not in stem_libr and not IS_LINKAGE(k)]:  # a linkage needs no core, and canonicalize_iupac writes ones lib may lack (Kdo(?2-4), Glc(?1-1))

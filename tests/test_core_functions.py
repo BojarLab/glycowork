@@ -1541,6 +1541,12 @@ def test_glycan_to_composition():
     # Test lactonization
     result = glycan_to_composition("Neu1,7lactone5,9Ac2(a2-3)Gal(b1-4)Glc")
     assert result == {'Neu5Ac': 1, 'Hex': 2, '-H2O': 1, 'Ac': 1}
+    # a residue that is its core minus water (a lyase's unsaturated uronic acid, an anhydro sugar) counts as the core plus '-H2O'; one whose core glycowork does not know keeps an empty composition
+    assert glycan_to_composition("L-4dThrHexA4en(?1-4)Rha3S") == {'HexA': 1, 'dHex': 1, 'S': 1, '-H2O': 1}
+    assert glycan_to_composition(canonicalize_iupac('D2S6')) == {'HexA': 1, 'HexN': 1, 'S': 3, '-H2O': 1}
+    assert glycan_to_composition("3,6-Anhydro-Gal2S(a1-3)Gal4S") == {'Hex': 2, 'S': 2, '-H2O': 1}
+    assert round(glycan_to_mass("3,6-Anhydro-Gal(a1-3)Gal4S"), 4) == 404.0625
+    assert glycan_to_composition("L-4dThrHexA4en6N(a1-4)GlcNAc") == glycan_to_composition("Gal(b1-4)3,6-Anhydro-L-Gal2Me(a1-3)Gal") == {}
     result = glycan_to_composition("{Fuc(a1-2/3)}{HexNAc4/6S(b1-4/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc")
     assert result == {'Hex': 4, 'HexNAc': 5, 'dHex': 2, 'S': 1}
     # An anchored bit carries more information than the merged form but exactly the same atoms
@@ -1558,7 +1564,7 @@ def test_glycan_to_composition():
                                                                                                  'Neu5Ac': 1, 'S': 1}
     # a substituent no composition key covers makes the composition unknown rather than silently dropped (Gal4Pyr6Pyr is no Hex, Rha4N no dHex)
     for g in ("Gal4Pyr6Pyr(b1-4)Glc", "D-Rha4N(a1-2)D-Rha4N", "GalNAc6Aep(b1-4)Glc", "GlcNAcA(b1-4)Glc",
-              "Glc(b1-4)Glc1Pam", "3,6-Anhydro-Gal(a1-3)Gal"):
+              "Glc(b1-4)Glc1Pam"):
         assert glycan_to_composition(g) == {}
     assert glycan_to_composition("Rhaf(a1-3)Gal1Cer3S") == {'dHex': 1, 'Hex': 1, 'S': 1}
     # counted by linkage, as a linkage-specific sialic acid derivatization tells a2-6 from the lactone-forming a2-3/8/9; an unknown one stays Neu5Ac
@@ -6237,6 +6243,27 @@ def test_get_differential_expression():
     indexed = df.set_index(df.columns[0])
     assert get_differential_expression(indexed, group1 = group1, group2 = group2, impute = False, random_state = 0).equals(get_differential_expression(df, group1 = group1, group2 = group2, impute = False, random_state = 0))
     assert get_jtk(indexed, timepoints = 2, interval = 12, random_state = 0).equals(get_jtk(df, timepoints = 2, interval = 12, random_state = 0))
+    # Covariates: five glycans 4 log2 lower in six non-secretor-like samples (three per group), one of them 1 log2 higher in group 2. Bundled, the covariate
+    # inflates the within-group variance (p 0.06); fit as group plus covariate, the group effect stands out, with the same log2FC on this balanced design
+    rng = np.random.default_rng(0)
+    glycans_c, samples_c = [f'Hex{i + 3}HexNAc{2 + i % 3}' for i in range(30)], [f's{i}' for i in range(24)]
+    non = np.isin(np.arange(24), [0, 1, 2, 12, 13, 14])
+    X = 2 ** (rng.normal(4, 0.4, (30, 1)) + rng.normal(0, 0.4, (30, 24)))
+    X[:5, non] /= 16
+    X[0, 12:] *= 2
+    df_c = pd.DataFrame(X, columns = samples_c)
+    df_c.insert(0, 'glycan', glycans_c)
+    g1_c, g2_c, cov = samples_c[:12], samples_c[12:], pd.Series(np.where(non, 'non', 'sec'), index = samples_c)
+    plain = get_differential_expression(df_c, g1_c, g2_c, impute = False, random_state = 0).set_index('Glycan')
+    adjusted = get_differential_expression(df_c, g1_c, g2_c, impute = False, random_state = 0, covariates = cov).set_index('Glycan')
+    assert not plain['significant'].any() and adjusted.index[adjusted['significant']].tolist() == [glycans_c[0]] and adjusted.loc[glycans_c[0], 'p-val'] < 1e-6
+    assert np.isclose(adjusted.loc[glycans_c[0], 'Log2FC'], plain.loc[glycans_c[0], 'Log2FC'])
+    assert adjusted.equals(get_differential_expression(df_c, g1_c, g2_c, impute = False, random_state = 0, covariates = cov.to_dict()).set_index('Glycan'))
+    for bad, msg in ((pd.Series(['a'] * 12 + ['b'] * 12, index = samples_c), 'confounded'), (cov.iloc[:-1], 'no value for samples')):
+        with pytest.raises(ValueError, match = msg):
+            get_differential_expression(df_c, g1_c, g2_c, impute = False, covariates = bad)
+    with pytest.raises(ValueError, match = "paired"):
+        get_differential_expression(df_c, g1_c, g2_c, impute = False, covariates = cov, paired = True)
 
 
 def test_get_differential_expression_monte_carlo_glycoproteomics():
@@ -6375,6 +6402,20 @@ def test_get_glycanova():
         assert np.allclose(_studentized_range_sf(q, 2, dof), 2 * t_dist.sf(q / np.sqrt(2), dof), rtol = 1e-9, atol = 0)
     assert _studentized_range_sf(np.array([np.inf]), 3, 10)[0] == 0 and np.isnan(_studentized_range_sf(np.array([np.nan]), 3, 10)[0])
     assert _studentized_range_sf(np.linspace(0, 6, 200), 5, 20).shape == (200,)  # computed in chunks of 64
+    # Covariates: the groups are tested by ANCOVA, so a glycan shifted by a covariate in two samples per group shows its group effect (p 0.36 bundled)
+    rng = np.random.default_rng(1)
+    glycans_c, samples_c = [f'Hex{i + 3}HexNAc{2 + i % 3}' for i in range(30)], [f's{i}' for i in range(24)]
+    non = np.isin(np.arange(24), [0, 1, 8, 9, 16, 17])
+    X = 2 ** (rng.normal(4, 0.4, (30, 1)) + rng.normal(0, 0.4, (30, 24)))
+    X[:5, non] /= 16
+    X[0, 16:] *= 2
+    df_c = pd.DataFrame(X, columns = samples_c)
+    df_c.insert(0, 'glycan', glycans_c)
+    labels = [1] * 8 + [2] * 8 + [3] * 8
+    plain = get_glycanova(df_c, labels, impute = False, random_state = 0)[0].set_index('Glycan')
+    adjusted, posthoc_c = get_glycanova(df_c, labels, impute = False, random_state = 0, covariates = pd.Series(np.where(non, 'non', 'sec'), index = samples_c))
+    adjusted = adjusted.set_index('Glycan')
+    assert plain.loc[glycans_c[0], 'p-val'] > 0.05 and adjusted.loc[glycans_c[0], 'p-val'] < 1e-5 and list(posthoc_c) == adjusted.index[adjusted['significant']].tolist()
 
 
 def test_select_grouping():

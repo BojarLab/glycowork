@@ -35,7 +35,7 @@ from glycowork.glycan_data.stats import (cohen_d, _ttest_pvalue, _studentized_ra
                                          omega_squared, moderated_variance, dag_neighbors,
                                          get_glycoform_diff, process_glm_results, partial_corr,
                                          estimate_technical_variance,
-                                         perform_tests_monte_carlo, cosinor_fit, spearman_exact_pvals, detection_test)
+                                         perform_tests_monte_carlo, cosinor_fit, spearman_exact_pvals, detection_test, _covariate_fit)
 from glycowork.motif.processing import enforce_class, process_for_glycoshift, split_glycoform_id, GLYCOFORM_ID
 from glycowork.glycan_data.data_entry import read_abundances
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, create_correlation_network,
@@ -1034,9 +1034,10 @@ def get_differential_expression(
         level: str = 'peptide',  # Analysis level for glycoproteomics
         monte_carlo: bool = False,  # Use Monte Carlo for technical variation
         random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
-        top_explained: int | None = 5  # How many child motifs to name in 'Explained by'; None names all of them
+        top_explained: int | None = 5,  # How many child motifs to name in 'Explained by'; None names all of them
+        covariates: pd.DataFrame | pd.Series | dict | None = None  # per-sample nuisance variables indexed by sample name (e.g., secretor status, sex, age, batch; a dict maps samples to one covariate); each feature is fit as group plus covariates and the group effect is tested within them
 ) -> GlycoDataFrame:  # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes
-    "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets) with multiple testing correction on glycomics abundance data"
+    "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets, or a linear model with covariates) with multiple testing correction on glycomics abundance data"
     grouped_BH = ((motifs or glycoproteomics) and not sets) if grouped_BH is None else grouped_BH
     if glycoproteomics and monte_carlo:
         raise ValueError(
@@ -1051,6 +1052,8 @@ def get_differential_expression(
         raise ValueError("get_differential_expression compares two groups, so group2 has to be given too; use get_glycanova for three or more groups.")
     if group1 and min(len(group1), len(group2)) < 2:
         raise ValueError(f"Each group needs at least two samples to estimate a variance; got {len(group1)} and {len(group2)}.")
+    if covariates is not None and (paired or sets or monte_carlo):
+        raise ValueError("covariates go into the two-group linear model, which paired samples (a per-sample covariate cancels within each pair), sets and monte_carlo do not use.")
     df, df_org, group1, group2 = preprocess_data(df, group1 = group1, group2 = group2, experiment = "diff", motifs = motifs,
                                                  glycoproteomics = glycoproteomics, impute = impute,
                                                  min_samples = min_samples, transform = transform,
@@ -1107,7 +1110,15 @@ def get_differential_expression(
             levene_pvals = [1.0] * len(pvals)
         else:
             A, B = df_a.values, df_b.values
-            if moderate_variance and len(A) > 1:
+            if covariates is not None:
+                # Each feature is fit as group means plus covariates: A and B become the values with the covariate part removed (their group means are the adjusted
+                # group effects), and the group coefficient is tested with its own standard error and residual df; a feature the model cannot fit keeps the plain comparison
+                adj, cov_ssr, cov_df, _, cov_c, _ = _covariate_fit(np.hstack([A, B]), [0] * len(group1) + [1] * len(group2), covariates, group1 + group2)
+                fit = np.isfinite(cov_ssr)
+                AB = np.where(fit[:, None], adj, np.hstack([A, B]))
+                A, B = AB[:, :len(group1)], AB[:, len(group1):]
+                log2fc = np.nanmean(B, axis = 1) - np.nanmean(A, axis = 1)
+            if (moderate_variance and len(A) > 1) or covariates is not None:
                 # Shrinking each feature's variance toward its containment neighborhood stabilizes the small samples typical of glycomics, without touching the reported effect sizes
                 D = B - A if paired else None
                 na, nb = np.isfinite(A).sum(axis = 1), np.isfinite(B).sum(
@@ -1116,10 +1127,12 @@ def get_differential_expression(
                 resid = (np.nanvar(D, axis = 1, ddof = 1) if paired else
                          ((na - 1) * np.nanvar(A, axis = 1, ddof = 1) + (nb - 1) * np.nanvar(B, axis = 1, ddof = 1)) / (
                                      na + nb - 2))
-                dfr = (nd - 1) if paired else (na + nb - 2)
+                dfr, factor = (nd - 1) if paired else (na + nb - 2), 1 / na + 1 / nb
+                if covariates is not None:
+                    resid, dfr, factor = np.where(fit, cov_ssr / cov_df, resid), np.where(fit, cov_df, dfr), np.where(fit, cov_c, factor)
                 s2, dfp = moderated_variance(resid, df_resid = dfr,
-                                             neighbors = dag_neighbors(glycans, dag))
-                se = np.sqrt(s2 / nd) if paired else np.sqrt(s2 * (1 / na + 1 / nb))
+                                             neighbors = dag_neighbors(glycans, dag)) if moderate_variance and len(A) > 1 else (resid, dfr)
+                se = np.sqrt(s2 / nd) if paired else np.sqrt(s2 * factor)
                 delta = np.nanmean(D, axis = 1) if paired else (np.nanmean(B, axis = 1) - np.nanmean(A, axis = 1))
                 pvals = list(2 * t_dist.sf(np.abs(delta / se), dfp))
             else:
@@ -1235,6 +1248,16 @@ def get_differential_expression(
             bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9] if len(bal) and len(cols_b) > 1 else bal[:0]
             bal_p = hotellings_t2(bal[:, b1].T, bal[:, b2].T, paired = paired)[1] if 0 < len(bal) < min(len(b1),
                                                                                                         len(b2)) else np.nan
+            if covariates is not None:
+                # the group coefficient of the multivariate linear model: T2 of the adjusted mean difference against its covariance c * E / df_e, which is Hotelling's T2 without covariate columns
+                bal_p = np.nan
+                if len(bal):
+                    ab, _, dfe, _, cc, _ = _covariate_fit(bal, [0 if k in b1 else 1 for k in range(len(cols_b))], covariates, full.columns[cols_b].tolist())
+                    if np.isfinite(dfe).all() and len(bal) < min(len(b1), len(b2), dfe[0]):  # as Hotelling's T2 above, fewer balances than samples in the smaller group
+                        res_b = np.hstack([ab[:, b1] - ab[:, b1].mean(axis = 1, keepdims = True), ab[:, b2] - ab[:, b2].mean(axis = 1, keepdims = True)])
+                        dlt = ab[:, b2].mean(axis = 1) - ab[:, b1].mean(axis = 1)
+                        t2 = dlt @ np.linalg.pinv(cc[0] * ((res_b @ res_b.T) / dfe[0] + np.eye(len(bal)) * 1e-6)) @ dlt  # the ridge and pseudo-inverse of hotellings_t2, for nearly collinear balances
+                        bal_p = f.sf((dfe[0] - len(bal) + 1) / (len(bal) * dfe[0]) * t2, len(bal), dfe[0] - len(bal) + 1)
             explained = _explained_by(p, kids, fc, top = top_explained)
             ok1, ok2 = usable[g1i], usable[g2i]
             pair_ok = ok1 & ok2 if paired else None
@@ -1244,11 +1267,17 @@ def get_differential_expression(
                 continue
             r = np.log2(np.maximum(resid, 0.0000001)) - ref
             r_a, r_b = (r[g1i][pair_ok], r[g2i][pair_ok]) if paired else (r[g1i][ok1], r[g2i][ok2])
+            if covariates is not None:  # the residual part through the same group-plus-covariates model as the marginal test, where it can be fit
+                ar, ssr_r, dfr_r, _, c_r, _ = _covariate_fit(np.where(usable, r, np.nan)[None, g1i + g2i], [0] * len(g1i) + [1] * len(g2i), covariates, group1 + group2)
+                if np.isfinite(ssr_r[0]):
+                    r_a, r_b = ar[0, :len(g1i)][ok1], ar[0, len(g1i):][ok2]
+                    rows[p] = (explained, 2 * t_dist.sf(abs(r_b.mean() - r_a.mean()) / np.sqrt(ssr_r[0] / dfr_r[0] * c_r[0]), dfr_r[0]), cohen_d(r_b, r_a)[0], bal_p)
+                    continue
             rows[p] = (explained, _ttest_pvalue(r_b, r_a, paired = paired), cohen_d(r_b, r_a, paired = paired)[0], bal_p)  # r is NaN-free here, so this is the nan_policy = 'omit' test
         for k, v in _decomposition_columns(rows, df_out['Glycan'].tolist(), alpha).items():
             df_out[k] = v
     df_out.attrs.update(
-        {'alpha': alpha, 'n': len(group1) + len(group2), 'test': "Hotelling's T2" if sets else ("moderated " if moderate_variance and not monte_carlo and len(glycans) > 1 else "Welch's " if not paired else "") + ("paired t-test" if paired else "t-test"),
+        {'alpha': alpha, 'n': len(group1) + len(group2), 'test': "Hotelling's T2" if sets else ("moderated " if moderate_variance and not monte_carlo and len(glycans) > 1 else "Welch's " if not paired and covariates is None else "") + ("paired t-test" if paired else "t-test") + (" with covariates" if covariates is not None else ""),
          'transform': df_org.attrs.get('transform', transform), 'paired': paired, 'dataset': in_name, 'provenance': in_prov})
     if glycoproteomics:
         df_site = get_glycoform_diff(df_out, alpha = alpha, level = level)
@@ -1409,7 +1438,8 @@ def get_glycanova(
         moderate_variance: bool = True,  # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
         glycoproteomics: bool | None = None,  # Whether rows are glycoforms from glycoproteomics instead of glycans; default: whenever every row label is protein_site_glycan
         random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
-        top_explained: int | None = 5  # How many child motifs to name in 'Explained by'; None names all of them
+        top_explained: int | None = 5,  # How many child motifs to name in 'Explained by'; None names all of them
+        covariates: pd.DataFrame | pd.Series | dict | None = None  # per-sample nuisance variables indexed by sample name (e.g., secretor status, sex, age, batch); the groups are tested by ANCOVA, post-hoc tests on covariate-adjusted values
 ) -> tuple[GlycoDataFrame, dict[str, pd.DataFrame]]:  # (ANOVA results with F-stats and omega-squared effect sizes, post-hoc results)
     "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
     from scipy.stats import studentized_range
@@ -1430,13 +1460,20 @@ def get_glycanova(
                                        random_state = random_state)
     absent_rows = df_org.attrs.pop('absent', None)
     results, posthoc_results = [], {}
+    n_cov, df_raw = 0, df  # the residual decomposition reads its per-sample reference off the unadjusted transform
+    if covariates is not None:
+        # Each feature is fit as group means plus covariates: effect sizes and post-hoc tests see the values with the covariate part removed, and the F test the group sum of squares given the covariates
+        adj, cov_ssr, cov_df, cov_ssb, _, n_cov = _covariate_fit(df.values, groups, covariates, df.columns.tolist())
+        df = df.copy()
+        df.iloc[:, :] = np.where(np.isfinite(cov_ssr)[:, None], adj, df.values)
+        cov_stats = pd.DataFrame({'ssr': cov_ssr, 'df': cov_df, 'ssb': cov_ssb}, index = df.index)
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(len(groups))
     effect_sizes = omega_squared(df, groups)
     # Variance-based filtering of features
     df, df_prison = variance_based_filtering(df)
     garr, X = np.asarray(groups), df.values
-    if moderate_variance and len(X) > 1:
+    if (moderate_variance and len(X) > 1) or covariates is not None:
         # Shrinking each feature's residual variance toward its containment neighborhood stabilizes the F test without touching the reported effect sizes
         ug = np.unique(garr)
         ng = np.stack([np.isfinite(X[:, garr == g]).sum(axis = 1) for g in ug],
@@ -1447,8 +1484,12 @@ def get_glycanova(
         ssw = sum(
             np.nansum((X[:, garr == g] - np.nanmean(X[:, garr == g], axis = 1, keepdims = True)) ** 2, axis = 1) for g
             in ug)
+        if covariates is not None:  # ANCOVA: the group sum of squares given the covariates, over the residuals of the full model; a feature the model cannot fit keeps the one-way terms
+            cs = cov_stats.loc[df.index]
+            fit = np.isfinite(cs['ssr'].to_numpy())
+            ssb, ssw, dfr = np.where(fit, cs['ssb'], ssb), np.where(fit, cs['ssr'], ssw), np.where(fit, cs['df'], dfr)
         s2, dfp = moderated_variance(ssw / dfr, df_resid = dfr,
-                                     neighbors = dag_neighbors(df.index.tolist(), df_org.attrs.get('motif_dag')))
+                                     neighbors = dag_neighbors(df.index.tolist(), df_org.attrs.get('motif_dag'))) if moderate_variance and len(X) > 1 else (ssw / dfr, dfr)
         f_values = (ssb / (len(ug) - 1)) / s2
         p_values = f.sf(f_values, len(ug) - 1, dfp)
     else:  # computed only here, since the moderated F replaces it, and Welch's ANOVA warned on every singleton group the pooled test handles
@@ -1492,7 +1533,7 @@ def get_glycanova(
                     continue  # Tukey's HSD has no nan_policy, so an unmeasured cell would turn every pairwise p-value into NaN
                 # Tukey's HSD computed as scipy.stats.tukey_hsd does, except that the studentized range is only integrated for the pairs reported instead of the full k x k matrix, and by _studentized_range_sf instead of scipy's adaptive integrals (13 ms per pair, 99% of many-group runs), and its critical value, which depends only on the design, once per design instead of once per glycan
                 n_ph = np.asarray([c.size for c in cols_ph])
-                dof = np.sum(n_ph) - len(ug_ph)
+                dof = np.sum(n_ph) - len(ug_ph) - n_cov  # covariate columns cost residual degrees of freedom
                 mse = np.sum(np.asarray([np.var(c, ddof = 1) for c in cols_ph]) * (n_ph - 1)) / dof
                 se_ph = np.broadcast_to(np.sqrt((2 / n_ph[0] if np.unique(n_ph).size == 1 else 1 / n_ph + 1 / n_ph[None].T) * mse / 2), (len(ug_ph),) * 2)
                 means_ph = np.asarray([np.mean(c) for c in cols_ph])
@@ -1523,7 +1564,7 @@ def get_glycanova(
     if (motifs or glycoproteomics) and df_org.attrs.get('motif_dag') is not None and not df.empty:
         dag, full = df_org.attrs['motif_dag'], df_org
         # Recover the per-sample logratio offset from the transform itself, so residual features land in the frame everything else was tested in
-        ref = np.nanmedian(np.log2(full.loc[df.index].values + 0.0000001) - df.values, axis = 0)
+        ref = np.nanmedian(np.log2(full.loc[df.index].values + 0.0000001) - df_raw.loc[df.index].values, axis = 0)
         levels, garr = sorted(set(groups)), np.asarray(groups)
         eff, rows = dict(zip(df_out['Glycan'], df_out['Effect size'])), {}
         pos, F = {m: i for i, m in enumerate(full.index)}, full.values
@@ -1543,6 +1584,9 @@ def get_glycanova(
             bal = np.log2(parts[:, obs] + 0.0000001)
             bal = bal[1:] - bal[0] if len(bal) > 1 else bal[:0]
             bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9] if len(bal) and obs.sum() > 1 else bal[:0]
+            if covariates is not None and len(bal):  # the balances with their covariate part removed, as the marginal values
+                ab = _covariate_fit(bal, grp_b, covariates, full.columns[obs].tolist())[0]
+                bal = ab if np.isfinite(ab).all() else bal
             bal_p = permanova_with_permutation(squareform(pdist(bal.T, metric = 'euclidean')), group_labels = grp_b,
                                                permutations = 999, random_state = random_state)[1] if len(
                 bal) and 1 < len(set(grp_b)) < len(grp_b) else np.nan  # a PERMANOVA needs a within-group degree of freedom; with one sample per group every F is infinite
@@ -1552,11 +1596,16 @@ def get_glycanova(
                            bal_p)  # parent occurs only inside its children: no context of its own left to test
                 continue
             r = np.log2(np.maximum(resid, 0.0000001)) - ref
+            if covariates is not None:  # ANCOVA of the residual part, as for the marginal values, where it can be fit
+                ar, ssr_r, dfr_r, ssb_r, _, _ = _covariate_fit(np.where(usable, r, np.nan)[None], groups, covariates, full.columns.tolist())
+                if np.isfinite(ssr_r[0]):
+                    rows[p] = (explained, f.sf(ssb_r[0] / (len(levels) - 1) / (ssr_r[0] / dfr_r[0]), len(levels) - 1, dfr_r[0]), omega_squared(ar[0][usable], garr[usable].tolist()), bal_p)
+                    continue
             rows[p] = (explained, f_oneway(*[r[usable & (garr == g)] for g in levels], equal_var = False)[1],
                        omega_squared(r[usable], garr[usable].tolist()), bal_p)
         for k, v in _decomposition_columns(rows, df_out['Glycan'].tolist(), alpha).items():
             df_out[k] = v
-    df_out.attrs.update({'alpha': alpha, 'n': len(groups), 'test': 'moderated ANOVA' if moderate_variance and len(X) > 1 else "Welch's ANOVA", 'transform': df_org.attrs.get('transform', transform), 'paired': False,
+    df_out.attrs.update({'alpha': alpha, 'n': len(groups), 'test': ('moderated ' if moderate_variance and len(X) > 1 else '') + 'ANCOVA' if covariates is not None else 'moderated ANOVA' if moderate_variance and len(X) > 1 else "Welch's ANOVA", 'transform': df_org.attrs.get('transform', transform), 'paired': False,
                          'dataset': df_org.attrs.get('dataset', ''), 'provenance': df_org.attrs.get('provenance', {})})
     return df_out.sort_values(by = 'corr p-val'), posthoc_results
 
