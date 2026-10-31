@@ -99,7 +99,7 @@ _OXFORD_MAPPING = {"A": "GlcNAc(b1-?)", "G": "Gal(b1-3/4)", "S": "Neu5Ac(a2-3/6)
                    "Sg": "Neu5Gc(a2-3/6)", "Ga": "Gal(a1-?)", "Gal": "Gal(?1-?)", "GalNAc": "GalNAc(?1-?)",
                    "Lac": "Gal(b1-3/4)GlcNAc(b1-?)", "F": "Fuc(a1-3/4)", "LacDiNAc": "GalNAc(b1-4)GlcNAc(b1-?)"}
 _OXFORD_SIALIC_MAP = {'S': 'Neu5Ac', 'Sg': 'Neu5Gc', 'SAc': 'Neu5AcOAc', 'SgAc': 'Neu5GcOAc'}
-_GAG_NON_RED = {'U': 'HexA', 'D': '4uHexA', 'G': 'GlcA', 'I': 'IdoA', 'g': 'Gal'}
+_GAG_NON_RED = {'U': 'HexA', 'D': 'L-4dThrHexA4en', 'G': 'GlcA', 'I': 'IdoA', 'g': 'Gal'}
 _GAG_NON_RED_SULF = {'0': '', '2': '2S'}
 _GAG_HEXOSAMINE = {'A': 'GlcNAc', 'a': 'GalNAc', 'S': 'GlcNS', 'H': 'GlcN'}
 _GAG_HEXOSAMINE_SULF = {'0': '', '3': '3S', '4': '4S', '6': '6S', '9': '3S6S', '10': '4S6S'}
@@ -1678,7 +1678,7 @@ def glytoucan_to_glycan(ids: str | list[str], # GlyTouCan ID(s) or glycan(s)
 
 def GAG_disaccharide_to_iupac(input_dsc: str # Disaccharide structural code (DSC) for GAGs
                               ) -> str: # Basic IUPAC-condensed format
-    "Convert disaccharide GAG codes like D2A6 into 4uHexA2S(?1-?)GlcNAc6S"
+    "Convert disaccharide GAG codes like D2A6 into L-4dThrHexA4en2S(?1-?)GlcNAc6S"
     return f"{_GAG_NON_RED[input_dsc[0]]}{_GAG_NON_RED_SULF[input_dsc[1]]}(?1-?){_GAG_HEXOSAMINE[input_dsc[2]]}{_GAG_HEXOSAMINE_SULF[input_dsc[3:]]}"
 
 

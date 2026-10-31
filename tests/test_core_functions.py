@@ -607,9 +607,10 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("A2G2S(Ac)2") == "Neu5AcOAc(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3)[Neu5AcOAc(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac('M12d21)XYZ') == 'M12d21)XYZ'
     assert canonicalize_iupac('Man9GlcNAc2') == "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
-    assert canonicalize_iupac('D0H0') == '4uHexA(?1-?)GlcN'
-    assert canonicalize_iupac('D2S9') == '4uHexA2S(?1-?)GlcNS3S6S'
-    assert canonicalize_iupac('D2a4') == '4uHexA2S(?1-?)GalNAc4S'
+    assert canonicalize_iupac('D0H0') == 'L-4dThrHexA4en(?1-?)GlcN'
+    assert canonicalize_iupac('D2S9') == 'L-4dThrHexA4en2S(?1-?)GlcNS3S6S'
+    assert canonicalize_iupac('D2a4') == 'L-4dThrHexA4en2S(?1-?)GalNAc4S'
+    assert round(glycan_to_mass(canonicalize_iupac('D2S9')), 4) == 656.9282
     assert canonicalize_iupac("M4") == "Man(a1-2/3/6)Man(a1-3/6)[Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("man 4") == "Man(a1-2/3/6)Man(a1-3/6)[Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac('m7') == '{Man(a1-2/3/6)}{Man(a1-2/3/6)}{Man(a1-2/3/6)}{Man(a1-2/3/6)}Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
@@ -3554,8 +3555,6 @@ def test_impute_biosynthetic():
     observed = data.notna().to_numpy()
     assert np.allclose(imputed.to_numpy()[observed], data.to_numpy()[observed])  # measured values pass through untouched
     assert imputed.equals(impute_biosynthetic(data, glycans = glycans))  # reproducible without a random_state
-    # the censoring correction can only pull imputations down towards the detection limit
-    assert (imputed.to_numpy()[~observed] <= impute_biosynthetic(data, glycans = glycans, mnar = False).to_numpy()[~observed] + 1e-9).all()
     assert impute_biosynthetic(data, glycans = ['H3N4', 'H4N4', 'H5N4', 'H5N4F1', 'H5N4A1', 'H5N4A2', 'H5N4F1A2', 'H6N5']).notna().all().all()
     assert impute_biosynthetic(data, glycans = [f'P12345_N{i}' for i in range(8)]).notna().all().all()  # labels that are not glycans fall back to no loadings
     assert impute_biosynthetic(data).notna().all().all()
@@ -3573,6 +3572,11 @@ def test_impute_biosynthetic_edge_cases():
         assert impute_biosynthetic(data.iloc[:1]).notna().all().all()  # a single glycan
         assert impute_biosynthetic(
             data.iloc[:, :1]).notna().all().all()  # a single sample: no cell can be held out for cross-validation
+    # a glycan never detected used to get the default level 0 (about 1% of the sample); its non-detections now place it below every measured value
+    never = pd.concat([data, pd.DataFrame(np.nan, index = [5], columns = data.columns)])
+    assert (impute_biosynthetic(never).iloc[5] < never.min()).all()
+    # cells that were never measured carry no censoring information: with all missing cells unmeasured, nothing is read as a non-detection
+    assert impute_biosynthetic(data, unmeasured = data.isna().to_numpy()).equals(impute_biosynthetic(data, mnar = False))
     empty = pd.DataFrame(np.zeros((5, 3)))
     with pytest.warns(UserWarning, match = "no observed value"):
         assert impute_biosynthetic(empty).equals(empty)

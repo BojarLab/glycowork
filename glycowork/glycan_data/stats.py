@@ -271,14 +271,16 @@ def _factor_fit(L: np.ndarray, # log2 abundances, glycans as rows and samples as
                 F: np.ndarray, # centered per-glycan counts of each biosynthetic step; may have zero columns
                 rank: int, # number of free latent factors on top of the biosynthetic loadings
                 beta: float, # ridge penalty on the per-sample biosynthetic step activities
-                iters: int = 30 # alternating least squares rounds
+                iters: int = 30, # alternating least squares rounds
+                prior: tuple[np.ndarray, np.ndarray] | None = None # optional Gaussian prior on each glycan intercept: (mean, weight in units of one fitted cell)
                 ) -> np.ndarray: # fitted log2 abundance for every cell
     "Fits L_ij = mu_i + b_j + F_i.A_j + U_i.V_j by ridge-penalized alternating least squares, with F the known biosynthetic loadings and A_j the step activities of sample j"
     n, m = L.shape
     r, k = max(0, min(rank, m - 2, n)), F.shape[
         1]  # the SVD below has min(n, m) components, so a single glycan cannot carry more factors
     Lz = np.where(W > 0, L, 0)
-    mu = Lz.sum(axis = 1) / np.maximum(W.sum(axis = 1), 1)
+    pm, pw = prior if prior is not None else (0.0, 0.0)
+    mu = (Lz.sum(axis = 1) + pw * pm) / np.maximum(W.sum(axis = 1) + pw, 1 if prior is None else 1e-9)  # with a prior, a glycan without usable cells starts at its prior mean
     U, s, Vt = np.linalg.svd(np.where(W > 0, L - mu[:, None], 0), full_matrices = False)
     U, V = U[:, :r] * np.sqrt(s[:r]), Vt[:r].T * np.sqrt(s[:r])
     # a vanishing ridge on the intercepts keeps a glycan or sample without any usable cell solvable
@@ -288,9 +290,85 @@ def _factor_fit(L: np.ndarray, # log2 abundances, glycans as rows and samples as
         sol = np.linalg.solve(np.einsum('ij,ik,il->jkl', W, D, D) + pen_sample, np.einsum('ij,ik,ij->jk', W, D, Lz - mu[:, None])[..., None])[..., 0]
         b, A, V = sol[:, 0], sol[:, 1:1 + k], sol[:, 1 + k:]
         S = np.column_stack([np.ones(m), V])
-        theta = np.linalg.solve(np.einsum('ij,jk,jl->ikl', W, S, S) + pen_glycan, np.einsum('ij,jk,ij->ik', W, S, Lz - b - F @ A.T)[..., None])[..., 0]
+        G, y = np.einsum('ij,jk,jl->ikl', W, S, S) + pen_glycan, np.einsum('ij,jk,ij->ik', W, S, Lz - b - F @ A.T)
+        if prior is not None:  # the prior enters as one more cell of its weight at its mean, on the intercept only
+            G[:, 0, 0] += prior[1]
+            y[:, 0] += prior[1] * prior[0]
+        theta = np.linalg.solve(G, y[..., None])[..., 0]
         mu, U = theta[:, 0], theta[:, 1:]
     return mu[:, None] + b + F @ A.T + U @ V.T
+
+
+def _detection_fit(L: np.ndarray, # log2 abundances, NaN where missing
+                   M: np.ndarray, # boolean mask of the cells that count as non-detections
+                   R: np.ndarray, # predicted log2 abundance for every cell
+                   sigma: float, # prediction error of R
+                   lmin: np.ndarray # lowest observed log2 value of each sample
+                   ) -> np.ndarray: # (logit pi, d, log s)
+    "Fits P(missing | y) = pi + (1 - pi) * Phi((lmin_j + d - y) / s), a constant random dropout rate plus soft censoring below each sample's detection limit, with y ~ N(R, sigma^2), by maximum likelihood of the missingness pattern"
+    from scipy.optimize import minimize
+    O = ~(M | np.isnan(L))
+
+    def nll(p):
+        pi, sc = expit(p[0]), np.sqrt(sigma ** 2 + np.exp(2 * np.clip(p[2], -10, 10)))
+        q = np.clip(pi + (1 - pi) * norm.cdf((lmin + p[1] - R) / sc), 1e-9, 1 - 1e-9)
+        return -(np.log(q[M]).sum() + np.log1p(-q[O]).sum())
+
+    return min((minimize(nll, x0, method = 'Nelder-Mead', options = {'maxiter': 400}) for x0 in ([-2, 0, 0], [0, 1, -1], [-4, -1, 0.5])), key = lambda o: o.fun).x
+
+
+def _censored_mean(R: np.ndarray, # predicted log2 abundance
+                   lmin: np.ndarray, # lowest observed log2 value of each sample
+                   p: np.ndarray, # (logit pi, d, log s) from _detection_fit
+                   sigma: float # spread of y around R
+                   ) -> np.ndarray: # E[y | missing] for every cell
+    "Mean of y ~ N(R, sigma^2) given that it was missed under the selection model of _detection_fit"
+    sc = np.sqrt(sigma ** 2 + np.exp(2 * np.clip(p[2], -10, 10)))
+    z = (lmin + p[1] - R) / sc
+    # in log space: far above the detection limit pdf(z) and cdf(z) underflow together, and pi can be 0, so the direct ratio is 0/0
+    return R - sigma ** 2 / sc * np.exp(log_expit(-p[0]) + norm.logpdf(z) - np.logaddexp(log_expit(p[0]), log_expit(-p[0]) + norm.logcdf(z)))
+
+
+def _censored_levels(L: np.ndarray, # log2 abundances, NaN where missing
+                     M: np.ndarray, # boolean mask of the cells that count as non-detections
+                     b: np.ndarray, # per-sample offsets, centered
+                     sw: float, # spread of a glycan around its level across samples
+                     lmin: np.ndarray, # lowest observed log2 value of each sample
+                     rng: np.random.Generator, # draws the glycans the parameters are fitted on, for large tables
+                     grid_n: int = 240, # grid points for each glycan's level
+                     max_glycans: int = 2000 # glycans the five parameters are fitted on; their per-glycan posteriors are computed for all
+                     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]: # (level grid, parameters, log-posterior of each glycan's level from all its cells, from its non-detections alone)
+    "Empirical Bayes over glycan levels: y_ij = mu_i + b_j + e (sd sw), mu_i ~ N(m0, s0^2), and each cell missed as in _detection_fit; the population and selection parameters are fitted jointly on the marginal likelihood, so glycans never or rarely detected inform how low glycan levels go"
+    from scipy.optimize import minimize
+    n, m = L.shape
+    O = ~np.isnan(L)
+    Lb = np.where(O, L - b, np.nan)
+    grid = np.linspace(np.nanmin(Lb) - 20, np.nanmax(Lb) + 5, grid_n)
+    rows = np.arange(n) if n <= max_glycans else np.sort(rng.choice(n, max_glycans, replace = False))
+    cnt, S1, S2 = O.sum(axis = 1), np.nansum(Lb, axis = 1), np.nansum(Lb ** 2, axis = 1)
+    # the observed values are Gaussian in the level, so their log-likelihood on the grid is quadratic in it, from per-glycan sums
+    gauss = -(S2[:, None] - 2 * S1[:, None] * grid + cnt[:, None] * grid ** 2) / (2 * sw ** 2) - cnt[:, None] * np.log(sw * np.sqrt(2 * np.pi))
+    Mf, Y = M.astype(float), np.where(O, L, 0.0)
+
+    def parts(t, idx):
+        "log P(missed | level) summed over each glycan's non-detections on the grid, and log P(detected | y) of its observed values"
+        lpi, l1pi, s = log_expit(t[2]), log_expit(-t[2]), np.exp(np.clip(t[4], -10, 10))
+        lq = np.logaddexp(lpi, l1pi + norm.logcdf((lmin + t[3] - b - grid[:, None]) / np.sqrt(sw ** 2 + s ** 2)))
+        qy = np.logaddexp(lpi, l1pi + norm.logcdf((lmin + t[3] - Y[idx]) / max(s, 1e-6)))
+        return Mf[idx] @ lq.T, np.where(O[idx], np.log1p(-np.exp(np.minimum(qy, -1e-12))), 0.0).sum(axis = 1)
+
+    def nll(t):
+        miss, det = parts(t, rows)
+        a = gauss[rows] + miss + norm.logpdf(grid, t[0], np.exp(np.clip(t[1], -5, 5)))
+        mx = a.max(axis = 1, keepdims = True)
+        return -(mx[:, 0] + np.log(np.exp(a - mx).sum(axis = 1)) + det).sum()
+
+    lv = np.where(cnt > 0, S1 / np.maximum(cnt, 1), np.nan)
+    start = rows[cnt[rows] > 0]  # the selection model of the observed-only levels as a starting point
+    x0 = [np.nanmean(lv) - 1, np.log(np.nanstd(lv) + 0.5), *_detection_fit(L[start], M[start], lv[start, None] + b, sw, lmin)]
+    t = min((minimize(nll, x, method = 'Nelder-Mead', options = {'maxiter': 600, 'xatol': 1e-3, 'fatol': 1e-3}) for x in (x0, [x0[0] - 2, x0[1] + 0.5, -3, 0, 0])), key = lambda o: o.fun).x
+    missed = parts(t, np.arange(n))[0] + norm.logpdf(grid, t[0], np.exp(np.clip(t[1], -5, 5)))
+    return grid, t, gauss + missed, missed
 
 
 def _partner_fit(L: np.ndarray, # log2 abundances, glycans as rows and samples as columns
@@ -340,12 +418,12 @@ def _partner_fit(L: np.ndarray, # log2 abundances, glycans as rows and samples a
 
 def impute_biosynthetic(df: pd.DataFrame, # glycans as rows, samples as columns; NaN or 0 marks a missing value
                         glycans: list[str] | None = None, # glycan of each row (IUPAC-condensed or composition), to give every sample its own activity per biosynthetic step
-                        mnar: bool = True, # pull imputations towards each sample's detection limit, as far as the data say missingness is intensity-dependent
+                        mnar: bool = True, # treat non-detections as censored where the data say missingness is intensity-dependent: they inform each glycan's level, and imputations are pulled towards the detection limit
                         draw: bool = False, # add a random draw of the held-out prediction error to every imputed value, so imputed replicates keep the spread of measured ones (for rhythm tests that weigh each timepoint by its standard error)
-                        random_state: int | np.random.Generator | None = None # optional random state for reproducibility
+                        random_state: int | np.random.Generator | None = None, # optional random state for reproducibility
+                        unmeasured: np.ndarray | None = None # boolean mask in the shape of df of cells that were never measured (e.g., a glycosite not covered in a sample): imputed, but not read as non-detections
                         ) -> pd.DataFrame: # dataframe with every missing value imputed
-    "Imputes missing glycomics values with a low-rank model whose glycan loadings include each glycan's count of every biosynthetic step, stacked with stable-ratio partner glycans and corrected for detection-limit censoring by a fitted selection model"
-    from scipy.optimize import minimize
+    "Imputes missing glycomics values with a low-rank model whose glycan loadings include each glycan's count of every biosynthetic step, stacked with stable-ratio partner glycans; non-detections are censored observations of a fitted selection model, which sets each glycan's level together with its measured values and gives glycans detected at most once their posterior mean"
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         L = np.log2(df.to_numpy(dtype = float))
     M = ~np.isfinite(L)
@@ -356,6 +434,7 @@ def impute_biosynthetic(df: pd.DataFrame, # glycans as rows, samples as columns;
         warnings.warn("impute_biosynthetic got no observed value to impute from; the input is returned unchanged.")
         return df.copy()
     L[M] = np.nan
+    Mi = M & ~np.asarray(unmeasured, dtype = bool) if unmeasured is not None else M  # the non-detections; a cell never measured says nothing about abundance
     F = np.zeros((n, 0))
     if glycans is not None:
         from glycowork.motif.processing import canonicalize_iupac, canonicalize_composition, is_composition
@@ -385,9 +464,25 @@ def impute_biosynthetic(df: pd.DataFrame, # glycans as rows, samples as columns;
         C[(M | C).all(axis = 1)] = False
         folds.append(C)
     truth = np.concatenate([L[C] for C in folds])
+    lmin = np.nanmin(np.where(M, np.inf, L), axis = 0)
+    lmin = np.where(np.isfinite(lmin), lmin, np.nanmin(L))
+    prior, cnt = None, (~M).sum(axis = 1)
+    if mnar and Mi.any():
+        # Glycan levels with censoring (Oct 2026): fitted on observed cells only, a glycan seen in one sample took that one value as its level, and one
+        # never seen took the default 0, i.e. about 1% of the sample (on GlycoForge simulations 4% of the missing cells, but 71% of the squared error)
+        seen = cnt > 0
+        R0 = _factor_fit(L[seen], (~M[seen]).astype(float), np.zeros((seen.sum(), 0)), 0, 1)
+        b0, sw = R0[0] - R0[0].mean(), max(float(np.nanstd((L[seen] - R0)[~M[seen]])), 0.1)
+        grid_mu, t, post, missed = _censored_levels(L, Mi, b0, sw, lmin, rng)
+        # each glycan's level as its non-detections alone place it, a Gaussian prior on the intercept, so the factor model weighs them against its measured values;
+        # a glycan detected everywhere keeps its plain fit
+        wts = np.exp(missed - missed.max(axis = 1, keepdims = True))
+        wts /= wts.sum(axis = 1, keepdims = True)
+        pm = wts @ grid_mu
+        prior = (pm, np.where(Mi.any(axis = 1), sw ** 2 / np.maximum(wts @ grid_mu ** 2 - pm ** 2, 1e-4), 0.0))
     grid = [(r, beta) for r in (0, 1, 2, 4) for beta in ((1, 10) if F.shape[1] else (1,))]
     if truth.size:
-        cv = {g: np.concatenate([_factor_fit(L, (~(M | C)).astype(float), F, *g)[C] for C in folds]) for g in grid}
+        cv = {g: np.concatenate([_factor_fit(L, (~(M | C)).astype(float), F, *g, prior = prior)[C] for C in folds]) for g in grid}
         best = min(grid, key = lambda g: np.mean((cv[g] - truth) ** 2))
         partner = np.concatenate([_partner_fit(L, ~(M | C))[C] for C in folds])
         weights = np.linspace(0, 1, 21)
@@ -395,23 +490,14 @@ def impute_biosynthetic(df: pd.DataFrame, # glycans as rows, samples as columns;
         w, sigma = weights[int(np.argmin(err))], np.sqrt(min(err))
     else:  # no cell can be held out without emptying its glycan (e.g., a single sample): the smallest factor model, with the spread of the observed values as its error
         best, w, sigma = grid[0], 1.0, np.nanstd(L)
-    R = w * _factor_fit(L, (~M).astype(float), F, *best) + (1 - w) * _partner_fit(L, ~M)
-    if mnar:
-        lmin = np.nanmin(np.where(M, np.inf, L), axis = 0)
-        lmin = np.where(np.isfinite(lmin), lmin, np.nanmin(L))
-
-        def nll(p):
-            "Negative log-likelihood of the missingness pattern under P(missing | y) = pi + (1 - pi) * Phi((lmin_j + d - y) / s), a constant random dropout rate plus soft censoring below each sample's detection limit, with y ~ N(R, sigma^2)"
-            pi, sc = expit(p[0]), np.sqrt(sigma ** 2 + np.exp(2 * np.clip(p[2], -10, 10)))
-            q = np.clip(pi + (1 - pi) * norm.cdf((lmin + p[1] - R) / sc), 1e-9, 1 - 1e-9)
-            return -(np.log(q[M]).sum() + np.log1p(-q[~M]).sum())
-
-        p = min((minimize(nll, x0, method = 'Nelder-Mead', options = {'maxiter': 400}) for x0 in ([-2, 0, 0], [0, 1, -1], [-4, -1, 0.5])), key = lambda o: o.fun).x
-        sc = np.sqrt(sigma ** 2 + np.exp(2 * np.clip(p[2], -10, 10)))
-        z = (lmin + p[1] - R) / sc
-        # E[y | missing] under that selection model, in log space: far above the detection limit pdf(z) and cdf(z) underflow together, and pi can be 0, so the direct ratio is 0/0
-        R = R - sigma ** 2 / sc * np.exp(
-            log_expit(-p[0]) + norm.logpdf(z) - np.logaddexp(log_expit(p[0]), log_expit(-p[0]) + norm.logcdf(z)))
+    R = w * _factor_fit(L, (~M).astype(float), F, *best, prior = prior) + (1 - w) * _partner_fit(L, ~M)
+    if mnar and Mi.any():
+        R = _censored_mean(R, lmin, _detection_fit(L, Mi, R, sigma, lmin), sigma)
+        # a glycan detected at most once has no spread of its own to fit, so its cells are the posterior mean of E[y | missed] over its level, given all its cells
+        few = cnt <= 1
+        if few.any():
+            wf = np.exp(post[few] - post[few].max(axis = 1, keepdims = True))
+            R[few] = (wf / wf.sum(axis = 1, keepdims = True)) @ _censored_mean(grid_mu[:, None] + b0, lmin, t[2:], sw)
     if draw:
         # a conditional mean carries none of a measurement's noise, so a timepoint with imputed replicates would get a too-small standard error and too much weight in a rhythm test
         R = R + rng.normal(0, sigma, R.shape)
@@ -463,7 +549,8 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
     if impute:
         # floored cells go in as missing, since a 1e-7 floor read as a measurement is an extreme outlier on the log scale, and come back as the floor
         df = df.mask(floored).replace(0, np.nan)
-        df = impute_biosynthetic(df, glycans = glycans.tolist(), draw = circadian, random_state = random_state)
+        df = impute_biosynthetic(df, glycans = glycans.tolist(), draw = circadian, random_state = random_state,
+                                 unmeasured = None if protect is None else protect.to_numpy())
         df = df.mask(floored, floor)
         if protect is not None:
             df = df.mask(
