@@ -6386,7 +6386,7 @@ def test_absent_in_a_group_stays_out_of_the_reference():
     assert not anova.loc[glycans[:-3], 'significant'].any() and anova.loc[glycans[-3:], 'p-val'].between(0, 1).all()
     assert all(posthoc[g]['lower'].isna().all() for g in glycans[-3:] if g in posthoc) and anova.loc[glycans[-3:], 'Effect size'].between(0, 1).all()
     # with five per group, glycans seen only in group 1 are significant, and their post-hoc is Holm over pairwise Fisher tests (5/5 vs 0/5: p = 2 / C(10, 5))
-    # (sample spread 0.3, as the variance filter skips features whose log2 variance is below 0.02)
+    # (sample spread 0.3, a realistic biological spread)
     rng5 = np.random.default_rng(0)
     X5 = rng5.lognormal(2, 0.5, (len(glycans), 1)) * rng5.lognormal(0, 0.3, (len(glycans), 15))
     X5[-2:, 5:] = 0

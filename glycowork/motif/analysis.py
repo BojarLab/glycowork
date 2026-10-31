@@ -25,7 +25,7 @@ from scipy.spatial.distance import squareform, pdist
 from glycowork.glycan_data import loader
 from glycowork.glycan_data.loader import strip_suffixes, download_model, GlycoDataFrame
 from glycowork.glycan_data.stats import (cohen_d, _ttest_pvalue, _studentized_range_sf, mahalanobis_distance, mahalanobis_variance,
-                                         impute_and_normalize, variance_based_filtering, JTKTest,
+                                         impute_and_normalize, JTKTest,
                                          impute_biosynthetic, get_alphaN, TST_grouped_benjamini_hochberg,
                                          compare_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
@@ -1065,12 +1065,8 @@ def get_differential_expression(
     absent_rows = df_org.attrs.pop('absent', None)
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(len(group1 + group2))
-    # Variance-based filtering of features
     if not monte_carlo:
-        df, df_prison = variance_based_filtering(df)
-        df_org, df_org_prison = df_org.loc[df.index], df_org.loc[df_prison.index]
-    else:
-        df_prison, df_org_prison = pd.DataFrame(), pd.DataFrame()
+        df_org = df_org.loc[df.index]
     glycans = df.index.tolist()
     variances = [0] * len(glycans)
     mean_abundance = df_org.mean(axis = 1)
@@ -1199,28 +1195,11 @@ def get_differential_expression(
                    'significant', 'corr Levene p-val', 'Effect size',
                    'Equivalence p-val']),
         contrasts = in_contrasts, paired = paired, name = in_name, provenance = in_prov)
-    if not monte_carlo:
-        prison_rows = pd.DataFrame({
-            'Glycan': df_prison.index,
-            'Mean abundance': df_org_prison.mean(axis = 1),
-            'Log2FC': np.nanmean(df_prison[group2].values - df_prison[group1].values, axis = 1) if paired else (
-                        df_prison[group2].mean(axis = 1) - df_prison[group1].mean(axis = 1)),
-            'p-val': [1.0] * len(df_prison),
-            'corr p-val': [1.0] * len(df_prison),
-            'significant': [False] * len(df_prison),
-            'corr Levene p-val': [1.0] * len(df_prison),
-            'Effect size': [0] * len(df_prison),
-            'Equivalence p-val': [1.0] * len(df_prison)})
-        prison_rows = prison_rows.astype({'significant': 'bool'})
-        if len(prison_rows) > 0:
-            df_out = GlycoDataFrame(
-                prison_rows if df_out.empty else pd.concat([df_out, prison_rows], ignore_index = True),
-                contrasts = in_contrasts, paired = paired, name = in_name, provenance = in_prov)
     df_out['significant'] = df_out['significant'].astype('bool')
     if effect_size_variance:
-        df_out['Effect size variance'] = list(variances) + [0] * len(df_prison)
+        df_out['Effect size variance'] = list(variances)
     if (motifs or glycoproteomics) and not sets and not monte_carlo and dag is not None and not df.empty:
-        full = pd.concat([df_org, df_org_prison])
+        full = df_org
         # Recover the per-sample logratio offset from the transform itself, so residual features land in the frame everything else was tested in
         ref = np.nanmedian(np.log2(df_org.values + 0.0000001) - df.values, axis = 0)
         fc, rows = dict(zip(df_out['Glycan'], df_out['Log2FC'])), {}
@@ -1470,8 +1449,6 @@ def get_glycanova(
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(len(groups))
     effect_sizes = omega_squared(df, groups)
-    # Variance-based filtering of features
-    df, df_prison = variance_based_filtering(df)
     garr, X = np.asarray(groups), df.values
     if (moderate_variance and len(X) > 1) or covariates is not None:
         # Shrinking each feature's residual variance toward its containment neighborhood stabilizes the F test without touching the reported effect sizes
@@ -1545,22 +1522,12 @@ def get_glycanova(
                 posthoc_results[glycan] = pd.DataFrame(
                     [{'group1': ug_ph[a], 'group2': ug_ph[b], 'meandiff': -md[j], 'p-adj': pv[j], 'lower': -(md[j] + rad[j]),
                       'upper': -(md[j] - rad[j]), 'reject': pv[j] < alpha} for j, (a, b) in enumerate(zip(*iu))])
-    prison_rows = pd.DataFrame({
-        'Glycan': df_prison.index,
-        'F statistic': [0] * len(df_prison),
-        'p-val': [1.0] * len(df_prison),
-        'corr p-val': [1.0] * len(df_prison),
-        'significant': [False] * len(df_prison)})
-    prison_rows = prison_rows.astype({'significant': 'bool'})
-    if len(prison_rows) > 0:
-        # An all-prison run leaves df_out empty with object dtypes, and inferring result dtypes from that is what pandas is deprecating
-        df_out = GlycoDataFrame(prison_rows) if df_out.empty else pd.concat([df_out, prison_rows], ignore_index = True)
     df_out['significant'] = df_out['significant'].astype('bool')
     if absent.any():
         effect_sizes = effect_sizes.copy()
         effect_sizes[df.index[absent]] = v_det
     df_out['Effect size'] = effect_sizes.reindex(df_out['Glycan']).values
-    # With no feature surviving the variance filter there is no transformed frame to read the per-sample offset off, so the residuals have no reference frame to land in
+    # With no feature there is no transformed frame to read the per-sample offset off, so the residuals have no reference frame to land in
     if (motifs or glycoproteomics) and df_org.attrs.get('motif_dag') is not None and not df.empty:
         dag, full = df_org.attrs['motif_dag'], df_org
         # Recover the per-sample logratio offset from the transform itself, so residual features land in the frame everything else was tested in
