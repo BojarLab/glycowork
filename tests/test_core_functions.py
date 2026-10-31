@@ -6265,6 +6265,16 @@ def test_absent_in_a_group_stays_out_of_the_reference():
             assert (res.loc[glycans[-3:], 'corr Levene p-val'] == 1).all() and (res.loc[glycans[-3:], 'Equivalence p-val'] == 1).all()
             # their effect size is Cohen's h of the detection rates (Cohen's d of a floor ran into the hundreds)
             assert np.allclose(res.loc[glycans[-3:], 'Effect size'], [-np.pi, -np.pi, -2 * np.arcsin(np.sqrt(1 / 3))])
+    # Replicates again, with an A and a B antigen glycan seen in one sample each, one per group: the floor of one group counted 0 in the motif sums
+    # next to imputations of the same glycan in the other group, so H type 3, which they share with a glycan measured everywhere, was called (p 1.5e-5)
+    glycans_ab = glycans[:7] + [glycans[8], glycans[10], glycans[7], 'Gal(a1-3)[Fuc(a1-2)]Gal(b1-3)GalNAc']
+    rng_ab = np.random.default_rng(0)
+    X_ab = rng_ab.lognormal(2, 0.5, (len(glycans_ab), 1)) * rng_ab.lognormal(0, 0.1, (len(glycans_ab), 6))
+    X_ab[-2:] = 0
+    X_ab[-2, 0], X_ab[-1, 3] = 8.0, 0.5
+    df_ab = pd.DataFrame(X_ab, columns = [f's{k}' for k in range(6)])
+    df_ab.insert(0, 'glycan', glycans_ab)
+    assert not get_differential_expression(df_ab, group1 = g1, group2 = g2, motifs = True, random_state = 0)['significant'].any()
     # paired: the exact McNemar test on the discordant pairs
     res = get_differential_expression(df, group1 = g1, group2 = g2, paired = True, random_state = 0).set_index('Glycan')
     assert np.isclose(res.loc[glycans[-2], 'p-val'], 0.25) and not res.loc[glycans[:-3], 'significant'].any()

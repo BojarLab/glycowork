@@ -190,7 +190,9 @@ def preprocess_data(
         # Motif extraction and quantification; with floored glycans the detection of each motif is quantified in the same pass
         if absent.any():
             samples = df_org.columns[1:]
-            df_org.iloc[:, 1:] = df_org.iloc[:, 1:].mask(floored.to_numpy(), 0.0)
+            # A glycan without detection in a whole group counts only where it was measured, in every group: its floor read as 0 next to imputations
+            # of the same glycan in the other group, so a glycan seen in few samples made its motifs differ between any two groups (~20 calls per random split)
+            df_org.iloc[:, 1:] = df_org.iloc[:, 1:].mask(absent[:, None] & ~detected.to_numpy(), 0.0)
             seen = detected.astype(float).set_axis([f'\x00{c}' for c in samples], axis = 1)
             both = quantify_motifs(pd.concat([df_org, seen], axis = 1), feature_set = feature_set, custom_motifs = custom_motifs)
             df_org, detected = both[samples], both[seen.columns].set_axis(samples, axis = 1) > 0
