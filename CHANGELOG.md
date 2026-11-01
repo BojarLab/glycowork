@@ -22,7 +22,7 @@
 
 ##### Fixed 🐛
 - `plot_glycans_excel` leaves the cell of a motif defined by a glyco-regex (such as `Nglycan_complex` in motif-level `get_differential_expression` results) empty instead of failing the whole export, as `annotate_figure` already did (a1ae680)
-- `plot_glycans_excel` closes and removes its workbook when a glycan cannot be drawn, instead of leaving it open and half-written ()
+- `plot_glycans_excel` closes and removes its workbook when a glycan cannot be drawn, instead of leaving it open and half-written (91e264a)
 - `per_residue`, `highlight_linkages`, and `highlight_residues` in `GlycoDraw` land on the right arm when another arm carries a wildcard linkage (e.g., `GlcNAc(b1-?)` next to `GlcNAc(b1-2)`) (5134bdd)
 
 ##### Deprecated ⚠️
