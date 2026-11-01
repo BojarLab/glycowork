@@ -799,8 +799,9 @@ def glycan_to_mass(glycan: str | dict[str, int], # Glycan in IUPAC-condensed for
         raise unmapped or ValueError(
             f"No valid composition could be derived from '{glycan}' (it contains components outside {sorted(_VALID_COMPONENTS)}), and it has no defined structure to weigh it by, so no mass can be calculated.") from None
     cap = _DERIV_CAP.get(sample_prep)
-    modification = None if glycan.endswith('-ol') and modification == 'reduced' else modification  # the molecule of an alditol is reduced already
-    weighed = calculate_adduct_mass(''.join(f'{el}{n}' for el, n in formula.items()), mass_value = mass_value) + (caps * calculate_adduct_mass(cap, mass_value = mass_value) if cap else 0) + composition_to_mass(
+    deuterium = calculate_adduct_mass('D-H', mass_value = mass_value) if glycan.endswith('-ol') and modification == 'reduced_D' else 0  # with NaBD4 the alditol carries one D in place of an H
+    modification = None if glycan.endswith('-ol') and modification in ('reduced', 'reduced_D') else modification  # the molecule of an alditol is reduced already
+    weighed = deuterium + calculate_adduct_mass(''.join(f'{el}{n}' for el, n in formula.items()), mass_value = mass_value) + (caps * calculate_adduct_mass(cap, mass_value = mass_value) if cap else 0) + composition_to_mass(
         {}, mass_value = mass_value, sample_prep = sample_prep, adduct = adduct, modification = modification, peptide = peptide) - composition_to_mass({}, mass_value = mass_value, sample_prep = sample_prep)
     return mass if comp and abs(weighed - mass) < 21 else weighed  # where both count the same acetyls (42 Da each), the composition's mass stands
 
@@ -817,7 +818,7 @@ def get_formula(glycan: str | dict[str, int], # Glycan in any nomenclature canon
     """Elemental formula of a glycan, composition, or formula: the molecule glycan_to_mass weighs"""
     peptide = _peptide_deltas(peptide) if peptide else peptide
     # adds the formula f n times; a signed formula ('-H2O', '+N3') counts with its sign
-    elements, add = Counter(), lambda c, f, n = 1: c.update({el: (-n if f.startswith('-') else n) * (int(k) if k else 1) for el, k in re.findall(r'([A-Z][a-z]?)(\d*)', f)})
+    elements, add = Counter(), lambda c, f, n = 1: [c.update({el: (-n if sign == '-' else n) * (int(k) if k else 1)}) for sign, part in re.findall(r'([+-]?)([^+-]+)', f) for el, k in re.findall(r'([A-Z][a-z]?)(\d*)', part)]
     cap = _DERIV_CAP.get(sample_prep)
     formula = isinstance(glycan, str) and re.fullmatch(r'(?:(?:Cl|Br|Na|[CHDNOPSKFI])\d*)+', glycan)
     if formula:  # only the elements calculate_adduct_mass knows, and wherever a formula also reads as a composition, it is one (H5N4 is Hex5HexNAc4, not a nitrogen hydride)
@@ -902,8 +903,11 @@ def get_formula(glycan: str | dict[str, int], # Glycan in any nomenclature canon
                 weighed = Counter(atoms)
                 if cap:
                     add(weighed, cap, caps)
-                add(weighed, get_formula({}, sample_prep = sample_prep, adduct = adduct, modification = None if glycan.endswith('-ol') and modification == 'reduced' else modification, peptide = peptide))
+                add(weighed, get_formula({}, sample_prep = sample_prep, adduct = adduct, modification = None if glycan.endswith('-ol') and modification in ('reduced', 'reduced_D') else modification, peptide = peptide))
                 add(weighed, get_formula({}, sample_prep = sample_prep), -1)
+                if glycan.endswith('-ol') and modification == 'reduced_D':  # with NaBD4 the alditol carries one D in place of an H
+                    add(weighed, 'D')
+                    add(weighed, '-H')
                 if not comp or abs(sum((weighed[el] - elements[el]) * calculate_adduct_mass(el) for el in weighed.keys() | elements.keys())) >= 21:  # where both count the same acetyls, the composition stands, as in glycan_to_mass
                     elements = weighed
     if any(v < 0 for v in elements.values()):

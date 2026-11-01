@@ -122,11 +122,11 @@ def build_signatures(paths):
             tree = ast.parse(f.read_text(encoding = 'utf-8'))
         except SyntaxError:
             continue
-        for node in ast.walk(tree):
-            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                continue
+        defs = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        nested = {id(n) for d in defs for n in ast.walk(d) if n is not d and isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        for node in defs:
             args = node.args
-            if args.vararg:
+            if args.vararg or id(node) in nested:  # a nested function is local, so a bare call of its name may mean it or a local lambda (tokenization's add)
                 sigs[node.name].add(None)
                 continue
             pos = args.posonlyargs + args.args

@@ -1108,6 +1108,12 @@ LIN
     assert canonicalize_iupac("A2G2S(6)") == "Neu5Ac(a2-6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"  # Oxford, not a Byonic composition
     with pytest.raises(ValueError):
         canonicalize_iupac(float('nan'))
+    # A residue glycowork does not know stays a residue, so an error downstream names it as written: a modification carries no anomer, and an aglycone
+    # hangs off position 1, an unknown one, or is marked by CSDB's missing anomer
+    assert canonicalize_iupac('Gal(b1-4)Glx') == 'Gal(b1-4)Glx' and canonicalize_iupac('Glx(b1-4)Glc') == 'Glx(b1-4)Glc'
+    assert canonicalize_iupac('GlcNAz(b1-4)GlcNAz') == 'GlcNAz(b1-4)GlcNAz'
+    assert canonicalize_iupac('Ac(1-5)aXNeup(2-3)bDGalp(1-3)[Ac(1-5)aXNeup(2-6),Ac(1-2)]aDGalpN(1-3)xDSer?') == 'Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc1Ser'
+    assert canonicalize_iupac('Ac(1-4)aDFucp(1-3)xXMyricetin?') == 'D-Fuc1Myricetin4Ac' and canonicalize_iupac('Gal(b1-4)Glc(b1-1)Cer') == 'Gal(b1-4)Glc1Cer'
 
 
 KNOWN = [
@@ -1650,6 +1656,15 @@ def test_glycan_to_mass():
     assert glycan_to_mass('H5N4F1', sample_prep = 'permethylated', modification = 'reduced') == composition_to_mass('H5N4F1', sample_prep = 'permethylated', modification = 'reduced')
     assert glycan_to_mass('H5N4F1', sample_prep = 'deuteropermethylated', modification = 'reduced_D') == composition_to_mass('H5N4F1', sample_prep = 'deuteropermethylated', modification = 'reduced_D')
     assert glycan_to_mass('H5N4F1', peptide = 'EEQYNSTYR') == composition_to_mass('H5N4F1', peptide = 'EEQYNSTYR')
+    # NaBD4 puts one D where the alditol molecule has an H, also where the glycan is weighed atom by atom (a heptose, a peracetylated phosphate)
+    for sp in ['underivatized', 'peracetylated', 'permethylated']:
+        for g in ['Glc(a1-3)LDManHep-ol', 'Glc6P(a1-4)Glc-ol', 'Gal(b1-4)Glc-ol']:
+            assert np.isclose(glycan_to_mass(g, sample_prep = sp, modification = 'reduced_D') - glycan_to_mass(g, sample_prep = sp), 1.006277)
+            assert np.isclose(calculate_adduct_mass(get_formula(g, sample_prep = sp, modification = 'reduced_D')), glycan_to_mass(g, sample_prep = sp, modification = 'reduced_D'))
+    assert get_formula('Glc(a1-3)LDManHep-ol', modification = 'reduced_D') == 'C13H25DO12'
+    # an adduct formula counts every atom with the sign of its part, as its mass does
+    for a in ['CH3COOH', 'C2H4O2-H']:
+        assert np.isclose(calculate_adduct_mass(get_formula('H5N4', adduct = a)) - calculate_adduct_mass(get_formula('H5N4')), composition_to_mass('H5N4', adduct = a) - composition_to_mass('H5N4'))
 
 
 def test_calculate_adduct_mass():
@@ -3540,6 +3555,9 @@ def test_estimate_technical_variance():
     assert np.allclose(a.values, b.values)
     result = estimate_technical_variance(data, group1, group2, num_instances = 10)
     assert result.shape[1] == (len(group1) + len(group2)) * 10
+    # a reference leaves a floored feature out of each geometric mean, and the floor keeps every draw finite
+    sim = estimate_technical_variance(pd.DataFrame({'a': [10., 20., 1e-9], 'b': [12., 18., 1e-9]}), ['a'], ['b'], num_instances = 4, random_state = 0, reference = [0, 1])
+    assert np.isfinite(sim.values).all() and np.allclose(sim.iloc[:2].mean(axis = 0), 0, atol = 0.5)
 
 
 def test_missforest():
@@ -3596,6 +3614,17 @@ def test_impute_biosynthetic():
     assert impute_biosynthetic(data, glycans = [f'P12345_N{i}' for i in range(8)]).notna().all().all()  # labels that are not glycans fall back to no loadings
     assert impute_biosynthetic(data).notna().all().all()
     assert impute_biosynthetic(data.fillna(1)).equals(data.fillna(1))  # nothing to impute
+    # cells never measured are not non-detections, so the censoring step leaves them alone, also next to real non-detections
+    import glycowork.glycan_data.stats as stats_module
+    X = 2 ** np.random.default_rng(1).normal(3, 1, (30, 12))
+    X[X < np.quantile(X, 0.15)] = np.nan
+    unmeasured = np.zeros(X.shape, bool)
+    unmeasured[:6, :3] = True
+    X[unmeasured] = np.nan
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(stats_module, '_censored_mean', lambda mu, *args: np.full(np.shape(mu), -50.0))
+        out = np.log2(impute_biosynthetic(pd.DataFrame(X), unmeasured = unmeasured, random_state = 0).to_numpy(dtype = float))
+    assert (out[unmeasured] > -40).all() and np.isclose(out[np.isnan(X) & ~unmeasured], -50).any()
 
 
 def test_impute_biosynthetic_edge_cases():
@@ -3768,6 +3797,8 @@ def test_perform_tests_monte_carlo():
     # the within-instance correction is calibrated to alpha, so a looser alpha cannot yield larger adjusted p-values
     loose = perform_tests_monte_carlo(group_a, group_b, num_instances = 10, alpha = 0.2)[1]
     assert all(l <= a + 1e-12 for l, a in zip(loose, adj_p))
+    # a fixed p-value (a detection test) replaces the test in every instance
+    assert perform_tests_monte_carlo(group_a, group_b, num_instances = 10, fixed_pvals = np.array([np.nan, 0.5, np.nan, np.nan, np.nan]))[0][1] == 0.5
 
 
 def test_spearman_exact_pvals():
@@ -5306,6 +5337,7 @@ def test_plot_glycans_excel(tmp_path):
     # ...and one that cannot be drawn names its row
     with pytest.raises(ValueError):
         plot_glycans_excel(pd.DataFrame({'Glycans': ['NotAGlycan'], 'Values': [1]}), str(tmp_path / "undrawable"))
+    assert not (tmp_path / "undrawable" / "output.xlsx").exists()  # closed and removed, not left open and half-written
     # A bare column or list of glycans becomes a one-column sheet next to its drawings
     plot_glycans_excel(df['Glycans'], str(tmp_path / "series.xlsx"))
     assert [c.value for c in load_workbook(tmp_path / "series.xlsx").active[1]] == ['Glycans', 'SNFG']
@@ -6295,16 +6327,16 @@ def test_get_differential_expression():
     df_c = pd.DataFrame(X, columns = samples_c)
     df_c.insert(0, 'glycan', glycans_c)
     g1_c, g2_c, cov = samples_c[:12], samples_c[12:], pd.Series(np.where(non, 'non', 'sec'), index = samples_c)
-    plain = get_differential_expression(df_c, g1_c, g2_c, impute = False, random_state = 0).set_index('Glycan')
-    adjusted = get_differential_expression(df_c, g1_c, g2_c, impute = False, random_state = 0, covariates = cov).set_index('Glycan')
+    plain = get_differential_expression(df_c, group1 = g1_c, group2 = g2_c, impute = False, random_state = 0).set_index('Glycan')
+    adjusted = get_differential_expression(df_c, group1 = g1_c, group2 = g2_c, impute = False, random_state = 0, covariates = cov).set_index('Glycan')
     assert not plain['significant'].any() and adjusted.index[adjusted['significant']].tolist() == [glycans_c[0]] and adjusted.loc[glycans_c[0], 'p-val'] < 1e-6
     assert np.isclose(adjusted.loc[glycans_c[0], 'Log2FC'], plain.loc[glycans_c[0], 'Log2FC'])
-    assert adjusted.equals(get_differential_expression(df_c, g1_c, g2_c, impute = False, random_state = 0, covariates = cov.to_dict()).set_index('Glycan'))
+    assert adjusted.equals(get_differential_expression(df_c, group1 = g1_c, group2 = g2_c, impute = False, random_state = 0, covariates = cov.to_dict()).set_index('Glycan'))
     for bad, msg in ((pd.Series(['a'] * 12 + ['b'] * 12, index = samples_c), 'confounded'), (cov.iloc[:-1], 'no value for samples')):
         with pytest.raises(ValueError, match = msg):
-            get_differential_expression(df_c, g1_c, g2_c, impute = False, covariates = bad)
+            get_differential_expression(df_c, group1 = g1_c, group2 = g2_c, impute = False, covariates = bad)
     with pytest.raises(ValueError, match = "paired"):
-        get_differential_expression(df_c, g1_c, g2_c, impute = False, covariates = cov, paired = True)
+        get_differential_expression(df_c, group1 = g1_c, group2 = g2_c, impute = False, covariates = cov, paired = True)
     # The fit itself: a numeric covariate with more than two values is one standardized slope, each feature's group effect is the least-squares one over its
     # measured samples (an unmeasured cell gets a solve of its own), and a feature with a group left unmeasured has no model
     from glycowork.glycan_data.stats import _covariate_fit
@@ -6334,6 +6366,23 @@ def test_get_differential_expression():
     adjusted = get_differential_expression(skin, motifs = True, random_state = 0, paired = False, covariates = cov_s)
     decomposed = adjusted['Residual p-val'].notna()
     assert decomposed.any() and adjusted.loc[decomposed, ['Residual p-val', 'Redistribution p-val']].stack().between(0, 1).all()
+    with pytest.raises(ValueError, match = 'more than once'):
+        _covariate_fit(np.ones((4, 8)), [0] * 4 + [1] * 4, pd.Series(range(9), index = list('abcdefgh') + ['a']), list('abcdefgh'))
+    # Monte Carlo samples the CLR: motifs get their instances too (both crashed in the reshape), explicit ALR and sets are refused
+    mc = pd.DataFrame(2 ** np.random.default_rng(0).normal(3, 0.3, (6, 8)), columns = [f's{i}' for i in range(8)])
+    mc.insert(0, 'glycan', ['Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Fuc(a1-2)Gal(b1-3)GalNAc',
+                            'Gal(b1-3)GalNAc', 'Neu5Ac(a2-3)Gal(b1-3)GalNAc', 'Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'])
+    g1_mc, g2_mc = [f's{i}' for i in range(4)], [f's{i}' for i in range(4, 8)]
+    assert get_differential_expression(mc, group1 = g1_mc, group2 = g2_mc, monte_carlo = True, motifs = True, random_state = 0)['p-val'].between(0, 1).all()
+    for kw, msg in ((dict(transform = 'ALR'), "transform = 'CLR'"), (dict(sets = True), 'sets')):
+        with pytest.raises(ValueError, match = msg):
+            get_differential_expression(mc, group1 = g1_mc, group2 = g2_mc, monte_carlo = True, **kw)
+    # a glycan absent from a whole group is tested on its detection and no longer shifts the others (by -1.2 log2 here)
+    plain = get_differential_expression(mc, group1 = g1_mc, group2 = g2_mc, monte_carlo = True, random_state = 0).set_index('Glycan')
+    mc.loc[0, g1_mc] = 0
+    gone = get_differential_expression(mc, group1 = g1_mc, group2 = g2_mc, monte_carlo = True, random_state = 0).set_index('Glycan')
+    assert gone.loc[mc.glycan[0], 'p-val'] < 0.05 and np.isclose(gone.loc[mc.glycan[0], 'Effect size'], np.pi) and gone['Log2FC'].abs().max() < 40
+    assert (gone['Log2FC'] - plain['Log2FC']).drop(mc.glycan[0]).abs().max() < 0.3
 
 
 def test_get_differential_expression_monte_carlo_glycoproteomics():
@@ -6498,8 +6547,8 @@ def test_get_glycanova():
     df_c = pd.DataFrame(X, columns = samples_c)
     df_c.insert(0, 'glycan', glycans_c)
     labels = [1] * 8 + [2] * 8 + [3] * 8
-    plain = get_glycanova(df_c, labels, impute = False, random_state = 0)[0].set_index('Glycan')
-    adjusted, posthoc_c = get_glycanova(df_c, labels, impute = False, random_state = 0, covariates = pd.Series(np.where(non, 'non', 'sec'), index = samples_c))
+    plain = get_glycanova(df_c, groups = labels, impute = False, random_state = 0)[0].set_index('Glycan')
+    adjusted, posthoc_c = get_glycanova(df_c, groups = labels, impute = False, random_state = 0, covariates = pd.Series(np.where(non, 'non', 'sec'), index = samples_c))
     adjusted = adjusted.set_index('Glycan')
     assert plain.loc[glycans_c[0], 'p-val'] > 0.05 and adjusted.loc[glycans_c[0], 'p-val'] < 1e-5 and list(posthoc_c) == adjusted.index[adjusted['significant']].tolist()
     # Motifs: the residual parts by ANCOVA and the redistribution by PERMANOVA on balances with their covariate part removed; a covariate that adds no column changes nothing
@@ -6914,6 +6963,8 @@ def test_get_lectin_array():
     res = get_lectin_array(gappy, group1 = group1, group2 = group2)
     assert res['score'].notna().all() and not res['lectin(s)'].str.contains('WGA').any()
     assert get_lectin_array('bacteria_PMID20973590', group1 = [0, 1], group2 = [2, 3])['score'].notna().all()
+    with pytest.raises(ValueError, match = 'log2'):
+        get_lectin_array('bacteria_PMID20973590', group1 = [0, 1], group2 = [2, 3], transform = 'CLR')
 
 
 @pytest.mark.parametrize("extension", ["csv", "xlsx"])
@@ -8167,12 +8218,12 @@ def test_get_differential_biosynthesis(abundance_data):
     odf = pd.DataFrame(X, columns = samples)
     odf.insert(0, 'glycan', oglycans)
     cov = pd.Series(np.where(non, 'non', 'sec'), index = samples)
-    plain = get_differential_biosynthesis(odf, samples[:8], samples[8:], analysis = 'steps')
-    adjusted = get_differential_biosynthesis(odf, samples[:8], samples[8:], analysis = 'steps', covariates = cov)
+    plain = get_differential_biosynthesis(odf, group1 = samples[:8], group2 = samples[8:], analysis = 'steps')
+    adjusted = get_differential_biosynthesis(odf, group1 = samples[:8], group2 = samples[8:], analysis = 'steps', covariates = cov)
     assert not plain.loc['H_type3', 'significant'] and adjusted.index[0] == 'H_type3' and adjusted.loc['H_type3', 'significant'] and adjusted.loc['H_type3', 'Log2FC'] > 0.9
-    assert adjusted.attrs['test'] == 'moderated t-test with covariates' and 'with covariates' in get_differential_biosynthesis(odf, samples[:8], samples[8:], covariates = cov).attrs['test']
+    assert adjusted.attrs['test'] == 'moderated t-test with covariates' and 'with covariates' in get_differential_biosynthesis(odf, group1 = samples[:8], group2 = samples[8:], covariates = cov).attrs['test']
     with pytest.raises(ValueError, match = "paired"):
-        get_differential_biosynthesis(odf, samples[:8], samples[8:], analysis = 'steps', paired = True, covariates = cov)
+        get_differential_biosynthesis(odf, group1 = samples[:8], group2 = samples[8:], analysis = 'steps', paired = True, covariates = cov)
     results = get_differential_biosynthesis(
         abundance_data,
         group1=[1,2],

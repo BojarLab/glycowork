@@ -156,10 +156,12 @@ def preprocess_data(
     absent_rows = None
     df_org = df.copy(deep = True)
     if transform is None:
-        transform = "CLR" if glycoproteomics else "ALR" if (isinstance(df.iloc[0, 0], str) and enforce_class(
-            df.iloc[0, 0], "N")) and len(df) > 50 else "CLR"
+        transform = "CLR" if glycoproteomics or monte_carlo else "ALR" if (isinstance(df.iloc[0, 0], str) and enforce_class(
+            df.iloc[0, 0], "N")) and len(df) > 50 else "CLR"  # Monte Carlo samples CLR-transformed instances (estimate_technical_variance)
     if transform not in ("ALR", "CLR", "Nothing"):
         raise ValueError("Only ALR and CLR are valid transforms for now.")
+    if monte_carlo and transform != "CLR":
+        raise ValueError(f"monte_carlo samples CLR-transformed instances (estimate_technical_variance), so it needs transform = 'CLR' or None, not {transform!r}.")
     if motifs or glycoproteomics:
         pass  # both cases overwrite df below with their own transform, so running the run-wide one here only pays for ALR's O(features) Procrustes search and, for glycoproteomics, would close over a simplex that does not exist
     elif transform == "ALR":
@@ -173,7 +175,7 @@ def preprocess_data(
             df = GlycoDataFrame(pd.concat([df.iloc[:, 0], estimate_technical_variance(df.iloc[:, 1:], group1, group2,
                                                                                       gamma = gamma,
                                                                                       custom_scale = custom_scale,
-                                                                                      random_state = random_state)],
+                                                                                      random_state = random_state, reference = reference)],
                                           axis = 1),
                                 contrasts = getattr(df, '_contrasts', {}), paired = paired,
                                 name = getattr(df, '_glyco_name', ''))
@@ -206,7 +208,9 @@ def preprocess_data(
         if motif_dag:
             df_org.attrs['motif_dag'] = get_motif_dag(df_org.index.tolist(), abundances = df_org)
         df = df_org + 0.0000001
-        if transform == "CLR":
+        if monte_carlo:
+            df = estimate_technical_variance(df, group1, group2, gamma = gamma, custom_scale = custom_scale, random_state = random_state, reference = reference).set_axis(df.index)
+        elif transform == "CLR":
             df = clr_transformation(df, (
                 (group1 + group2) if paired else group1) if experiment == "diff" else df.columns.tolist(),
                                     [] if paired else group2,
@@ -1036,12 +1040,14 @@ def get_differential_expression(
         random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
         top_explained: int | None = 5,  # How many child motifs to name in 'Explained by'; None names all of them
         covariates: pd.DataFrame | pd.Series | dict | None = None  # per-sample nuisance variables indexed by sample name (e.g., secretor status, sex, age, batch; a dict maps samples to one covariate); each feature is fit as group plus covariates and the group effect is tested within them
-) -> GlycoDataFrame:  # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes
+) -> GlycoDataFrame:  # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes (Cohen's h of the detection rates for features absent from a whole group)
     "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets, or a linear model with covariates) with multiple testing correction on glycomics abundance data"
     grouped_BH = ((motifs or glycoproteomics) and not sets) if grouped_BH is None else grouped_BH
     if glycoproteomics and monte_carlo:
         raise ValueError(
             "monte_carlo is not available for glycoproteomics: the per-glycosite closure replaces the run-wide CLR that estimate_technical_variance simulates over, so no Monte Carlo frame is ever built.")
+    if sets and monte_carlo:
+        raise ValueError("sets are tested with Hotelling's T2 on the samples themselves, which monte_carlo would replace by its simulated instances; run sets without monte_carlo.")
     in_contrasts, in_name, in_prov = getattr(df, '_contrasts', {}), getattr(df, '_glyco_name', ''), getattr(df,
                                                                                                             '_provenance',
                                                                                                             {})
@@ -1100,7 +1106,16 @@ def get_differential_expression(
         log2fc = np.nanmean(df_b.values - df_a.values, axis = 1) if paired else (
                     df_b.mean(axis = 1) - df_a.mean(axis = 1))
         if monte_carlo:
-            pvals, corrpvals, effect_sizes = perform_tests_monte_carlo(df_a, df_b, paired = paired, alpha = alpha)
+            # A floor has no spread and no log-ratio to compare, so an absent feature is tested on its detection, in every instance
+            absent = np.isin(glycans, absent_rows.index) if absent_rows is not None else np.zeros(len(glycans), bool)
+            fixed = np.full(len(glycans), np.nan)
+            if absent.any():
+                cut = len(group1)
+                fixed[absent], h_det = detection_test(absent_rows.loc[np.array(glycans)[absent], group1 + group2].to_numpy(), [list(range(cut)), list(range(cut, cut + len(group2)))],
+                                                      paired = paired, random_state = random_state)
+            pvals, corrpvals, effect_sizes = perform_tests_monte_carlo(df_a, df_b, paired = paired, alpha = alpha, fixed_pvals = fixed if absent.any() else None)
+            if absent.any():
+                effect_sizes[absent] = h_det
             significance = [cp < alpha for cp in corrpvals]
             equivalence_pvals = [1.0] * len(pvals)
             levene_pvals = [1.0] * len(pvals)
@@ -1408,7 +1423,7 @@ def get_glycanova(
         motifs: bool = False,  # Analyze motifs instead of sequences; per glycosite (protein_site_motif) for glycoproteomics data
         feature_set: str | list[str] = ['exhaustive', 'known'],  # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
         min_samples: float = 0.1,  # Min fraction (0-1) of non-zero samples required
-        posthoc: bool = True,  # Perform Tukey's HSD test post-hoc
+        posthoc: bool = True,  # Perform Tukey's HSD test post-hoc (pairwise Fisher tests with Holm for features absent from a whole group)
         grouped_BH: bool | None = None,  # Use two-stage adaptive Benjamini-Hochberg; None infers True for motifs (DAG-grouped families) and False for sequences
         custom_motifs: str | list[str] = [],  # Custom motifs if using 'custom' feature set
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"; None auto-decides
@@ -1419,7 +1434,7 @@ def get_glycanova(
         random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
         top_explained: int | None = 5,  # How many child motifs to name in 'Explained by'; None names all of them
         covariates: pd.DataFrame | pd.Series | dict | None = None  # per-sample nuisance variables indexed by sample name (e.g., secretor status, sex, age, batch); the groups are tested by ANCOVA, post-hoc tests on covariate-adjusted values
-) -> tuple[GlycoDataFrame, dict[str, pd.DataFrame]]:  # (ANOVA results with F-stats and omega-squared effect sizes, post-hoc results)
+) -> tuple[GlycoDataFrame, dict[str, pd.DataFrame]]:  # (ANOVA results with F-stats and omega-squared effect sizes (Cramer's V for features absent from a whole group), post-hoc results)
     "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
     from scipy.stats import studentized_range
     grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
@@ -2376,6 +2391,8 @@ def get_lectin_array(
         raise ValueError(
             f'Analysis aborted due to:\nDuplicates found for the following lectin(s): {", ".join(duplicated_cols)}.\nIf you have multiple copies of the same lectin, rename them by adding a suffix in the form of "_<identifier>" (underscore + an identifier).\nFor example, "SNA" may be renamed "SNA_1", "SNA_batch1", etc. ')
     lectin_list = df.columns.tolist()
+    if transform not in ('', None, 'log2'):
+        raise ValueError(f"get_lectin_array offers transform = 'log2' or '' (none), not {transform!r}.")
     if transform == "log2" and (df.to_numpy(dtype = float) <= 0).any():
         raise ValueError(f"transform = 'log2' needs positive intensities, but {(df.to_numpy(dtype = float) <= 0).sum()} values are zero or negative; negative values usually mean the data are log-transformed already, so leave transform = ''.")
     df = np.log2(df) if transform == "log2" else df

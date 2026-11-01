@@ -52,6 +52,9 @@ for path in sorted(Path('.').glob('*.ipynb')):
         except Exception as e:
             print(f'{path.name}: no dark rendering for {source[:60]!r} ({e})')
             continue
+        if not hasattr(result, 'as_svg' if 'image/png' in out['data'] else 'data'):
+            print(f'{path.name}: no dark rendering for {source[:60]!r} (the cell imports its own drawing function)')
+            continue
         if 'image/png' in out['data']:
             png = convert_svg_to_png(result.as_svg(), None, scale = 2.0, return_bytes = True, sticker = True)
             cell['outputs'].append({'output_type': 'display_data', 'metadata': {'image/png': {'width': result.drawing_obj.width, 'height': result.drawing_obj.height}},

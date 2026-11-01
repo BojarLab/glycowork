@@ -492,12 +492,12 @@ def impute_biosynthetic(df: pd.DataFrame, # glycans as rows, samples as columns;
         best, w, sigma = grid[0], 1.0, np.nanstd(L)
     R = w * _factor_fit(L, (~M).astype(float), F, *best, prior = prior) + (1 - w) * _partner_fit(L, ~M)
     if mnar and Mi.any():
-        R = _censored_mean(R, lmin, _detection_fit(L, Mi, R, sigma, lmin), sigma)
+        R = np.where(Mi, _censored_mean(R, lmin, _detection_fit(L, Mi, R, sigma, lmin), sigma), R)  # a cell never measured was not missed, so it keeps its unconditional prediction
         # a glycan detected at most once has no spread of its own to fit, so its cells are the posterior mean of E[y | missed] over its level, given all its cells
         few = cnt <= 1
         if few.any():
             wf = np.exp(post[few] - post[few].max(axis = 1, keepdims = True))
-            R[few] = (wf / wf.sum(axis = 1, keepdims = True)) @ _censored_mean(grid_mu[:, None] + b0, lmin, t[2:], sw)
+            R[few] = np.where(Mi[few], (wf / wf.sum(axis = 1, keepdims = True)) @ _censored_mean(grid_mu[:, None] + b0, lmin, t[2:], sw), R[few])
     if draw:
         # a conditional mean carries none of a measurement's noise, so a timepoint with imputed replicates would get a too-small standard error and too much weight in a rhythm test
         R = R + rng.normal(0, sigma, R.shape)
@@ -1045,7 +1045,7 @@ def get_procrustes_scores(df: pd.DataFrame, # dataframe with features as rows an
                           paired: bool = False, # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
                           custom_scale: float | dict = 0, # ratio total signal group2/group1 for scale model (or group_idx:mean/min dict)
                           random_state: int | np.random.Generator | None = None, # optional random state for reproducibility
-                          reference: list | None = None # rows (labels) that may be the reference and define the CLR it is compared with; default: all
+                          reference: list | None = None # index labels of the rows that may be the reference and define the CLR it is compared with; default: all
                           ) -> tuple[list[float], list[float], list[float]]: # (Procrustes scores, correlations, variances: with two groups of the feature's CLR value over all samples, paired the mean square of its paired differences; with one group of its log2 values)
     "For each feature, estimates its value as ALR reference component"
     local_rng = np.random.default_rng(random_state) if random_state is not None else rng
@@ -1078,7 +1078,7 @@ def get_additive_logratio_transformation(df: pd.DataFrame, # dataframe with feat
                                          gamma: float = 0.1, # degree of uncertainty that CLR assumption holds
                                          custom_scale: float | dict = 0, # ratio total signal group2/group1 for scale model
                                          random_state: int | np.random.Generator | None = None, # optional random state for reproducibility
-                                         reference: list | None = None # rows (labels) that may be the reference, and the CLR reference if it falls back to CLR; default: all
+                                         reference: list | None = None # index labels of the rows that may be the reference, and the CLR reference if it falls back to CLR; default: all
                                          ) -> pd.DataFrame: # ALR-transformed dataframe
     "Identifies ALR reference component and transforms data according to ALR"
     local_rng = np.random.default_rng(random_state) if random_state is not None else rng
@@ -1171,6 +1171,8 @@ def _covariate_fit(X: np.ndarray, # features x samples, NaN where a cell was nev
                    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, int]: # (adjusted values, residual SS, residual df, group SS given the covariates, variance factor of group 2 - group 1, covariate columns)
     "Fits every feature as group means plus covariates (y = G.beta + Z.gamma) and returns the values with the covariate part removed, so group means of the adjusted values are the adjusted group effects, together with what a t or F test of the groups needs"
     cov = covariates.copy() if isinstance(covariates, pd.DataFrame) else pd.Series(covariates).to_frame()
+    if cov.index.duplicated().any():
+        raise ValueError(f"covariates lists samples more than once ({cov.index[cov.index.duplicated()].unique().tolist()[:5]}); give one value per sample.")
     missing = [s for s in samples if s not in cov.index]
     if missing:
         raise ValueError(f"covariates has no value for samples {missing[:5]}{' ...' if len(missing) > 5 else ''}; index it by sample name, with a value for every sample tested.")
@@ -1192,7 +1194,7 @@ def _covariate_fit(X: np.ndarray, # features x samples, NaN where a cell was nev
     G = (codes[:, None] == np.arange(len(levels))).astype(float)
     full, reduced = np.hstack([G, Z]), np.hstack([np.ones((len(codes), 1)), Z])
     if np.linalg.matrix_rank(full) < full.shape[1]:
-        raise ValueError("The covariates are confounded with the groups (a covariate level occurs in only one group, or a covariate repeats the grouping), so no group effect can be told apart from them.")
+        raise ValueError("The covariates are confounded with the groups (a covariate is constant within each group, or repeats the grouping), so no group effect can be told apart from them.")
     n, p = X.shape[0], Z.shape[1]
     adj, ssr, dfr, ssb, cvar = np.full(X.shape, np.nan), np.full(n, np.nan), np.full(n, np.nan), np.full(n, np.nan), np.full(n, np.nan)
     ok = np.isfinite(X)
@@ -1377,25 +1379,28 @@ def estimate_technical_variance(df: pd.DataFrame, # dataframe with abundances in
                                 num_instances: int = 128, # number of Monte Carlo instances to sample
                                 gamma: float = 0.1, # uncertainty parameter for CLR transformation scale
                                 custom_scale: float | dict = 0,  # ratio total signal group2/group1 for scale model
-                                random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
+                                random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
+                                reference: list | None = None  # index labels of the rows whose geometric mean is each sample's CLR reference (e.g., without features absent from a whole group); default: all
                                 ) -> pd.DataFrame:  # transformed df (features, samples*num_instances) with CLR-transformed Monte Carlo instances
     "Monte Carlo sampling from Dirichlet distribution with relative abundances as concentration, followed by CLR transformation"
     local_rng = np.random.default_rng(random_state) if random_state is not None else rng
     df = df.apply(lambda col: (col / col.sum()) * 5000, axis = 0)
     features, samples = df.shape
+    ref = slice(None) if reference is None else df.index.get_indexer(reference)
     transformed_data = np.zeros((features, samples, num_instances))
     for j in range(samples):
-        dirichlet_samples = dirichlet.rvs(alpha = np.maximum(df.iloc[:, j].to_numpy(float), 1e-6), random_state = local_rng, size = num_instances).T
+        # a component with a concentration far below 1 draws 0 or 1e-300, whose log is no measurement, so draws are floored at the share impute_and_normalize gives a feature absent from a group (1e-7 %)
+        dirichlet_samples = np.maximum(dirichlet.rvs(alpha = np.maximum(df.iloc[:, j].to_numpy(float), 1e-6), random_state = local_rng, size = num_instances).T, 1e-9)
         if isinstance(custom_scale, dict) or custom_scale:
             for n in range(num_instances):
                 sample_instance = pd.DataFrame(dirichlet_samples[:, n])
                 transformed_data[:, j, n] = clr_transformation(sample_instance, sample_instance.columns.tolist(), [],
                                                                gamma = gamma, custom_scale = custom_scale,
-                                                               random_state = local_rng).squeeze()
+                                                               random_state = local_rng, reference = None if reference is None else ref.tolist()).squeeze()
         else:
             # CLR on a single column is just log2(x) minus the log2 geometric mean, plus the gamma uncertainty term
             log_samples = np.log2(np.where(dirichlet_samples > 0, dirichlet_samples, np.nan))
-            log_gmean = np.nanmean(log_samples, axis = 0)
+            log_gmean = np.nanmean(log_samples[ref], axis = 0)
             transformed_data[:, j, :] = log_samples + norm.rvs(loc = -log_gmean, scale = gamma,
                                                                random_state = local_rng,
                                                                size = (features, num_instances))
@@ -1409,7 +1414,8 @@ def perform_tests_monte_carlo(group_a: pd.DataFrame, # rows as features, columns
                               group_b: pd.DataFrame, # rows as features, columns as sample instances from one condition
                               num_instances: int = 128,  # number of Monte Carlo instances to sample
                               paired: bool = False,  # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
-                              alpha: float = 0.05  # error rate the within-instance FDR correction is calibrated to
+                              alpha: float = 0.05,  # error rate the within-instance FDR correction is calibrated to
+                              fixed_pvals: np.ndarray | None = None  # per-feature p-values that replace every instance's test where not NaN (e.g., detection tests of features absent from a whole group)
                               ) -> tuple[list[float], list[float], list[float]]:  # (uncorrected p-vals, corrected p-vals, effect sizes)
     "Perform tests on each Monte Carlo instance, apply Benjamini-Hochberg correction, calculate effect sizes"
     num_features, _ = group_a.shape
@@ -1422,6 +1428,8 @@ def perform_tests_monte_carlo(group_a: pd.DataFrame, # rows as features, columns
         instance_p_values = np.nan_to_num((
             ttest_rel(sample_b, sample_a, axis = 1) if paired else ttest_ind(sample_b, sample_a, equal_var = False,
                                                                              axis = 1))[1], nan = 1.0)
+        if fixed_pvals is not None:
+            instance_p_values = np.where(np.isnan(fixed_pvals), instance_p_values, fixed_pvals)
         instance_effect_sizes = cohen_d(sample_b, sample_a, paired = paired)[0]
         # Apply Benjamini-Hochberg correction for multiple testing within the instance
         avg_uncorrected_p_values += instance_p_values

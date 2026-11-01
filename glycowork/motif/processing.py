@@ -2068,6 +2068,7 @@ def _canonicalize_iupac(glycan: str | int  # Glycan sequence in any supported fo
     if len(glycan) > 1 and glycan[-1] in 'ab' and not any(tail[i:] in lib for i in range(len(tail) - 1)):
         glycan = glycan[:-1]
     # Remove anomeric and steric indicators at reducing end
+    csdb_aglycone = bool(re.search(r'\)x[DLX?][A-Z][A-Za-z0-9]*\??$', glycan))  # CSDB marks a reducing-end aglycone (xDSer, xXMyricetin) by its missing anomer, whatever atom it is linked through
     if '(' in glycan and bool(re.search(r'[\)\]]([abx\?][DLX\?][A-Z][A-Za-z5]*)', glycan)):
         glycan = re.sub(r'([\)\]])([abx\?][DLX\?])([A-Z][A-Za-z5]*)', r'\1\3', glycan)
     glycan = re.sub(r'\)[ab]-([DL]-[A-Z])', r')\1', glycan)
@@ -2111,14 +2112,14 @@ def _canonicalize_iupac(glycan: str | int  # Glycan sequence in any supported fo
                         lambda m: f"{m.group(2) or ''}{m.group(3)}5{m.group(1)}" if m.group(
                             2) else f"{m.group(3)}5{m.group(1)}",
                         glycan)  # Gc(?1-5)Neu to Neu5Gc
-        glycan = re.sub(r'\[([^]^-]+\([?ab]?\d+-([\d\?]+)\))\]([A-Z][A-Za-z1-9]*)',
+        glycan = re.sub(r'\[([^]^-]+\(\??\d+-([\d\?]+)\))\]([A-Z][A-Za-z1-9]*)',
                         lambda m: (lambda mod: f"{m.group(3)}{m.group(2)}{mod}" if (
                                 mod not in lib and _MONO_STEM.sub('', mod) not in lib and '/' not in mod and m.group(1).count(
                             '(') == 1) else f"[{m.group(1)}]{m.group(3)}")(
                             re.sub(r'^[abx?][DLX?]', '', m.group(1).split('(')[0]).rstrip('?')),
                         glycan)  # [Ac(?1-3)]Fruf to Fruf3Ac
         glycan = re.sub(
-            r'(?:(?<=[\)\]\}])|^)([A-Z][a-z]{0,3})(?:\([?ab]?\d+-([\d\?]+)\)|-(\d)\))((?:[DL]-)?[A-Z][A-Za-z1-9]*)',
+            r'(?:(?<=[\)\]\}])|^)([A-Z][a-z]{0,3})(?:\(\??\d+-([\d\?]+)\)|-(\d)\))((?:[DL]-)?[A-Z][A-Za-z1-9]*)',
             lambda m: f"{m.group(4)}{m.group(2) or m.group(3)}{m.group(1)}" if m.group(
                 1) not in lib else m.group(0),
             glycan)  # Ac(?1-5)Neu to Neu5Ac; S-3)GlcA to GlcA3S
@@ -2161,7 +2162,7 @@ def _canonicalize_iupac(glycan: str | int  # Glycan sequence in any supported fo
     glycan = re.sub(r'\(([ab\?])([1-2])-([\d\?]+)\)([A-Z][A-Za-z]*)$',
                     lambda m: f'{m.group(2)}{m.group(4)}' if m.group(
                         4) not in lib and _MONO_STEM.sub('', m.group(
-                        4)) not in lib else f'({m.group(1)}{m.group(2)}-{m.group(3)}){m.group(4)}', glycan)
+                        4)) not in lib and (m.group(3) in ('1', '?') or csdb_aglycone) else f'({m.group(1)}{m.group(2)}-{m.group(3)}){m.group(4)}', glycan)  # an aglycone hangs off position 1 or an unknown one; an unknown residue on a ring carbon (Gal(b1-4)Glx) is a residue, kept for the error that names it
     if '-P-' in glycan or '-S-' in glycan:
         glycan = re.sub(r'([\w-]+?)(-ol)?\(([ab?]?)(\d+)-([PS])-(\d+)\)',
                         lambda m: f"{m.group(1)}{m.group(4)}{m.group(5)}{m.group(2) or ''}({m.group(3)}{m.group(4)}-{m.group(6)})",

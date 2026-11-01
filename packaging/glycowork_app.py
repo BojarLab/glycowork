@@ -322,6 +322,7 @@ def _describe(text, motifs = False):
         # (Kdo, heptoses, QuiNAc), which glycan_to_mass weighs atom by atom
         composition = glycan_to_composition(glycan)
         info.update(kind = get_class(glycan) or 'unclassified', composition = f'{stringify_dict(composition)} ({canonicalize_composition(composition, as_string = True)})' if composition else '',
+                    mass = glycan_to_mass(glycan), permethylated = glycan_to_mass(glycan, sample_prep = 'permethylated'))
         found = glytoucan_to_glycan(glycan, revert = True, verbose = False)
         info['glytoucan'] = found if found != glycan else ''
         if motifs:

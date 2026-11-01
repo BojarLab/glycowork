@@ -2424,6 +2424,8 @@ def plot_glycans_excel(
             try:
                 drawing = GlycoDraw(glycan_structure, **{'compact': compact, 'suppress': True, 'restrict_vocab': True, **kwargs})
             except Exception as e:
+                writer.close()
+                out.unlink()  # the writer holds the file open from its creation on, and a half-drawn workbook would pass for a finished export
                 raise ValueError(f"Could not draw the glycan in row {i + 2} of the sheet: {glycan_structure}") from e
             svg_data = drawing.as_svg()
             # Excel 2016+ draws the vector twin added below; other readers show the PNG, rasterized at 4x the

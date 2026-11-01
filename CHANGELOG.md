@@ -10,15 +10,20 @@
 ### motif
 #### draw
 ##### Added ✨
-- `GlycanDrawing.as_markdown(size = 16)` returns the drawing as an inline `<img>` (base64 SVG data URI) for Markdown text, e.g., `IPython.display.Markdown(f'... {d.as_markdown()} ...')`, scaled so each monosaccharide symbol is `size` px tall (ba25f21)
-- `GlycanDrawing.as_sticker()` returns any drawing as a die-cut sticker, exactly as `GlycoDraw(..., sticker = True)` would have drawn it, e.g., for slides or pages with a dark background ()
-- frontends with a dark background can set `GLYCOWORK_DARK_DISPLAY=1`, and drawings then display, and inline with `as_markdown`, as die-cut stickers ()
+- `GlycanDrawing.as_markdown(size = 14)` returns the drawing as an inline `<img>` (base64 SVG data URI) for Markdown text, e.g., `IPython.display.Markdown(f'... {d.as_markdown()} ...')`, scaled so each monosaccharide symbol is `size` px tall (ba25f21)
+- `GlycanDrawing.as_sticker()` returns any drawing as a die-cut sticker, exactly as `GlycoDraw(..., sticker = True)` would have drawn it, e.g., for slides or pages with a dark background (0820c34)
+- frontends with a dark background can set `GLYCOWORK_DARK_DISPLAY=1`, and drawings then display, and inline with `as_markdown`, as die-cut stickers (0820c34)
+- frontends that show rich output outside Jupyter (such as an editor's console) can set `GLYCOWORK_RICH_DISPLAY=1`, and `GlycoDraw` and `plot_glycans_grid` then return their drawing instead of opening a matplotlib window (6957d6a)
 
 ##### Changed 🔄
-- a sticker drawing (`sticker = True`) now displays on a transparent background in notebooks, so it looks the same in light and dark themes, instead of on a white box ()
+- a sticker drawing (`sticker = True`) now displays on a transparent background in notebooks, so it looks the same in light and dark themes, instead of on a white box (0820c34)
+- Better drawing of repeat units with branches (5134bdd)
+- `GlycoDraw` `.png` outputs are now much faster (364808d)
 
 ##### Fixed 🐛
 - `plot_glycans_excel` leaves the cell of a motif defined by a glyco-regex (such as `Nglycan_complex` in motif-level `get_differential_expression` results) empty instead of failing the whole export, as `annotate_figure` already did (a1ae680)
+- `plot_glycans_excel` closes and removes its workbook when a glycan cannot be drawn, instead of leaving it open and half-written ()
+- `per_residue`, `highlight_linkages`, and `highlight_residues` in `GlycoDraw` land on the right arm when another arm carries a wildcard linkage (e.g., `GlcNAc(b1-?)` next to `GlcNAc(b1-2)`) (5134bdd)
 
 ##### Deprecated ⚠️
 
@@ -38,7 +43,7 @@
 #### tokenization
 ##### Added ✨
 - Pyridylamination as reducing-end label: `modification = 'PA'` (2-aminopyridine, +78.058 Da) in `composition_to_mass`, `glycan_to_mass`, `get_formula`, `mz_to_composition`, and `mz_to_structures` (2aff05a)
-- Also added mass support for reducine end modifications `reduced_D` (NaBD4 reduction, +HD), `APTS`, `aminoxyTMT`, and `GirardP` (8770c04)
+- Also added mass support for reducing-end modifications `reduced_D` (NaBD4 reduction, +HD), `APTS`, `aminoxyTMT`, and `GirardP` (8770c04)
 - `sample_prep` keyword arguments now also accept the option of `deuteropermethylated` (8770c04)
 - Mass calculation functions etc now support more peptide modifications with their Unimod (PSI-MS) names, such as `'NC[Carbamidomethyl]SK'` (54a3ea2)
 - Added `anilide` and `d5-anilide` to the supported sialic acid derivatization (from glycoqueuing), as `GQ` and `GQ-d5` (6a9dae8)
@@ -53,11 +58,6 @@
 #### smiles
 ##### Added ✨
 - Sialic acid methylamides (e.g., SALSA's a2-3 product) are now supported in SMILES generation (5134bdd)
-
-#### draw
-##### Changed 🔄
-- Better drawing of repeat units with branches (5134bdd)
-- `GlycoDraw` `.png` outputs are now much faster (364808d)
 
 #### analysis
 ##### Added ✨
@@ -88,7 +88,7 @@
 ##### Changed 🔄
 - Improved estimate of `mahalanobis_variance` (cb9feeb)
 - `impute_and_normalize(return_masks = True)` also returns which cells hold a group's floor and which were detected; `get_additive_logratio_transformation` and `get_procrustes_scores` take `reference`, the rows that may serve as reference (c759330)
-- The ALR reference of a two-group comparison (`get_procrustes_scores`) is now the feature whose log-ratio to the geometric mean varies least over all samples (paired: across each pair), resulting in better FDR and +0.14 power ()
+- The ALR reference of a two-group comparison (`get_procrustes_scores`) is now the feature whose log-ratio to the geometric mean varies least over all samples (paired: across each pair), resulting in better FDR and +0.14 power (10ce1fe)
 
 ##### Fixed 🐛
 - `attrs['transform']` of `get_differential_expression` and other `preprocess_data` users no longer reports CLR for an ALR whose reference glycan was listed more than once (10ce1fe)
