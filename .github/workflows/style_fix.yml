@@ -24,7 +24,7 @@ jobs:
       - name: Download the fixes
         id: patch
         continue-on-error: true  # no artifact: nothing left that --fix can fix
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: style-fix
           path: patch
@@ -39,8 +39,9 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/pulls/$number" --jq '"number=\(.number)\nhead=\(.head.sha)\npushable=\(.maintainer_can_modify or .head.repo.full_name == .base.repo.full_name)"' >> "$GITHUB_OUTPUT"
       - name: Check out the pull request branch
         if: steps.pr.outputs.pushable == 'true' && steps.pr.outputs.head == env.HEAD_SHA  # after a newer push, its own check run brings the fixes
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
+          allow-unsafe-pr-checkout: true  # only git apply and git push run on this checkout, never PR code
           repository: ${{ env.HEAD_REPO }}
           ref: ${{ env.HEAD_BRANCH }}
           token: ${{ secrets.STYLE_BOT_TOKEN }}

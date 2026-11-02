@@ -12,7 +12,7 @@ from glycowork.glycan_data import loader
 from glycowork.glycan_data.loader import lib, unwrap, Hex, dHex, HexA, HexN, HexNAc, Pen, linkages, multireplace, pd
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, rescue_compositions, parse_floating_bit, FLOATY_ALT, is_composition, canonicalize_composition
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, IS_LINKAGE
-from glycowork.motif.smiles import glycan_to_molecule
+from glycowork.motif.smiles import glycan_to_molecule, _anomeric_position, GlycanSMILESError
 
 chars = {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7, 'H': 8, 'I': 9, 'J': 10, 'K': 11,
          'L': 12, 'M': 13, 'N': 14, 'P': 15, 'Q': 16, 'R': 17, 'S': 18, 'T': 19, 'V': 20, 'W': 21, 'Y': 22, 'X': 23, 'Z': 24, 'z': 25}
@@ -749,16 +749,38 @@ def _molecule_formula(glycan: str, # Glycan in IUPAC-condensed format
     return Counter(atom[0] for atom in mol.atoms) + Counter({'H': sum(hydrogens)}), caps
 
 
+def _check_reducing_end(glycan: str | dict[str, int], # Glycan, composition, or formula
+                        modification: str | None # Reducing end modification
+                        ) -> None:
+    "Raises for a reducing-end modification on a glycan with no free reducing end to carry it; reduced and reduced_D describe an alditol itself"
+    if not modification or not isinstance(glycan, str) or is_composition(glycan):
+        return
+    token = re.split(r'[)\]}]', glycan)[-1]
+    if token.endswith('-ol'):
+        blocked = modification not in ('reduced', 'reduced_D')
+    else:
+        try:
+            anomeric = _anomeric_position(token)
+        except GlycanSMILESError:  # aglycones without a SMILES (1Ser, 1Fer, 1Bn) sit on an aldose's C1
+            anomeric = 1
+        graph = glycan_to_nxGraph(glycan.split('}')[-1])  # floating parts are numbered after the root
+        blocked = anomeric is None or token.endswith(('-onic', '-aric')) or re.search(rf'(?<![\d,]){anomeric}(?:[A-Z]|,\d+-Anhydro)', token) or any(
+            graph.nodes[n]['string_labels'].split('-')[-1] == str(anomeric) for n in graph.neighbors(max(graph.nodes)))  # linked through its own anomeric carbon, as sucrose and trehalose
+    if blocked:
+        raise ValueError(f"'{glycan}' has no free reducing end to carry '{modification}'.")
+
+
 def glycan_to_mass(glycan: str | dict[str, int], # Glycan in IUPAC-condensed format, or a composition (dict, or a string canonicalize_composition reads, such as "H5N4F1")
                    mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
                    sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/deuteropermethylated/peracetylated
                    stem_libr: dict[str, str] | None = None, # Modified to core monosaccharide mapping
                    adduct: str | float | None = None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
-                   modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl; a glycan ending in an alditol (-ol) is reduced already
+                   modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl; a glycan ending in an alditol (-ol) is reduced already and takes no label, and one without a free reducing end (-onic, Ins, an anomeric aglycone such as 1Ser, a residue linked through its anomeric carbon such as Glc(a1-2)Fru) takes neither
                    peptide: str | None = None, # Peptide carrying the glycan, in one-letter code with optional signed mass or formula deltas, or named modifications (PEPTIDE_MODIFICATIONS), after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK', 'NC[Carbamidomethyl]SK'), to get the glycopeptide mass
                    sialic_derivatization: str | tuple[str, str] | None = None # Sialic acid derivatization of an underivatized or (before it) permethylated sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); unless both are the same product, each sialic acid then needs a known linkage class, a2-3/6 or a2-? raises
                    ) -> float: # Theoretical mass
     """Calculate theoretical mass from glycan or composition, optionally as a glycopeptide"""
+    _check_reducing_end(glycan, modification)
     if sample_prep == 'deuteropermethylated':  # as in composition_to_mass, from the permethylated mass, so that alditol, inositol and atom-by-atom caps count too
         mass = glycan_to_mass(glycan, mass_value = mass_value, sample_prep = 'permethylated', stem_libr = stem_libr, adduct = adduct, modification = modification, peptide = peptide, sialic_derivatization = sialic_derivatization)
         return mass + round((mass - glycan_to_mass(glycan, mass_value = mass_value, stem_libr = stem_libr, adduct = adduct, modification = modification, sialic_derivatization = sialic_derivatization)) / calculate_adduct_mass('CH2', mass_value = mass_value)) * calculate_adduct_mass('D3-H3', mass_value = mass_value)
@@ -811,11 +833,12 @@ def get_formula(glycan: str | dict[str, int], # Glycan in any nomenclature canon
                 sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/deuteropermethylated/peracetylated
                 stem_libr: dict[str, str] | None = None, # Modified to core monosaccharide mapping
                 adduct: str | None = None, # Chemical formula of a neutral adduct (e.g., "C2H4O2"); a signed formula ("-H2O") removes atoms
-                modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl; a glycan ending in an alditol (-ol) is reduced already
+                modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl; a glycan ending in an alditol (-ol) is reduced already and takes no label, and one without a free reducing end (-onic, Ins, an anomeric aglycone such as 1Ser, a residue linked through its anomeric carbon such as Glc(a1-2)Fru) takes neither
                 peptide: str | None = None, # Peptide carrying the glycan(s), in one-letter code with optional signed formula deltas, or named modifications (PEPTIDE_MODIFICATIONS) other than isotope-coded tags, after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK', 'NC[Carbamidomethyl]SK'); several glycans on one peptide are passed as their total composition
                 sialic_derivatization: str | tuple[str, str] | None = None # Sialic acid derivatization of an underivatized or (before it) permethylated sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); unless both are the same product, every sialic acid then needs its linkage ('H5N4E1L1', 'Neu5Ac(a2-6)...')
                 ) -> str: # Elemental formula in Hill order (C, H, then alphabetical), e.g., 'C62H104N4O46' for H5N4
     """Elemental formula of a glycan, composition, or formula: the molecule glycan_to_mass weighs"""
+    _check_reducing_end(glycan, modification)
     peptide = _peptide_deltas(peptide) if peptide else peptide
     # adds the formula f n times; a signed formula ('-H2O', '+N3') counts with its sign
     elements, add = Counter(), lambda c, f, n = 1: [c.update({el: (-n if sign == '-' else n) * (int(k) if k else 1)}) for sign, part in re.findall(r'([+-]?)([^+-]+)', f) for el, k in re.findall(r'([A-Z][a-z]?)(\d*)', part)]

@@ -1662,6 +1662,25 @@ def test_glycan_to_mass():
             assert np.isclose(glycan_to_mass(g, sample_prep = sp, modification = 'reduced_D') - glycan_to_mass(g, sample_prep = sp), 1.006277)
             assert np.isclose(calculate_adduct_mass(get_formula(g, sample_prep = sp, modification = 'reduced_D')), glycan_to_mass(g, sample_prep = sp, modification = 'reduced_D'))
     assert get_formula('Glc(a1-3)LDManHep-ol', modification = 'reduced_D') == 'C13H25DO12'
+    # an alditol has no reducing end left to carry a label, in any sample preparation
+    for func in [glycan_to_mass, get_formula]:
+        for sp in ['underivatized', 'deuteropermethylated']:
+            for label in ['2AB', 'PA', 'benzyl']:
+                with pytest.raises(ValueError, match = 'no free reducing end'):
+                    func('Gal(b1-4)Glc-ol', sample_prep = sp, modification = label)
+    assert np.isclose(glycan_to_mass('Rib-ol(5-3)Gal', modification = '2AB') - glycan_to_mass('Rib-ol(5-3)Gal'), 120.0687)  # an alditol inside the chain leaves the reducing end free
+    # neither does an aldonic acid, inositol, an anomeric aglycone, or a residue linked through its anomeric carbon have a reducing end, for reduction as for a label
+    for g in ['Gal(b1-4)Glc-onic', 'Man(a1-2)Ins', 'Gal(b1-3)GalNAc1Ser', 'Gal(b1-4)Glc1Cer', 'Gal(b1-4)Glc1Me', 'Glc(a1-3)Glc1P', 'Kdo(a2-4)Kdo2Me', 'Gal(b1-4)Glc1Bn', 'Glc(a1-2)Fru', 'Glc(a1-1)Glc',
+              'Fru(b2-1)Glc', 'Gal(a1-6)Glc(a1-2)Fru', 'Glc(a1-2)[Gal(a1-6)]Fru', 'Rib-ol(5-1)Gal', '{Fuc(a1-?)}Glc(a1-1)Glc']:
+        for func in [glycan_to_mass, get_formula]:
+            for mod in ['reduced', '2AB']:
+                with pytest.raises(ValueError, match = 'no free reducing end'):
+                    func(g, modification = mod)
+    # a substituent or linkage elsewhere, a ketose's C1, an undefined linkage, or a bridge away from the anomeric carbon leaves it free
+    for g in ['Gal(b1-4)Glc6Me', 'Gal6S(b1-4)GlcNAc', 'Gal(b1-4)GlcA', 'Kdo(a2-4)Kdo', 'Gal(b1-3)Fru1P', 'GlcA(b1-4)2,5-Anhydro-Man', 'Fuc(a1-2)[Gal(a1-3)]Glc', 'Gal(b1-?)Glc', 'Fruf(b2-1)Fruf']:
+        assert np.isclose(glycan_to_mass(g, modification = '2AB') - glycan_to_mass(g), 120.0687), g
+    assert abs(glycan_to_mass('Fuc(a1-3)GlcNAc', modification = 'reduced') - 369.1635) < 0.001 and get_formula('Fuc(a1-3)GlcNAc', modification = 'reduced') == 'C14H27NO10'
+    assert np.isclose(calculate_adduct_mass(get_formula('Gal(b1-4)Glc6Me', modification = '2AB')), glycan_to_mass('Gal(b1-4)Glc6Me', modification = '2AB'))
     # an adduct formula counts every atom with the sign of its part, as its mass does
     for a in ['CH3COOH', 'C2H4O2-H']:
         assert np.isclose(calculate_adduct_mass(get_formula('H5N4', adduct = a)) - calculate_adduct_mass(get_formula('H5N4')), composition_to_mass('H5N4', adduct = a) - composition_to_mass('H5N4'))
