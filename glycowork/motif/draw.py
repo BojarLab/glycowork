@@ -21,6 +21,7 @@ import re
 from math import sin, cos, radians, sqrt, atan, degrees
 import ast
 
+
 # Adjusted SNFG color palette
 col_dict_base = {
     'snfg_white': '#FFFFFF', 'snfg_alt_blue': '#0385AE', 'snfg_green': '#058F60', 'snfg_yellow': '#FCC326',
