@@ -76,7 +76,7 @@ get_heatmap(df_map, motifs = True, feature_set = ['exhaustive'], datatype = 'pre
             show_all = True)
 ```
 
-![](00_core_files/figure-html/cell-8-output-1.png)
+![](00_core_files/figure-html/cell-9-output-1.png)
 
 Let’s say you’re interested in a specific glycan from Fabales, `GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc`. Finding out more about it could be annoying (try to Google anything more complex than a short motif and you run into problems). That’s why we have `glycowork.motif.query.get_insight`, a function that returns some metadata about that glycan. The nice thing is that you don’t need to bother with database IDs or notational ambiguity, as `glycowork` will convert that glycan into a graph behind the scenes and search our databases.
 
@@ -99,14 +99,14 @@ get_insight('GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)Glc
     That's all we can do for you at this point!
 
 Let’s say you develop an acute interest in the distribution of xylose in plant glycans. In such a situation, one option for further inquiry would be `glycowork.motif.analysis.characterize_monosaccharide`. This neat little function allows you to get a sense of what a particular monosaccharide is typically directly connected to and which modifications it can acquire. Further, you can filter the results to any taxonomic level you’re interested in! (as long as it’s in `df_species` or your dataset of interest of course.)\
-So, for xylose in plants, we immediately see Man (in M3X/M3FX structures) and Glc/Xyl (Xyloglucans) as prominent neighbors. Additionally, we note that xylose in plant glycans can be methylated, which is a rather typical modification in plant glycans in general.\
+So, for xylose in plants, we immediately see Man (in M3X / M3FX structures) and Glc/Xyl (Xyloglucans) as prominent neighbors. Additionally, we note that xylose in plant glycans can be methylated, which is a rather typical modification in plant glycans in general.\
 There is quite a bit more that you can do with `characterize_monosaccharide`, so have a look at its documentation for all the options!
 
 ``` python
 characterize_monosaccharide('Xyl', rank = 'Kingdom', focus = 'Plantae', modifications = True)
 ```
 
-![](00_core_files/figure-html/cell-10-output-1.png)
+![](00_core_files/figure-html/cell-13-output-1.png)
 
 Or how about we switch gears to fish and have a look at how they handle their galactose connections. This is a bit more diverse than with xylose! Note that you can set `thresh` to 50 (from its default value of 10), to make the plot more legible, if you have many rare modifications and pairings.
 
@@ -115,6 +115,6 @@ characterize_monosaccharide('Gal', rank = 'Class', mode = 'sugarbond',
                             focus = 'Actinopterygii', modifications = True, thresh = 50)
 ```
 
-![](00_core_files/figure-html/cell-11-output-1.png)
+![](00_core_files/figure-html/cell-14-output-1.png)
 
 And that’s just a super-brief glimpse at the really cool functions contained in `glycowork`! The rest of the documentation describes all functions and what they’re good for. Be sure to check out more, suggest improvements/fixes, and maybe even contribute something yourself. We are looking forward to your discoveries!

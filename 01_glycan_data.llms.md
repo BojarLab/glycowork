@@ -23,8 +23,8 @@ Further, the `stats` module contains many helper functions for statistics and da
 
 ``` python
 def unwrap(
-    nested_list:list[typing.Any], # list to be flattened
-)->list[typing.Any]: # flattened list
+    nested_list:list[Any], # list to be flattened
+)->list[Any]: # flattened list
 ```
 
 *converts a nested list into a flat list*
@@ -121,9 +121,9 @@ multireplace("Neu5Ac[a2-3]Gal", {'[': '(', ']': ')'})
 
 ``` python
 def build_custom_df(
-    df:pandas.DataFrame, # df_glycan / sugarbase
+    df:pd.DataFrame, # df_glycan / sugarbase
     kind:str='df_species', # whether to create 'df_species', 'df_tissue', or 'df_disease'
-)->pandas.DataFrame: # custom df with one glycan - species/tissue/disease association per row
+)->pd.DataFrame: # custom df with one glycan - species/tissue/disease association per row
 ```
 
 *creates custom df from df_glycan*
@@ -292,18 +292,18 @@ alpha = 0.054572814701647765
 TST_grouped_benjamini_hochberg(grouped_glycans, grouped_pvals, alpha)
 ```
 
-    ({'Fuc(a1-2)Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc': np.float64(0.8026651973502792),
-      'Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc': np.float64(0.8026651973502792),
-      'Neu5Ac(a2-3)Gal(b1-3)[Gal(b1-4)GlcNAc(b1-6)]GalNAc': np.float64(0.039797889108415155),
+    ({'Fuc(a1-2)Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc': np.float64(0.6142626731590599),
+      'Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc': np.float64(0.7070153617674607),
+      'Neu5Ac(a2-3)Gal(b1-3)[Gal(b1-4)GlcNAc(b1-6)]GalNAc': np.float64(0.019898944554207577),
       'Neu5Ac(a2-3)Gal(b1-3)[Gal(b1-4)GlcNAc6S(b1-6)]GalNAc': np.float64(0.8026651973502792),
-      'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc': np.float64(0.039797889108415155),
-      'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc': np.float64(0.01905510809527267),
-      'Neu5Ac(a2-3)Gal(b1-4)GlcNAc6S(b1-6)[Gal(b1-3)]GalNAc': np.float64(0.8026651973502792),
-      'Neu5Ac(a2-3)Gal(b1-4)GlcNAc6S(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc': np.float64(0.021666621200794843),
-      'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc': np.float64(0.4756765538697209),
-      'GalOS(b1-3)[Neu5Ac(a2-6)]GalNAc': np.float64(0.001509641430805748),
-      'Neu5Ac(a2-3)Gal(b1-3)GalNAc': np.float64(0.059740406588887206),
-      'Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc': np.float64(0.02577890710353316),
+      'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc': np.float64(0.019898944554207577),
+      'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc': np.float64(0.009527554047636335),
+      'Neu5Ac(a2-3)Gal(b1-4)GlcNAc6S(b1-6)[Gal(b1-3)]GalNAc': np.float64(0.5611180077391343),
+      'Neu5Ac(a2-3)Gal(b1-4)GlcNAc6S(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc': np.float64(0.010833310600397422),
+      'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc': np.float64(0.38054124309577675),
+      'GalOS(b1-3)[Neu5Ac(a2-6)]GalNAc': np.float64(0.0009057848584834488),
+      'Neu5Ac(a2-3)Gal(b1-3)GalNAc': np.float64(0.03584424395333232),
+      'Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc': np.float64(0.015467344262119896),
       'Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-8)Neu5Ac(a2-6)]GalNAc': np.float64(0.7501582090523815)},
      {'Fuc(a1-2)Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc': False,
       'Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc': False,
@@ -342,13 +342,14 @@ def meta_analysis(
 def impute_biosynthetic(
     df:pandas.DataFrame, # glycans as rows, samples as columns; NaN or 0 marks a missing value
     glycans:list[str] | None=None, # glycan of each row (IUPAC-condensed or composition), to give every sample its own activity per biosynthetic step
-    mnar:bool=True, # pull imputations towards each sample's detection limit, as far as the data say missingness is intensity-dependent
+    mnar:bool=True, # treat non-detections as censored where the data say missingness is intensity-dependent: they inform each glycan's level, and imputations are pulled towards the detection limit
     draw:bool=False, # add a random draw of the held-out prediction error to every imputed value, so imputed replicates keep the spread of measured ones (for rhythm tests that weigh each timepoint by its standard error)
     random_state:int | numpy.random._generator.Generator | None=None, # optional random state for reproducibility
+    unmeasured:numpy.ndarray | None=None, # boolean mask in the shape of df of cells that were never measured (e.g., a glycosite not covered in a sample): imputed, but not read as non-detections
 )->pandas.DataFrame: # dataframe with every missing value imputed
 ```
 
-*Imputes missing glycomics values with a low-rank model whose glycan loadings include each glycan’s count of every biosynthetic step, stacked with stable-ratio partner glycans and corrected for detection-limit censoring by a fitted selection model*
+*Imputes missing glycomics values with a low-rank model whose glycan loadings include each glycan’s count of every biosynthetic step, stacked with stable-ratio partner glycans; non-detections are censored observations of a fitted selection model, which sets each glycan’s level together with its measured values and gives glycans detected at most once their posterior mean*
 
 ``` python
 import numpy as np
@@ -359,7 +360,7 @@ hidden = masked.isna().values & (df.values > 0)
 print(np.corrcoef(np.log2(df.values[hidden]), np.log2(imputed.values[hidden]))[0, 1])  # 0.92
 ```
 
-    0.9201816879922476
+    0.9169137129365768
 
 ------------------------------------------------------------------------
 
@@ -440,7 +441,7 @@ def read_glycoproteomics(
     files:str | pathlib.Path | pandas.DataFrame | list[str | pathlib.Path | pandas.DataFrame], # result file(s) of FragPipe/MSFragger-Glyco or O-Pair (psm.tsv), pGlyco3 or pGlycoQuant, Byonic or Byologic, GlycReSoft, MetaMorpheus O-Pair (.psmtsv), Glyco-Decipher, StrucGP, or PEAKS GlycanFinder
     max_q:float=0.01, # highest q-value/FDR a match may have, wherever the engine reports one
     sample_map:Union[dict[str, str], Callable[[str], str], NoneType]=None, # renames runs (raw files, or FragPipe experiments) into samples; runs sharing a sample, e.g., fractions, are summed
-)->glycowork.glycan_data.loader.GlycoDataFrame: # glycoforms as 'protein_site_composition' in column 'ID' ('protein_site_sequence' for StrucGP structure codes), samples as columns; ready for get_differential_expression(glycoproteomics = True) or get_glycoshift_per_site
+)->glycowork.glycan_data.frame.GlycoDataFrame: # glycoforms as 'protein_site_composition' in column 'ID' ('protein_site_sequence' for StrucGP structure codes), samples as columns; ready for get_differential_expression(glycoproteomics = True) or get_glycoshift_per_site
 ```
 
 *Reads the native output of glycoproteomics search engines into a site-specific glycoform x sample table, quantified by intensity where the engine reports one and by spectral counts otherwise*
@@ -464,11 +465,11 @@ read_glycoproteomics(psms)
 
 ``` python
 def read_glycomics(
-    files:str | pathlib.Path | pandas.DataFrame | list[str | pathlib.Path | pandas.DataFrame], # export(s) of Skyline (report, long or pivoted by replicate), LaCyTools or MassyTools (Summary.txt), GlycoWorkbench (.gwp workspace or .gwa annotated peak list), Thermo Compound Discoverer, GlycoGenius, GlyHunter, GlycReSoft, or CandyCrunch, or any table with glycans in its first column and samples in the others
+    files:str | pathlib.Path | pandas.DataFrame | list[str | pathlib.Path | pandas.DataFrame], # export(s) of Skyline (report, long or pivoted by replicate), LaCyTools or MassyTools (Summary.txt), GlycoWorkbench (.gwp workspace or .gwa annotated peak list), Thermo Compound Discoverer, GlycoGenius, GlyHunter, GlycReSoft, or CandyCrunch, or any table with glycans in its first column and samples in the others; glycosphingolipids named as lipidomics software names them (GM3 d18:1/16:0, HexCer_NS d18:1/24:1, Hex2Cer 34:1;O2) are read as their glycans, summed over ceramides
     sample_map:Union[dict[str, str], Callable[[str], str], NoneType]=None, # renames runs (raw files, Skyline replicates, or sample columns) into samples; runs sharing a sample, e.g., fractions, are summed
     qc:dict[str, float]={'ppm': 20, 'ipq': 0.2, 'sn': 9}, # GlycoDash's limits for a LaCyTools charge state to pass in a run: absolute mass error (ppm), isotopic pattern quality (at most), S/N (at least); {} keeps every analyte
     min_pass:float=0.25, # fraction of runs a LaCyTools charge state has to pass qc in to be kept in every run, as LaCyTools reports each listed analyte in each run, noise included; GlycoDash's analyte curation uses 0.8 per biological group, after removing failed spectra
-)->glycowork.glycan_data.loader.GlycoDataFrame: # glycans (IUPAC-condensed, canonical composition, or the label as written if it is neither) in column 'glycan', samples as columns; ready for get_differential_expression and the rest of glycowork
+)->glycowork.glycan_data.frame.GlycoDataFrame: # glycans (IUPAC-condensed, canonical composition, or the label as written if it is neither) in column 'glycan', samples as columns; ready for get_differential_expression and the rest of glycowork
 ```
 
 *Reads the native output of glycomics software into a glycan x sample table, quantified by the tool’s abundance where it reports one and by feature counts otherwise*

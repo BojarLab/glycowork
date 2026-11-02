@@ -34,10 +34,10 @@ def GlycoDraw(
     repeat:bool | int | str | None=None, # Repeat unit specification (True: n units, int: # of units, str: range of units)
     repeat_range:list[int] | None=None, # Repeat unit range
     draw_method:str | None=None, # Drawing method: None, 'chem2d', 'chem3d'
-    filepath:str | pathlib.Path | None=None, # Output file path
+    filepath:str | Path | None=None, # Output file path
     suppress:bool=False, # Suppress display
     per_residue:list=[], # Per-residue intensity values (order should be the same as the monosaccharides in glycan string)
-    pdb_file:str | pathlib.Path | None=None, # only used when draw_method='chem3d'; already existing glycan structure
+    pdb_file:str | Path | None=None, # only used when draw_method='chem3d'; already existing glycan structure
     alt_text:str | None=None, # Custom ALT text for accessibility
     libr:dict | None=None, # Can be modified for drawing too exotic monosaccharides
     reducing_end_label:str | None=None, # Label to be drawn connected to the reducing end
@@ -57,6 +57,8 @@ GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Neu5Gc(a2-6)Gal
 
 ![](03_motif_files/figure-html/cell-3-output-1.png)
 
+![](03_motif_files/figure-html/cell-3-output-2.png)
+
 ------------------------------------------------------------------------
 
 ### annotate_figure
@@ -67,8 +69,8 @@ def annotate_figure(
     scale_range:tuple[int, int]=(25, 80), # Min/max glycan dimensions
     compact:bool=False, # Use compact style
     glycan_size:str='medium', # Glycan size preset ('small', 'medium', 'large')
-    filepath:str | pathlib.Path='', # Output file path
-    scale_by_DE_res:pandas.DataFrame | None=None, # Differential expression results (motif_analysis.get_differential_expression)
+    filepath:str | Path='', # Output file path
+    scale_by_DE_res:pd.DataFrame | None=None, # Differential expression results (motif_analysis.get_differential_expression)
     x_thresh:float=1, # X metric threshold
     y_thresh:float=0.05, # P-value threshold
     x_metric:str='Log2FC', # X axis metric ('Log2FC', 'Effect size')
@@ -83,8 +85,8 @@ def annotate_figure(
 
 ``` python
 def plot_glycans_excel(
-    df:pandas.DataFrame | pandas.Series | list[str] | str | pathlib.Path, # DataFrame or filepath with glycans, or the glycans themselves
-    folder_filepath:str | pathlib.Path, # Output folder path
+    df:pd.DataFrame | pd.Series | list[str] | str | Path, # DataFrame or filepath with glycans, or the glycans themselves
+    folder_filepath:str | Path, # Output folder path
     glycan_col_num:int | str=0, # Glycan column index, or its name
     scaling_factor:float=0.2, # Image scaling
     compact:bool=False, # Use compact style
@@ -103,7 +105,7 @@ def plot_glycans_grid(
     glycans:str | list[str], # Glycans to draw (IUPAC-condensed, compositions, motif names)
     ncols:int=4, # Glycans per row
     labels:list[str] | None=None, # Caption under each glycan, such as a name, ID, or fold change
-    filepath:str | pathlib.Path | None=None, # Output file path (.svg, .pdf, or .png)
+    filepath:str | Path | None=None, # Output file path (.svg, .pdf, or .png)
     suppress:bool=False, # Suppress display
     **kwargs
 )->Any: # Drawing object
@@ -116,6 +118,8 @@ plot_glycans_grid(['Gal(b1-4)GlcNAc', 'Fuc(a1-2)Gal(b1-4)GlcNAc', 'Neu5Ac(a2-6)G
 ```
 
 ![](03_motif_files/figure-html/cell-7-output-1.png)
+
+![](03_motif_files/figure-html/cell-7-output-2.png)
 
 ## analysis
 
@@ -139,7 +143,7 @@ def get_pvals_motifs(
     grouped_BH:bool=True, # Two-stage adaptive Benjamini-Hochberg within DAG-grouped motif families
     moderate_variance:bool=True, # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
     top_explained:int | None=5, # How many child motifs to name in 'Explained by'; None names all of them
-)->glycowork.glycan_data.loader.GlycoDataFrame: # DataFrame with p-values, FDR-corrected p-values, significance, Cohen's d effect sizes, and equivalence p-values for glycan motifs
+)->glycowork.glycan_data.frame.GlycoDataFrame: # DataFrame with p-values, FDR-corrected p-values, significance, Cohen's d effect sizes, and equivalence p-values for glycan motifs
 ```
 
 *Identifies significantly enriched glycan motifs using a moderated t-test with DAG-grouped FDR correction and Cohen’s d effect size calculation, comparing samples above/below threshold*
@@ -162,12 +166,12 @@ out = get_pvals_motifs(test_df, 'binding').iloc[:10,:]
 
 |   | motif | pval | corr_pval | significant | effect_size | equivalence_pval | Explained by | Redistribution p-val | Residual p-val | Residual effect size |
 |----|----|----|----|----|----|----|----|----|----|----|
-| 3 | GlcNAc | 0.000685 | 0.001657 | True | 8.217313 | 1.000000 | Fuc(a1-3)GlcNAc (-7.51), GlcNAc(b1-4)GlcNAc (-0.00) | nan | 1.000000 | 0.000000 |
-| 8 | GlcNAc(b1-4)GlcNAc | 0.001104 | 0.001657 | True | 8.217313 | 1.000000 |  | nan | nan | nan |
-| 6 | Man | 0.002273 | 0.009093 | True | 6.172967 | 1.000000 | Man(a1-2/3/6)Man (-2.14) | nan | 1.000000 | 0.000000 |
-| 11 | Man(a1-3)Man | 0.012950 | 0.017266 | True | 4.701182 | 1.000000 |  | nan | nan | nan |
-| 10 | Man(a1-2/3/6)Man | 0.007816 | 0.015632 | True | 4.032437 | 1.000000 | Man(a1-2)Man (-2.71), Man(a1-3)Man (+0.67) | nan | 1.000000 | 0.000000 |
-| 9 | Man(a1-2)Man | 0.225862 | 0.225862 | True | 1.321958 | 0.846667 |  | nan | nan | nan |
+| 3 | GlcNAc | 0.000685 | 0.000685 | True | 8.217313 | 1.000000 | Fuc(a1-3)GlcNAc (-7.51), GlcNAc(b1-4)GlcNAc (-0.00) | nan | 1.000000 | 0.000000 |
+| 8 | GlcNAc(b1-4)GlcNAc | 0.001104 | 0.001104 | True | 8.217313 | 1.000000 |  | nan | nan | nan |
+| 6 | Man | 0.002273 | 0.002728 | True | 6.172967 | 1.000000 | Man(a1-2/3/6)Man (-2.14) | nan | 1.000000 | 0.000000 |
+| 11 | Man(a1-3)Man | 0.012950 | 0.012950 | True | 4.701182 | 1.000000 |  | nan | nan | nan |
+| 10 | Man(a1-2/3/6)Man | 0.007816 | 0.007816 | True | 4.032437 | 1.000000 | Man(a1-2)Man (-2.71), Man(a1-3)Man (+0.67) | nan | 1.000000 | 0.000000 |
+| 9 | Man(a1-2)Man | 0.225862 | 0.225862 | False | 1.321958 | 0.846667 |  | nan | nan | nan |
 | 5 | Kdo | 0.218480 | 0.385142 | False | -1.224745 | 0.846667 |  | nan | nan | nan |
 | 4 | GlcOPN | 0.256761 | 0.385142 | False | -1.224745 | 0.846667 |  | nan | nan | nan |
 | 1 | GalNAc(a1-4)GlcNAcA | 0.399098 | 0.399098 | False | -1.224745 | 0.846667 |  | nan | nan | nan |
@@ -309,10 +313,11 @@ def get_differential_expression(
     monte_carlo:bool=False, # Use Monte Carlo for technical variation
     random_state:int | numpy.random._generator.Generator | None=None, # optional random state for reproducibility
     top_explained:int | None=5, # How many child motifs to name in 'Explained by'; None names all of them
-)->glycowork.glycan_data.loader.GlycoDataFrame: # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes
+    covariates:pandas.DataFrame | pandas.Series | dict | None=None, # per-sample nuisance variables indexed by sample name (e.g., secretor status, sex, age, batch; a dict maps samples to one covariate); each feature is fit as group plus covariates and the group effect is tested within them
+)->glycowork.glycan_data.frame.GlycoDataFrame: # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes (Cohen's h of the detection rates for features absent from a whole group)
 ```
 
-*Performs differential expression analysis using Welch’s t-test (or Hotelling’s T2 for sets) with multiple testing correction on glycomics abundance data*
+*Performs differential expression analysis using Welch’s t-test (or Hotelling’s T2 for sets, or a linear model with covariates) with multiple testing correction on glycomics abundance data*
 
 ``` python
 test_df = glycomics_data_loader.human_skin_O_PMC5871710_BCC
@@ -326,19 +331,19 @@ res
 
 |  | Glycan | Mean abundance | Log2FC | p-val | corr p-val | significant | corr Levene p-val | Effect size | Equivalence p-val | Explained by | Redistribution p-val | Residual p-val | Residual effect size |
 |----|----|----|----|----|----|----|----|----|----|----|----|----|----|
-| 12 | Neu5Ac(a2-3)Gal | 12.345115 | 0.313599 | 0.000015 | 0.000073 | True | 0.846171 | 1.286347 | 1.000000 | Disialyl_T_antigen (-0.36) | 0.005505 | 0.000193 | 1.168046 |
-| 7 | Gal3/6S(b1-3)GalNAc | 0.159900 | -0.838774 | 0.000696 | 0.004176 | True | 0.846171 | -0.847840 | 1.000000 |  | NaN | NaN | NaN |
-| 0 | H_antigen_type2 | 0.247156 | -0.654481 | 0.001817 | 0.006209 | True | 0.996125 | -0.788570 | 1.000000 |  | NaN | NaN | NaN |
-| 1 | Internal_LacNAc_type2 | 2.328696 | 0.491517 | 0.003104 | 0.006209 | True | 0.608968 | 0.731626 | 1.000000 | H_antigen_type2 (-1.15) | 0.000306 | 0.000971 | 0.871276 |
-| 9 | GlcNAc6S(b1-6)GalNAc | 1.046247 | 0.884675 | 0.004181 | 0.010466 | True | 0.996125 | 0.684443 | 1.000000 |  | NaN | NaN | NaN |
-| 4 | Oglycan_core1 | 7.956860 | 0.234965 | 0.005233 | 0.010466 | True | 0.996125 | 0.692574 | 1.000000 | Disialyl_T_antigen (-0.28) | 0.002596 | 0.000238 | 1.077778 |
-| 6 | Gal | 18.541780 | 0.184057 | 0.009787 | 0.013049 | True | 0.996125 | 0.661140 | 1.000000 | Terminal_LacNAc_type2 (-0.60), Internal_LacNAc... | 0.002265 | 1.000000 | 0.000000 |
+| 12 | Neu5Ac(a2-3)Gal | 12.345115 | 0.313599 | 0.000015 | 0.000029 | True | 0.846171 | 1.286347 | 1.000000 | Disialyl_T_antigen (-0.36) | 0.005505 | 0.000193 | 1.168046 |
+| 0 | H_antigen_type2 | 0.247156 | -0.654481 | 0.001817 | 0.001863 | True | 0.996125 | -0.788570 | 1.000000 |  | NaN | NaN | NaN |
+| 7 | Gal3/6S(b1-3)GalNAc | 0.159900 | -0.838774 | 0.000696 | 0.002088 | True | 0.846171 | -0.847840 | 1.000000 |  | NaN | NaN | NaN |
+| 1 | Internal_LacNAc_type2 | 2.328696 | 0.491517 | 0.003104 | 0.003104 | True | 0.608968 | 0.731626 | 1.000000 | H_antigen_type2 (-1.15) | 0.000306 | 0.000971 | 0.871276 |
+| 9 | GlcNAc6S(b1-6)GalNAc | 1.046247 | 0.884675 | 0.004181 | 0.005233 | True | 0.996125 | 0.684443 | 1.000000 |  | NaN | NaN | NaN |
+| 4 | Oglycan_core1 | 7.956860 | 0.234965 | 0.005233 | 0.005233 | True | 0.996125 | 0.692574 | 1.000000 | Disialyl_T_antigen (-0.28) | 0.002596 | 0.000238 | 1.077778 |
+| 6 | Gal | 18.541780 | 0.184057 | 0.009787 | 0.009787 | True | 0.996125 | 0.661140 | 1.000000 | Terminal_LacNAc_type2 (-0.60), Internal_LacNAc... | 0.002265 | 1.000000 | 0.000000 |
+| 10 | Neu5Ac | 16.553504 | 0.195722 | 0.009963 | 0.009963 | True | 0.996125 | 0.666531 | 1.000000 | Neu5Ac(a2-8)Neu5Ac (-0.82), Neu5Ac(a2-6)GalNAc... | 0.005061 | 1.000000 | 0.000000 |
+| 14 | Neu5Ac(a2-8)Neu5Ac | 0.038663 | -0.621757 | 0.013059 | 0.013059 | True | 0.608968 | -0.582300 | 1.000000 |  | NaN | NaN | NaN |
 | 2 | Terminal_LacNAc_type2 | 2.440640 | -0.413622 | 0.014311 | 0.014311 | True | 0.608968 | -0.577125 | 1.000000 |  | NaN | NaN | NaN |
-| 10 | Neu5Ac | 16.553504 | 0.195722 | 0.009963 | 0.021766 | True | 0.996125 | 0.666531 | 1.000000 | Neu5Ac(a2-8)Neu5Ac (-0.82), Neu5Ac(a2-6)GalNAc... | 0.005061 | 1.000000 | 0.000000 |
-| 14 | Neu5Ac(a2-8)Neu5Ac | 0.038663 | -0.621757 | 0.013059 | 0.021766 | True | 0.608968 | -0.582300 | 1.000000 |  | NaN | NaN | NaN |
-| 8 | GalNAc | 12.886096 | 0.121066 | 0.030163 | 0.045244 | True | 0.996125 | 0.645643 | 1.000000 | Gal3/6S(b1-3)GalNAc (-0.96), GlcNAc6S(b1-6)Gal... | 0.003977 | 1.000000 | 0.000000 |
-| 11 | Gal(b1-3)GalNAc | 12.726196 | 0.099145 | 0.071818 | 0.086182 | True | 0.842190 | 0.437094 | 0.831783 | Oglycan_core1 (+0.14), Oglycan_core2 (-0.07) | 0.271310 | 1.000000 | 0.000000 |
-| 13 | Neu5Ac(a2-6)GalNAc | 4.169726 | -0.061919 | 0.493222 | 0.616527 | False | 0.996125 | -0.152631 | 0.450845 | Disialyl_T_antigen (+0.02) | 0.000587 | 0.000845 | -0.913043 |
+| 8 | GalNAc | 12.886096 | 0.121066 | 0.030163 | 0.030163 | True | 0.996125 | 0.645643 | 1.000000 | Gal3/6S(b1-3)GalNAc (-0.96), GlcNAc6S(b1-6)Gal... | 0.003977 | 1.000000 | 0.000000 |
+| 11 | Gal(b1-3)GalNAc | 12.726196 | 0.099145 | 0.071818 | 0.071818 | False | 0.842190 | 0.437094 | 0.831783 | Oglycan_core1 (+0.14), Oglycan_core2 (-0.07) | 0.271310 | 1.000000 | 0.000000 |
+| 13 | Neu5Ac(a2-6)GalNAc | 4.169726 | -0.061919 | 0.493222 | 0.493222 | False | 0.996125 | -0.152631 | 0.450845 | Disialyl_T_antigen (+0.02) | 0.000587 | 0.000845 | -0.913043 |
 | 3 | Disialyl_T_antigen | 3.790085 | -0.043993 | 0.654437 | 0.654437 | False | 0.996125 | -0.099488 | 0.450845 |  | NaN | NaN | NaN |
 | 5 | Oglycan_core2 | 4.769337 | 0.025826 | 0.811772 | 0.811772 | False | 0.996125 | 0.052366 | 0.450845 |  | NaN | NaN | NaN |
 
@@ -500,7 +505,7 @@ def get_glycanova(
     motifs:bool=False, # Analyze motifs instead of sequences; per glycosite (protein_site_motif) for glycoproteomics data
     feature_set:str | list[str]=['exhaustive', 'known'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     min_samples:float=0.1, # Min fraction (0-1) of non-zero samples required
-    posthoc:bool=True, # Perform Tukey's HSD test post-hoc
+    posthoc:bool=True, # Perform Tukey's HSD test post-hoc (pairwise Fisher tests with Holm for features absent from a whole group)
     grouped_BH:bool | None=None, # Use two-stage adaptive Benjamini-Hochberg; None infers True for motifs (DAG-grouped families) and False for sequences
     custom_motifs:str | list[str]=[], # Custom motifs if using 'custom' feature set
     transform:str | None=None, # Transformation type: "CLR" or "ALR"; None auto-decides
@@ -510,7 +515,8 @@ def get_glycanova(
     glycoproteomics:bool | None=None, # Whether rows are glycoforms from glycoproteomics instead of glycans; default: whenever every row label is protein_site_glycan
     random_state:int | numpy.random._generator.Generator | None=None, # optional random state for reproducibility
     top_explained:int | None=5, # How many child motifs to name in 'Explained by'; None names all of them
-)->tuple[glycowork.glycan_data.loader.GlycoDataFrame, dict[str, pandas.DataFrame]]: # (ANOVA results with F-stats and omega-squared effect sizes, post-hoc results)
+    covariates:pandas.DataFrame | pandas.Series | dict | None=None, # per-sample nuisance variables indexed by sample name (e.g., secretor status, sex, age, batch); the groups are tested by ANCOVA, post-hoc tests on covariate-adjusted values
+)->tuple[glycowork.glycan_data.frame.GlycoDataFrame, dict[str, pandas.DataFrame]]: # (ANOVA results with F-stats and omega-squared effect sizes (Cramer's V for features absent from a whole group), post-hoc results)
 ```
 
 *Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey’s HSD post-hoc testing on glycomics data across multiple groups*
@@ -578,7 +584,7 @@ def get_time_series(
     custom_scale:float | dict=0, # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
     glycoproteomics:bool | None=None, # Whether rows are glycoforms, ordered by composition containment instead of substructure containment; default: whenever every row label is protein_site_glycan
     random_state:int | numpy.random._generator.Generator | None=None, # optional random state for reproducibility
-)->glycowork.glycan_data.loader.GlycoDataFrame: # DataFrame with regression coefficients and FDR-corrected p-values
+)->glycowork.glycan_data.frame.GlycoDataFrame: # DataFrame with regression coefficients and FDR-corrected p-values
 ```
 
 *Analyzes time series glycomics data using polynomial regression*
@@ -617,7 +623,7 @@ def get_jtk(
     grouped_BH:bool | None=None, # Family-grouped two-stage Benjamini-Hochberg via the motif DAG; None infers True for motifs and False for sequences
     glycoproteomics:bool | None=None, # Whether rows are glycoforms, ordered by composition containment instead of substructure containment; default: whenever every row label is protein_site_glycan
     random_state:int | numpy.random._generator.Generator | None=None, # optional random state for reproducibility
-)->glycowork.glycan_data.loader.GlycoDataFrame: # DataFrame with JTK results: adjusted p-values, period length, lag phase, amplitude
+)->glycowork.glycan_data.frame.GlycoDataFrame: # DataFrame with JTK results: adjusted p-values, period length, lag phase, amplitude
 ```
 
 *Identifies rhythmically expressed glycans using Jonckheere-Terpstra-Kendall algorithm for time series analysis*
@@ -676,7 +682,7 @@ def get_cosinor(
     grouped_BH:bool | None=None, # Family-grouped two-stage Benjamini-Hochberg via the motif DAG; None infers True for motifs and False for sequences
     glycoproteomics:bool | None=None, # Whether rows are glycoforms, ordered by composition containment instead of substructure containment; default: whenever every row label is protein_site_glycan
     random_state:int | numpy.random._generator.Generator | None=None, # optional random state for reproducibility
-)->glycowork.glycan_data.loader.GlycoDataFrame: # DataFrame with cosinor results: best period, mesor, amplitude, acrophase (peak time, on the time axis of timepoints), R2, raw and adjusted p-values
+)->glycowork.glycan_data.frame.GlycoDataFrame: # DataFrame with cosinor results: best period, mesor, amplitude, acrophase (peak time, on the time axis of timepoints), R2, raw and adjusted p-values
 ```
 
 *Identifies rhythmically expressed glycans or motifs with single-harmonic cosinor regression, reporting amplitude and acrophase (peak time) next to an F-test against no rhythm; unlike get_jtk, timepoints may be unevenly spaced or unevenly replicated*
@@ -979,20 +985,20 @@ get_roc(test_df, motifs = True)
 ![](03_motif_files/figure-html/cell-47-output-1.png)
 
     [('Neu5Ac(a2-3)Gal', 0.82),
+     ('Gal3/6S(b1-3)GalNAc', 0.2225),
      ('Neu5Ac', 0.7675000000000001),
      ('Gal(b1-3)GalNAc', 0.7525),
+     ('H_antigen_type2', 0.275),
      ('GlcNAc6S(b1-6)GalNAc', 0.7225),
+     ('Terminal_LacNAc_type2', 0.29),
      ('Internal_LacNAc_type2', 0.6975),
      ('Gal', 0.6699999999999999),
      ('Oglycan_core1', 0.655),
+     ('Neu5Ac(a2-8)Neu5Ac', 0.375),
      ('GalNAc', 0.6075),
      ('Oglycan_core2', 0.54),
-     ('Neu5Ac(a2-6)GalNAc', 0.485),
      ('Disialyl_T_antigen', 0.48),
-     ('Neu5Ac(a2-8)Neu5Ac', 0.375),
-     ('Terminal_LacNAc_type2', 0.29),
-     ('H_antigen_type2', 0.275),
-     ('Gal3/6S(b1-3)GalNAc', 0.2225)]
+     ('Neu5Ac(a2-6)GalNAc', 0.485)]
 
 ------------------------------------------------------------------------
 
@@ -1149,61 +1155,61 @@ get_glycoshift_per_site(df_milk, ['Colostrum1', 'Colostrum2', 'Colostrum3'], ['M
 
 |  | Condition_coefficient | Condition_corr_pval | Condition_significant | Hex_Condition_coefficient | Hex_Condition_corr_pval | Hex_Condition_significant | HexNAc_Condition_coefficient | HexNAc_Condition_corr_pval | HexNAc_Condition_significant | Neu5Ac_Condition_coefficient | ... | complex_Condition_significant | dHex_Condition_coefficient | dHex_Condition_corr_pval | dHex_Condition_significant | high_Man_Condition_coefficient | high_Man_Condition_corr_pval | high_Man_Condition_significant | hybrid_Condition_coefficient | hybrid_Condition_corr_pval | hybrid_Condition_significant |
 |----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
-| P10909_374 | 11.003143 | 2.205473e-24 | True | -21.866421 | 4.932419e-25 | True | 5.571504 | 4.209452e-23 | True | -1.469129 | ... | True | 34.478558 | 9.634171e-26 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P01011_106 | 37.301835 | 4.544324e-22 | True | 8.597721 | 3.240239e-23 | True | -28.704113 | 5.098921e-21 | True | 9.757607 | ... | True | -35.895702 | 5.235743e-23 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P07602_215 | 11.872231 | 9.508737e-21 | True | -33.685935 | 4.506236e-20 | True | 29.210907 | 7.798520e-20 | True | 5.466445 | ... | True | 11.872231 | 1.118675e-20 | True | 9.139009 | 8.846142e-20 | True | 0.000000 | 1.000000e+00 | False |
-| P24821_327 | 1.372925 | 8.307229e-17 | True | 6.864626 | 7.818568e-17 | True | 5.491701 | 7.818568e-17 | True | -40.233617 | ... | True | 1.372925 | 7.818568e-17 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P06858_70 | -0.138017 | 8.952165e-14 | True | -0.690084 | 8.425567e-14 | True | -0.552067 | 6.018262e-14 | True | -13.395384 | ... | True | 12.981334 | 1.321738e-17 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P01871_46 | 2.183549 | 8.173888e-13 | True | 1.241158 | 9.026027e-07 | True | -3.494675 | 1.207887e-15 | True | 14.412420 | ... | True | 2.183549 | 6.410892e-13 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P10909_103 | -0.722082 | 1.740507e-12 | True | -3.610409 | 1.638125e-12 | True | -2.888327 | 1.433359e-12 | True | 21.209039 | ... | True | -0.722082 | 1.433359e-12 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P01833_186 | 1.306143 | 3.930302e-11 | True | -5.392580 | 2.564386e-11 | True | 5.224572 | 3.288096e-11 | True | -1.459286 | ... | True | 4.071572 | 1.892816e-14 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P02765_156 | -0.511649 | 2.353016e-10 | True | 2.937741 | 1.881030e-10 | True | -2.046595 | 1.993143e-10 | True | -6.519282 | ... | True | 5.495985 | 1.534251e-10 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P47710_69 | 0.289541 | 1.089307e-09 | True | -1.503953 | 2.744323e-09 | True | 1.158164 | 9.320270e-10 | True | 0.929697 | ... | True | 3.241199 | 1.264030e-09 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P25311_109 | -0.372386 | 1.277871e-09 | True | -1.861931 | 1.322973e-09 | True | -1.489545 | 1.102477e-09 | True | 0.043921 | ... | True | 9.492600 | 8.580032e-14 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P0C0L5_226 | -28.680566 | 2.277092e-09 | True | 18.111339 | 2.315163e-09 | True | -57.361132 | 1.978288e-09 | True | 0.000000 | ... | False | 0.000000 | 1.000000e+00 | False | -28.680566 | 9.644155e-09 | True | 0.000000 | 1.000000e+00 | False |
-| P10909_291 | 0.125205 | 5.623001e-09 | True | 0.626024 | 5.292236e-09 | True | -0.990710 | 2.731725e-09 | True | 0.125205 | ... | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 1.491529 | 6.027501e-08 | True |
-| P08571_151 | -27.886409 | 5.623001e-09 | True | 18.001733 | 4.425171e-09 | True | -21.978514 | 1.399867e-08 | True | 14.700316 | ... | True | 0.000000 | 1.000000e+00 | False | -42.316188 | 5.548065e-09 | True | -5.475819 | 3.473702e-01 | False |
-| P01591_71 | 42.724023 | 7.122701e-08 | True | -5.194748 | 2.724638e-02 | True | -8.671393 | 9.720115e-04 | True | -8.798990 | ... | True | -3.118598 | 3.356059e-01 | False | 0.000000 | 1.000000e+00 | False | 18.376130 | 4.723805e-04 | True |
-| Q08380_551 | -1.912574 | 9.352811e-08 | True | -6.200274 | 1.649353e-13 | True | 8.783184 | 6.018262e-14 | True | 6.304166 | ... | True | 0.000000 | 1.000000e+00 | False | -8.216740 | 2.065116e-12 | True | 0.000000 | 1.000000e+00 | False |
-| P0DOX2_246 | -13.445023 | 1.950178e-04 | True | 0.651510 | 3.291974e-01 | False | 5.811469 | 1.482340e-04 | True | -5.075537 | ... | True | -18.650503 | 5.289632e-04 | True | 0.797895 | 8.727273e-01 | False | -1.294999 | 9.454545e-01 | False |
-| P01024_85 | -10.979048 | 1.656752e-03 | True | 9.408833 | 1.477550e-03 | True | -21.958095 | 1.403366e-03 | True | 0.000000 | ... | False | 0.000000 | 1.000000e+00 | False | -10.979048 | 7.016832e-03 | True | 0.000000 | 1.000000e+00 | False |
-| P19652_56 | -0.001621 | 4.035872e-03 | True | -0.008103 | 3.608545e-03 | True | -0.006483 | 3.436709e-03 | True | -0.003241 | ... | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P02788_156 | -13.375488 | 5.019683e-03 | True | 4.504494 | 2.955551e-02 | True | -2.204410 | 3.308678e-01 | False | 1.768800 | ... | True | 6.453011 | 1.821802e-03 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P24821_1018 | 1.404241 | 3.220482e-02 | True | -1.118785 | 2.917707e-02 | True | 2.808482 | 2.893267e-02 | True | 0.000000 | ... | False | 0.000000 | 1.000000e+00 | False | 1.404241 | 1.193473e-01 | False | 0.000000 | 1.000000e+00 | False |
-| P0DOX2_207 | -12.811609 | 5.479322e-02 | True | -3.186345 | 8.345975e-02 | False | 7.898115 | 5.826111e-05 | True | 7.413943 | ... | True | -0.176823 | 9.526511e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P07602_101 | 0.000944 | 8.213297e-02 | False | 0.004718 | 7.408072e-02 | True | 0.003774 | 7.408072e-02 | True | 0.000944 | ... | False | 0.000944 | 1.307307e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P01833_135 | -0.001365 | 9.783597e-02 | False | -0.006825 | 8.499776e-02 | False | -0.005460 | 8.499776e-02 | False | -0.002730 | ... | False | -0.001365 | 1.521829e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P02788_497 | 1.412371 | 1.557445e-01 | False | -3.966515 | 1.763508e-01 | False | 5.649484 | 1.357251e-01 | False | -7.775096 | ... | False | 3.402115 | 5.637362e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| Q6WN34_114 | -0.000546 | 1.566794e-01 | False | -0.002732 | 1.369299e-01 | False | -0.002185 | 1.369299e-01 | False | -0.000546 | ... | False | -0.000546 | 2.396272e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P01877_327 | 10.413107 | 1.772138e-01 | False | -3.797678 | 4.334942e-04 | True | 2.782034 | 5.193531e-01 | False | -5.635758 | ... | False | 0.000000 | 1.000000e+00 | False | 16.048865 | 1.200267e-04 | True | 1.190658 | 9.454545e-01 | False |
-| P00709_90 | -0.549612 | 2.178057e-01 | False | -1.014216 | 4.777876e-01 | False | -2.198447 | 1.979249e-01 | False | 0.698590 | ... | False | 19.818654 | 1.366540e-16 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P01833_469 | -9.830877 | 2.211357e-01 | False | 10.360782 | 5.060322e-05 | True | -12.661842 | 7.102502e-06 | True | -2.014921 | ... | True | 0.601039 | 7.272727e-01 | False | 0.000000 | 1.000000e+00 | False | -20.706156 | 4.723805e-04 | True |
-| Q08380_125 | -0.002017 | 2.211357e-01 | False | -0.010087 | 2.081277e-01 | False | -0.008070 | 2.049123e-01 | False | -0.002017 | ... | False | -0.002017 | 3.547631e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| Q13410_55 | -8.767867 | 2.467762e-01 | False | -1.400615 | 4.245568e-01 | False | 7.367252 | 2.049123e-01 | False | -9.804702 | ... | False | 10.138048 | 1.304585e-02 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P01033_101 | -0.000955 | 2.560696e-01 | False | -0.004774 | 2.507795e-01 | False | -0.003819 | 2.507795e-01 | False | -0.000955 | ... | False | -0.000955 | 4.267827e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P10909_86 | 0.002258 | 2.560696e-01 | False | 0.011290 | 2.560696e-01 | False | 0.009032 | 2.560696e-01 | False | 0.002258 | ... | False | 0.002258 | 4.267827e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P01876_340 | 7.582295 | 2.560696e-01 | False | -1.422441 | 2.312212e-01 | False | -0.094454 | 9.663220e-01 | False | 2.691064 | ... | False | -5.268188 | 1.307307e-01 | False | 0.661014 | 8.727273e-01 | False | 7.182366 | 3.473702e-01 | False |
-| P0C0L5_1391 | -0.002707 | 2.704897e-01 | False | -0.013534 | 2.704897e-01 | False | -0.010828 | 2.704897e-01 | False | -0.002707 | ... | False | -0.002707 | 4.327835e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| Q9NZJ4_3757 | 0.001253 | 2.962280e-01 | False | 0.007517 | 2.962280e-01 | False | 0.005012 | 2.962280e-01 | False | 0.001253 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| O60225_152 | 0.000330 | 3.273787e-01 | False | 0.002969 | 3.273787e-01 | False | 0.000660 | 3.273787e-01 | False | 0.000000 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000330 | 8.727273e-01 | False | 0.000000 | 1.000000e+00 | False |
-| P24821_1119 | -0.001260 | 4.282784e-01 | False | -0.006302 | 4.282784e-01 | False | -0.005042 | 4.282784e-01 | False | -0.001260 | ... | False | -0.001260 | 6.344866e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P01833_421 | -5.302533 | 4.721212e-01 | False | -5.091342 | 1.312784e-01 | False | 9.695514 | 4.516998e-02 | True | -0.536194 | ... | False | -0.170286 | 9.522628e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P02788_534 | -0.000608 | 4.872411e-01 | False | -0.003041 | 4.872411e-01 | False | -0.002433 | 4.872411e-01 | False | -0.000608 | ... | False | -0.000608 | 6.620121e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P25311_112 | 0.001661 | 4.965091e-01 | False | 0.008304 | 4.965091e-01 | False | 0.006643 | 4.965091e-01 | False | 0.001661 | ... | False | 0.001661 | 6.620121e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P00734_143 | -0.000248 | 5.072288e-01 | False | -0.001242 | 5.072288e-01 | False | -0.000994 | 5.072288e-01 | False | -0.000497 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P01833_499 | -6.190913 | 5.200281e-01 | False | 7.179902 | 3.608545e-03 | True | -9.919761 | 7.915336e-02 | False | -8.425150 | ... | False | 2.179052 | 6.620121e-01 | False | -16.857299 | 2.315925e-02 | True | -3.635730 | 9.454545e-01 | False |
-| P07602_332 | 0.000929 | 5.419882e-01 | False | 0.001857 | 5.419882e-01 | False | 0.001857 | 5.419882e-01 | False | 0.000000 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000929 | 8.727273e-01 | False | 0.000000 | 1.000000e+00 | False |
-| Q6ZMW3_1352 | -0.000986 | 5.560690e-01 | False | -0.002959 | 5.560690e-01 | False | -0.004931 | 5.560690e-01 | False | 0.000000 | ... | False | -0.000986 | 7.175083e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P02790_453 | -0.001216 | 5.800360e-01 | False | -0.006081 | 5.800360e-01 | False | -0.004865 | 5.800360e-01 | False | -0.002432 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P02749_253 | 0.000824 | 6.283032e-01 | False | 0.004118 | 6.283032e-01 | False | 0.003295 | 6.283032e-01 | False | 0.001647 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| Q08431_238 | -0.053430 | 7.776351e-01 | False | 0.070673 | 6.905309e-01 | False | -0.135220 | 6.801319e-01 | False | -0.028359 | ... | False | 0.000000 | 1.000000e+00 | False | -0.025071 | 9.231754e-01 | False | -0.028359 | 9.454545e-01 | False |
-| P00738_241 | 0.000473 | 7.923659e-01 | False | 0.002363 | 7.923659e-01 | False | 0.001891 | 7.923659e-01 | False | 0.000945 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P02788_521 | 0.000183 | 8.036502e-01 | False | 0.000913 | 8.036502e-01 | False | 0.000730 | 8.036502e-01 | False | 0.000365 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P07602_426 | -0.000476 | 8.227525e-01 | False | -0.002379 | 8.227525e-01 | False | -0.000952 | 8.227525e-01 | False | 0.000000 | ... | False | 0.000000 | 1.000000e+00 | False | -0.000476 | 8.727273e-01 | False | 0.000000 | 1.000000e+00 | False |
-| P00739_126 | -0.000261 | 8.298991e-01 | False | -0.001307 | 8.298991e-01 | False | -0.001045 | 8.298991e-01 | False | -0.000261 | ... | False | -0.000261 | 8.298991e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P18505_376 | 0.000512 | 8.520762e-01 | False | 0.002558 | 8.520762e-01 | False | 0.002046 | 8.520762e-01 | False | 0.001023 | ... | False | 0.001535 | 8.520762e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| Q08380_69 | -0.000080 | 9.493157e-01 | False | -0.000482 | 9.493157e-01 | False | -0.000321 | 9.493157e-01 | False | -0.000080 | ... | False | -0.000080 | 9.493157e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
-| P0DOX2_320 | 0.518476 | 9.517452e-01 | False | 1.187979 | 5.781108e-01 | False | -0.767261 | 8.047623e-01 | False | -15.669119 | ... | False | 6.908342 | 1.521829e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False |
+| P10909_374 | 11.007827 | 8.092243e-22 | True | -21.866671 | 1.819095e-22 | True | 5.578404 | 1.576562e-20 | True | -1.422656 | ... | True | 34.446135 | 3.594519e-23 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P01011_106 | 36.915718 | 9.899568e-21 | True | 8.593441 | 6.036643e-22 | True | -28.322276 | 1.198489e-19 | True | 9.371360 | ... | True | -35.940292 | 9.485707e-22 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P07602_215 | 11.887741 | 3.399843e-20 | True | -33.818338 | 1.561163e-19 | True | 29.342116 | 2.767400e-19 | True | 5.566635 | ... | True | 11.887741 | 3.999815e-20 | True | 9.104423 | 3.362082e-19 | True | 0.000000 | 1.000000 | False |
+| P24821_327 | 1.358945 | 6.515765e-15 | True | 6.794723 | 6.132485e-15 | True | 5.435778 | 6.324125e-15 | True | -39.823518 | ... | True | 1.358945 | 5.110404e-15 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P06858_70 | -0.137687 | 2.741216e-14 | True | -0.688437 | 2.579968e-14 | True | -0.550750 | 2.660592e-14 | True | -13.363438 | ... | True | 12.950375 | 4.045636e-18 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P10909_103 | -0.721154 | 2.456535e-12 | True | -3.605772 | 2.312033e-12 | True | -2.884618 | 2.043672e-12 | True | 21.181837 | ... | True | -0.721154 | 1.926694e-12 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P01833_186 | 1.300711 | 1.017785e-10 | True | -5.369004 | 5.830579e-11 | True | 5.202845 | 7.683278e-11 | True | -1.418266 | ... | True | 4.019688 | 4.809724e-14 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P01871_46 | 2.170283 | 4.187967e-10 | True | 1.146676 | 3.972924e-04 | True | -3.393175 | 1.003374e-12 | True | 14.244591 | ... | True | 2.170283 | 3.583288e-10 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P02765_156 | -0.519886 | 4.788857e-10 | True | 2.985334 | 3.825655e-10 | True | -2.079543 | 4.183207e-10 | True | -6.624535 | ... | True | 5.584763 | 3.434170e-10 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P25311_109 | -0.368422 | 2.741089e-09 | True | -1.842111 | 2.579849e-09 | True | -1.473689 | 2.418608e-09 | True | 0.017052 | ... | True | 9.412616 | 1.660768e-13 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P0C0L5_226 | -28.656498 | 2.975290e-09 | True | 18.096138 | 2.772959e-09 | True | -57.312996 | 2.647133e-09 | True | 0.000000 | ... | False | 0.000000 | 1.000000e+00 | False | -28.656498 | 1.155113e-08 | True | 0.000000 | 1.000000 | False |
+| P47710_69 | 0.279969 | 3.734651e-09 | True | -1.475748 | 8.715094e-09 | True | 1.119877 | 3.345977e-09 | True | 1.048123 | ... | True | 3.155565 | 4.799426e-09 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P08571_151 | -27.922110 | 5.800812e-09 | True | 17.991876 | 5.054349e-09 | True | -21.915590 | 1.702305e-08 | True | 14.497459 | ... | True | 0.000000 | 1.000000e+00 | False | -42.320351 | 5.783135e-09 | True | -5.330584 | 0.398619 | False |
+| P01591_71 | 42.541599 | 8.477669e-08 | True | -5.166757 | 2.810473e-02 | True | -8.650273 | 1.027186e-03 | True | -8.713971 | ... | True | -3.123779 | 3.339279e-01 | False | 0.000000 | 1.000000e+00 | False | 18.275951 | 0.000538 | True |
+| P10909_291 | 0.115116 | 4.889396e-07 | True | 0.575581 | 5.259182e-07 | True | -0.911443 | 2.630226e-07 | True | 0.115116 | ... | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 1.371908 | 0.000006 | True |
+| Q08380_551 | -2.416570 | 4.889396e-07 | True | -5.689635 | 3.721454e-11 | True | 8.116556 | 1.192939e-11 | True | 6.474847 | ... | True | 0.000000 | 1.000000e+00 | False | -8.891417 | 7.687681e-11 | True | 0.000000 | 1.000000 | False |
+| P0DOX2_246 | -13.580865 | 1.637397e-04 | True | 0.689838 | 3.010212e-01 | False | 5.795945 | 1.562258e-04 | True | -5.070921 | ... | True | -18.702344 | 4.990650e-04 | True | 0.710907 | 8.727273e-01 | False | -1.378544 | 0.945455 | False |
+| P01024_85 | -11.039726 | 1.529300e-03 | True | 9.460843 | 1.363301e-03 | True | -22.079453 | 1.335888e-03 | True | 0.000000 | ... | False | 0.000000 | 1.000000e+00 | False | -11.039726 | 6.477035e-03 | True | 0.000000 | 1.000000 | False |
+| P19652_56 | -0.001621 | 4.035872e-03 | True | -0.008103 | 3.608545e-03 | True | -0.006483 | 3.544106e-03 | True | -0.003241 | ... | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P02788_156 | -13.409647 | 4.852328e-03 | True | 4.497341 | 2.965550e-02 | True | -2.179494 | 3.358536e-01 | False | 1.801164 | ... | True | 6.459422 | 1.777605e-03 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P24821_1018 | 1.628020 | 3.403608e-02 | True | -1.297808 | 2.965550e-02 | True | 3.256039 | 3.153342e-02 | True | 0.000000 | ... | False | 0.000000 | 1.000000e+00 | False | 1.628020 | 1.261337e-01 | False | 0.000000 | 1.000000 | False |
+| P0DOX2_207 | -12.713679 | 5.803763e-02 | True | -3.166871 | 8.499776e-02 | False | 7.838112 | 7.248072e-05 | True | 7.352821 | ... | True | -0.148102 | 9.604860e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P07602_101 | 0.000944 | 8.213297e-02 | False | 0.004718 | 7.408072e-02 | True | 0.003774 | 7.639574e-02 | True | 0.000944 | ... | False | 0.000944 | 1.307307e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P01833_135 | -0.001365 | 9.783597e-02 | False | -0.006825 | 8.499776e-02 | False | -0.005460 | 8.765394e-02 | False | -0.002730 | ... | False | -0.001365 | 1.534682e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| Q6WN34_114 | -0.000546 | 1.566794e-01 | False | -0.002732 | 1.369299e-01 | False | -0.002185 | 1.412089e-01 | False | -0.000546 | ... | False | -0.000546 | 2.396272e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P02788_497 | 1.406250 | 1.566794e-01 | False | -3.945483 | 1.778568e-01 | False | 5.625002 | 1.409846e-01 | False | -7.770275 | ... | False | 3.473427 | 5.470211e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P01877_327 | 10.139194 | 1.920099e-01 | False | -3.769092 | 4.938894e-04 | True | 2.883046 | 5.057712e-01 | False | -5.768511 | ... | False | 0.000000 | 1.000000e+00 | False | 15.907705 | 1.449311e-04 | True | 1.079359 | 0.945455 | False |
+| P00709_90 | -0.561673 | 2.096062e-01 | False | -0.946003 | 5.100415e-01 | False | -2.246693 | 1.964261e-01 | False | 0.668611 | ... | False | 19.674465 | 2.379337e-16 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P01833_469 | -9.767329 | 2.237880e-01 | False | 10.248731 | 6.520996e-05 | True | -12.514158 | 9.332801e-06 | True | -1.985840 | ... | True | 0.596568 | 7.272727e-01 | False | 0.000000 | 1.000000e+00 | False | -20.498904 | 0.000562 | True |
+| Q08380_125 | -0.002017 | 2.237880e-01 | False | -0.010087 | 2.081277e-01 | False | -0.008070 | 2.077081e-01 | False | -0.002017 | ... | False | -0.002017 | 3.547631e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| Q13410_55 | -8.933516 | 2.373962e-01 | False | -1.433458 | 4.137702e-01 | False | 7.500058 | 2.077081e-01 | False | -9.771402 | ... | False | 10.071922 | 1.369400e-02 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P01033_101 | -0.000955 | 2.560696e-01 | False | -0.004774 | 2.507795e-01 | False | -0.003819 | 2.560696e-01 | False | -0.000955 | ... | False | -0.000955 | 4.267827e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P10909_86 | 0.002258 | 2.560696e-01 | False | 0.011290 | 2.560696e-01 | False | 0.009032 | 2.560696e-01 | False | 0.002258 | ... | False | 0.002258 | 4.267827e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P01876_340 | 7.603177 | 2.560696e-01 | False | -1.438773 | 2.252206e-01 | False | -0.073076 | 9.739093e-01 | False | 2.642875 | ... | False | -5.274189 | 1.307307e-01 | False | 0.703402 | 8.727273e-01 | False | 7.170895 | 0.398619 | False |
+| P0C0L5_1391 | -0.002707 | 2.704897e-01 | False | -0.013534 | 2.704897e-01 | False | -0.010828 | 2.704897e-01 | False | -0.002707 | ... | False | -0.002707 | 4.327835e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| Q9NZJ4_3757 | 0.001253 | 2.962280e-01 | False | 0.007517 | 2.962280e-01 | False | 0.005012 | 2.962280e-01 | False | 0.001253 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| O60225_152 | 0.000330 | 3.273787e-01 | False | 0.002969 | 3.273787e-01 | False | 0.000660 | 3.273787e-01 | False | 0.000000 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000330 | 8.727273e-01 | False | 0.000000 | 1.000000 | False |
+| P24821_1119 | -0.001260 | 4.282784e-01 | False | -0.006302 | 4.282784e-01 | False | -0.005042 | 4.282784e-01 | False | -0.001260 | ... | False | -0.001260 | 6.344866e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P01833_421 | -5.429280 | 4.626961e-01 | False | -5.040469 | 1.365327e-01 | False | 9.672193 | 4.776485e-02 | True | -0.562121 | ... | False | -0.161116 | 9.549389e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P02788_534 | -0.000608 | 4.872411e-01 | False | -0.003041 | 4.872411e-01 | False | -0.002433 | 4.872411e-01 | False | -0.000608 | ... | False | -0.000608 | 6.620121e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P25311_112 | 0.001661 | 4.965091e-01 | False | 0.008304 | 4.965091e-01 | False | 0.006643 | 4.965091e-01 | False | 0.001661 | ... | False | 0.001661 | 6.620121e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P00734_143 | -0.000248 | 5.072288e-01 | False | -0.001242 | 5.072288e-01 | False | -0.000994 | 5.072288e-01 | False | -0.000497 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P01833_499 | -6.304288 | 5.115586e-01 | False | 7.196460 | 3.536410e-03 | True | -9.906141 | 8.139259e-02 | False | -8.425216 | ... | False | 2.187014 | 6.620121e-01 | False | -16.906167 | 2.213538e-02 | True | -3.706189 | 0.945455 | False |
+| P07602_332 | 0.000929 | 5.419882e-01 | False | 0.001857 | 5.419882e-01 | False | 0.001857 | 5.419882e-01 | False | 0.000000 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000929 | 8.727273e-01 | False | 0.000000 | 1.000000 | False |
+| Q6ZMW3_1352 | -0.000986 | 5.560690e-01 | False | -0.002959 | 5.560690e-01 | False | -0.004931 | 5.560690e-01 | False | 0.000000 | ... | False | -0.000986 | 7.175083e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P02790_453 | -0.001216 | 5.800360e-01 | False | -0.006081 | 5.800360e-01 | False | -0.004865 | 5.800360e-01 | False | -0.002432 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P02749_253 | 0.000824 | 6.283032e-01 | False | 0.004118 | 6.283032e-01 | False | 0.003295 | 6.283032e-01 | False | 0.001647 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P00738_241 | 0.000473 | 7.923659e-01 | False | 0.002363 | 7.923659e-01 | False | 0.001891 | 7.923659e-01 | False | 0.000945 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P02788_521 | 0.000183 | 8.036502e-01 | False | 0.000913 | 8.036502e-01 | False | 0.000730 | 8.036502e-01 | False | 0.000365 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P07602_426 | -0.000476 | 8.227525e-01 | False | -0.002379 | 8.227525e-01 | False | -0.000952 | 8.227525e-01 | False | 0.000000 | ... | False | 0.000000 | 1.000000e+00 | False | -0.000476 | 8.727273e-01 | False | 0.000000 | 1.000000 | False |
+| P00739_126 | -0.000261 | 8.298991e-01 | False | -0.001307 | 8.298991e-01 | False | -0.001045 | 8.298991e-01 | False | -0.000261 | ... | False | -0.000261 | 8.298991e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P18505_376 | 0.000512 | 8.520762e-01 | False | 0.002558 | 8.520762e-01 | False | 0.002046 | 8.520762e-01 | False | 0.001023 | ... | False | 0.001535 | 8.520762e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| Q08431_238 | -0.032680 | 8.616991e-01 | False | 0.048280 | 7.836892e-01 | False | -0.092457 | 7.759790e-01 | False | -0.027097 | ... | False | 0.000000 | 1.000000e+00 | False | -0.005583 | 9.827333e-01 | False | -0.027097 | 0.945455 | False |
+| Q08380_69 | -0.000080 | 9.493157e-01 | False | -0.000482 | 9.493157e-01 | False | -0.000321 | 9.493157e-01 | False | -0.000080 | ... | False | -0.000080 | 9.493157e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P0DOX2_320 | 0.407500 | 9.620596e-01 | False | 1.168275 | 5.843695e-01 | False | -0.703303 | 8.207185e-01 | False | -15.551187 | ... | False | 6.842047 | 1.578354e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
 
 55 rows × 27 columns
 
@@ -1215,11 +1221,11 @@ get_biodiversity(df_milk, metrics = ['alpha'])[0].head()
 
     Chosen grouping: by_motif_family
          Glycosite    corr p-val  significant  Effect size
-    0    P00709_90  1.363759e-25         True    -2.172303
-    14  P0DOX2_246  1.457395e-25         True     0.263281
-    11  P07602_215  1.762216e-24         True    -0.347576
-    8   P01877_327  3.570178e-11         True   -25.357349
-    15  P0DOX2_320  9.034243e-08         True     1.131434
+    0    P00709_90  2.904331e-26         True    -3.112571
+    14  P0DOX2_246  5.889920e-26         True    -0.323954
+    11  P07602_215  3.653765e-25         True    -0.348624
+    8   P01877_327  3.445288e-11         True   -22.614158
+    15  P0DOX2_320  2.547771e-07         True     1.068710
 
 |  | Metric | Group1 mean | Group2 mean | p-val | Effect size | corr p-val | significant |
 |----|----|----|----|----|----|----|----|
@@ -1461,10 +1467,10 @@ get_glycan_similarity("Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", "Neu5Ac(a2-3)
 ``` python
 def glycan_to_nxGraph(
     glycan:str, # Glycan in IUPAC-condensed format
-    libr:glycowork.glycan_data.loader.HashableDict[str, int] | None=None, # Dictionary of form glycoletter:index
+    libr:HashableDict[str, int] | None=None, # Dictionary of form glycoletter:index
     termini:str='ignore', # How to encode terminal/internal position; options: ignore, calc, provided
     termini_list:tuple[str] | None=None, # List of positions from terminal/internal/flexible
-)->networkx.classes.digraph.DiGraph: # NetworkX graph object of glycan; cached and shared between calls, so copy it before modifying (a changed label would change every later result for that glycan)
+)->nx.DiGraph: # NetworkX graph object of glycan; cached and shared between calls, so copy it before modifying (a changed label would change every later result for that glycan)
 ```
 
 *Wrapper for converting glycans into networkx graphs; also works with floating substituents*
@@ -1483,7 +1489,7 @@ print(glycan_to_nxGraph('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]Glc
 
 ``` python
 def graph_to_string(
-    graph:networkx.classes.digraph.DiGraph, # Glycan graph (assumes root node is the one with the highest index)
+    graph:nx.DiGraph, # Glycan graph (assumes root node is the one with the highest index)
     canonicalize:bool=True, # Whether to output canonicalized IUPAC-condensed
     order_by:str='length', # canonicalize by 'length' or 'linkage'
 )->str: # IUPAC-condensed glycan string
@@ -1503,8 +1509,8 @@ graph_to_string(glycan_to_nxGraph('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc
 
 ``` python
 def compare_glycans(
-    glycan_a:str | networkx.classes.digraph.DiGraph, # First glycan to compare
-    glycan_b:str | networkx.classes.digraph.DiGraph, # Second glycan to compare
+    glycan_a:str | nx.DiGraph, # First glycan to compare
+    glycan_b:str | nx.DiGraph, # Second glycan to compare
     return_matches:bool=False, # Whether to return node mapping between glycans
     subsumes:bool=False, # Whether to instead check that glycan_a covers every structure glycan_b can be, i.e., glycan_b is glycan_a or a more specific version of it (Gal(b1-4)GlcNAc for Gal(b1-3/4)GlcNAc, but not vice versa)
 )->bool: # True if glycans are same (or glycan_a subsumes glycan_b), False if not
@@ -1527,8 +1533,8 @@ print(compare_glycans('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNA
 
 ``` python
 def subgraph_isomorphism(
-    glycan:str | networkx.classes.digraph.DiGraph, # Glycan sequence or graph
-    motif:str | networkx.classes.digraph.DiGraph, # Glycan motif sequence or graph
+    glycan:str | nx.DiGraph, # Glycan sequence or graph
+    motif:str | nx.DiGraph, # Glycan motif sequence or graph
     termini_list:str | list=[], # Monosaccharide position(s) from terminal/internal/flexible
     count:bool=False, # Whether to return count instead of presence/absence
     return_matches:bool=False, # Whether to return matched subgraphs as node lists
@@ -1552,10 +1558,10 @@ print(subgraph_isomorphism('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]
 
 ``` python
 def generate_graph_features(
-    glycan:str | networkx.classes.digraph.DiGraph, # Glycan sequence or network graph
+    glycan:str | nx.DiGraph, # Glycan sequence or network graph
     glycan_graph:bool=True, # True if input is glycan, False if network
     label:str='network', # Label for output dataframe if glycan_graph=False
-)->pandas.DataFrame: # Dataframe of graph features
+)->pd.DataFrame: # Dataframe of graph features
 ```
 
 *Compute graph features of glycan or network*
@@ -1576,8 +1582,8 @@ generate_graph_features("Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]Glc
 
 ``` python
 def largest_subgraph(
-    glycan_a:str | networkx.classes.digraph.DiGraph, # First glycan
-    glycan_b:str | networkx.classes.digraph.DiGraph, # Second glycan
+    glycan_a:str | nx.DiGraph, # First glycan
+    glycan_b:str | nx.DiGraph, # Second glycan
 )->str: # Largest common subgraph in IUPAC format
 ```
 
@@ -1597,9 +1603,9 @@ largest_subgraph(glycan1, glycan2)
 
 ``` python
 def ensure_graph(
-    glycan:str | networkx.classes.digraph.DiGraph, # Glycan in IUPAC-condensed format or as networkx graph
+    glycan:str | nx.DiGraph, # Glycan in IUPAC-condensed format or as networkx graph
     **kwargs
-)->networkx.classes.digraph.DiGraph: # NetworkX graph object of glycan; for a string, the cached graph glycan_to_nxGraph returns
+)->nx.DiGraph: # NetworkX graph object of glycan; for a string, the cached graph glycan_to_nxGraph returns
 ```
 
 *Ensures function compatibility with string glycans and graph glycans*
@@ -1616,12 +1622,12 @@ ensure_graph("Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc")
 
 ``` python
 def get_possible_topologies(
-    glycan:str | networkx.classes.digraph.DiGraph, # Glycan with floating substituent
+    glycan:str | nx.DiGraph, # Glycan with floating substituent
     exhaustive:bool=False, # Whether to allow additions at internal positions
     allowed_disaccharides:set[str] | None=None, # Permitted disaccharides when creating possible glycans
-    modification_map:dict[str, set[str]]={'6S': {'GlcNAc', 'Gal'}, '3S': {'Gal'}, '4S': {'GalNAc'}, 'OS': {'GlcNAc', 'GalNAc', 'Gal'}}, # Maps modifications to valid attachments
+    modification_map:dict[str, set[str]]={'6S': {'GlcNAc', 'Gal'}, '3S': {'Gal'}, '4S': {'GalNAc'}, 'OS': {'GlcNAc', 'Gal', 'GalNAc'}}, # Maps modifications to valid attachments
     return_graphs:bool=False, # Whether to return glycan graphs (otherwise return converted strings)
-)->list[str | networkx.classes.digraph.DiGraph]: # List of possible topology strings or graphs
+)->list[str | nx.DiGraph]: # List of possible topology strings or graphs
 ```
 
 *Create possible glycan graphs given a floating substituent*
@@ -1632,11 +1638,11 @@ def get_possible_topologies(
 
 ``` python
 def possible_topology_check(
-    glycan:str | networkx.classes.digraph.DiGraph, # Glycan with floating substituent
-    glycans:list[str | networkx.classes.digraph.DiGraph], # List of glycans to check against
+    glycan:str | nx.DiGraph, # Glycan with floating substituent
+    glycans:list[str | nx.DiGraph], # List of glycans to check against
     exhaustive:bool=False, # Whether to allow additions at internal positions
     **kwargs
-)->list[str | networkx.classes.digraph.DiGraph]: # List of matching glycans
+)->list[str | nx.DiGraph]: # List of matching glycans
 ```
 
 *Check whether glycan with floating substituent could match glycans from a list*
@@ -1751,10 +1757,10 @@ lib2
 
 ``` python
 def presence_to_matrix(
-    df:pandas.DataFrame, # DataFrame with glycan occurrence
+    df:pd.DataFrame, # DataFrame with glycan occurrence
     glycan_col_name:str='glycan', # Column name for glycans
     label_col_name:str='Species', # Column name for labels
-)->pandas.DataFrame: # Matrix with labels as rows and glycan occurrences as columns
+)->pd.DataFrame: # Matrix with labels as rows and glycan occurrences as columns
 ```
 
 *Converts a dataframe with glycan occurrence to absence/presence matrix*
@@ -1846,8 +1852,8 @@ print(canonicalize_composition("H5N4F1A2", as_string = True, string_format = "by
 
 ``` python
 def canonicalize_iupac(
-    glycan:str | int | list[str] | pandas.Series, # Glycan sequence in any supported format, or a list, tuple, array, Series, or Index of them
-)->str | list[str] | pandas.Series: # Standardized IUPAC-condensed format; a list for a list/tuple/array, a Series/Index with the same index for a Series/Index
+    glycan:str | int | list[str] | pd.Series, # Glycan sequence in any supported format, or a list, tuple, array, Series, or Index of them
+)->str | list[str] | pd.Series: # Standardized IUPAC-condensed format; a list for a list/tuple/array, a Series/Index with the same index for a Series/Index
 ```
 
 *Convert glycan(s) from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, pGlyco, StrucGP, CSDB-linear, KCF, SMILES, LINUCS, GlyConnect IDs, and GlyTouCanIDs to standardized IUPAC-condensed format*
@@ -1999,7 +2005,7 @@ glycan_to_glycam("Neu5Ac(a2-3)Gal(b1-3)GalNAc", reducing_anomer = "a")  # mucin-
 ``` python
 def get_possible_linkages(
     wildcard:str, # Pattern to match, ? can be wildcard
-    linkage_list:list[str]={'a2-11', 'b1-2', 'b2-7', '?1-6', '1-6', 'a1-11', 'b1-1', 'b1-4', '?1-?', '?2-3', 'a1-7', 'a1-8', 'a2-9', 'a1-3', 'b2-5', 'b1-6', 'a2-?', 'a2-2', '1-4', 'a1-9', 'a2-7', 'a1-4', 'a1-5', '?1-2', 'a2-1', 'a1-2', 'a1-?', 'a2-8', 'b1-3', 'a2-4', 'b1-?', 'b2-8', '?1-3', '?2-?', 'b1-9', 'a2-6', 'b2-6', 'b1-7', 'b2-1', 'a1-1', 'a1-6', 'b2-3', '?1-4', 'a2-5', 'b1-8', '?2-8', 'b2-2', 'a2-3', 'b2-4', 'b1-5', '?2-6'}, # List of linkages to search
+    linkage_list:list[str]={'?2-6', 'b2-3', '?1-?', 'a2-5', 'b2-5', 'a2-1', 'b1-7', 'a1-2', 'a2-3', 'a2-4', '1-6', 'b1-2', '?2-?', '?1-4', 'b1-?', 'b2-4', 'b1-8', 'b2-8', 'b1-9', 'a2-8', 'a2-2', '?1-6', '?1-2', 'a1-4', 'b1-5', 'a1-5', 'a2-7', 'a1-?', 'a2-9', 'a2-?', 'b2-6', 'b1-1', '1-4', 'b2-2', 'b1-4', '?1-3', 'b1-6', 'b2-1', 'a1-11', 'b2-7', 'a1-9', 'a2-6', 'a1-1', '?2-8', 'b1-3', '?2-3', 'a2-11', 'a1-6', 'a1-8', 'a1-3', 'a1-7'}, # List of linkages to search
 )->frozenset[str]: # Matching linkages
 ```
 
@@ -2213,7 +2219,7 @@ def glycan_to_molecule(
 ``` python
 def get_match(
     pattern:str | list[str], # Expression or pre-compiled pattern; e.g., "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
-    glycan:str | networkx.classes.digraph.DiGraph, # Glycan string or graph
+    glycan:str | nx.DiGraph, # Glycan string or graph
     return_matches:bool=True, # Whether to return matches vs boolean
 )->bool | list[str]: # Match results
 ```
@@ -2322,7 +2328,7 @@ For interested users, we here compile a selection of regular expression patterns
 ``` python
 def get_match_batch(
     pattern:str | list[str], # Expression or pre-compiled pattern; e.g., "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
-    glycan_list:str | networkx.classes.digraph.DiGraph | list[str | networkx.classes.digraph.DiGraph], # Glycan(s) as strings or graphs
+    glycan_list:str | nx.DiGraph | list[str | nx.DiGraph], # Glycan(s) as strings or graphs
     return_matches:bool=True, # Whether to return matches vs boolean
 )->list[bool] | list[list[str]]: # Match results for each glycan
 ```
@@ -2336,8 +2342,8 @@ def get_match_batch(
 ``` python
 def explain_match(
     pattern:str, # Glyco-regular expression, e.g., "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
-    glycan:str | networkx.classes.digraph.DiGraph, # Glycan string or graph
-)->pandas.DataFrame: # One row per pattern chunk, with what it compiled to and how often it occurs
+    glycan:str | nx.DiGraph, # Glycan string or graph
+)->pd.DataFrame: # One row per pattern chunk, with what it compiled to and how often it occurs
 ```
 
 *Show what each chunk of a glyco-regular expression means and where it does or does not occur in a glycan*
@@ -2430,12 +2436,12 @@ stemify_glycan("Neu5Ac9Ac(a2-3)Gal6S(b1-3)[Neu5Ac(a2-6)]GalNAc")
 
 ``` python
 def stemify_dataset(
-    df:pandas.DataFrame, # DataFrame with glycan column
+    df:pd.DataFrame, # DataFrame with glycan column
     stem_lib:dict[str, str] | None=None, # Modified to core monosaccharide mapping; default:created from lib
     libr:dict[str, int] | None=None, # Glycoletter to index mapping
     glycan_col_name:str='glycan', # Column name for glycans
     rarity_filter:int=1, # Modified monosaccharides occurring more often than this keep their modification
-)->pandas.DataFrame: # DataFrame with stemified glycans
+)->pd.DataFrame: # DataFrame with stemified glycans
 ```
 
 *Remove monosaccharide modifications from all glycans in dataset*
@@ -2463,22 +2469,22 @@ def mz_to_composition(
     mz_value:float, # m/z value from mass spec
     max_charge:int=-2, # Signed charge ceiling: sign sets ion mode (negative/positive), magnitude the highest charge state z considered
     mass_value:str='monoisotopic', # Mass type: monoisotopic/average
-    modification:str | None=None, # Reducing end modification: reduced/2AA/2AB/procainamide
-    sample_prep:str='underivatized', # Sample preparation method: underivatized/permethylated/peracetylated
+    modification:str | None=None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl
+    sample_prep:str='underivatized', # Sample preparation method: underivatized/permethylated/deuteropermethylated/peracetylated
     mass_tolerance:float=0.5, # Mass tolerance for matching
     tolerance_unit:str='Da', # Unit of mass_tolerance: "Da" (absolute) or "ppm"
     kingdom:str='Animalia', # Taxonomic kingdom filter for choosing a subset of glycans to consider
     glycan_class:str='all', # Glycan class: N/O/lipid/free/all
-    df_use:pandas.DataFrame | None=None, # Custom glycan database
+    df_use:pd.DataFrame | None=None, # Custom glycan database
     filter_out:str | set[str] | None=None, # Monosaccharide(s) to ignore during composition finding
-    deprioritized:str | set[str] | None={'PCho', 'HexA', 'Me'}, # Monosaccharide(s) to use only as fallback if no other composition matches
+    deprioritized:str | set[str] | None={'HexA', 'PCho', 'Me'}, # Monosaccharide(s) to use only as fallback if no other composition matches
     extras:str | list[str]=[], # Additional operation(s): 'adduct' also considers the adduct_ions
     adduct:str | None=None, # Chemical formula of a neutral adduct added to every candidate's mass, e.g., "C2H4O2"
     adduct_ions:str | list[str] | None=None, # Adduct ion(s) considered with extras = ['adduct'], as named in mz_to_composition.csv (e.g., 'Na+', 'K+', 'NH4+', 'Acetate', 'Formate'); default: Acetate (negative) or Na+ (positive)
     mass_tag:float | None=None, # Mass in Da a reducing-end label adds to the free glycan, i.e., the label minus O (e.g., 121.0528 for 2AA, 120.0687 for 2AB, 219.1735 for procainamide), added to every candidate's neutral mass
-    sialic_derivatization:str | tuple[str, str] | None=None, # Linkage-specific sialic acid derivatization ('EE', 'EEA', 'ME', 'DMA', 'SALSA', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); compositions then come with linkage-resolved sialic acids (Neu5Ac_a2-6, Neu5Ac_a2-3)
+    sialic_derivatization:str | tuple[str, str] | None=None, # Linkage-specific sialic acid derivatization ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); compositions then come with linkage-resolved sialic acids (Neu5Ac_a2-6, Neu5Ac_a2-3)
     return_all:bool=False, # Whether to return every composition and ion within mass_tolerance, as GlycoMod lists them, instead of the first hit
-)->list[dict[str, int]] | pandas.DataFrame: # List of matching compositions; with return_all a DataFrame of every match (composition, ion, theoretical mz, error_ppm) in Occam order, deprioritized ones last
+)->list[dict[str, int]] | pd.DataFrame: # List of matching compositions; with return_all a DataFrame of every match (composition, ion, theoretical mz, error_ppm) in Occam order, deprioritized ones last
 ```
 
 *Map m/z value to matching monosaccharide composition*
@@ -2499,7 +2505,7 @@ def match_composition_relaxed(
     composition:dict[str, int] | str, # Composition as a dict (e.g., {"dHex": 1, "Hex": 1, "HexNAc": 1}) or in any format canonicalize_composition reads (e.g., "H1N1F1")
     glycan_class:str='N', # Glycan class: N/O/lipid/free/all
     kingdom:str='Animalia', # Taxonomic kingdom filter for choosing a subset of glycans to consider
-    df_use:pandas.DataFrame | None=None, # Custom glycan database
+    df_use:pd.DataFrame | None=None, # Custom glycan database
 )->list[str]: # List of matching glycans
 ```
 
@@ -2575,20 +2581,20 @@ def mz_to_structures(
     mz_list:float | list[float], # Precursor mass(es)
     glycan_class:str, # Glycan class: N/O/lipid/free/all
     kingdom:str='Animalia', # Taxonomic kingdom filter for choosing a subset of glycans to consider
-    abundances:pandas.DataFrame | None=None, # Sample abundances matrix
+    abundances:pd.DataFrame | None=None, # Sample abundances matrix
     max_charge:int=-2, # Signed charge ceiling: sign sets ion mode (negative/positive), magnitude the highest charge state z considered
     mass_value:str='monoisotopic', # Mass type: monoisotopic/average
-    sample_prep:str='underivatized', # Sample prep: underivatized/permethylated/peracetylated
+    sample_prep:str='underivatized', # Sample prep: underivatized/permethylated/deuteropermethylated/peracetylated
     mass_tolerance:float=0.5, # Mass tolerance for matching
     tolerance_unit:str='Da', # Unit of mass_tolerance: "Da" (absolute) or "ppm"
-    modification:str | None=None, # Reducing end modification: reduced/2AA/2AB/procainamide
-    df_use:pandas.DataFrame | None=None, # Custom glycan database
+    modification:str | None=None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl
+    df_use:pd.DataFrame | None=None, # Custom glycan database
     filter_out:str | set[str] | None=None, # Monosaccharide(s) to ignore
-    deprioritized:str | set[str] | None={'PCho', 'HexA', 'Me'}, # Monosaccharide(s) to use only as fallback if no other composition matches
+    deprioritized:str | set[str] | None={'HexA', 'PCho', 'Me'}, # Monosaccharide(s) to use only as fallback if no other composition matches
     verbose:bool=False, # Whether to print non-matching compositions
     mass_tag:float | None=None, # Mass in Da a reducing-end label adds to the free glycan, i.e., the label minus O (e.g., 121.0528 for 2AA), added to every candidate's neutral mass
-    sialic_derivatization:str | tuple[str, str] | None=None, # Linkage-specific sialic acid derivatization ('EE', 'EEA', 'ME', 'DMA', 'SALSA', or a pair of SIALIC_PRODUCTS); the mass then gives each sialic acid's linkage, and only structures with these linkages are returned, unknown ones filled in where the mass decides them
-)->pandas.DataFrame | list: # DataFrame of structures x intensities or empty list
+    sialic_derivatization:str | tuple[str, str] | None=None, # Linkage-specific sialic acid derivatization ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS); the mass then gives each sialic acid's linkage, and only structures with these linkages are returned, unknown ones filled in where the mass decides them
+)->pd.DataFrame | list: # DataFrame of structures x intensities or empty list
 ```
 
 *Map precursor masses to structures, supporting accompanying relative intensities*
@@ -2610,10 +2616,10 @@ def compositions_to_structures(
     composition_list:str | dict[str, int] | list[str | dict[str, int]], # Composition(s) like {'Hex': 1, 'HexNAc': 1} or 'H1N1'
     glycan_class:str='N', # Glycan class: N/O/lipid/free/all
     kingdom:str='Animalia', # Taxonomic kingdom filter for choosing a subset of glycans to consider
-    abundances:pandas.DataFrame | None=None, # Sample abundances matrix
-    df_use:pandas.DataFrame | None=None, # Custom glycan database
+    abundances:pd.DataFrame | None=None, # Sample abundances matrix
+    df_use:pd.DataFrame | None=None, # Custom glycan database
     verbose:bool=False, # Whether to print non-matching compositions
-)->pandas.DataFrame: # DataFrame of structures x intensities
+)->pd.DataFrame: # DataFrame of structures x intensities
 ```
 
 *Map compositions to structures, supporting accompanying relative intensities*
@@ -2686,12 +2692,12 @@ glycan_to_composition("Neu5Ac(a2-3)Gal6S(b1-3)[Neu5Ac(a2-6)]GalNAc")
 def glycan_to_mass(
     glycan:str | dict[str, int], # Glycan in IUPAC-condensed format, or a composition (dict, or a string canonicalize_composition reads, such as "H5N4F1")
     mass_value:str='monoisotopic', # Mass type: monoisotopic/average
-    sample_prep:str='underivatized', # Sample prep: underivatized/permethylated/peracetylated
+    sample_prep:str='underivatized', # Sample prep: underivatized/permethylated/deuteropermethylated/peracetylated
     stem_libr:dict[str, str] | None=None, # Modified to core monosaccharide mapping
     adduct:str | float | None=None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
-    modification:str | None=None, # Reducing end modification: reduced/2AA/2AB/procainamide; a glycan ending in an alditol (-ol) is reduced already
-    peptide:str | None=None, # Peptide carrying the glycan, in one-letter code with optional signed mass or formula deltas after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK'), to get the glycopeptide mass
-    sialic_derivatization:str | tuple[str, str] | None=None, # Linkage-specific sialic acid derivatization of an underivatized sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); each sialic acid then needs a known linkage class, a2-3/6 or a2-? raises
+    modification:str | None=None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl; a glycan ending in an alditol (-ol) is reduced already
+    peptide:str | None=None, # Peptide carrying the glycan, in one-letter code with optional signed mass or formula deltas, or named modifications (PEPTIDE_MODIFICATIONS), after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK', 'NC[Carbamidomethyl]SK'), to get the glycopeptide mass
+    sialic_derivatization:str | tuple[str, str] | None=None, # Sialic acid derivatization of an underivatized or (before it) permethylated sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); unless both are the same product, each sialic acid then needs a known linkage class, a2-3/6 or a2-? raises
 )->float: # Theoretical mass
 ```
 
@@ -2711,11 +2717,11 @@ glycan_to_mass("Neu5Ac(a2-3)Gal6S(b1-3)[Neu5Ac(a2-6)]GalNAc")
 def composition_to_mass(
     dict_comp_in:dict[str, int] | str, # Composition dictionary of monosaccharide:count, or a string in any format canonicalize_composition reads (e.g., "H5N4F1")
     mass_value:str='monoisotopic', # Mass type: monoisotopic/average
-    sample_prep:str='underivatized', # Sample prep: underivatized/permethylated/peracetylated
+    sample_prep:str='underivatized', # Sample prep: underivatized/permethylated/deuteropermethylated/peracetylated
     adduct:str | float | None=None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
-    modification:str | None=None, # Reducing end modification: reduced/2AA/2AB/procainamide
-    peptide:str | None=None, # Peptide carrying the glycan(s), in one-letter code with optional signed mass or formula deltas after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK' for carbamidomethylation, 'M[+15.9949]NGTK'), to get the glycopeptide mass; several glycans on one peptide are passed as their total composition
-    sialic_derivatization:str | tuple[str, str] | None=None, # Linkage-specific sialic acid derivatization of an underivatized sample, a key of SIALIC_DERIVATIZATIONS ('EE', 'EEA', 'ME', 'DMA', 'SALSA') or a pair of SIALIC_PRODUCTS (a2-6, a2-3/8/9); every sialic acid then needs its linkage ('H5N4E1L1', {'Neu5Ac_a2-6': 1, 'Neu5Ac_a2-3': 1}), and uronic acids take the a2-6 product; peptide carboxyls are left to peptide's deltas
+    modification:str | None=None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl
+    peptide:str | None=None, # Peptide carrying the glycan(s), in one-letter code with optional signed mass or formula deltas, or named modifications (PEPTIDE_MODIFICATIONS), after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK' or 'NC[Carbamidomethyl]SK' for carbamidomethylation, 'M[+15.9949]NGTK'), to get the glycopeptide mass; several glycans on one peptide are passed as their total composition
+    sialic_derivatization:str | tuple[str, str] | None=None, # Sialic acid derivatization of an underivatized or (before it) permethylated sample, a key of SIALIC_DERIVATIZATIONS ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5') or a pair of SIALIC_PRODUCTS (a2-6, a2-3/8/9); unless both are the same product, every sialic acid then needs its linkage ('H5N4E1L1', {'Neu5Ac_a2-6': 1, 'Neu5Ac_a2-3': 1}), and uronic acids take the a2-6 product; peptide carboxyls are left to peptide's deltas
 )->float: # Theoretical mass
 ```
 
@@ -2735,7 +2741,7 @@ print(composition_to_mass('H5N4F1', peptide = 'EEQYNSTYR'))  # glycopeptide mass
 
 ``` python
 def calculate_adduct_mass(
-    formula:str, # Chemical formula of adduct (e.g., "C2H4O2", "-H2O", "+Na")
+    formula:str, # Chemical formula of adduct (e.g., "C2H4O2", "-H2O", "+Na"), or signed parts (e.g., "C5H6N2-O")
     mass_value:str='monoisotopic', # Mass type: monoisotopic/average
     enforce_sign:bool=False, # If True, returns 0 for unsigned formulas
 )->float: # Formula mass
@@ -2756,12 +2762,12 @@ calculate_adduct_mass("C2H4O2")
 ``` python
 def get_formula(
     glycan:str | dict[str, int], # Glycan in any nomenclature canonicalize_iupac reads, composition (dict, or a string canonicalize_composition reads, e.g., "H5N4F1"), or elemental formula (e.g., 'C62H104N4O46')
-    sample_prep:str='underivatized', # Sample prep: underivatized/permethylated/peracetylated
+    sample_prep:str='underivatized', # Sample prep: underivatized/permethylated/deuteropermethylated/peracetylated
     stem_libr:dict[str, str] | None=None, # Modified to core monosaccharide mapping
     adduct:str | None=None, # Chemical formula of a neutral adduct (e.g., "C2H4O2"); a signed formula ("-H2O") removes atoms
-    modification:str | None=None, # Reducing end modification: reduced/2AA/2AB/procainamide; a glycan ending in an alditol (-ol) is reduced already
-    peptide:str | None=None, # Peptide carrying the glycan(s), in one-letter code with optional signed formula deltas after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK'); several glycans on one peptide are passed as their total composition
-    sialic_derivatization:str | tuple[str, str] | None=None, # Linkage-specific sialic acid derivatization of an underivatized sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); every sialic acid then needs its linkage ('H5N4E1L1', 'Neu5Ac(a2-6)...')
+    modification:str | None=None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl; a glycan ending in an alditol (-ol) is reduced already
+    peptide:str | None=None, # Peptide carrying the glycan(s), in one-letter code with optional signed formula deltas, or named modifications (PEPTIDE_MODIFICATIONS) other than isotope-coded tags, after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK', 'NC[Carbamidomethyl]SK'); several glycans on one peptide are passed as their total composition
+    sialic_derivatization:str | tuple[str, str] | None=None, # Sialic acid derivatization of an underivatized or (before it) permethylated sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); unless both are the same product, every sialic acid then needs its linkage ('H5N4E1L1', 'Neu5Ac(a2-6)...')
 )->str: # Elemental formula in Hill order (C, H, then alphabetical), e.g., 'C62H104N4O46' for H5N4
 ```
 
@@ -2783,7 +2789,7 @@ print(get_formula("H1N1A1"))
 def get_unique_topologies(
     composition:dict[str, int] | str, # Composition dictionary of monosaccharide:count, or a string in any format canonicalize_composition reads (e.g., "H5N4F1")
     glycan_type:str, # Glycan class: N/O/lipid/free/repeat
-    df_use:pandas.DataFrame | None=None, # Custom glycan database to use for mapping
+    df_use:pd.DataFrame | None=None, # Custom glycan database to use for mapping
     universal_replacers:dict[str, str] | None=None, # Base-to-specific monosaccharide mapping
     taxonomy_rank:str='Kingdom', # Taxonomic rank for filtering
     taxonomy_value:str='Animalia', # Value at taxonomy rank
@@ -2820,4 +2826,4 @@ def get_random_glycan(
 get_random_glycan()
 ```
 
-    'GlcA(b1-4)GalNAc(b1-4)GlcNAc(b1-4)GlcNAc(b1-2)Man(a1-6)[Fuc(a1-3)[GalNAc(b1-4)]GlcNAcOPCho(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc'
+    'Fuc(a1-?)HexNAc(?1-?)Gal(b1-3)[GlcNAc(b1-6)]GlcNAc(b1-6)[GalNAc(?1-?)Gal(b1-3)]GalNAc'
