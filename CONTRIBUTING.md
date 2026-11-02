@@ -34,6 +34,8 @@ cd tests
 pytest
 ```
 
+* Adding `--fix` to the style check fixes GW1, GW2, and the pycodestyle rules on the lines you touched; GW3 findings need a manual fix. If a pull request fails the style check, a bot pushes these fixes to its branch (keep "Allow edits by maintainers" ticked), so pull before you push again.
+
 * Please update CHANGELOG.md with any significant changes. Add your changes in the relevant module/submodule section in the following format:
 
 ### module_name

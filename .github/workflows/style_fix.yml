@@ -1,0 +1,70 @@
+name: Style Bot
+
+# Pushes the check_style.py --fix result to pull requests that fail the Coding Standard check. style_check.yml makes the
+# fixes without write access; this workflow runs from the default branch, applies only their .py hunks and never runs PR code.
+on:
+  workflow_run:
+    workflows: [Coding Standard]
+    types: [completed]
+
+permissions:
+  actions: read
+  pull-requests: write
+
+jobs:
+  push-fixes:
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+      HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Download the fixes
+        id: patch
+        continue-on-error: true  # no artifact: nothing left that --fix can fix
+        uses: actions/download-artifact@v4
+        with:
+          name: style-fix
+          path: patch
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Find the pull request
+        id: pr
+        if: steps.patch.outcome == 'success'
+        run: |
+          number=$(gh api -X GET "repos/$GITHUB_REPOSITORY/pulls" -f state=open -f head="${HEAD_REPO%%/*}:$HEAD_BRANCH" --jq '.[0].number // empty')
+          [ -n "$number" ] || exit 0
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$number" --jq '"number=\(.number)\nhead=\(.head.sha)\npushable=\(.maintainer_can_modify or .head.repo.full_name == .base.repo.full_name)"' >> "$GITHUB_OUTPUT"
+      - name: Check out the pull request branch
+        if: steps.pr.outputs.pushable == 'true' && steps.pr.outputs.head == env.HEAD_SHA  # after a newer push, its own check run brings the fixes
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.HEAD_REPO }}
+          ref: ${{ env.HEAD_BRANCH }}
+          token: ${{ secrets.STYLE_BOT_TOKEN }}
+          path: pr
+      - name: Push the fixes
+        id: push
+        if: steps.pr.outputs.pushable == 'true' && steps.pr.outputs.head == env.HEAD_SHA
+        working-directory: pr
+        run: |
+          [ "$(git rev-parse HEAD)" = "$HEAD_SHA" ] && [ "$(git log -1 --format=%an)" != 'github-actions[bot]' ] || exit 0
+          git apply --include='*.py' ../patch/style.patch
+          git diff --quiet && exit 0
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -qam 'Apply check_style.py --fix'
+          git push
+          echo pushed=true >> "$GITHUB_OUTPUT"
+      - name: Tell the author
+        if: steps.pr.outputs.number && (steps.push.outputs.pushed == 'true' || steps.pr.outputs.pushable != 'true')
+        env:
+          NUMBER: ${{ steps.pr.outputs.number }}
+          PUSHED: ${{ steps.push.outputs.pushed }}
+        run: |
+          if [ "$PUSHED" = true ]; then
+            body='The style check failed, so `check_style.py --fix` was applied to the lines this PR touches and pushed to your branch. Please `git pull` before pushing again; GW3 findings, if any are left, need a manual fix.'
+          else
+            body='The style check failed. Allow edits by maintainers on this PR to get the fixes pushed automatically, or run `python .github/scripts/check_style.py --fix --diff origin/dev...HEAD glycowork tests bin` and push the result; GW3 findings need a manual fix.'
+          fi
+          gh pr comment "$NUMBER" -R "$GITHUB_REPOSITORY" --body "$body"

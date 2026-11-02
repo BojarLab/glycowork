@@ -3,12 +3,17 @@ project:
   render:
     - "*.ipynb"
     - "!CONTRIBUTING.md"
+  pre-render: python ../bin/docs_dark_glycans.py
 
 format:
   html:
-    theme: cosmo
-    css: styles.css
+    theme:
+      light: [cosmo, custom.scss]
+      dark: [cosmo, custom.scss, custom-dark.scss]
+    respect-user-color-scheme: true
+    highlight-style: github
     toc: true
+    toc-title: On this page
 
 website:
   llms-txt: true
@@ -16,8 +21,13 @@ website:
   open-graph: true
   repo-actions: [issue]
   navbar:
-    background: primary
     search: true
+    right:
+      - icon: github
+        href: https://github.com/BojarLab/glycowork
+        aria-label: GitHub
+  page-footer:
+    center: "glycowork · glycan data science from the [Bojar Lab](https://github.com/BojarLab)"
   sidebar:
     style: floating
 

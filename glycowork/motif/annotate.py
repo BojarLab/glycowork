@@ -1,4 +1,5 @@
 import ast
+import warnings
 import networkx as nx
 from pathlib import Path
 import pandas as pd
@@ -132,6 +133,9 @@ def annotate_glycan_topology_uncertainty(
     motifs = [motifs] if isinstance(motifs, str) else motifs
     if feasibles is None:
         feasibles = set(loader.df_species[loader.df_species.Class == "Mammalia"].glycan.values.tolist())
+    # A reducing-end alditol is its sugar, as in annotate_glycan and annotate_dataset, which hands over glycans already stripped; the database has to meet them that way too, since 1126 of its mammalian glycans are written as alditols
+    strip = lambda g: g[:-3] if g.endswith('-ol') and not _STRUCTURAL_ALDITOL.search(g) else g
+    feasibles = {strip(k) for k in feasibles}
     # Check whether termini are specified
     if not termini_list and isinstance(motifs, pd.DataFrame):
         termini_list = list(map(ast.literal_eval, motifs.termini_spec)) if 'termini_spec' in motifs.columns else [
@@ -144,7 +148,7 @@ def annotate_glycan_topology_uncertainty(
                    for i, mo in enumerate(motifs.motif if isinstance(motifs, pd.DataFrame) else motifs)]
     # Count the number of times each motif occurs in a glycan
     termini = 'calc' if termini_list else 'ignore'
-    ggraph = ensure_graph(glycan, termini = termini)
+    ggraph = ensure_graph(strip(glycan) if isinstance(glycan, str) else glycan, termini = termini)
     # round-trip through strings so termini are recalculated with the floating bit attached
     tgraphs = [glycan_to_nxGraph(t, termini = termini) for t in get_possible_topologies(ggraph, exhaustive = True)]
     if any('anchors' in d for _, d in ggraph.nodes(data = True)):
@@ -596,9 +600,14 @@ def quantify_motifs(
             raise ValueError("glycans must be provided if the first column is not glycan strings")
     # Glycoforms of one glycosite compete for that site only, so a motif is summed per site instead of over the whole run; before, protein_site_glycan labels were annotated as one unknown monosaccharide each and came back unchanged as 'motifs'
     sites = [split_glycoform_id(g) for g in glycans] if len(glycans) and all(GLYCOFORM_ID.fullmatch(str(g)) for g in glycans) else None
+    names = [g for _, g in sites] if sites else glycans
+    feature_set = [feature_set] if isinstance(feature_set, str) else feature_set
+    # Compositions have no structure, so their motifs are their monosaccharides, which only 'exhaustive' counts; without it, motifs = True on composition glycoforms ended in 'No glycosite has two or more glycoforms'
+    if 'exhaustive' not in feature_set and all(is_composition(g) for g in names):
+        warnings.warn("Compositions carry no structural motifs, so their monosaccharides (feature_set 'exhaustive') are quantified as well.")
+        feature_set = [*feature_set, 'exhaustive']
     # Motif extraction
-    df_motif = annotate_dataset([g for _, g in sites] if sites else glycans, feature_set = feature_set,
-                                condense = True, custom_motifs = custom_motifs)
+    df_motif = annotate_dataset(names, feature_set = feature_set, condense = True, custom_motifs = custom_motifs)
     collect_dic = {}
     df = df.T
     log2 = (df.select_dtypes(include = 'number') < 0).any().any()

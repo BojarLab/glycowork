@@ -51,6 +51,7 @@ human_skin_O_PMC5871710_BCC,PMC5871710,10.3389/fonc.2018.00070,,,Homo sapiens,sk
 human_skin_O_PMC5871710_SCC,PMC5871710,10.3389/fonc.2018.00070,,,Homo sapiens,skin,primary tissue,squamous cell carcinoma,O,negative,reduced,PGC-LC
 human_influenza_N_10_648982026_02_02_703422,,10.1038/s42003-026010759-y,,,Homo sapiens,lung,cell line,lung adenocarcinoma,N,negative,reduced,PGC-LC
 human_influenza_O_10_648982026_02_02_703422,,10.1038/s42003-026010759-y,,,Homo sapiens,lung,cell line,lung adenocarcinoma,O,negative,reduced,PGC-LC
+human_headandneck_O_GPST000316,https://glycopost.glycosmos.org/entry/GPST000316,,GlycoPOST,GPST000316,Homo sapiens,head_and_neck,primary tissue,head and neck cancer,O,negative,reduced,PGC-LC
 macaque_brain_N_GPST000309,,10.1126/sciadv.adg2615,GlycoPOST,GPST000309,Macaca mulatta,brain,primary tissue,,N,,2-AB,HILIC-LC
 mouse_brain_GSL_PMID39375371,PMID:39375371,10.1038/s41467-024-53032-8,,,Mus musculus,brain,primary tissue,,lipid,positive,none,RP-LC
 mouse_brain_tango2ko_GSL_10_1002pgr2_70042,,10.1002/pgr2.70042,,,Mus musculus,brain,primary tissue,,lipid,negative,reduced,PGC-LC

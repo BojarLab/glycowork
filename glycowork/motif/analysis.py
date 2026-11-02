@@ -24,8 +24,8 @@ from scipy.spatial.distance import squareform, pdist
 
 from glycowork.glycan_data import loader
 from glycowork.glycan_data.loader import strip_suffixes, download_model, GlycoDataFrame
-from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
-                                         impute_and_normalize, variance_based_filtering, JTKTest,
+from glycowork.glycan_data.stats import (cohen_d, _ttest_pvalue, _studentized_range_sf, mahalanobis_distance, mahalanobis_variance,
+                                         impute_and_normalize, JTKTest,
                                          impute_biosynthetic, get_alphaN, TST_grouped_benjamini_hochberg,
                                          compare_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
@@ -35,7 +35,7 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          omega_squared, moderated_variance, dag_neighbors,
                                          get_glycoform_diff, process_glm_results, partial_corr,
                                          estimate_technical_variance,
-                                         perform_tests_monte_carlo, cosinor_fit, spearman_exact_pvals)
+                                         perform_tests_monte_carlo, cosinor_fit, spearman_exact_pvals, detection_test, _covariate_fit)
 from glycowork.motif.processing import enforce_class, process_for_glycoshift, split_glycoform_id, GLYCOFORM_ID
 from glycowork.glycan_data.data_entry import read_abundances
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, create_correlation_network,
@@ -53,24 +53,24 @@ def _glycans_to_column(df: pd.DataFrame  # Abundance table, glycans in the first
 
 def _abundance_input(*names: str  # Parameters taking an abundance table, a file path, or a shipped dataset name
                    ) -> Callable:  # Decorator for analysis entry points
-  "Reads paths and dataset names with read_abundances and moves glycans from the index into the first column; a glycoproteomics parameter defaulting to None is then decided on the row labels of the first table"
-  def decorator(func):
-      sig = inspect.signature(func)
-      detect = 'glycoproteomics' in sig.parameters and sig.parameters['glycoproteomics'].default is None
+    "Reads paths and dataset names with read_abundances and moves glycans from the index into the first column; a glycoproteomics parameter defaulting to None is then decided on the row labels of the first table"
+    def decorator(func):
+        sig = inspect.signature(func)
+        detect = 'glycoproteomics' in sig.parameters and sig.parameters['glycoproteomics'].default is None
 
-      @wraps(func)
-      def wrapper(*args, **kwargs):
-          bound = sig.bind(*args, **kwargs)
-          for name in names:
-              if name in bound.arguments:
-                  x = bound.arguments[name]
-                  bound.arguments[name] = _glycans_to_column(read_abundances(x) if isinstance(x, (str, Path)) else x)
-          if detect and bound.arguments.get('glycoproteomics') is None:
-              df = bound.arguments[names[0]]
-              bound.arguments['glycoproteomics'] = len(df) > 0 and all(GLYCOFORM_ID.fullmatch(str(k)) for k in df.iloc[:, 0])  # decided on the labels, which survive pd.DataFrame(), to_csv, and a reader; attrs did not, and outlived a collapse to compositions
-          return func(*bound.args, **bound.kwargs)
-      return wrapper
-  return decorator
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            bound = sig.bind(*args, **kwargs)
+            for name in names:
+                if name in bound.arguments:
+                    x = bound.arguments[name]
+                    bound.arguments[name] = _glycans_to_column(read_abundances(x) if isinstance(x, (str, Path)) else x)
+            if detect and bound.arguments.get('glycoproteomics') is None:
+                df = bound.arguments[names[0]]
+                bound.arguments['glycoproteomics'] = len(df) > 0 and all(GLYCOFORM_ID.fullmatch(str(k)) for k in df.iloc[:, 0])  # decided on the labels, which survive pd.DataFrame(), to_csv, and a reader; attrs did not, and outlived a collapse to compositions
+            return func(*bound.args, **bound.kwargs)
+        return wrapper
+    return decorator
 
 
 @_abundance_input('df')
@@ -140,32 +140,42 @@ def preprocess_data(
         protect = pd.DataFrame(~seen.loc[sites.values].to_numpy(), index = df.index, columns = df.columns[
             1:])  # every glycoform of a site that was never identified in a sample is structurally missing, not below detection
     df = replace_outliers_winsorization(df)
-    if experiment == "diff":
-        df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples, protect = protect,
-                                  circadian = circadian, random_state = random_state)
-    elif experiment == "anova":
-        groups_unq = sorted(set(group1))
-        df = impute_and_normalize(df, [[df.columns[i + 1] for i, x in enumerate(group1) if x == g] for g in groups_unq],
-                                  impute = impute, min_samples = min_samples, protect = protect,
-                                  circadian = circadian, random_state = random_state)
+    split = [group1, group2] if experiment == "diff" else [[df.columns[i + 1] for i, x in enumerate(group1) if x == g] for g in sorted(set(group1))]
+    df, floored, detected = impute_and_normalize(df, split, impute = impute, min_samples = min_samples, protect = protect, circadian = circadian,
+                                                 random_state = random_state, return_masks = True)
+    # A feature without any detection in a whole group holds a floor there, which is no measurement: in the log-ratio reference it shifted every
+    # feature of the samples it floors, so it stays out of the reference (and gets a detection test from the callers, through attrs['absent'])
+    absent = floored.any(axis = 1).to_numpy() & (not glycoproteomics)
+    # A glycan given more than once is averaged after the transform, so a floored copy next to measured ones put the group it floors ~11 log2 low
+    # with no spread (the remaining false calls of split replicates); it carries no measurement and is left out
+    copies = df.iloc[:, 0]
+    spare = absent & copies.isin(copies[~absent]).to_numpy()
+    if spare.any():
+        df, floored, detected, absent = df[~spare].reset_index(drop = True), floored[~spare].reset_index(drop = True), detected[~spare].reset_index(drop = True), absent[~spare]
+    reference = df.index[~absent].tolist() if absent.any() and not absent.all() else None
+    absent_rows = None
     df_org = df.copy(deep = True)
     if transform is None:
-        transform = "CLR" if glycoproteomics else "ALR" if (isinstance(df.iloc[0, 0], str) and enforce_class(
-            df.iloc[0, 0], "N")) and len(df) > 50 else "CLR"
+        transform = "CLR" if glycoproteomics or monte_carlo else "ALR" if (isinstance(df.iloc[0, 0], str) and enforce_class(
+            df.iloc[0, 0], "N")) and len(df) > 50 else "CLR"  # Monte Carlo samples CLR-transformed instances (estimate_technical_variance)
     if transform not in ("ALR", "CLR", "Nothing"):
         raise ValueError("Only ALR and CLR are valid transforms for now.")
+    if monte_carlo and transform != "CLR":
+        raise ValueError(f"monte_carlo samples CLR-transformed instances (estimate_technical_variance), so it needs transform = 'CLR' or None, not {transform!r}.")
     if motifs or glycoproteomics:
         pass  # both cases overwrite df below with their own transform, so running the run-wide one here only pays for ALR's O(features) Procrustes search and, for glycoproteomics, would close over a simplex that does not exist
     elif transform == "ALR":
+        rows = len(df)
         df = get_additive_logratio_transformation(df, df.columns[1:].tolist() if experiment == "anova" else group1,
                                                   group2, paired = paired, gamma = gamma, custom_scale = custom_scale,
-                                                  random_state = random_state)
+                                                  random_state = random_state, reference = reference)
+        transform = "ALR" if len(df) < rows else "CLR"  # it switches to CLR when no reference qualifies; ALR drops the reference row
     elif transform == "CLR":
         if monte_carlo:
             df = GlycoDataFrame(pd.concat([df.iloc[:, 0], estimate_technical_variance(df.iloc[:, 1:], group1, group2,
                                                                                       gamma = gamma,
                                                                                       custom_scale = custom_scale,
-                                                                                      random_state = random_state)],
+                                                                                      random_state = random_state, reference = reference)],
                                           axis = 1),
                                 contrasts = getattr(df, '_contrasts', {}), paired = paired,
                                 name = getattr(df, '_glyco_name', ''))
@@ -177,30 +187,51 @@ def preprocess_data(
                                                 clr_group1 if experiment == "diff" else df.columns[1:].tolist(),
                                                 [] if paired else group2, gamma = gamma,
                                                 custom_scale = 0 if paired else custom_scale,
-                                                random_state = random_state).to_numpy()
+                                                random_state = random_state, reference = reference).to_numpy()
     if motifs and not glycoproteomics:
-        # Motif extraction and quantification
-        df_org = quantify_motifs(df_org, feature_set = feature_set, custom_motifs = custom_motifs)
+        # Motif extraction and quantification; with floored glycans the detection of each motif is quantified in the same pass
+        if absent.any():
+            samples = df_org.columns[1:]
+            # A glycan without detection in a whole group counts only where it was measured, in every group: its floor read as 0 next to imputations
+            # of the same glycan in the other group, so a glycan seen in few samples made its motifs differ between any two groups (~20 calls per random split)
+            df_org.iloc[:, 1:] = df_org.iloc[:, 1:].mask(absent[:, None] & ~detected.to_numpy(), 0.0)
+            seen = detected.astype(float).set_axis([f'\x00{c}' for c in samples], axis = 1)
+            both = quantify_motifs(pd.concat([df_org, seen], axis = 1), feature_set = feature_set, custom_motifs = custom_motifs)
+            df_org, detected = both[samples], both[seen.columns].set_axis(samples, axis = 1) > 0
+            absent = np.logical_or.reduce([(df_org[g] == 0).all(axis = 1).to_numpy() for g in split if len(g)])
+            reference = df_org.index[~absent].tolist() if absent.any() and not absent.all() else None
+            absent_rows = detected[absent] if absent.any() else None
+        else:
+            df_org = quantify_motifs(df_org, feature_set = feature_set, custom_motifs = custom_motifs)
         # Re-normalization
         df_org = df_org.apply(lambda col: col / col.sum() * 100, axis = 0)
         if motif_dag:
             df_org.attrs['motif_dag'] = get_motif_dag(df_org.index.tolist(), abundances = df_org)
         df = df_org + 0.0000001
-        if transform == "CLR":
+        if monte_carlo:
+            df = estimate_technical_variance(df, group1, group2, gamma = gamma, custom_scale = custom_scale, random_state = random_state, reference = reference).set_axis(df.index)
+        elif transform == "CLR":
             df = clr_transformation(df, (
                 (group1 + group2) if paired else group1) if experiment == "diff" else df.columns.tolist(),
                                     [] if paired else group2,
                                     gamma = gamma, custom_scale = 0 if paired else custom_scale,
-                                    random_state = random_state)
+                                    random_state = random_state, reference = reference)
         elif transform == "ALR":
+            rows = len(df)
             df = get_additive_logratio_transformation(df.reset_index(), group1 if experiment == "diff" else df.columns.tolist(), group2, paired = paired, gamma = gamma,
-                                                      custom_scale = custom_scale, random_state = random_state)
+                                                      custom_scale = custom_scale, random_state = random_state,
+                                                      reference = None if reference is None else np.flatnonzero(~absent).tolist())
+            transform = "ALR" if len(df) < rows else "CLR"
             df = df.set_index(df.columns[0])
     else:
         if motifs:
             # Per-glycosite motifs (protein_site_motif) from the imputed glycoforms, which then compete within their site exactly as glycoforms do; structurally missing sites stay NaN
             df_org = quantify_motifs(df_org, feature_set = feature_set, custom_motifs = custom_motifs).rename_axis('motif').reset_index()
             df = df_org.copy()
+        if absent.any():
+            labels = df_org.iloc[:, 0].to_numpy()
+            gone = pd.Series(absent).groupby(labels).all()
+            absent_rows = detected.set_axis(labels).groupby(level = 0).any()[gone]
         df = df.set_index(df.columns[0])
         df = df.groupby(df.index).sum() if glycoproteomics else df.groupby(
             df.index).mean()  # duplicate glycoproteomics rows are charge states/repeat identifications of one part, so they amalgamate by summation before closure
@@ -224,7 +255,7 @@ def preprocess_data(
             df_org, sites = df_org[ok], sites[
                 ok]  # a group needs two measured samples before it has a variance; the closure above already ran over the observed cells only, so dropping here changes no site total
             if transform == "Nothing":
-                df = df.loc[df_org.index]
+                df = df_org.copy()  # the within-site shares; the whole-sample shares mixed protein abundance and coverage into every glycoform
             else:
                 cols = df_org.columns.tolist() if experiment == "anova" else ((group1 + group2) if paired else group1)
                 grp2 = [] if (paired or experiment == "anova") else group2
@@ -240,7 +271,10 @@ def preprocess_data(
                 df = pd.concat(parts).loc[df_org.index]
             if motif_dag:
                 df_org.attrs['motif_dag'] = get_motif_dag(df_org.index.tolist()) if motifs else get_composition_dag(df_org.index.tolist(), abundances = df_org)
+    if absent_rows is not None:
+        df_org.attrs['absent'] = absent_rows  # detection per sample of the features absent from a whole group
     df_org.attrs['dataset'], df_org.attrs['provenance'] = prov
+    df_org.attrs['transform'] = transform
     return df, df_org, group1, group2
 
 
@@ -258,6 +292,19 @@ def _explained_by(parent: str,  # Parent motif whose signal is being decomposed
     return ', '.join(labels) + (f', +{len(shown) - n} more' if len(shown) > n else '')
 
 
+def _decomposition_columns(rows: dict[str, tuple], # parent motif to (explained by, residual p-value, residual effect size, redistribution p-value)
+                           motifs: list[str], # motifs in the row order of the results table
+                           alpha: float # significance threshold of the corrections
+                           ) -> dict[str, list]: # the four decomposition columns of a results table
+    "Corrects residual and redistribution p-values, each as its own, much smaller family, since they answer different questions than the marginals"
+    cp = dict(zip(rows, correct_multiple_testing([v[1] for v in rows.values()], alpha)[0])) if rows else {}
+    bk = [m for m in rows if not np.isnan(rows[m][3])]
+    bp = dict(zip(bk, correct_multiple_testing([rows[m][3] for m in bk], alpha)[0])) if bk else {}
+    return {'Explained by': [rows[m][0] if m in rows else '' for m in motifs], 'Redistribution p-val': [bp.get(m, np.nan) for m in motifs],
+            'Residual p-val': [cp.get(m, np.nan) for m in motifs], 'Residual effect size': [rows[m][2] if m in rows else np.nan for m in motifs]}
+
+
+@_abundance_input('df')
 def get_pvals_motifs(
         df: pd.DataFrame | str | Path,  # Input dataframe, filepath (.csv/.xlsx), or shipped dataset name
         label_col_name: str = 'target',  # Column name for labels
@@ -273,8 +320,6 @@ def get_pvals_motifs(
         top_explained: int | None = 5  # How many child motifs to name in 'Explained by'; None names all of them
 ) -> GlycoDataFrame:  # DataFrame with p-values, FDR-corrected p-values, significance, Cohen's d effect sizes, and equivalence p-values for glycan motifs
     "Identifies significantly enriched glycan motifs using a moderated t-test with DAG-grouped FDR correction and Cohen's d effect size calculation, comparing samples above/below threshold"
-    if isinstance(df, (str, Path)):
-        df = read_abundances(df)
     in_name = getattr(df, '_glyco_name', '')
     glycan_col_name = GlycoDataFrame(df)._glycan_col or df.columns[0]
     if not multiple_samples and label_col_name not in df.columns:
@@ -335,8 +380,7 @@ def get_pvals_motifs(
     equivalence_pvals[np.isnan(equivalence_pvals)] = 1.0
     # Multiple testing correction
     if grouped_BH:
-        cohorts = (pd.DataFrame(B, index = motif_names), pd.DataFrame(A, index = motif_names)) if dag is None else (pd.DataFrame(index = motif_names),) * 2  # the DAG branch of select_grouping reads only names and p-values, so materializing the cohorts there doubled peak memory for nothing
-        grouped_motifs, grouped_pvals = select_grouping(*cohorts, motif_names, ttests, grouped_BH = True, dag = dag)
+        grouped_motifs, grouped_pvals = select_grouping(pd.DataFrame(index = motif_names), pd.DataFrame(index = motif_names), motif_names, ttests, grouped_BH = True, dag = dag)  # grouped_BH always builds the DAG, and its branch of select_grouping reads only names and p-values
         corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_motifs, grouped_pvals, alpha)
         ttests_corr = [max(corrpvals[m], ttests[i]) for i, m in enumerate(motif_names)]
         significance = [significance_dict[m] for m in motif_names]
@@ -371,12 +415,8 @@ def get_pvals_motifs(
                            bal_p)  # parent occurs only inside its children: no context of its own left to test
                 continue
             r = np.log2(np.maximum(resid, 0.0000001))
-            rows[p] = (explained, ttest_ind(r[pos_i][okp], r[neg_i][okn], equal_var = False)[1],
+            rows[p] = (explained, _ttest_pvalue(r[pos_i][okp], r[neg_i][okn]),
                        cohen_d(r[pos_i][okp], r[neg_i][okn])[0], bal_p)
-    # Residuals and balances answer different questions than the marginals, so each is corrected as its own, much smaller family
-    cp = dict(zip(rows, correct_multiple_testing([v[1] for v in rows.values()], alpha)[0])) if rows else {}
-    bk = [m for m in rows if not np.isnan(rows[m][3])]
-    bp = dict(zip(bk, correct_multiple_testing([rows[m][3] for m in bk], alpha)[0])) if bk else {}
     out = GlycoDataFrame(pd.DataFrame({
         'motif': motif_names,
         'pval': ttests,
@@ -384,10 +424,7 @@ def get_pvals_motifs(
         'significant': significance,
         'effect_size': effect_sizes,
         'equivalence_pval': equivalence_pvals,
-        'Explained by': [rows[m][0] if m in rows else '' for m in motif_names],
-        'Redistribution p-val': [bp.get(m, np.nan) for m in motif_names],
-        'Residual p-val': [cp.get(m, np.nan) for m in motif_names],
-        'Residual effect size': [rows[m][2] if m in rows else np.nan for m in motif_names]
+        **_decomposition_columns(rows, motif_names, alpha)
     }), name = in_name)
     out['significant'] = out['significant'].astype('bool')
     if sorting:
@@ -428,22 +465,40 @@ def get_representative_substructures(
             gmotifs[m] = (glycan_to_nxGraph(s, termini = 'provided', termini_list = sp), sp)
         except Exception:
             continue  # non-structural features (graph/chemical/size_branch) cannot be searched for in a sequence
-    motif_scores = []
+    motif_scores, size = [], {}
     for k in glycans:
         ggraph = glycan_to_nxGraph(k, termini = 'calc')
         hit = {m for m, (p, sp) in gmotifs.items() if subgraph_isomorphism(ggraph, p, termini_list = sp)}
         motif_scores.append(sum(weight_of[m] for m in hit if not (descendants.get(m, set()) & hit)))
-    # For each glycan, get their motif score, normalized by glycan length
-    length_scores = [len(g) for g in glycans]
+        size[k] = len(ggraph)  # residues and linkages; the string length made a Neu5Gc twice the size of a Fuc
+    # For each glycan, get their motif score, normalized by glycan size
+    length_scores = [size[g] for g in glycans]
     combined_scores = np.divide(motif_scores, length_scores)
     df_score = pd.DataFrame({'glycan': glycans, 'motif_score': motif_scores, 'length_score': length_scores,
                              'combined_score': combined_scores})
     df_score = df_score.sort_values(by = 'combined_score', ascending = False)
     # Take the 10 glycans with the highest score
     rep_motifs = df_score.glycan.values.tolist()[:10]
-    rep_motifs.sort(key = len)
+    rep_motifs.sort(key = size.get)
     # Make sure that the list only contains the minimum number of representative glycans
     return [k for k in rep_motifs if sum(subgraph_isomorphism(j, k) for j in rep_motifs) <= 1]
+
+
+def _features_as_rows(df: pd.DataFrame | str | Path, # abundance table, file path, or shipped dataset name, with glycans as rows or as columns
+                      index_col: str # column holding the glycans
+                      ) -> pd.DataFrame: # glycans (or other features) as index, samples as columns, missing values as 0
+    "Reads the input of get_heatmap and get_distance_matrix"
+    if isinstance(df, (str, Path)):
+        df = read_abundances(df)
+    gcol = index_col if index_col in df.columns else GlycoDataFrame(df)._glycan_col
+    set_idx = bool(gcol) or isinstance(df.iloc[0, 0], str)
+    if set_idx:
+        df = df.set_index(gcol or df.columns[0])
+    # Glycans as columns get transposed; a feature column lifted into the index is otherwise trusted, since compositions carry no linkages to recognize them by, and a named glycan column always is, since sample names can hold brackets too ('Hexa (or HA) Li')
+    if not gcol and (sum(isinstance(c, str) and '(' in c for c in df.columns) > sum(isinstance(k, str) and '(' in k for k in df.index) or (
+            not set_idx and (not isinstance(df.index[0], str) or '(' not in df.index[0]))):
+        df = df.T
+    return df.fillna(0)
 
 
 def get_heatmap(
@@ -464,17 +519,7 @@ def get_heatmap(
 ) -> tuple[Any, list[str], pd.DataFrame] | None:  # None or (plot object, column names, transformed dataframe) if return_plot=True
     "Creates hierarchically clustered heatmap visualization of glycan/motif abundances"
     import seaborn as sns
-    if isinstance(df, (str, Path)):
-        df = read_abundances(df)
-    gcol = index_col if index_col in df.columns else GlycoDataFrame(df)._glycan_col
-    set_idx = bool(gcol) or isinstance(df.iloc[0, 0], str)
-    if set_idx:
-        df = df.set_index(gcol or df.columns[0])
-    # Glycans as columns get transposed; a feature column lifted into the index is otherwise trusted, since compositions carry no linkages to recognize them by, and a named glycan column always is, since sample names can hold brackets too ('Hexa (or HA) Li')
-    if not gcol and (sum(isinstance(c, str) and '(' in c for c in df.columns) > sum(isinstance(k, str) and '(' in k for k in df.index) or (
-            not set_idx and (not isinstance(df.index[0], str) or '(' not in df.index[0]))):
-        df = df.T
-    df = df.fillna(0)
+    df = _features_as_rows(df, index_col)
     if transform:
         df = df[(df > 0).sum(axis = 1) >= np.max([np.round(rarity_filter * df.shape[1]), 1])]
         df = df.replace(0, 1e-6)
@@ -491,8 +536,7 @@ def get_heatmap(
             df_motif = df_motif.replace(0, np.nan).dropna(
                 thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
             df = df_motif.T.fillna(0) @ df
-            df = df.apply(lambda col: col / col.sum()).T
-            df = deduplicate_motifs(df.T)
+            df = deduplicate_motifs(df.apply(lambda col: col / col.sum()))
     # Quantify on raw abundances and transform the motif composition, as get_pca/preprocess_data do
     if transform == "CLR":
         df = clr_transformation(df + 1e-7, [], [], gamma = 0)
@@ -503,9 +547,9 @@ def get_heatmap(
     if not (df < 0).any().any():
         df /= df.sum()
         df *= 100
-        center = None
-    else:
-        center = 0
+    else:  # centered at 0 by limits symmetric around it, which colors every value as seaborn's center = 0 does; center resamples the colormap through Colormap.set_bad, which matplotlib deprecates
+        vlim = np.abs(df.to_numpy()).max()
+        kwargs = {'cmap': 'icefire', 'vmin': -vlim, 'vmax': vlim, **kwargs}
     # Cluster the abundances
     if dist_func is not None:
         from scipy.cluster.hierarchy import linkage
@@ -514,7 +558,7 @@ def get_heatmap(
                   'col_linkage': linkage(pdist(df.values.T, metric = dist_func), method = method), **kwargs}
     ticklabels = {'yticklabels': True, 'xticklabels': True} if show_all else {}
     combined_kwargs = {**ticklabels, **kwargs}
-    g = sns.clustermap(df, center = center, **combined_kwargs)
+    g = sns.clustermap(df, **combined_kwargs)
     if max(len(str(label)) for label in df.index) > 100:
         g.ax_heatmap.set_yticklabels(g.ax_heatmap.get_yticklabels(), fontsize = 6)
     g.ax_heatmap.set_xlabel('Samples')
@@ -552,17 +596,7 @@ def get_distance_matrix(
         if not callable(getattr(distance, dist_func, None)):
             raise ValueError(f"dist_func = '{dist_func}' is not a scipy.spatial.distance metric.")
         dist_func = getattr(distance, dist_func)
-    if isinstance(df, (str, Path)):
-        df = read_abundances(df)
-    gcol = index_col if index_col in df.columns else GlycoDataFrame(df)._glycan_col
-    set_idx = bool(gcol) or isinstance(df.iloc[0, 0], str)
-    if set_idx:
-        df = df.set_index(gcol or df.columns[0])
-    # Glycans as columns get transposed; a feature column lifted into the index is otherwise trusted, since compositions carry no linkages to recognize them by, and a named glycan column always is, since sample names can hold brackets too ('Hexa (or HA) Li')
-    if not gcol and (sum(isinstance(c, str) and '(' in c for c in df.columns) > sum(isinstance(k, str) and '(' in k for k in df.index) or (
-            not set_idx and (not isinstance(df.index[0], str) or '(' not in df.index[0]))):
-        df = df.T
-    df = df.fillna(0)
+    df = _features_as_rows(df, index_col)
     if motifs:
         df = quantify_motifs(df, glycans = df.index.tolist(), feature_set = feature_set, custom_motifs = custom_motifs)
     # Quantify on raw abundances and transform the (motif) composition, as get_heatmap does
@@ -608,7 +642,7 @@ def plot_embeddings(
     markers = None
     if shape_feature is not None:
         markers = {shape_feature: "X", "Absent": "o"}
-        shape_feature = [shape_feature if shape_feature in g else 'Absent' for g in glycans]
+        shape_feature = [shape_feature if shape_feature in nx.get_node_attributes(glycan_to_nxGraph(g), 'string_labels').values() else 'Absent' for g in glycans]  # whole monosaccharides and linkages: 'Gal' is not in GalNAc
     sns.scatterplot(x = embs[:, 0], y = embs[:, 1], hue = label_list if label_list is not None else None,
                     palette = palette if label_list is not None else None, style = shape_feature,
                     markers = markers, alpha = alpha, **kwargs)
@@ -651,7 +685,7 @@ def characterize_monosaccharide(
     if rank is not None and focus is not None:
         df = df[df[rank] == focus]
     # Get all disaccharides by extracting adjacent pairs from graph structure
-    pool_in = []
+    pool_in_split = []
     for glycan in df[glycan_col_name].tolist():
         graph = glycan_to_nxGraph(glycan)
         node_labels = nx.get_node_attributes(graph, 'string_labels')
@@ -659,8 +693,7 @@ def characterize_monosaccharide(
             if parent_mono % 2 == 0:
                 for linkage in graph.successors(parent_mono):
                     for child_mono in graph.successors(linkage):
-                        pool_in.append(f"{node_labels[child_mono]}*{node_labels[linkage]}*{node_labels[parent_mono]}")
-    pool_in_split = [k.split('*') for k in pool_in]
+                        pool_in_split.append((node_labels[child_mono], node_labels[linkage], node_labels[parent_mono]))
     pool, sugars = [], []
     if mode == 'bond':
         # Get upstream monosaccharides for a specific linkage
@@ -668,7 +701,7 @@ def characterize_monosaccharide(
     elif mode in ['sugar', 'sugarbond']:
         for k in pool_in_split:
             # Get downstream monosaccharides or downstream linkages for a specific monosaccharide
-            k0, k2 = k[0], k[2] if len(k) > 2 else None
+            k0, k2 = k[0], k[2]
             if modifications and sugar in k0:
                 sugars.append(k0)
                 pool.append(k2 if mode == 'sugar' else k[1])
@@ -790,20 +823,16 @@ def get_pca(
         df = df[[df._glycan_col or df.columns[0]] + [c for c in df.columns if c in df._contrasts]]  # the labels only cover the contrast columns, and X pairs them with columns by position
     if isinstance(groups, list) and len(groups) > df.shape[1] - 1:
         raise ValueError(f"{len(groups)} group labels were given for {df.shape[1] - 1} sample columns; pass one label per sample column, in column order.")
-    if transform and not motifs:
+    if transform:
         df = df[(df.iloc[:, 1:] > 0).sum(axis = 1) >= np.max([np.round(rarity_filter * (df.shape[1] - 1)), 1])].reset_index(drop = True)
         df.iloc[:, 1:] = df.iloc[:, 1:].replace(0, 1e-6)
-        if transform == "ALR":
-            df = get_additive_logratio_transformation(df, df.columns.tolist()[1:], [], paired = False, gamma = 0)
-        elif transform == "CLR":
-            df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], [], [], gamma = 0)
+    if not motifs and transform == "ALR":
+        df = get_additive_logratio_transformation(df, df.columns.tolist()[1:], [], paired = False, gamma = 0)
+    elif not motifs and transform == "CLR":
+        df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], [], [], gamma = 0)
     if motifs:
         # Motif extraction and quantification
-        df_motif = df
-        if transform:
-            df_motif = df[(df.iloc[:, 1:] > 0).sum(axis = 1) >= np.max([np.round(rarity_filter * (df.shape[1] - 1)), 1])].reset_index(drop = True)
-            df_motif.iloc[:, 1:] = df_motif.iloc[:, 1:].replace(0, 1e-6)
-        raw = quantify_motifs(df_motif, feature_set = feature_set, custom_motifs = custom_motifs)
+        raw = quantify_motifs(df, feature_set = feature_set, custom_motifs = custom_motifs)
         if transform == "CLR":
             raw = clr_transformation(raw + 1e-7, raw.columns.tolist(), [], gamma = 0)
         elif transform == "ALR":
@@ -828,41 +857,25 @@ def get_pca(
     if isinstance(groups, list):
         color = groups
     # make plot
+    _, axes = plt.subplots(1, 2) if eigenvalues else plt.subplots()
+    ax = axes[0] if eigenvalues else axes
+    sns.scatterplot(x = pc_x - 1, y = pc_y - 1, data = df_pca, hue = color, style = shape, size = size, ax = ax)
+    ax.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance',
+           ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
+    if title is not None:
+        ax.set_title(title)
+    if color or shape or size:
+        ax.legend(bbox_to_anchor = (1.05, 1), loc = 'upper left', borderaxespad = 0)
     if eigenvalues:
-        _, (ax1, ax2) = plt.subplots(1, 2)
-        sns.scatterplot(x = pc_x - 1, y = pc_y - 1, data = df_pca, hue = color, style = shape, size = size, ax = ax1)
-        ax1.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance',
-                ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
-        if title is not None:
-            ax1.set_title(title)
-        if color or shape or size:
-            ax1.legend(bbox_to_anchor = (1.05, 1), loc = 'upper left', borderaxespad = 0)
-        ax2.bar(x = range(1, len(percent_var) + 1), height = percent_var, tick_label = percent_var_labels, edgecolor = "black", linewidth = 1)
-        ax2.set(ylabel = 'Explained Variance (%)',
-                xlabel = 'Principal Component')
-        ax2.tick_params(axis = "x", labelrotation = 45)
-        ax2.grid(visible = False)
-        sns.despine()
-        # save to file
-        if filepath:
-            plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
-        plt.show()
-        plt.close()
-    else:
-        _, ax = plt.subplots()
-        ax = sns.scatterplot(x = pc_x - 1, y = pc_y - 1, data = df_pca, hue = color, style = shape, size = size)
-        ax.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance',
-               ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
-        if color or shape or size:
-            ax.legend(bbox_to_anchor = (1.05, 1), loc = 'upper left', borderaxespad = 0)
-        if title is not None:
-            ax.set_title(title)
-        sns.despine()
-        # save to file
-        if filepath:
-            plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
-        plt.show()
-        plt.close()
+        axes[1].bar(x = range(1, len(percent_var) + 1), height = percent_var, tick_label = percent_var_labels, edgecolor = "black", linewidth = 1)
+        axes[1].set(ylabel = 'Explained Variance (%)', xlabel = 'Principal Component')
+        axes[1].tick_params(axis = "x", labelrotation = 45)
+        axes[1].grid(visible = False)
+    sns.despine()
+    if filepath:
+        plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
+    plt.show()
+    plt.close()
 
 
 def get_pcoa(
@@ -934,6 +947,18 @@ def get_pcoa(
     return coords
 
 
+def _root_families(dag: nx.DiGraph # motif containment DAG
+                   ) -> dict[str, str]: # motif to its family, the rarest root it descends from (a root is its own family)
+    "Assigns each motif of a containment DAG to its rarest root ancestor, so that branches with different null proportions each get their own pi0 estimate instead of sharing a global one"
+    desc = {r: nx.descendants(dag, r) for r in dag if not dag.in_degree(r)}
+    # a node's root ancestors are exactly the roots whose descendant set already contains it, so no per-node ancestor walk is needed
+    anc_roots = {}
+    for r, d in desc.items():
+        for g in d:
+            anc_roots.setdefault(g, []).append(r)
+    return {g: min(anc_roots.get(g, []) + ([g] if g in desc else []), key = lambda a: (len(desc[a]), a)) for g in dag}
+
+
 def select_grouping(
         cohort_b: pd.DataFrame,  # Case samples dataframe
         cohort_a: pd.DataFrame,  # Control samples dataframe
@@ -947,20 +972,12 @@ def select_grouping(
     if not grouped_BH:
         return {"group1": glycans}, {"group1": p_values}
     if dag is not None:
-        # Family = rarest root ancestor, so that branches with different null proportions each get their own pi0 estimate instead of sharing a global one
-        desc = {r: nx.descendants(dag, r) for r in dag if not dag.in_degree(r)}
-        breadth = {r: len(d) for r, d in desc.items()}
-        # a node's root ancestors are exactly the roots whose descendant set already contains it, so no per-node ancestor walk is needed
-        anc_roots = {}
-        for r, d in desc.items():
-            for g in d:
-                anc_roots.setdefault(g, []).append(r)
+        family = _root_families(dag)
 
         def group_by_family(gs, ps):
             gg, gp = {}, {}
             for g, p in zip(gs, ps):
-                anc = anc_roots.get(g, []) + ([g] if g in breadth else [])
-                grp = min(anc, key = lambda a: (breadth[a], a)) if anc else "rest"
+                grp = family.get(g, "rest")
                 gg.setdefault(grp, []).append(g)
                 gp.setdefault(grp, []).append(p)
             for k in [k for k, v in gg.items() if len(v) < 2 and k != "rest"]:
@@ -1021,13 +1038,16 @@ def get_differential_expression(
         level: str = 'peptide',  # Analysis level for glycoproteomics
         monte_carlo: bool = False,  # Use Monte Carlo for technical variation
         random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
-        top_explained: int | None = 5  # How many child motifs to name in 'Explained by'; None names all of them
-) -> GlycoDataFrame:  # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes
-    "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets) with multiple testing correction on glycomics abundance data"
+        top_explained: int | None = 5,  # How many child motifs to name in 'Explained by'; None names all of them
+        covariates: pd.DataFrame | pd.Series | dict | None = None  # per-sample nuisance variables indexed by sample name (e.g., secretor status, sex, age, batch; a dict maps samples to one covariate); each feature is fit as group plus covariates and the group effect is tested within them
+) -> GlycoDataFrame:  # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes (Cohen's h of the detection rates for features absent from a whole group)
+    "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets, or a linear model with covariates) with multiple testing correction on glycomics abundance data"
     grouped_BH = ((motifs or glycoproteomics) and not sets) if grouped_BH is None else grouped_BH
     if glycoproteomics and monte_carlo:
         raise ValueError(
             "monte_carlo is not available for glycoproteomics: the per-glycosite closure replaces the run-wide CLR that estimate_technical_variance simulates over, so no Monte Carlo frame is ever built.")
+    if sets and monte_carlo:
+        raise ValueError("sets are tested with Hotelling's T2 on the samples themselves, which monte_carlo would replace by its simulated instances; run sets without monte_carlo.")
     in_contrasts, in_name, in_prov = getattr(df, '_contrasts', {}), getattr(df, '_glyco_name', ''), getattr(df,
                                                                                                             '_provenance',
                                                                                                             {})
@@ -1038,6 +1058,8 @@ def get_differential_expression(
         raise ValueError("get_differential_expression compares two groups, so group2 has to be given too; use get_glycanova for three or more groups.")
     if group1 and min(len(group1), len(group2)) < 2:
         raise ValueError(f"Each group needs at least two samples to estimate a variance; got {len(group1)} and {len(group2)}.")
+    if covariates is not None and (paired or sets or monte_carlo):
+        raise ValueError("covariates go into the two-group linear model, which paired samples (a per-sample covariate cancels within each pair), sets and monte_carlo do not use.")
     df, df_org, group1, group2 = preprocess_data(df, group1 = group1, group2 = group2, experiment = "diff", motifs = motifs,
                                                  glycoproteomics = glycoproteomics, impute = impute,
                                                  min_samples = min_samples, transform = transform,
@@ -1045,14 +1067,12 @@ def get_differential_expression(
                                                  paired = paired, gamma = gamma, custom_scale = custom_scale,
                                                  custom_motifs = custom_motifs,
                                                  monte_carlo = monte_carlo, random_state = random_state)
+    dag = df_org.attrs.pop('motif_dag', None)  # pandas deep-copies attrs into every frame derived from df_org, which for a glycoproteomics composition DAG cost 0.3 s per copy
+    absent_rows = df_org.attrs.pop('absent', None)
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(len(group1 + group2))
-    # Variance-based filtering of features
     if not monte_carlo:
-        df, df_prison = variance_based_filtering(df)
-        df_org, df_org_prison = df_org.loc[df.index], df_org.loc[df_prison.index]
-    else:
-        df_prison, df_org_prison = pd.DataFrame(), pd.DataFrame()
+        df_org = df_org.loc[df.index]
     glycans = df.index.tolist()
     variances = [0] * len(glycans)
     mean_abundance = df_org.mean(axis = 1)
@@ -1086,13 +1106,30 @@ def get_differential_expression(
         log2fc = np.nanmean(df_b.values - df_a.values, axis = 1) if paired else (
                     df_b.mean(axis = 1) - df_a.mean(axis = 1))
         if monte_carlo:
-            pvals, corrpvals, effect_sizes = perform_tests_monte_carlo(df_a, df_b, paired = paired, alpha = alpha)
+            # A floor has no spread and no log-ratio to compare, so an absent feature is tested on its detection, in every instance
+            absent = np.isin(glycans, absent_rows.index) if absent_rows is not None else np.zeros(len(glycans), bool)
+            fixed = np.full(len(glycans), np.nan)
+            if absent.any():
+                cut = len(group1)
+                fixed[absent], h_det = detection_test(absent_rows.loc[np.array(glycans)[absent], group1 + group2].to_numpy(), [list(range(cut)), list(range(cut, cut + len(group2)))],
+                                                      paired = paired, random_state = random_state)
+            pvals, corrpvals, effect_sizes = perform_tests_monte_carlo(df_a, df_b, paired = paired, alpha = alpha, fixed_pvals = fixed if absent.any() else None)
+            if absent.any():
+                effect_sizes[absent] = h_det
             significance = [cp < alpha for cp in corrpvals]
             equivalence_pvals = [1.0] * len(pvals)
             levene_pvals = [1.0] * len(pvals)
         else:
             A, B = df_a.values, df_b.values
-            if moderate_variance and len(A) > 1:
+            if covariates is not None:
+                # Each feature is fit as group means plus covariates: A and B become the values with the covariate part removed (their group means are the adjusted
+                # group effects), and the group coefficient is tested with its own standard error and residual df; a feature the model cannot fit keeps the plain comparison
+                adj, cov_ssr, cov_df, _, cov_c, _ = _covariate_fit(np.hstack([A, B]), [0] * len(group1) + [1] * len(group2), covariates, group1 + group2)
+                fit = np.isfinite(cov_ssr)
+                AB = np.where(fit[:, None], adj, np.hstack([A, B]))
+                A, B = AB[:, :len(group1)], AB[:, len(group1):]
+                log2fc = np.nanmean(B, axis = 1) - np.nanmean(A, axis = 1)
+            if (moderate_variance and len(A) > 1) or covariates is not None:
                 # Shrinking each feature's variance toward its containment neighborhood stabilizes the small samples typical of glycomics, without touching the reported effect sizes
                 D = B - A if paired else None
                 na, nb = np.isfinite(A).sum(axis = 1), np.isfinite(B).sum(
@@ -1101,10 +1138,12 @@ def get_differential_expression(
                 resid = (np.nanvar(D, axis = 1, ddof = 1) if paired else
                          ((na - 1) * np.nanvar(A, axis = 1, ddof = 1) + (nb - 1) * np.nanvar(B, axis = 1, ddof = 1)) / (
                                      na + nb - 2))
-                dfr = (nd - 1) if paired else (na + nb - 2)
+                dfr, factor = (nd - 1) if paired else (na + nb - 2), 1 / na + 1 / nb
+                if covariates is not None:
+                    resid, dfr, factor = np.where(fit, cov_ssr / cov_df, resid), np.where(fit, cov_df, dfr), np.where(fit, cov_c, factor)
                 s2, dfp = moderated_variance(resid, df_resid = dfr,
-                                             neighbors = dag_neighbors(glycans, df_org.attrs.get('motif_dag')))
-                se = np.sqrt(s2 / nd) if paired else np.sqrt(s2 * (1 / na + 1 / nb))
+                                             neighbors = dag_neighbors(glycans, dag)) if moderate_variance and len(A) > 1 else (resid, dfr)
+                se = np.sqrt(s2 / nd) if paired else np.sqrt(s2 * factor)
                 delta = np.nanmean(D, axis = 1) if paired else (np.nanmean(B, axis = 1) - np.nanmean(A, axis = 1))
                 pvals = list(2 * t_dist.sf(np.abs(delta / se), dfp))
             else:
@@ -1112,8 +1151,16 @@ def get_differential_expression(
                                                                                                       equal_var = False,
                                                                                                       nan_policy = 'omit'))[
                                  1])
+            # A floor has no spread and no log-ratio to compare, so an absent feature is tested on its detection, with no equivalence or variance test
+            absent = np.isin(glycans, absent_rows.index) if absent_rows is not None else np.zeros(len(glycans), bool)
+            if absent.any():
+                cut = len(group1)
+                p_det, h_det = detection_test(absent_rows.loc[np.array(glycans)[absent], group1 + group2].to_numpy(), [list(range(cut)), list(range(cut, cut + len(group2)))],
+                                          paired = paired, random_state = random_state)
+                for i, p in zip(np.flatnonzero(absent), p_det):
+                    pvals[i] = p
             equivalence_pvals = np.full(len(A), np.nan)
-            todo = np.array(pvals) > alpha
+            todo = (np.array(pvals) > alpha) & ~absent
             if todo.any():
                 equivalence_pvals[todo] = get_equivalence_test(A[todo], B[todo], paired = paired)
             valid = ~np.isnan(equivalence_pvals)
@@ -1134,13 +1181,17 @@ def get_differential_expression(
             levene_pvals = np.ones(len(df_a))
             if vary.any() and df_a.shape[1] > 2 and df_b.shape[1] > 2:
                 levene_pvals[vary] = f_oneway(U[vary], V[vary], axis = 1, nan_policy = 'omit')[1]
+            levene_pvals[absent] = 1.0
             effect_sizes, variances = cohen_d(B, A, paired = paired) if len(A) else ([0] * len(glycans),
                                                                                      [0] * len(glycans))
+            if absent.any():
+                effect_sizes, variances = np.array(effect_sizes, dtype = float), np.array(variances, dtype = float)
+                effect_sizes[absent], variances[absent] = h_det, 1 / len(group1) + 1 / len(group2)
     # Multiple testing correction
     if not monte_carlo and pvals:
         if grouped_BH:
             grouped_glycans, grouped_pvals = select_grouping(df_b, df_a, glycans, pvals, paired = paired,
-                                                             grouped_BH = grouped_BH, dag = df_org.attrs.get('motif_dag') if motifs or glycoproteomics else None)
+                                                             grouped_BH = grouped_BH, dag = dag if motifs or glycoproteomics else None)
             corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_glycans, grouped_pvals, alpha)
             corrpvals = [corrpvals[g] for g in glycans]
             corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
@@ -1159,29 +1210,11 @@ def get_differential_expression(
                    'significant', 'corr Levene p-val', 'Effect size',
                    'Equivalence p-val']),
         contrasts = in_contrasts, paired = paired, name = in_name, provenance = in_prov)
-    if not monte_carlo:
-        prison_rows = pd.DataFrame({
-            'Glycan': df_prison.index,
-            'Mean abundance': df_org_prison.mean(axis = 1),
-            'Log2FC': np.nanmean(df_prison[group2].values - df_prison[group1].values, axis = 1) if paired else (
-                        df_prison[group2].mean(axis = 1) - df_prison[group1].mean(axis = 1)),
-            'p-val': [1.0] * len(df_prison),
-            'corr p-val': [1.0] * len(df_prison),
-            'significant': [False] * len(df_prison),
-            'corr Levene p-val': [1.0] * len(df_prison),
-            'Effect size': [0] * len(df_prison),
-            'Equivalence p-val': [1.0] * len(df_prison)})
-        prison_rows = prison_rows.astype({'significant': 'bool'})
-        if len(prison_rows) > 0:
-            df_out = GlycoDataFrame(
-                prison_rows if df_out.empty else pd.concat([df_out, prison_rows], ignore_index = True),
-                contrasts = in_contrasts, paired = paired, name = in_name, provenance = in_prov)
     df_out['significant'] = df_out['significant'].astype('bool')
     if effect_size_variance:
-        df_out['Effect size variance'] = list(variances) + [0] * len(df_prison)
-    if (motifs or glycoproteomics) and not sets and not monte_carlo and df_org.attrs.get(
-            'motif_dag') is not None and not df.empty:
-        dag, full = df_org.attrs['motif_dag'], pd.concat([df_org, df_org_prison])
+        df_out['Effect size variance'] = list(variances)
+    if (motifs or glycoproteomics) and not sets and not monte_carlo and dag is not None and not df.empty:
+        full = df_org
         # Recover the per-sample logratio offset from the transform itself, so residual features land in the frame everything else was tested in
         ref = np.nanmedian(np.log2(df_org.values + 0.0000001) - df.values, axis = 0)
         fc, rows = dict(zip(df_out['Glycan'], df_out['Log2FC'])), {}
@@ -1209,6 +1242,16 @@ def get_differential_expression(
             bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9] if len(bal) and len(cols_b) > 1 else bal[:0]
             bal_p = hotellings_t2(bal[:, b1].T, bal[:, b2].T, paired = paired)[1] if 0 < len(bal) < min(len(b1),
                                                                                                         len(b2)) else np.nan
+            if covariates is not None:
+                # the group coefficient of the multivariate linear model: T2 of the adjusted mean difference against its covariance c * E / df_e, which is Hotelling's T2 without covariate columns
+                bal_p = np.nan
+                if len(bal):
+                    ab, _, dfe, _, cc, _ = _covariate_fit(bal, [0 if k in b1 else 1 for k in range(len(cols_b))], covariates, full.columns[cols_b].tolist())
+                    if np.isfinite(dfe).all() and len(bal) < min(len(b1), len(b2), dfe[0]):  # as Hotelling's T2 above, fewer balances than samples in the smaller group
+                        res_b = np.hstack([ab[:, b1] - ab[:, b1].mean(axis = 1, keepdims = True), ab[:, b2] - ab[:, b2].mean(axis = 1, keepdims = True)])
+                        dlt = ab[:, b2].mean(axis = 1) - ab[:, b1].mean(axis = 1)
+                        t2 = dlt @ np.linalg.pinv(cc[0] * ((res_b @ res_b.T) / dfe[0] + np.eye(len(bal)) * 1e-6)) @ dlt  # the ridge and pseudo-inverse of hotellings_t2, for nearly collinear balances
+                        bal_p = f.sf((dfe[0] - len(bal) + 1) / (len(bal) * dfe[0]) * t2, len(bal), dfe[0] - len(bal) + 1)
             explained = _explained_by(p, kids, fc, top = top_explained)
             ok1, ok2 = usable[g1i], usable[g2i]
             pair_ok = ok1 & ok2 if paired else None
@@ -1218,20 +1261,18 @@ def get_differential_expression(
                 continue
             r = np.log2(np.maximum(resid, 0.0000001)) - ref
             r_a, r_b = (r[g1i][pair_ok], r[g2i][pair_ok]) if paired else (r[g1i][ok1], r[g2i][ok2])
-            rows[p] = (explained, ttest_rel(r_b, r_a, nan_policy = 'omit')[1] if paired else
-            ttest_ind(r_b, r_a, equal_var = False, nan_policy = 'omit')[1],
-                       cohen_d(r_b, r_a, paired = paired)[0], bal_p)
-        # Residuals and balances answer different questions than the marginals, so each is corrected as its own, much smaller family
-        cp = dict(zip(rows, correct_multiple_testing([v[1] for v in rows.values()], alpha)[0])) if rows else {}
-        bk = [m for m in rows if not np.isnan(rows[m][3])]
-        bp = dict(zip(bk, correct_multiple_testing([rows[m][3] for m in bk], alpha)[0])) if bk else {}
-        df_out['Explained by'] = [rows[m][0] if m in rows else '' for m in df_out['Glycan']]
-        df_out['Redistribution p-val'] = [bp.get(m, np.nan) for m in df_out['Glycan']]
-        df_out['Residual p-val'] = [cp.get(m, np.nan) for m in df_out['Glycan']]
-        df_out['Residual effect size'] = [rows[m][2] if m in rows else np.nan for m in df_out['Glycan']]
+            if covariates is not None:  # the residual part through the same group-plus-covariates model as the marginal test, where it can be fit
+                ar, ssr_r, dfr_r, _, c_r, _ = _covariate_fit(np.where(usable, r, np.nan)[None, g1i + g2i], [0] * len(g1i) + [1] * len(g2i), covariates, group1 + group2)
+                if np.isfinite(ssr_r[0]):
+                    r_a, r_b = ar[0, :len(g1i)][ok1], ar[0, len(g1i):][ok2]
+                    rows[p] = (explained, 2 * t_dist.sf(abs(r_b.mean() - r_a.mean()) / np.sqrt(ssr_r[0] / dfr_r[0] * c_r[0]), dfr_r[0]), cohen_d(r_b, r_a)[0], bal_p)
+                    continue
+            rows[p] = (explained, _ttest_pvalue(r_b, r_a, paired = paired), cohen_d(r_b, r_a, paired = paired)[0], bal_p)  # r is NaN-free here, so this is the nan_policy = 'omit' test
+        for k, v in _decomposition_columns(rows, df_out['Glycan'].tolist(), alpha).items():
+            df_out[k] = v
     df_out.attrs.update(
-        {'alpha': alpha, 'n': len(group1) + len(group2), 'test': "Welch's t-test" if not paired else "paired t-test",
-         'transform': transform, 'paired': paired, 'dataset': in_name, 'provenance': in_prov})
+        {'alpha': alpha, 'n': len(group1) + len(group2), 'test': "Hotelling's T2" if sets else ("moderated " if moderate_variance and not monte_carlo and len(glycans) > 1 else "Welch's " if not paired and covariates is None else "") + ("paired t-test" if paired else "t-test") + (" with covariates" if covariates is not None else ""),
+         'transform': df_org.attrs.get('transform', transform), 'paired': paired, 'dataset': in_name, 'provenance': in_prov})
     if glycoproteomics:
         df_site = get_glycoform_diff(df_out, alpha = alpha, level = level)
         df_site.attrs[
@@ -1241,6 +1282,15 @@ def get_differential_expression(
         return df_out.dropna(subset = ['Log2FC', 'p-val']).sort_values(by = ['corr p-val', 'p-val'])
 
 
+def _read_results(df_res: pd.DataFrame | str | Path # results of an analysis function, or a .csv, .tsv, or Excel file of them
+                  ) -> pd.DataFrame: # the results table
+    "Reads the input of the plotting functions for differential expression results"
+    if not isinstance(df_res, (str, Path)):
+        return df_res
+    ext = Path(df_res).suffix.lower()
+    return pd.read_csv(df_res) if ext == '.csv' else pd.read_csv(df_res, sep = '\t') if ext == '.tsv' else pd.read_excel(df_res)
+
+
 def get_pval_distribution(
         df_res: pd.DataFrame | str | Path,  # Output DataFrame from get_differential_expression
         filepath: str | Path = '',  # Path to save plot
@@ -1248,10 +1298,7 @@ def get_pval_distribution(
 ) -> None:
     "Creates histogram of p-values from differential expression analysis"
     import seaborn as sns
-    if isinstance(df_res, (str, Path)):
-        df_res = pd.read_csv(df_res) if Path(df_res).suffix.lower() == ".csv" else pd.read_csv(df_res,
-                                                                                               sep = "\t") if Path(
-            df_res).suffix.lower() == ".tsv" else pd.read_excel(df_res)
+    df_res = _read_results(df_res)
     # make plot
     ax = sns.histplot(x = 'p-val', data = df_res, stat = 'frequency')
     ax.set(xlabel = 'p-values', ylabel = 'Frequency', title = '' if title is None else title)
@@ -1271,10 +1318,7 @@ def get_ma(
 ) -> None:
     "Generates MA plot (mean abundance vs log2 fold change) from differential expression results"
     import seaborn as sns
-    if isinstance(df_res, (str, Path)):
-        df_res = pd.read_csv(df_res) if Path(df_res).suffix.lower() == ".csv" else pd.read_csv(df_res,
-                                                                                               sep = "\t") if Path(
-            df_res).suffix.lower() == ".tsv" else pd.read_excel(df_res)
+    df_res = _read_results(df_res)
     if 'Log2FC' not in df_res.columns and 'glycoforms' in df_res.attrs:
         df_res = df_res.attrs['glycoforms']  # glycoproteomics results are per glycosite, without abundances or fold changes; the glycoform table they were built from has both
     if sig_thresh is None:
@@ -1311,10 +1355,7 @@ def get_volcano(
 ) -> None:  # Displays volcano plot, or returns it as a Jupyter-renderable SVG when annotate_volcano
     "Creates volcano plot showing -log10(FDR-corrected p-values) vs Log2FC or effect size"
     import seaborn as sns
-    if isinstance(df_res, (str, Path)):
-        df_res = pd.read_csv(df_res) if Path(df_res).suffix.lower() == ".csv" else pd.read_csv(df_res,
-                                                                                               sep = "\t") if Path(
-            df_res).suffix.lower() == ".tsv" else pd.read_excel(df_res)
+    df_res = _read_results(df_res)
     df_res = df_res.copy()
     if x_metric == 'Log2FC' and 'Log2FC' not in df_res.columns and 'Effect size' in df_res.columns:
         x_metric = 'Effect size'  # get_differential_expression on glycoforms returns one row per glycosite, with a mean effect size but no fold change
@@ -1331,8 +1372,8 @@ def get_volcano(
     # Make plot
     kwargs.pop('color', None)
     kwargs.pop('hue', None)
-    sig = df_res['log_p'] > -np.log10(y_thresh)
-    df_res['_cat'] = np.where(sig & (df_res[x_metric] > 0), 'up', np.where(sig & (df_res[x_metric] <= 0), 'down', 'ns'))
+    sig = (df_res['log_p'] > -np.log10(y_thresh)) & (df_res[x_metric].abs() > x_thresh)  # the hits the threshold lines frame and label_changed labels
+    df_res['_cat'] = np.where(sig & (df_res[x_metric] > 0), 'up', np.where(sig, 'down', 'ns'))
     ax = sns.scatterplot(x = x_metric, y = 'log_p', data = df_res, hue = '_cat',
                          palette = {'up': '#C84B55', 'down': '#2D6A9F', 'ns': '#BBBBBB'},
                          alpha = 0.85, s = 25, linewidth = 0, legend = False, **kwargs)
@@ -1382,7 +1423,7 @@ def get_glycanova(
         motifs: bool = False,  # Analyze motifs instead of sequences; per glycosite (protein_site_motif) for glycoproteomics data
         feature_set: str | list[str] = ['exhaustive', 'known'],  # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
         min_samples: float = 0.1,  # Min fraction (0-1) of non-zero samples required
-        posthoc: bool = True,  # Perform Tukey's HSD test post-hoc
+        posthoc: bool = True,  # Perform Tukey's HSD test post-hoc (pairwise Fisher tests with Holm for features absent from a whole group)
         grouped_BH: bool | None = None,  # Use two-stage adaptive Benjamini-Hochberg; None infers True for motifs (DAG-grouped families) and False for sequences
         custom_motifs: str | list[str] = [],  # Custom motifs if using 'custom' feature set
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"; None auto-decides
@@ -1391,8 +1432,9 @@ def get_glycanova(
         moderate_variance: bool = True,  # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
         glycoproteomics: bool | None = None,  # Whether rows are glycoforms from glycoproteomics instead of glycans; default: whenever every row label is protein_site_glycan
         random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
-        top_explained: int | None = 5  # How many child motifs to name in 'Explained by'; None names all of them
-) -> tuple[GlycoDataFrame, dict[str, pd.DataFrame]]:  # (ANOVA results with F-stats and omega-squared effect sizes, post-hoc results)
+        top_explained: int | None = 5,  # How many child motifs to name in 'Explained by'; None names all of them
+        covariates: pd.DataFrame | pd.Series | dict | None = None  # per-sample nuisance variables indexed by sample name (e.g., secretor status, sex, age, batch); the groups are tested by ANCOVA, post-hoc tests on covariate-adjusted values
+) -> tuple[GlycoDataFrame, dict[str, pd.DataFrame]]:  # (ANOVA results with F-stats and omega-squared effect sizes (Cramer's V for features absent from a whole group), post-hoc results)
     "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
     from scipy.stats import studentized_range
     grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
@@ -1410,14 +1452,20 @@ def get_glycanova(
                                        min_samples = min_samples, transform = transform, feature_set = feature_set,
                                        gamma = gamma, custom_scale = custom_scale, custom_motifs = custom_motifs,
                                        random_state = random_state)
+    absent_rows = df_org.attrs.pop('absent', None)
     results, posthoc_results = [], {}
+    n_cov, df_raw = 0, df  # the residual decomposition reads its per-sample reference off the unadjusted transform
+    if covariates is not None:
+        # Each feature is fit as group means plus covariates: effect sizes and post-hoc tests see the values with the covariate part removed, and the F test the group sum of squares given the covariates
+        adj, cov_ssr, cov_df, cov_ssb, _, n_cov = _covariate_fit(df.values, groups, covariates, df.columns.tolist())
+        df = df.copy()
+        df.iloc[:, :] = np.where(np.isfinite(cov_ssr)[:, None], adj, df.values)
+        cov_stats = pd.DataFrame({'ssr': cov_ssr, 'df': cov_df, 'ssb': cov_ssb}, index = df.index)
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(len(groups))
     effect_sizes = omega_squared(df, groups)
-    # Variance-based filtering of features
-    df, df_prison = variance_based_filtering(df)
     garr, X = np.asarray(groups), df.values
-    if moderate_variance and len(X) > 1:
+    if (moderate_variance and len(X) > 1) or covariates is not None:
         # Shrinking each feature's residual variance toward its containment neighborhood stabilizes the F test without touching the reported effect sizes
         ug = np.unique(garr)
         ng = np.stack([np.isfinite(X[:, garr == g]).sum(axis = 1) for g in ug],
@@ -1428,36 +1476,23 @@ def get_glycanova(
         ssw = sum(
             np.nansum((X[:, garr == g] - np.nanmean(X[:, garr == g], axis = 1, keepdims = True)) ** 2, axis = 1) for g
             in ug)
+        if covariates is not None:  # ANCOVA: the group sum of squares given the covariates, over the residuals of the full model; a feature the model cannot fit keeps the one-way terms
+            cs = cov_stats.loc[df.index]
+            fit = np.isfinite(cs['ssr'].to_numpy())
+            ssb, ssw, dfr = np.where(fit, cs['ssb'], ssb), np.where(fit, cs['ssr'], ssw), np.where(fit, cs['df'], dfr)
         s2, dfp = moderated_variance(ssw / dfr, df_resid = dfr,
-                                     neighbors = dag_neighbors(df.index.tolist(), df_org.attrs.get('motif_dag')))
+                                     neighbors = dag_neighbors(df.index.tolist(), df_org.attrs.get('motif_dag'))) if moderate_variance and len(X) > 1 else (ssw / dfr, dfr)
         f_values = (ssb / (len(ug) - 1)) / s2
         p_values = f.sf(f_values, len(ug) - 1, dfp)
     else:  # computed only here, since the moderated F replaces it, and Welch's ANOVA warned on every singleton group the pooled test handles
         # One-way ANOVA on a fixed design is the same F for every feature, so all features go through one vectorized call instead of one formula parse and OLS fit each
         f_values, p_values = f_oneway(*[X[:, garr == g] for g in np.unique(garr)], axis = 1, nan_policy = 'omit', equal_var = False)
+    absent = np.isin(df.index, absent_rows.index) if absent_rows is not None else np.zeros(len(df), bool)
+    if absent.any():
+        p_values = np.array(p_values, dtype = float)
+        p_values[absent], v_det = detection_test(absent_rows.loc[df.index[absent], df.columns].to_numpy(), [np.flatnonzero(garr == g).tolist() for g in np.unique(garr)],
+                                             random_state = random_state)
     results = list(zip(df.index, f_values, p_values))
-    if posthoc:
-        ug_ph, srd = np.unique(garr), {}
-        iu = np.triu_indices(len(ug_ph), k = 1)
-        for i, glycan in enumerate(df.index):
-            if p_values[i] < alpha:
-                cols_ph = [X[i][(garr == g) & np.isfinite(X[i])] for g in ug_ph]
-                if min(len(c) for c in cols_ph) < 2:
-                    continue  # Tukey's HSD has no nan_policy, so an unmeasured cell would turn every pairwise p-value into NaN
-                # Tukey's HSD computed as scipy.stats.tukey_hsd does, except that the studentized range, a numerical double integral per cell, is only integrated for the pairs reported instead of the full k x k matrix, and its critical value, which depends only on the design, once per design instead of once per glycan
-                n_ph = np.asarray([c.size for c in cols_ph])
-                dof = np.sum(n_ph) - len(ug_ph)
-                mse = np.sum(np.asarray([np.var(c, ddof = 1) for c in cols_ph]) * (n_ph - 1)) / dof
-                se_ph = np.broadcast_to(np.sqrt((2 / n_ph[0] if np.unique(n_ph).size == 1 else 1 / n_ph + 1 / n_ph[None].T) * mse / 2), (len(ug_ph),) * 2)
-                means_ph = np.asarray([np.mean(c) for c in cols_ph])
-                md = (means_ph[None].T - means_ph)[iu]
-                pv = studentized_range.sf(np.abs(md) / se_ph[iu], len(ug_ph), dof)
-                if dof not in srd:
-                    srd[dof] = studentized_range.ppf(1 - alpha, len(ug_ph), dof)
-                rad = srd[dof] * se_ph[iu]
-                posthoc_results[glycan] = pd.DataFrame(
-                    [{'group1': ug_ph[a], 'group2': ug_ph[b], 'meandiff': -md[j], 'p-adj': pv[j], 'lower': -(md[j] + rad[j]),
-                      'upper': -(md[j] - rad[j]), 'reject': pv[j] < alpha} for j, (a, b) in enumerate(zip(*iu))])
     df_out = GlycoDataFrame(results, columns = ["Glycan", "F statistic", "p-val"])
     dag = df_org.attrs.get('motif_dag') if motifs or glycoproteomics else None
     if grouped_BH:
@@ -1471,23 +1506,47 @@ def get_glycanova(
         corrpvals, significance = correct_multiple_testing(df_out['p-val'], alpha)
     df_out['corr p-val'] = corrpvals
     df_out['significant'] = significance
-    prison_rows = pd.DataFrame({
-        'Glycan': df_prison.index,
-        'F statistic': [0] * len(df_prison),
-        'p-val': [1.0] * len(df_prison),
-        'corr p-val': [1.0] * len(df_prison),
-        'significant': [False] * len(df_prison)})
-    prison_rows = prison_rows.astype({'significant': 'bool'})
-    if len(prison_rows) > 0:
-        # An all-prison run leaves df_out empty with object dtypes, and inferring result dtypes from that is what pandas is deprecating
-        df_out = GlycoDataFrame(prison_rows) if df_out.empty else pd.concat([df_out, prison_rows], ignore_index = True)
+    if posthoc:
+        ug_ph, srd = np.unique(garr), {}
+        iu = np.triu_indices(len(ug_ph), k = 1)
+        for i, glycan in enumerate(df.index):
+            if significance[i] and absent[i]:
+                means_ph = np.asarray([np.mean(X[i][garr == g]) for g in ug_ph])
+                pv = np.array([detection_test(absent_rows.loc[[glycan], df.columns].to_numpy(), [np.flatnonzero(garr == ug_ph[a]).tolist(), np.flatnonzero(garr == ug_ph[b]).tolist()])[0][0]
+                               for a, b in zip(*iu)])
+                order = np.argsort(pv)
+                holm = np.empty(len(pv))
+                holm[order] = np.minimum(np.maximum.accumulate((len(pv) - np.arange(len(pv))) * pv[order]), 1)
+                posthoc_results[glycan] = pd.DataFrame([{'group1': ug_ph[a], 'group2': ug_ph[b], 'meandiff': means_ph[b] - means_ph[a], 'p-adj': holm[j], 'lower': np.nan,
+                                                         'upper': np.nan, 'reject': holm[j] < alpha} for j, (a, b) in enumerate(zip(*iu))])
+            elif significance[i]:  # only features the corrected omnibus test found; Tukey's studentized range integrals took 99% of many-group runs
+                cols_ph = [X[i][(garr == g) & np.isfinite(X[i])] for g in ug_ph]
+                if min(len(c) for c in cols_ph) < 2:
+                    continue  # Tukey's HSD has no nan_policy, so an unmeasured cell would turn every pairwise p-value into NaN
+                # Tukey's HSD computed as scipy.stats.tukey_hsd does, except that the studentized range is only integrated for the pairs reported instead of the full k x k matrix, and by _studentized_range_sf instead of scipy's adaptive integrals (13 ms per pair, 99% of many-group runs), and its critical value, which depends only on the design, once per design instead of once per glycan
+                n_ph = np.asarray([c.size for c in cols_ph])
+                dof = np.sum(n_ph) - len(ug_ph) - n_cov  # covariate columns cost residual degrees of freedom
+                mse = np.sum(np.asarray([np.var(c, ddof = 1) for c in cols_ph]) * (n_ph - 1)) / dof
+                se_ph = np.broadcast_to(np.sqrt((2 / n_ph[0] if np.unique(n_ph).size == 1 else 1 / n_ph + 1 / n_ph[None].T) * mse / 2), (len(ug_ph),) * 2)
+                means_ph = np.asarray([np.mean(c) for c in cols_ph])
+                md = (means_ph[None].T - means_ph)[iu]
+                pv = _studentized_range_sf(np.abs(md) / se_ph[iu], len(ug_ph), dof)
+                if dof not in srd:
+                    srd[dof] = studentized_range.ppf(1 - alpha, len(ug_ph), dof)
+                rad = srd[dof] * se_ph[iu]
+                posthoc_results[glycan] = pd.DataFrame(
+                    [{'group1': ug_ph[a], 'group2': ug_ph[b], 'meandiff': -md[j], 'p-adj': pv[j], 'lower': -(md[j] + rad[j]),
+                      'upper': -(md[j] - rad[j]), 'reject': pv[j] < alpha} for j, (a, b) in enumerate(zip(*iu))])
     df_out['significant'] = df_out['significant'].astype('bool')
+    if absent.any():
+        effect_sizes = effect_sizes.copy()
+        effect_sizes[df.index[absent]] = v_det
     df_out['Effect size'] = effect_sizes.reindex(df_out['Glycan']).values
-    # With no feature surviving the variance filter there is no transformed frame to read the per-sample offset off, so the residuals have no reference frame to land in
+    # With no feature there is no transformed frame to read the per-sample offset off, so the residuals have no reference frame to land in
     if (motifs or glycoproteomics) and df_org.attrs.get('motif_dag') is not None and not df.empty:
         dag, full = df_org.attrs['motif_dag'], df_org
         # Recover the per-sample logratio offset from the transform itself, so residual features land in the frame everything else was tested in
-        ref = np.nanmedian(np.log2(full.loc[df.index].values + 0.0000001) - df.values, axis = 0)
+        ref = np.nanmedian(np.log2(full.loc[df.index].values + 0.0000001) - df_raw.loc[df.index].values, axis = 0)
         levels, garr = sorted(set(groups)), np.asarray(groups)
         eff, rows = dict(zip(df_out['Glycan'], df_out['Effect size'])), {}
         pos, F = {m: i for i, m in enumerate(full.index)}, full.values
@@ -1507,6 +1566,9 @@ def get_glycanova(
             bal = np.log2(parts[:, obs] + 0.0000001)
             bal = bal[1:] - bal[0] if len(bal) > 1 else bal[:0]
             bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9] if len(bal) and obs.sum() > 1 else bal[:0]
+            if covariates is not None and len(bal):  # the balances with their covariate part removed, as the marginal values
+                ab = _covariate_fit(bal, grp_b, covariates, full.columns[obs].tolist())[0]
+                bal = ab if np.isfinite(ab).all() else bal
             bal_p = permanova_with_permutation(squareform(pdist(bal.T, metric = 'euclidean')), group_labels = grp_b,
                                                permutations = 999, random_state = random_state)[1] if len(
                 bal) and 1 < len(set(grp_b)) < len(grp_b) else np.nan  # a PERMANOVA needs a within-group degree of freedom; with one sample per group every F is infinite
@@ -1516,17 +1578,16 @@ def get_glycanova(
                            bal_p)  # parent occurs only inside its children: no context of its own left to test
                 continue
             r = np.log2(np.maximum(resid, 0.0000001)) - ref
+            if covariates is not None:  # ANCOVA of the residual part, as for the marginal values, where it can be fit
+                ar, ssr_r, dfr_r, ssb_r, _, _ = _covariate_fit(np.where(usable, r, np.nan)[None], groups, covariates, full.columns.tolist())
+                if np.isfinite(ssr_r[0]):
+                    rows[p] = (explained, f.sf(ssb_r[0] / (len(levels) - 1) / (ssr_r[0] / dfr_r[0]), len(levels) - 1, dfr_r[0]), omega_squared(ar[0][usable], garr[usable].tolist()), bal_p)
+                    continue
             rows[p] = (explained, f_oneway(*[r[usable & (garr == g)] for g in levels], equal_var = False)[1],
                        omega_squared(r[usable], garr[usable].tolist()), bal_p)
-        # Residuals and balances answer different questions than the marginals, so each is corrected as its own, much smaller family
-        cp = dict(zip(rows, correct_multiple_testing([v[1] for v in rows.values()], alpha)[0])) if rows else {}
-        bk = [m for m in rows if not np.isnan(rows[m][3])]
-        bp = dict(zip(bk, correct_multiple_testing([rows[m][3] for m in bk], alpha)[0])) if bk else {}
-        df_out['Explained by'] = [rows[m][0] if m in rows else '' for m in df_out['Glycan']]
-        df_out['Redistribution p-val'] = [bp.get(m, np.nan) for m in df_out['Glycan']]
-        df_out['Residual p-val'] = [cp.get(m, np.nan) for m in df_out['Glycan']]
-        df_out['Residual effect size'] = [rows[m][2] if m in rows else np.nan for m in df_out['Glycan']]
-    df_out.attrs.update({'alpha': alpha, 'n': len(groups), 'test': 'ANOVA', 'transform': transform, 'paired': False,
+        for k, v in _decomposition_columns(rows, df_out['Glycan'].tolist(), alpha).items():
+            df_out[k] = v
+    df_out.attrs.update({'alpha': alpha, 'n': len(groups), 'test': ('moderated ' if moderate_variance and len(X) > 1 else '') + 'ANCOVA' if covariates is not None else 'moderated ANOVA' if moderate_variance and len(X) > 1 else "Welch's ANOVA", 'transform': df_org.attrs.get('transform', transform), 'paired': False,
                          'dataset': df_org.attrs.get('dataset', ''), 'provenance': df_org.attrs.get('provenance', {})})
     return df_out.sort_values(by = 'corr p-val'), posthoc_results
 
@@ -1630,7 +1691,7 @@ def get_time_series(
     df = replace_outliers_winsorization(df).reset_index(names = 'glycan')
     df = impute_and_normalize(df, [df.columns[1:].tolist()], impute = impute, min_samples = min_samples, random_state = random_state)
     if transform is None:
-        transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
+        transform = "CLR" if glycoproteomics else "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"  # as in preprocess_data: a glycoform ID with a sequence passes enforce_class, and one ALR reference glycoform would span every glycosite
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(df.shape[1] - 1)
     dag = None
@@ -1680,14 +1741,7 @@ def get_time_series(
               df.columns[1:]]
     df_out = GlycoDataFrame(df_out, columns = ['Glycan', 'Change', 'p-val'])
     if grouped_BH and dag is not None:
-        df_num = df.iloc[:, 1:].T.astype(float)
-        grouped_glycans, grouped_pvals = select_grouping(df_num, df_num, df_out['Glycan'].tolist(),
-                                                         df_out['p-val'].tolist(),
-                                                         grouped_BH = grouped_BH, dag = dag)
-        corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_glycans, grouped_pvals, alpha)
-        corrpvals = [corrpvals[g] for g in df_out['Glycan']]
-        corrpvals = [p if p >= df_out['p-val'].iloc[i] else df_out['p-val'].iloc[i] for i, p in enumerate(corrpvals)]
-        significance = [significance_dict[g] for g in df_out['Glycan']]
+        corrpvals, significance = _family_corrected(df_out['Glycan'].tolist(), df_out['p-val'].tolist(), alpha, dag)
     else:
         corrpvals, significance = correct_multiple_testing(df_out['p-val'], alpha)
     df_out['corr p-val'] = corrpvals
@@ -1695,6 +1749,54 @@ def get_time_series(
     df_out.attrs.update(
         {'alpha': alpha, 'n': df.shape[0], 'test': 'OLS trend', 'transform': transform, 'paired': False})
     return df_out.sort_values(by = 'corr p-val')
+
+
+def _rhythm_input(df: pd.DataFrame, # glycans in the first column, samples in the others
+                  motifs: bool, # quantify motifs instead of keeping glycans
+                  feature_set: str | list[str], # feature sets for quantify_motifs
+                  custom_motifs: str | list[str], # custom motifs for quantify_motifs
+                  transform: str | None, # "CLR", "ALR", "Nothing", or None to decide
+                  gamma: float, # uncertainty parameter of the scale model
+                  grouped_BH: bool, # whether a containment DAG is needed for the correction
+                  glycoproteomics: bool, # whether rows are glycoforms
+                  random_state: int | np.random.Generator | None # random state for imputation and scale model
+                  ) -> tuple[pd.DataFrame, nx.DiGraph | None, str]: # (features in the first column and transformed samples, containment DAG, transform applied)
+    "Preprocesses the input of get_jtk and get_cosinor, which have to stay identical: winsorization, imputation with a drawn prediction error, optional motif quantification, and the log-ratio transform"
+    df = replace_outliers_winsorization(df)
+    annot = df.pop(df.columns[0])
+    df = impute_biosynthetic(df, glycans = annot.tolist(), draw = True, random_state = random_state)
+    df.insert(0, 'Molecule_Name', annot)
+    if transform is None:
+        transform = "CLR" if glycoproteomics else "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"  # as in preprocess_data: a glycoform ID with a sequence passes enforce_class, and one ALR reference glycoform would span every glycosite
+    dag = None
+    if motifs:
+        df = quantify_motifs(df, feature_set = feature_set, custom_motifs = custom_motifs) + 0.0000001
+        # Containment DAG off the raw motif frame (pre-transform), keeping the abundance-dominance prefilter valid
+        dag = get_motif_dag(df.index.tolist(), abundances = df) if grouped_BH else None
+        df = df.reset_index()
+    elif glycoproteomics and grouped_BH:
+        # Composition containment off the raw glycoform frame (pre-transform), keeping the abundance-dominance prefilter valid
+        raw = df.set_index(df.columns[0]).astype(float)
+        dag = get_composition_dag(raw.index.tolist(), abundances = raw)
+    n = len(df)
+    if transform == "ALR":
+        df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = False, gamma = gamma, random_state = random_state)
+    elif transform == "CLR":
+        df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], df.columns[1:].tolist(), [], gamma = gamma, random_state = random_state)
+    elif transform != "Nothing":
+        raise ValueError("Only ALR and CLR are valid transforms for now.")
+    return df, dag, 'CLR' if transform == 'ALR' and len(df) == n else transform  # get_additive_logratio_transformation switches to CLR when no reference qualifies
+
+
+def _family_corrected(names: list[str], # features
+                      pvals: list[float], # their p-values
+                      alpha: float, # significance threshold
+                      dag: nx.DiGraph # containment DAG, whose rarest root ancestors are the families
+                      ) -> tuple[list[float], list[bool]]: # (corrected p-values, never below the raw ones; significance)
+    "Two-stage Benjamini-Hochberg within the motif families of a containment DAG"
+    grouped_glycans, grouped_pvals = select_grouping(pd.DataFrame(), pd.DataFrame(), names, pvals, grouped_BH = True, dag = dag)  # the DAG branch reads only names and p-values
+    corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_glycans, grouped_pvals, alpha)
+    return [max(corrpvals[g], p) for g, p in zip(names, pvals)], [significance_dict[g] for g in names]
 
 
 @_abundance_input('df_in')
@@ -1722,38 +1824,7 @@ def get_jtk(
     replicates = (df.shape[1] - 1) // timepoints
     alpha = get_alphaN(df.shape[1] - 1)
     jtk = JTKTest(timepoints, periods, interval, replicates)
-    df = replace_outliers_winsorization(df)
-    annot = df.pop(df.columns[0])
-    df = impute_biosynthetic(df, glycans = annot.tolist(), draw = True, random_state = random_state)
-    df.insert(0, 'Molecule_Name', annot)
-    if transform is None:
-        transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
-    dag = None
-    if motifs:
-        df = quantify_motifs(df, feature_set = feature_set, custom_motifs = custom_motifs) + 0.0000001
-        # Containment DAG off the raw motif frame (pre-transform), keeping the abundance-dominance prefilter valid
-        dag = get_motif_dag(df.index.tolist(), abundances = df) if grouped_BH else None
-        if transform == "CLR":
-            df = clr_transformation(df, df.columns.tolist(), [], gamma = gamma, random_state = random_state).reset_index()
-        elif transform == "ALR":
-            df = get_additive_logratio_transformation(df.reset_index(), df.columns.tolist(), [], paired = False,
-                                                      gamma = gamma, random_state = random_state)
-        elif transform == "Nothing":
-            df = df.reset_index()
-        else:
-            raise ValueError("Only ALR and CLR are valid transforms for now.")
-    else:
-        if glycoproteomics and grouped_BH:
-            # Composition containment off the raw glycoform frame (pre-transform), keeping the abundance-dominance prefilter valid
-            raw = df.set_index(df.columns[0]).astype(float)
-            dag = get_composition_dag(raw.index.tolist(), abundances = raw)
-        if transform == "ALR":
-            df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = False,
-                                                      gamma = gamma, random_state = random_state)
-        elif transform == "CLR":
-            df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], df.columns[1:].tolist(), [], gamma = gamma, random_state = random_state)
-        elif transform != "Nothing":
-            raise ValueError("Only ALR and CLR are valid transforms for now.")
+    df, dag, transform = _rhythm_input(df, motifs, feature_set, custom_motifs, transform, gamma, grouped_BH, glycoproteomics, random_state)
     results = []
     for name, values in zip(df.iloc[:, 0].tolist(), df.iloc[:, 1:].to_numpy(dtype = float)):  # plain rows instead of a mixed-dtype Series per iterrows step
         p_val, period, phase, tau = jtk.test(values)
@@ -1761,15 +1832,7 @@ def get_jtk(
     df_out = GlycoDataFrame(results,
                             columns = ['Molecule_Name', 'Adjusted_P_value', 'Period_Length', 'Lag_Phase', 'Amplitude'])
     if grouped_BH and dag is not None:
-        df_num = df.iloc[:, 1:].astype(float)
-        grouped_glycans, grouped_pvals = select_grouping(df_num, df_num, df_out['Molecule_Name'].tolist(),
-                                                         df_out['Adjusted_P_value'].tolist(), grouped_BH = grouped_BH,
-                                                         dag = dag)
-        corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_glycans, grouped_pvals, alpha)
-        corrpvals = [corrpvals[g] for g in df_out['Molecule_Name']]
-        corrpvals = [p if p >= df_out['Adjusted_P_value'].iloc[i] else df_out['Adjusted_P_value'].iloc[i] for i, p in
-                     enumerate(corrpvals)]
-        significance = [significance_dict[g] for g in df_out['Molecule_Name']]
+        corrpvals, significance = _family_corrected(df_out['Molecule_Name'].tolist(), df_out['Adjusted_P_value'].tolist(), alpha, dag)
     else:
         corrpvals, significance = correct_multiple_testing(df_out.iloc[:, 1].tolist(), alpha,
                                                            correction_method = correction_method)
@@ -1818,40 +1881,7 @@ def get_cosinor(
         raise ValueError(
             f"A cosinor needs at least 4 distinct timepoints to test for a rhythm, got {len(np.unique(t))}.")
     alpha = get_alphaN(n)
-    df = replace_outliers_winsorization(df)
-    annot = df.pop(df.columns[0])
-    df = impute_biosynthetic(df, glycans = annot.tolist(), draw = True, random_state = random_state)
-    df.insert(0, 'Molecule_Name', annot)
-    if transform is None:
-        transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
-    dag = None
-    if motifs:
-        df = quantify_motifs(df, feature_set = feature_set, custom_motifs = custom_motifs) + 0.0000001
-        # Containment DAG off the raw motif frame (pre-transform), keeping the abundance-dominance prefilter valid
-        dag = get_motif_dag(df.index.tolist(), abundances = df) if grouped_BH else None
-        if transform == "CLR":
-            df = clr_transformation(df, df.columns.tolist(), [], gamma = gamma,
-                                    random_state = random_state).reset_index()
-        elif transform == "ALR":
-            df = get_additive_logratio_transformation(df.reset_index(), df.columns.tolist(), [], paired = False,
-                                                      gamma = gamma, random_state = random_state)
-        elif transform == "Nothing":
-            df = df.reset_index()
-        else:
-            raise ValueError("Only ALR and CLR are valid transforms for now.")
-    else:
-        if glycoproteomics and grouped_BH:
-            # Composition containment off the raw glycoform frame (pre-transform), keeping the abundance-dominance prefilter valid
-            raw = df.set_index(df.columns[0]).astype(float)
-            dag = get_composition_dag(raw.index.tolist(), abundances = raw)
-        if transform == "ALR":
-            df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = False,
-                                                      gamma = gamma, random_state = random_state)
-        elif transform == "CLR":
-            df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], df.columns[1:].tolist(), [], gamma = gamma,
-                                                random_state = random_state)
-        elif transform != "Nothing":
-            raise ValueError("Only ALR and CLR are valid transforms for now.")
+    df, dag, transform = _rhythm_input(df, motifs, feature_set, custom_motifs, transform, gamma, grouped_BH, glycoproteomics, random_state)
     results = []
     for name, values in zip(df.iloc[:, 0].tolist(), df.iloc[:, 1:].to_numpy(
             dtype = float)):  # plain rows instead of a mixed-dtype Series per iterrows step
@@ -1863,12 +1893,7 @@ def get_cosinor(
                             columns = ['Molecule_Name', 'P_value', 'Period_Length', 'Mesor', 'Amplitude', 'Acrophase',
                                        'R2'])
     if grouped_BH and dag is not None:
-        df_num = df.iloc[:, 1:].astype(float)
-        grouped_glycans, grouped_pvals = select_grouping(df_num, df_num, df_out['Molecule_Name'].tolist(),
-                                                         df_out['P_value'].tolist(), grouped_BH = grouped_BH, dag = dag)
-        corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_glycans, grouped_pvals, alpha)
-        corrpvals = [max(corrpvals[g], p) for g, p in zip(df_out['Molecule_Name'], df_out['P_value'])]
-        significance = [significance_dict[g] for g in df_out['Molecule_Name']]
+        corrpvals, significance = _family_corrected(df_out['Molecule_Name'].tolist(), df_out['P_value'].tolist(), alpha, dag)
     else:
         corrpvals, significance = correct_multiple_testing(df_out['P_value'].tolist(), alpha,
                                                            correction_method = correction_method)
@@ -1888,10 +1913,10 @@ def _diversity_pval(
         d = b - a
         if np.ptp(d) == 0:
             return 1.0 if d[0] == 0 else min(1.0, 2 / 2 ** len(d))
-        return ttest_rel(b, a)[1]
+        return _ttest_pvalue(b, a, paired = True)
     if np.ptp(a) == 0 and np.ptp(b) == 0:
         return 1.0 if a[0] == b[0] else 2 / comb(len(a) + len(b), len(a))
-    return ttest_ind(b, a, equal_var = False)[1]
+    return _ttest_pvalue(b, a)
 
 
 @_abundance_input('df')
@@ -2059,7 +2084,7 @@ def get_biodiversity(
     df_out["corr p-val"] = corrpvals
     df_out["significant"] = significance
     df_out.attrs.update(
-        {'alpha': alpha, 'n': len(group_sizes), 'test': 'ANOVA/t-test per metric', 'transform': None, 'paired': paired})
+        {'alpha': alpha, 'n': len(group_sizes), 'test': 'ANOVA/t-test per metric', 'transform': df_org.attrs.get('transform'), 'paired': paired})
     return df_out.sort_values(by = ['corr p-val', 'p-val']).reset_index(drop = True), distance_matrix
 
 
@@ -2076,10 +2101,9 @@ def get_SparCC(
         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> tuple[pd.DataFrame, pd.DataFrame]:  # (Spearman correlation matrix, FDR-corrected p-value matrix)
     "Calculates SparCC (Sparse Correlations for Compositional Data) between two matching datasets (e.g., glycomics)"
-    if df1.columns.tolist()[0] != df2.columns.tolist()[0] and df1.columns.tolist()[0] in df2.columns.tolist():
-        common_columns = df1.columns.intersection(df2.columns)
-        df1 = df1[common_columns]
-        df2 = df2[common_columns]
+    gcol2 = df1.columns[0] if df1.columns[0] in df2.columns else df2.columns[0]
+    if set(df2.columns) - {gcol2} == set(df1.columns[1:]):  # the same samples are paired by name, in df1's order; a df2 with its glycans first but its samples in another order was paired by position
+        df2 = df2[[gcol2] + df1.columns[1:].tolist()]
     if df1.shape[1] != df2.shape[1]:
         raise ValueError(
             f"df1 has {df1.shape[1] - 1} samples but df2 has {df2.shape[1] - 1}; SparCC correlates the two datasets sample by sample, so both need the same samples in the same order.")
@@ -2153,17 +2177,10 @@ def get_SparCC(
         p_value_matrix = spearman_exact_pvals(correlation_matrix, df1.shape[0])
     if motifs:
         # Each motif's correlations are one family, grouped by rarest ancestral motif family so that branches with different null proportions each get their own pi0
-        dag = get_motif_dag(df1.columns.tolist())
-        desc = {r: nx.descendants(dag, r) for r in dag if not dag.in_degree(r)}
-        breadth = {r: len(d) for r, d in desc.items()}
-        anc_roots = {}
-        for r, d in desc.items():
-            for g in d:
-                anc_roots.setdefault(g, []).append(r)
+        family = _root_families(get_motif_dag(df1.columns.tolist()))
         grouped_cells, grouped_pvals = {}, {}
         for i, m in enumerate(df1.columns):
-            anc = anc_roots.get(m, []) + ([m] if m in breadth else [])
-            grp = min(anc, key = lambda a: (breadth[a], a)) if anc else "rest"
+            grp = family.get(m, "rest")
             grouped_cells.setdefault(grp, []).extend((i, j) for j in range(df2.shape[1]))
             grouped_pvals.setdefault(grp, []).extend(p_value_matrix[i, :].tolist())
         corrected, _ = TST_grouped_benjamini_hochberg(grouped_cells, grouped_pvals, alpha)
@@ -2279,7 +2296,7 @@ def get_roc(
             y_true = [0] * len(values_group1) + [1] * len(values_group2)
             y_scores = np.concatenate([values_group1, values_group2])
             auc_scores[feature] = roc_auc_score(y_true, y_scores)
-        sorted_auc_scores = sorted(auc_scores.items(), key = lambda item: item[1], reverse = True)
+        sorted_auc_scores = sorted(auc_scores.items(), key = lambda item: abs(item[1] - 0.5), reverse = True)  # an AUC near 0 separates the groups as well as one near 1, by a glycan that falls in group2
         best, res = sorted_auc_scores[0]
         values = df.loc[best, :]
         values_group1 = values[group1]
@@ -2374,6 +2391,8 @@ def get_lectin_array(
         raise ValueError(
             f'Analysis aborted due to:\nDuplicates found for the following lectin(s): {", ".join(duplicated_cols)}.\nIf you have multiple copies of the same lectin, rename them by adding a suffix in the form of "_<identifier>" (underscore + an identifier).\nFor example, "SNA" may be renamed "SNA_1", "SNA_batch1", etc. ')
     lectin_list = df.columns.tolist()
+    if transform not in ('', None, 'log2'):
+        raise ValueError(f"get_lectin_array offers transform = 'log2' or '' (none), not {transform!r}.")
     if transform == "log2" and (df.to_numpy(dtype = float) <= 0).any():
         raise ValueError(f"transform = 'log2' needs positive intensities, but {(df.to_numpy(dtype = float) <= 0).sum()} values are zero or negative; negative values usually mean the data are log-transformed already, so leave transform = ''.")
     df = np.log2(df) if transform == "log2" else df
@@ -2429,7 +2448,7 @@ def get_lectin_array(
     df_out.attrs.update(
         {'alpha': alpha, 'n': len(group1) + (len(group2) if group2 else 0),
          'test': "Cohen's d" if group2 else 'omega squared',
-         'transform': None, 'paired': paired, 'dataset': in_name, 'provenance': in_prov})
+         'transform': transform or None, 'paired': paired, 'dataset': in_name, 'provenance': in_prov})
     return df_out
 
 

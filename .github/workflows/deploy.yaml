@@ -16,6 +16,13 @@ jobs:
       - run: pip install ".[dev]" nbdev
       - run: nbdev-install-quarto
       - run: nbdev-docs
+      - name: Strip inline glycan images from the llms.txt pages
+        run: |
+          python - <<'EOF'
+          import pathlib, re
+          for p in pathlib.Path('_docs').rglob('*.llms.md'):
+              p.write_text(re.sub(r' ?!\[(?:\\.|[^\]\\])*\]\(data:image/[^;]+;base64,[A-Za-z0-9+/=]*\)', '', p.read_text(encoding = 'utf-8')), encoding = 'utf-8')
+          EOF
       - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

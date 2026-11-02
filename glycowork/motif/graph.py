@@ -1,11 +1,11 @@
+from __future__ import annotations
 import re
 import sys
 from copy import deepcopy
 from typing import Any, Callable, Iterator
-from glycowork.glycan_data.loader import unwrap, modification_map, HashableDict
+from glycowork.glycan_data.loader import unwrap, modification_map, HashableDict, pd
 from glycowork.motif.processing import min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans, parse_floating_bit
 import numpy as np
-import pandas as pd
 import networkx as nx
 from collections import Counter, OrderedDict
 from functools import lru_cache, wraps
@@ -76,9 +76,18 @@ def _tree_embeddings(g1: nx.DiGraph,  # Glycan graph
     "Induced subgraph isomorphism for the tree case, where it is exactly a rooted embedding: every motif child sits on a distinct child of its parent's image"
     if _roots(g1) is None or len(r2 := _roots(g2) or ()) != 1:
         return None
+    embed = _embedder(g1, g2, node_match)
+    return (embed(r2[0], v) for v in g1)
+
+
+def _embedder(g1: nx.DiGraph,  # Glycan graph
+              g2: nx.DiGraph,  # Motif graph
+              node_match: Callable[[dict, dict], bool]  # Node matcher, called as node_match(g1 data, g2 data)
+              ) -> Callable[[int, int], Any]:  # embed(u, v): the distinct g1 node sets that the g2 subtree below u can occupy with u on v
+    "Memoized rooted embedding of out-tree subtrees, shared by _tree_embeddings and _forest_isomorphic"
     n1, n2, memo = g1.nodes, g2.nodes, {}
 
-    def embed(u, v):  # distinct node sets of g1 that the motif subtree below u can occupy with u on v
+    def embed(u, v):
         if (u, v) not in memo:
             res = [frozenset([v])] if node_match(n1[v], n2[u]) else []
             for cu in g2.successors(u):
@@ -88,7 +97,23 @@ def _tree_embeddings(g1: nx.DiGraph,  # Glycan graph
             memo[u, v] = res
         return memo[u, v]
 
-    return (embed(r2[0], v) for v in g1)
+    return embed
+
+
+def _forest_isomorphic(g1: nx.DiGraph,  # Glycan graph
+                       g2: nx.DiGraph,  # Glycan graph with the same out-degree multiset as g1
+                       node_match: Callable[[dict, dict], bool]  # Node matcher, called as node_match(g1 data, g2 data)
+                       ) -> bool | None:  # Whether g1 and g2 are isomorphic; None if VF2 is needed
+    "Isomorphism of out-forests of equal size (floating parts included): every g2 tree lands root on root in its own g1 tree, and as the sizes add up, each then fills that tree"
+    if (r1 := _roots(g1)) is None or (r2 := _roots(g2)) is None or len(r1) != len(r2):
+        return None
+    embed = _embedder(g1, g2, node_match)
+    fits = [[j for j, v in enumerate(r1) if embed(u, v)] for u in r2]
+
+    def pair(i, used):  # one g1 tree per g2 tree, by backtracking over the few trees a glycan has
+        return i == len(fits) or any(j not in used and pair(i + 1, used | {j}) for j in fits[i])
+
+    return pair(0, frozenset())
 
 
 def _ptm_wildcarded(g):  # cached PTM-wildcarded copy, keyed on graph identity
@@ -169,7 +194,7 @@ def glycan_to_nxGraph_int(glycan: str, # Glycan in IUPAC-condensed format
         glycan += 'Hex'
     # Map glycan string to node labels and adjacency matrix
     node_dict, edges = glycan_to_edges(glycan)
-    if appended_hex and glycan.endswith('x'):
+    if appended_hex:
         last_node = len(node_dict) - 1
         node_dict.pop(last_node, None)
         edges = [e for e in edges if last_node not in e]
@@ -339,7 +364,7 @@ def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
         main_b = gb.subgraph(nx.node_connected_component(gb.to_undirected(as_view = True), 0))
         # place glycan_a's floating parts one at a time (as strings, so equal placements collapse into one lru-cached graph), keeping placements whose main part still embeds into glycan_b's at its root, until the layouts agree and every part of glycan_b sits on an equally or more general part of glycan_a
         frontier, same = [ga], False
-        while frontier and not (same := any(_degs(g) == _degs(gb) and (any(hits) if (hits := _tree_embeddings(gb, g, covers)) is not None else nx.isomorphism.DiGraphMatcher(gb, g, covers).is_isomorphic()) for g in frontier if nx.number_weakly_connected_components(g) == n_parts)):
+        while frontier and not (same := any(_degs(g) == _degs(gb) and (iso if (iso := _forest_isomorphic(gb, g, covers)) is not None else nx.isomorphism.DiGraphMatcher(gb, g, covers).is_isomorphic()) for g in frontier if nx.number_weakly_connected_components(g) == n_parts)):
             placed = {}
             for t in frontier:
                 for s in (get_possible_topologies(t, exhaustive = True) if nx.number_weakly_connected_components(t) > n_parts else []):
@@ -401,9 +426,9 @@ def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
         node_match = categorical_node_match_wildcard('string_labels', 'unknown', {}, 'termini',
                                                      'flexible') if ptm else nx.algorithms.isomorphism.categorical_node_match(
             'string_labels', 'unknown')
-    # equal out-degree multisets mean equal node counts, so any embedding of one tree into the other is already an isomorphism
-    if not return_matches and (hits := _tree_embeddings(g1, g2, node_match)) is not None:
-        return any(hits)
+    # equal out-degree multisets mean equal node counts, so any embedding of one forest into the other is already an isomorphism
+    if not return_matches and (same := _forest_isomorphic(g1, g2, node_match)) is not None:
+        return same
     matcher = nx.isomorphism.DiGraphMatcher(g1, g2, node_match)
     for mapping in matcher.isomorphisms_iter():
         return (True, mapping) if return_matches else True
@@ -971,16 +996,16 @@ def deduplicate_glycans(glycans: list[str] | set[str] # List/set of glycans to d
         for gi, i in enumerate(group):
             if not keep[i]:
                 continue
-            correct_glycan = None
             for j in group[gi + 1:]:
-                if not keep[j]:
+                if not keep[j] or not compare_glycans(ggraphs[i], ggraphs[j]):
                     continue
-                if compare_glycans(ggraphs[i], ggraphs[j]):
-                    if correct_glycan is None:
-                        correct_glycan = graph_to_string(ggraphs[i])
-                    if correct_glycan == glycans[i]:
-                        keep[j] = False
-                    else:
-                        keep[i] = False
-                        break
+                # compare_glycans lets a wildcard match anything it could be, so only a glycan the other one covers is a duplicate, and the more specific one stays; two glycans that are each more specific somewhere both stay
+                i_covers, j_covers = compare_glycans(ggraphs[i], ggraphs[j], subsumes = True), compare_glycans(ggraphs[j], ggraphs[i], subsumes = True)
+                if not i_covers and not j_covers:
+                    continue
+                # the same glycan, spelled twice, keeps its canonical spelling
+                drop = (j if graph_to_string(ggraphs[i]) == glycans[i] else i) if i_covers and j_covers else i if i_covers else j
+                keep[drop] = False
+                if drop == i:
+                    break
     return [g for i, g in enumerate(glycans) if keep[i]]

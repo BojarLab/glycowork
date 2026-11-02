@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 # Project metadata
 [project]
 name = "glycowork"
-version = "1.11.0"
+version = "1.11.1"
 description = "The Python package for glycan data science: reads any glycan notation, motif search, SNFG drawing, glycomics statistics, curated glycan data"
 readme = "README.md"
 authors = [
@@ -31,13 +31,13 @@ dependencies = [
     "scipy>=1.16",
     "seaborn",
     "pandas>=2.2.2",
-    "drawSvg~=2.0",
     "openpyxl",
-    "glycorender~=0.4.2"
+    "glycorender~=0.5.3"
 ]
 
 [project.urls]
 Homepage = "https://github.com/BojarLab/glycowork"
+Repository = "https://github.com/BojarLab/glycowork"
 Documentation = "https://bojarlab.github.io/glycowork/"
 Changelog = "https://github.com/BojarLab/glycowork/blob/master/CHANGELOG.md"
 Issues = "https://github.com/BojarLab/glycowork/issues"

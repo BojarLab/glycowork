@@ -13,17 +13,22 @@ leaves no room for is filled in, so that a GlyTouCan entry with, say, '?' in the
 glycan we would write instead of being carried as is or not supported at all:
 * N-glycan core (GlcNAc root, or its alditol or aglycone form, with GlcNAc-Man on it): GlcNAc(b1-4)GlcNAc and
   Man(b1-4); the Man arms a1-3 and a1-6 when they are identical, else both a1-3/6 (one known position fixes the
-  other); a GlcNAc on the core Man is the bisecting b1-4, a Xyl b1-2; a Fuc on the root a1-3/6; Man on Man is
-  alpha anywhere in the glycan; floating Man/GlcNAc parts are alpha/beta.
+  other); a GlcNAc on the core Man is the bisecting b1-4, a Xyl b1-2; a lone GlcNAc on an arm Man without Man
+  children is b1-2 (MGAT1/MGAT2, which MGAT4/5 need first); a Fuc on the root a1-3/6; Man on Man is alpha
+  anywhere in the glycan; floating Man/GlcNAc parts are alpha/beta.
 * Everywhere else, an unknown anomer is filled when df_glycan glycans show one anomer in >= 99% of >= 30
   occurrences of (donor, carbon, position, acceptor), else (donor, carbon, acceptor), else the donor alone; the
   most specific context with enough occurrences decides, so an ambiguous context is never overruled by a coarser
   one. A missing position is filled the same way from (donor, anomer, acceptor). Generic residues (Hex, HexNAc,
   ...) are never filled.
-A result that equals a df_glycan glycan (both canonicalized) becomes an alias to its ID; IDs sharing one new
-sequence alias the one whose own structure is that sequence (else the first ID). Compositions, repeating units,
-and cyclic or bridged structures are left out. Aliases into df_glycan already in the file (including the
-hand-curated ones from the former backup_gids.json) are kept as they are.
+The result is then matched to df_glycan (both canonicalized): the df_glycan glycan it equals, else the only
+df_glycan glycan that refines it (compare_glycans(..., subsumes = True)), else the result itself. A match with an
+ID becomes an alias to that ID; IDs sharing one new sequence alias the one whose own structure is that sequence
+(else the first ID). An ID that df_glycan puts on several glycans (a glycan and its alditol, or wildcard copies)
+gets the one of its own glycans that equals or alone refines its record, else the record's match. Compositions,
+repeating units, and cyclic or bridged structures are left out. Nothing of the previous file is kept: the
+hand-curated aliases of the former backup_gids.json pointed 8,374 of 19,626 checkable IDs at vaguer or different
+glycans (Oct 2026), and the rest are reproduced by these rules.
 """
 import re
 import sys
@@ -59,12 +64,15 @@ def set_link(lab, node, anomer, pos):
 
 
 def resolve(wurcs):
-    "WURCS to (canonical, sensibly specified) or (None, None)"
+    "WURCS to (canonical, sensibly specified, best df_glycan match) or (None, None, None)"
     warnings.filterwarnings('ignore')
     from glycowork.motif.processing import canonicalize_iupac
-    from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string
+    from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string, compare_glycans
+    from glycowork.motif.tokenization import glycan_to_composition
     try:
         canon = canonicalize_iupac(wurcs)
+        if canon.startswith('{') and '(' not in canon[canon.rindex('}') + 1:]:  # floating parts on a bare residue are a composition (also WURCS without any linkage, which GlyCosmos leaves unclassified), and compare_glycans would place every part
+            return None, None, None
         g = glycan_to_nxGraph(canon)
         lab = dict(g.nodes(data = 'string_labels'))
         links = [n for n in g if LINK.match(lab[n] or '')]
@@ -96,6 +104,11 @@ def resolve(wurcs):
                 if lab[c] in ('GlcNAc', 'Xyl') and (mans or lab[c] == 'Xyl'):
                     set_link(lab, L, 'b', '4' if lab[c] == 'GlcNAc' else '2')
                     done.add(L)
+            for _, arm in mans:  # a lone GlcNAc on a trimmed arm is the MGAT1/MGAT2 product, which MGAT4/5 need first: b1-2 (95.9% of 7,383 such df_glycan arms, the rest mostly MS assignments)
+                gn = [L for L, c in kids(arm) if lab[c] == 'GlcNAc']
+                if len(gn) == 1 and not any(lab[c] == 'Man' for _, c in kids(arm)):
+                    set_link(lab, gn[0], 'b', '2')
+                    done.add(gn[0])
             for m in nx.descendants(g, cman):
                 for L, c in (kids(m) if lab[m] == 'Man' else []):
                     if lab[c] == 'Man' and L not in done and lab[L][0] == '?':
@@ -128,22 +141,31 @@ def resolve(wurcs):
         g = glycan_to_nxGraph(sens)
         valid = canonicalize_iupac(sens) == sens and '|' not in sens and all(
             l and l != '?' and (not LINK.match(l) or g.out_degree(n)) for n, l in g.nodes(data = 'string_labels'))
-        return (canon, sens) if valid else (None, None)
+        if not valid:
+            return None, None, None
+        try:  # a failed comparison loses the match, not the record
+            comp = glycan_to_composition(sens)
+            cands = BUCKETS.get((frozenset(comp.items()), sens.endswith('-ol')), ()) if comp else ()
+            hits = [g for g in cands if g == sens] or [g for g in cands if compare_glycans(sens, g, subsumes = True)]
+        except Exception:
+            hits = []
+        return canon, sens, hits[0] if len(hits) == 1 else sens
     except Exception:  # unparseable, repeating, cyclic or otherwise inexpressible structures
-        return None, None
+        return None, None, None
 
 
-def init(anomers, positions):
-    "Hands the df_glycan linkage statistics to a worker"
-    global ANOMERS, POSITIONS
-    ANOMERS, POSITIONS = anomers, positions
+def init(anomers, positions, buckets):
+    "Hands the df_glycan linkage statistics and canonical glycans (by composition and alditol) to a worker"
+    global ANOMERS, POSITIONS, BUCKETS
+    ANOMERS, POSITIONS, BUCKETS = anomers, positions, buckets
 
 
 if __name__ == '__main__':
     warnings.filterwarnings('ignore')
     from glycowork.glycan_data.loader import df_glycan
-    from glycowork.motif.graph import glycan_to_nxGraph
+    from glycowork.motif.graph import glycan_to_nxGraph, compare_glycans
     from glycowork.motif.processing import canonicalize_iupac
+    from glycowork.motif.tokenization import glycan_to_composition
     anomers, positions = defaultdict(Counter), defaultdict(Counter)
     for glycan in df_glycan.glycan.unique():
         try:
@@ -164,28 +186,39 @@ if __name__ == '__main__':
     src = sys.argv[1:] or ['https://download.glycosmos.org/glycosmos_glycans_list.csv', 'https://download.glycosmos.org/glycosmos_glycans_archive_mapping.csv']
     gtc = pd.read_csv(src[0], usecols = ['Accession Number', 'WURCS', 'Subsumption'], keep_default_na = False)
     gtc = gtc[~gtc.Subsumption.isin(['Monosaccharide composition with linkage', 'Base composition with linkage'])]
-    with Pool(initializer = init, initargs = (anomers, positions)) as pool:
-        res = pool.map(resolve, gtc.WURCS.tolist(), chunksize = 500)
-    has_id = df_glycan.dropna(subset = ['glytoucan_id'])
-    df_ids = set(has_id.glytoucan_id)
-    canon_to_id = defaultdict(set)
-    for glycan, gid in zip(has_id.glycan, has_id.glytoucan_id):
+    by_id, buckets = defaultdict(set), defaultdict(set)
+    for glycan, gid in zip(df_glycan.glycan, df_glycan.glytoucan_id):
         try:
-            canon_to_id[canonicalize_iupac(glycan)].add(gid)
+            canon = canonicalize_iupac(glycan)
+            comp = glycan_to_composition(canon)
         except Exception:
             continue
-    with lzma.open(OUT, 'rt') as f:
-        out = {k: v for k, v in json.load(f).items() if v in df_ids and k not in df_ids}
-    todo = [(gid, c, s) for gid, (c, s) in zip(gtc['Accession Number'], res) if s and gid not in df_ids and gid not in out
-            and not (s.startswith('{') and '(' not in s[s.rindex('}') + 1:])]  # floating parts on a bare residue are a composition
+        if isinstance(gid, str):
+            by_id[gid].add(canon)
+        if comp:
+            buckets[(frozenset(comp.items()), canon.endswith('-ol'))].add(canon)
+    with Pool(4, initializer = init, initargs = (anomers, positions, {k: sorted(v) for k, v in buckets.items()}), maxtasksperchild = 10) as pool:  # glycowork's caches grow ~35 MB per 1,000 records in a worker, so each is replaced after 10 chunks (5,000 records); one worker per core exhausted 31.5 GB
+        res = pool.map(resolve, gtc.WURCS.tolist(), chunksize = 500)
+    df_ids = set(df_glycan.glytoucan_id.dropna())
+    canon_to_id = defaultdict(set)
+    for gid, cs in by_id.items():
+        if len(cs) == 1:  # an ID that df_glycan puts on several glycans gets its own entry below and is never an alias target
+            canon_to_id[next(iter(cs))].add(gid)
+    records = [(gid, c, s, b) for gid, (c, s, b) in zip(gtc['Accession Number'], res) if s]
+    todo = [t for t in records if t[0] not in df_ids]
     rep = {}
-    for gid, c, s in sorted(todo, key = lambda t: (t[1] != t[2], t[0])):  # an ID whose own structure is the sequence holds it
-        rep.setdefault(s, gid)
-    out |= {gid: min(canon_to_id[s]) if s in canon_to_id else (s if rep[s] == gid else rep[s]) for gid, _, s in todo}
+    for gid, c, s, b in sorted(todo, key = lambda t: (t[1] != t[3], t[2] != t[3], t[0])):  # an ID whose own structure is the sequence holds it
+        rep.setdefault(b, gid)
+    out = {gid: min(canon_to_id[b]) if b in canon_to_id else (b if rep[b] == gid else rep[b]) for gid, _, _, b in todo}
+    for gid, _, s, b in records:
+        if len(by_id.get(gid, ())) > 1:  # its own glycan that equals or alone refines the record, else the record's best match
+            own = sorted(by_id[gid])
+            hits = [g for g in own if g == s] or [g for g in own if compare_glycans(s, g, subsumes = True)]
+            out[gid] = hits[0] if len(hits) == 1 else b
     for old, new in pd.read_csv(src[1], keep_default_na = False).values:
         new = new.rsplit('/', 1)[-1]
         if old not in df_ids and old not in out and (new in df_ids or new in out):
             out[old] = new if new in df_ids or not GID.fullmatch(out[new]) else out[new]
-    with lzma.open(OUT, 'wt', preset = 9) as f:
+    with lzma.open(OUT, 'wt', preset = 9, encoding = 'utf-8') as f:
         f.write(json.dumps(dict(sorted(out.items())), separators = (',', ':')))
     print(f'{len(out)} IDs: {sum(not GID.fullmatch(v) for v in out.values())} sequences, {sum(v in df_ids for v in out.values())} aliases into df_glycan')

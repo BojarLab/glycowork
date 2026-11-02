@@ -1,0 +1,39 @@
+/*-- scss:defaults --*/
+
+// the same palette after dusk; custom.scss derives every theme variable from these
+$gw-ink: #e6e3ec !default;
+$gw-slate: #f0edf5 !default;
+$gw-muted: #a9a5b3 !default;
+$gw-ocean: #5cc3e4 !default;
+$gw-rose: #eb9bb8 !default;
+$gw-paper: #17161c !default;
+$gw-tint: #211f28 !default;
+$gw-line: #322f3b !default;
+$gw-glow: rgba(0, 0, 0, 0.6) !default;
+
+/*-- scss:rules --*/
+
+// glycan drawings come as GlycoDraw's die-cut stickers in dark mode (bin/docs_dark_glycans.py), which carry their own
+// white outline; other stored figures (matplotlib) are drawn for a white page and get a white card
+.cell-output-display:not(.dark-content) img:not(.dark-content) {
+  padding: 0.5rem;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+// the sticker margin makes a drawing wider than its stored light version
+.cell-output-display.dark-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+img[alt="glycowork logo"] {
+  mix-blend-mode: normal;
+  padding: 0.75rem;
+  border-radius: 28px;
+  background: #ffffff;
+}
+
+p:has(> a > img[src*="shields.io"]) img {
+  filter: brightness(0.92);
+}

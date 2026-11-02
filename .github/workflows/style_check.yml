@@ -29,3 +29,18 @@ jobs:
             git cat-file -e "$BASE^{commit}" 2>/dev/null || BASE=$(git rev-parse HEAD~1)
           fi
           python .github/scripts/check_style.py --diff $BASE...HEAD glycowork tests bin
+      - name: Prepare fixes for the style bot
+        if: failure() && github.event_name == 'pull_request'
+        run: |
+          cp .github/scripts/check_style.py "$RUNNER_TEMP"  # the merged script, since the PR may branch off before --fix
+          git checkout --quiet ${{ github.event.pull_request.head.sha }}
+          python "$RUNNER_TEMP/check_style.py" --fix --diff origin/${{ github.base_ref }}...HEAD glycowork tests bin || true
+          git diff -- '*.py' > style.patch
+          [ -s style.patch ] || rm style.patch
+      - name: Upload fixes for the style bot
+        if: failure() && hashFiles('style.patch') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: style-fix
+          path: style.patch
+          retention-days: 1

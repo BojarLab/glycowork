@@ -160,6 +160,8 @@ glycomics_human_influenza_N_10_648982026_02_02_703422,A/X-31,"x31_1,x31_2,x31_3,
 glycomics_human_influenza_O_10_648982026_02_02_703422,mock,"mock_1,mock_2,mock_3,mock_4",FALSE
 glycomics_human_influenza_O_10_648982026_02_02_703422,A/Puerto Rico/8/1934,"PR8_1,PR8_2,PR8_3,PR8_4",FALSE
 glycomics_human_influenza_O_10_648982026_02_02_703422,A/X-31,"x31_1,x31_2,x31_3,x31_4",FALSE
+glycomics_human_headandneck_O_GPST000316,healthy,"16N1,16N2,27N1,27N2,59N1,59N2,40N1,40N2",FALSE
+glycomics_human_headandneck_O_GPST000316,cancer,"16T1,16T2,27T1,27T2,33T1,33T2,59T1,59T2,40T1,40T2,42T1,42T2,48T1,48T2,65T1,65T2",FALSE
 glycoproteomics_tomato_fruit_mnsI1_N_PMID41017156,mock,"Mock_1,Mock_2,Mock_3",FALSE
 glycoproteomics_tomato_fruit_mnsI1_N_PMID41017156,kifunensine,"Kif_1,Kif_2,Kif_3",FALSE
 glycoproteomics_tomato_fruit_mnsI1_N_PMID41017156,WT,"WT_1,WT_2,WT_3",FALSE

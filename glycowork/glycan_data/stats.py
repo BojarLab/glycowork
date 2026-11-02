@@ -5,12 +5,14 @@ from functools import lru_cache
 from itertools import permutations as iter_permutations
 from math import factorial
 from collections import Counter
-from scipy.stats import rankdata, norm, chi2, t, f, entropy, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind, gamma as gamma_dist
+from scipy.stats import rankdata, norm, chi2, t, f, entropy, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind, gamma as gamma_dist, \
+    fisher_exact, binomtest, MonteCarloMethod, chi2_contingency
 from scipy.spatial import procrustes
-from scipy.special import digamma, polygamma, expit, log_expit
+from scipy.special import digamma, polygamma, expit, log_expit, fdtrc, stdtr, erfc, gammaln
 import scipy.integrate as integrate
 rng = np.random.default_rng(42)
 np.random.seed(0)
+_leggauss = lru_cache(np.polynomial.legendre.leggauss)  # Gauss-Legendre nodes and weights per node count, for _studentized_range_sf
 
 
 def cohen_d(x: np.ndarray | list[float], # comparison group containing numerical data
@@ -58,9 +60,57 @@ def cohen_d(x: np.ndarray | list[float], # comparison group containing numerical
     return (d, var_d) if np.ndim(x) > 1 else (d[0], var_d[0])
 
 
+def _ttest_pvalue(x: np.ndarray, # comparison group containing numerical data
+                  y: np.ndarray, # comparison group containing numerical data, same order as x if paired
+                  paired: bool = False # whether samples are paired
+                  ) -> float: # two-sided p-value of x against y
+    "Welch's (or the paired) t-test p-value of one feature, computed step by step as scipy's ttest_ind(x, y, equal_var = False) or ttest_rel(x, y) compute it, so bit-identical (a NaN gives NaN, and NaN-free input gives what nan_policy = 'omit' does), without their ~0.5 ms of per-call overhead that dominated the per-parent loops"
+    x, y = np.asarray(x, dtype = float), np.asarray(y, dtype = float)
+    if min(len(x), len(y)) < 2:
+        return np.nan
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        if paired:
+            d, n = x - y, len(x)
+            t_stat = np.divide(np.mean(d) - 0.0, np.sqrt(np.mean((d - np.mean(d, keepdims = True)) ** 2) * np.divide(n, n - 1) / n))
+            return 2 * stdtr(np.asarray(n - 1, dtype = float), -np.abs(t_stat))
+        nx, ny = len(x), len(y)
+        vx = np.mean((x - np.mean(x, keepdims = True)) ** 2) * np.divide(nx, nx - 1) / nx
+        vy = np.mean((y - np.mean(y, keepdims = True)) ** 2) * np.divide(ny, ny - 1) / ny
+        dof = (vx + vy) ** 2 / (vx ** 2 / (nx - 1) + vy ** 2 / (ny - 1))
+        t_stat = np.divide(np.mean(x) - np.mean(y), np.sqrt(vx + vy))
+    return 2 * stdtr(np.where(np.isnan(dof), 1., dof), -np.abs(t_stat))
+
+
+def _studentized_range_sf(q: np.ndarray, # studentized range statistics (absolute mean differences over their standard errors)
+                          k: int, # number of groups
+                          df: float # residual degrees of freedom
+                          ) -> np.ndarray: # upper-tail probabilities, as scipy's studentized_range.sf(q, k, df)
+    "studentized range survival function, scipy's studentized_range.sf(q, k, df), as one fixed Gauss-Legendre double integral vectorized over q: P(range > w) is integrated as k * phi(z) * (Phi(z)^(k-1) - (Phi(z) - Phi(z - w))^(k-1)), which has no cancellation, so p-values keep a relative error below 2e-10 down to 1e-100, where scipy's 1 - cdf (absolute tolerance 1e-11) gives noise below 1e-11; ~13x faster than scipy's adaptive integrals, which took 99% of many-group get_glycanova runs"
+    q = np.asarray(q, dtype = float)
+    if q.ndim == 1 and q.size > 64:  # bounds the (cells, 96, 96) work arrays to ~5 MB each
+        return np.concatenate([_studentized_range_sf(c, k, df) for c in np.array_split(q, -(-q.size // 64))])
+    q, (xl, wl), (xr, wr), (xz, wz) = q[..., None], _leggauss(32), _leggauss(64), _leggauss(96)
+    with np.errstate(divide = 'ignore', invalid = 'ignore', over = 'ignore'):
+        # outer integral over u = log(s), s = chi_df / sqrt(df), in two panels split where s^df * exp(-df * s^2 / 2 - (q * s)^2 / 4) peaks: left of it the integrand only grows like exp(df * u), the peak of the chi density times P(range > q * s) lies right of it
+        mid = 0.5 * np.log(max(df - 1, 0.5) / (df + q ** 2 / 2))
+        # past s = W / q, P(range > q * s) <= k^2 * exp(-W^2 / 4) is below 1e-17 of a lower bound on the result (chi-square cdf series at s = 1 / q), which matters for large q at small df
+        W = 2 * np.sqrt(2 * np.log(k) + 40 + gammaln(df / 2 + 1) - df / 2 * np.log(df / 2) + df / 2 + df * np.log(np.maximum(q, 1)))
+        lo, hi = mid - 30 / df - 10 / np.sqrt(df), np.maximum(np.minimum(min(0.5 * np.log(2 + 100 / df), 10 / np.sqrt(df)), np.log(W / q)), mid + 1 / np.sqrt(df))
+        u = np.concatenate([(mid - lo) / 2 * xl + (mid + lo) / 2, (hi - mid) / 2 * xr + (hi + mid) / 2], axis = -1)
+        wts = np.concatenate([(mid - lo) / 2 * wl, (hi - mid) / 2 * wr], axis = -1) * np.exp(np.log(2) + df / 2 * np.log(df / 2) - gammaln(df / 2) + df * u - df * np.exp(2 * u) / 2)
+        # inner integral P(range > w) = k * int phi(z) * (Phi(z)^(k-1) - (Phi(z) - Phi(z - w))^(k-1)) dz, which has no cancellation; its mass lies within 8 of w / 2
+        w = (q * np.exp(u))[..., None] / 2
+        z = w + 8 * xz
+        tail = erfc(np.abs(z) / np.sqrt(2)) / 2
+        a, upper = np.where(z < 0, tail, 1 - tail), np.where(z < 0, 1 - tail, tail)
+        inner = np.exp(-z ** 2 / 2) * a ** (k - 1) * -np.expm1((k - 1) * np.log1p(-upper[..., ::-1] / a))
+        sf = np.sum(wts * (8 * k / np.sqrt(2 * np.pi)) * (inner @ wz), axis = -1)
+    return np.where(np.isposinf(q[..., 0]), 0.0, np.clip(sf, 0, 1))
+
+
 def mahalanobis_distance(x: np.ndarray | pd.DataFrame, # comparison group containing numerical data
                          y: np.ndarray | pd.DataFrame, # comparison group containing numerical data
-                         paired: bool = False # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
+                         paired: bool = False # whether samples are paired (e.g., tumor & tumor-adjacent tissue)
                          ) -> float: # Mahalanobis distance effect size
     "calculates effect size between two groups in a multivariate comparison"
     if paired:
@@ -77,21 +127,12 @@ def mahalanobis_distance(x: np.ndarray | pd.DataFrame, # comparison group contai
 def mahalanobis_variance(x: np.ndarray | pd.DataFrame, # comparison group containing numerical data
                          y: np.ndarray | pd.DataFrame, # comparison group containing numerical data
                          paired: bool = False,  # whether samples are paired (e.g., tumor & tumor-adjacent tissue)
-                         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
+                         random_state: int | np.random.Generator | None = None  # unused, since the variance is analytic; kept so existing calls keep working
                          ) -> float:  # variance of Mahalanobis distance
-    "Estimates variance of Mahalanobis distance via bootstrapping"
-    local_rng = np.random.default_rng(random_state) if random_state is not None else rng
-    # Combine gp1 and gp2 into a single matrix
-    data = np.concatenate((x.T, y.T), axis = 0)
-    # Perform bootstrap resampling
-    n_iterations = 1000
-    size_x = x.shape[1]
-    # Generate all bootstrap indices at once
-    boot_indices = local_rng.choice(data.shape[0], size = (n_iterations, data.shape[0]), replace = True)
-    bootstrap_samples = np.array([mahalanobis_distance(data[idx[:size_x]].T, data[idx[size_x:]].T, paired = paired)
-                                  for idx in boot_indices])
-    # Estimate the variance of the Mahalanobis distance
-    return np.var(bootstrap_samples)
+    "Approximates the sampling variance of the Mahalanobis distance as that of Cohen's d: 1/n + D^2/(2n) for paired, (n1 + n2)/(n1 n2) + D^2/(2(n1 + n2)) for unpaired samples"
+    # Bootstrapping from the pooled samples measured the spread between random mixtures of both groups (no difference) and broke the pairs, which underestimated a real effect's variance 3-7x; resampling within groups explodes at small n, where the pseudo-inverse of a resampled covariance with ties is near-singular
+    d, n1, n2 = mahalanobis_distance(x, y, paired = paired), np.shape(x)[1], np.shape(y)[1]
+    return float(1 / n1 + d ** 2 / (2 * n1) if paired else (n1 + n2) / (n1 * n2) + d ** 2 / (2 * (n1 + n2)))
 
 
 def variance_stabilization(data: pd.DataFrame, # dataframe with glycans/motifs as indices and samples as columns
@@ -230,14 +271,16 @@ def _factor_fit(L: np.ndarray, # log2 abundances, glycans as rows and samples as
                 F: np.ndarray, # centered per-glycan counts of each biosynthetic step; may have zero columns
                 rank: int, # number of free latent factors on top of the biosynthetic loadings
                 beta: float, # ridge penalty on the per-sample biosynthetic step activities
-                iters: int = 30 # alternating least squares rounds
+                iters: int = 30, # alternating least squares rounds
+                prior: tuple[np.ndarray, np.ndarray] | None = None # optional Gaussian prior on each glycan intercept: (mean, weight in units of one fitted cell)
                 ) -> np.ndarray: # fitted log2 abundance for every cell
     "Fits L_ij = mu_i + b_j + F_i.A_j + U_i.V_j by ridge-penalized alternating least squares, with F the known biosynthetic loadings and A_j the step activities of sample j"
     n, m = L.shape
     r, k = max(0, min(rank, m - 2, n)), F.shape[
         1]  # the SVD below has min(n, m) components, so a single glycan cannot carry more factors
     Lz = np.where(W > 0, L, 0)
-    mu = Lz.sum(axis = 1) / np.maximum(W.sum(axis = 1), 1)
+    pm, pw = prior if prior is not None else (0.0, 0.0)
+    mu = (Lz.sum(axis = 1) + pw * pm) / np.maximum(W.sum(axis = 1) + pw, 1 if prior is None else 1e-9)  # with a prior, a glycan without usable cells starts at its prior mean
     U, s, Vt = np.linalg.svd(np.where(W > 0, L - mu[:, None], 0), full_matrices = False)
     U, V = U[:, :r] * np.sqrt(s[:r]), Vt[:r].T * np.sqrt(s[:r])
     # a vanishing ridge on the intercepts keeps a glycan or sample without any usable cell solvable
@@ -247,9 +290,85 @@ def _factor_fit(L: np.ndarray, # log2 abundances, glycans as rows and samples as
         sol = np.linalg.solve(np.einsum('ij,ik,il->jkl', W, D, D) + pen_sample, np.einsum('ij,ik,ij->jk', W, D, Lz - mu[:, None])[..., None])[..., 0]
         b, A, V = sol[:, 0], sol[:, 1:1 + k], sol[:, 1 + k:]
         S = np.column_stack([np.ones(m), V])
-        theta = np.linalg.solve(np.einsum('ij,jk,jl->ikl', W, S, S) + pen_glycan, np.einsum('ij,jk,ij->ik', W, S, Lz - b - F @ A.T)[..., None])[..., 0]
+        G, y = np.einsum('ij,jk,jl->ikl', W, S, S) + pen_glycan, np.einsum('ij,jk,ij->ik', W, S, Lz - b - F @ A.T)
+        if prior is not None:  # the prior enters as one more cell of its weight at its mean, on the intercept only
+            G[:, 0, 0] += prior[1]
+            y[:, 0] += prior[1] * prior[0]
+        theta = np.linalg.solve(G, y[..., None])[..., 0]
         mu, U = theta[:, 0], theta[:, 1:]
     return mu[:, None] + b + F @ A.T + U @ V.T
+
+
+def _detection_fit(L: np.ndarray, # log2 abundances, NaN where missing
+                   M: np.ndarray, # boolean mask of the cells that count as non-detections
+                   R: np.ndarray, # predicted log2 abundance for every cell
+                   sigma: float, # prediction error of R
+                   lmin: np.ndarray # lowest observed log2 value of each sample
+                   ) -> np.ndarray: # (logit pi, d, log s)
+    "Fits P(missing | y) = pi + (1 - pi) * Phi((lmin_j + d - y) / s), a constant random dropout rate plus soft censoring below each sample's detection limit, with y ~ N(R, sigma^2), by maximum likelihood of the missingness pattern"
+    from scipy.optimize import minimize
+    O = ~(M | np.isnan(L))
+
+    def nll(p):
+        pi, sc = expit(p[0]), np.sqrt(sigma ** 2 + np.exp(2 * np.clip(p[2], -10, 10)))
+        q = np.clip(pi + (1 - pi) * norm.cdf((lmin + p[1] - R) / sc), 1e-9, 1 - 1e-9)
+        return -(np.log(q[M]).sum() + np.log1p(-q[O]).sum())
+
+    return min((minimize(nll, x0, method = 'Nelder-Mead', options = {'maxiter': 400}) for x0 in ([-2, 0, 0], [0, 1, -1], [-4, -1, 0.5])), key = lambda o: o.fun).x
+
+
+def _censored_mean(R: np.ndarray, # predicted log2 abundance
+                   lmin: np.ndarray, # lowest observed log2 value of each sample
+                   p: np.ndarray, # (logit pi, d, log s) from _detection_fit
+                   sigma: float # spread of y around R
+                   ) -> np.ndarray: # E[y | missing] for every cell
+    "Mean of y ~ N(R, sigma^2) given that it was missed under the selection model of _detection_fit"
+    sc = np.sqrt(sigma ** 2 + np.exp(2 * np.clip(p[2], -10, 10)))
+    z = (lmin + p[1] - R) / sc
+    # in log space: far above the detection limit pdf(z) and cdf(z) underflow together, and pi can be 0, so the direct ratio is 0/0
+    return R - sigma ** 2 / sc * np.exp(log_expit(-p[0]) + norm.logpdf(z) - np.logaddexp(log_expit(p[0]), log_expit(-p[0]) + norm.logcdf(z)))
+
+
+def _censored_levels(L: np.ndarray, # log2 abundances, NaN where missing
+                     M: np.ndarray, # boolean mask of the cells that count as non-detections
+                     b: np.ndarray, # per-sample offsets, centered
+                     sw: float, # spread of a glycan around its level across samples
+                     lmin: np.ndarray, # lowest observed log2 value of each sample
+                     rng: np.random.Generator, # draws the glycans the parameters are fitted on, for large tables
+                     grid_n: int = 240, # grid points for each glycan's level
+                     max_glycans: int = 2000 # glycans the five parameters are fitted on; their per-glycan posteriors are computed for all
+                     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]: # (level grid, parameters, log-posterior of each glycan's level from all its cells, from its non-detections alone)
+    "Empirical Bayes over glycan levels: y_ij = mu_i + b_j + e (sd sw), mu_i ~ N(m0, s0^2), and each cell missed as in _detection_fit; the population and selection parameters are fitted jointly on the marginal likelihood, so glycans never or rarely detected inform how low glycan levels go"
+    from scipy.optimize import minimize
+    n, m = L.shape
+    O = ~np.isnan(L)
+    Lb = np.where(O, L - b, np.nan)
+    grid = np.linspace(np.nanmin(Lb) - 20, np.nanmax(Lb) + 5, grid_n)
+    rows = np.arange(n) if n <= max_glycans else np.sort(rng.choice(n, max_glycans, replace = False))
+    cnt, S1, S2 = O.sum(axis = 1), np.nansum(Lb, axis = 1), np.nansum(Lb ** 2, axis = 1)
+    # the observed values are Gaussian in the level, so their log-likelihood on the grid is quadratic in it, from per-glycan sums
+    gauss = -(S2[:, None] - 2 * S1[:, None] * grid + cnt[:, None] * grid ** 2) / (2 * sw ** 2) - cnt[:, None] * np.log(sw * np.sqrt(2 * np.pi))
+    Mf, Y = M.astype(float), np.where(O, L, 0.0)
+
+    def parts(t, idx):
+        "log P(missed | level) summed over each glycan's non-detections on the grid, and log P(detected | y) of its observed values"
+        lpi, l1pi, s = log_expit(t[2]), log_expit(-t[2]), np.exp(np.clip(t[4], -10, 10))
+        lq = np.logaddexp(lpi, l1pi + norm.logcdf((lmin + t[3] - b - grid[:, None]) / np.sqrt(sw ** 2 + s ** 2)))
+        qy = np.logaddexp(lpi, l1pi + norm.logcdf((lmin + t[3] - Y[idx]) / max(s, 1e-6)))
+        return Mf[idx] @ lq.T, np.where(O[idx], np.log1p(-np.exp(np.minimum(qy, -1e-12))), 0.0).sum(axis = 1)
+
+    def nll(t):
+        miss, det = parts(t, rows)
+        a = gauss[rows] + miss + norm.logpdf(grid, t[0], np.exp(np.clip(t[1], -5, 5)))
+        mx = a.max(axis = 1, keepdims = True)
+        return -(mx[:, 0] + np.log(np.exp(a - mx).sum(axis = 1)) + det).sum()
+
+    lv = np.where(cnt > 0, S1 / np.maximum(cnt, 1), np.nan)
+    start = rows[cnt[rows] > 0]  # the selection model of the observed-only levels as a starting point
+    x0 = [np.nanmean(lv) - 1, np.log(np.nanstd(lv) + 0.5), *_detection_fit(L[start], M[start], lv[start, None] + b, sw, lmin)]
+    t = min((minimize(nll, x, method = 'Nelder-Mead', options = {'maxiter': 600, 'xatol': 1e-3, 'fatol': 1e-3}) for x in (x0, [x0[0] - 2, x0[1] + 0.5, -3, 0, 0])), key = lambda o: o.fun).x
+    missed = parts(t, np.arange(n))[0] + norm.logpdf(grid, t[0], np.exp(np.clip(t[1], -5, 5)))
+    return grid, t, gauss + missed, missed
 
 
 def _partner_fit(L: np.ndarray, # log2 abundances, glycans as rows and samples as columns
@@ -266,15 +385,24 @@ def _partner_fit(L: np.ndarray, # log2 abundances, glycans as rows and samples a
     step = max(1, int(1e7 // n))  # rows per block, so the n x n pairwise statistics of large glycoproteomics tables (tens of thousands of glycoforms) never sit in memory at once
     for s in range(0, n, step):
         b = slice(s, min(s + step, n))
-        # co-observed sums of each pairwise log-ratio and its square, as matrix products instead of an n x n x samples tensor
-        Q = Oi[b] @ Oi.T
-        S1 = Lz[b] @ Oi.T - Oi[b] @ Lz.T
-        S2 = Lz2[b] @ Oi.T + Oi[b] @ Lz2.T - 2 * Lz[b] @ Lz.T
+        # co-observed sums of each pairwise log-ratio and its square, as matrix products instead of an n x n x samples tensor; the same operations as (S2 - S1 * mean) / (Q - 1) in the same order, but written into existing blocks, since allocating a fresh block of the pairwise statistics for every step cost as much as the arithmetic
+        Q, S1, S2, T = Oi[b] @ Oi.T, Lz[b] @ Oi.T, Lz2[b] @ Oi.T, 2 * Lz[b] @ Lz.T  # (2 * Lz[b]) @ Lz.T as before: Lz[b] @ Lz.T of a whole-table block is one buffer times its transpose, which numpy hands to BLAS syrk, rounding differently
+        S1 -= Oi[b] @ Lz.T
+        S2 += Oi[b] @ Lz2.T
+        S2 -= T
         with np.errstate(divide = 'ignore', invalid = 'ignore'):
             mean = S1 / Q
-            var = (S2 - S1 * mean) / (Q - 1)
-        var[(Q < 3) | (np.arange(b.start, b.stop)[:, None] == np.arange(n)) | ~np.isfinite(var)] = np.inf
-        K[b] = np.argsort(var, axis = 1, kind = 'stable')[:, :k]
+            Q -= 1
+            var = np.divide(np.subtract(S2, np.multiply(S1, mean, out = T), out = T), Q, out = T)
+        bad = Q < 2
+        bad |= ~np.isfinite(var)
+        bad[np.arange(b.stop - b.start), np.arange(b.start, b.stop)] = True
+        var[bad] = np.inf
+        # the k most stable partners as a stable argsort would order them (ties by index), from a partition instead of sorting every row in full, which took half of the imputation on large glycoproteomics tables
+        kth = np.partition(var, K.shape[1] - 1, axis = 1)[:, K.shape[1] - 1:K.shape[1]]
+        less, tie = var < kth, var == kth
+        idx = np.nonzero(less | (tie & (np.cumsum(tie, axis = 1) <= K.shape[1] - less.sum(axis = 1, keepdims = True))))[1].reshape(-1, K.shape[1])
+        K[b] = np.take_along_axis(idx, np.argsort(np.take_along_axis(var, idx, axis = 1), axis = 1, kind = 'stable'), axis = 1)
         var_k[b], R[b] = np.take_along_axis(var, K[b], axis = 1), np.take_along_axis(mean, K[b], axis = 1)
     w = 1 / (var_k + 0.05)
     R[w == 0] = 0
@@ -290,12 +418,12 @@ def _partner_fit(L: np.ndarray, # log2 abundances, glycans as rows and samples a
 
 def impute_biosynthetic(df: pd.DataFrame, # glycans as rows, samples as columns; NaN or 0 marks a missing value
                         glycans: list[str] | None = None, # glycan of each row (IUPAC-condensed or composition), to give every sample its own activity per biosynthetic step
-                        mnar: bool = True, # pull imputations towards each sample's detection limit, as far as the data say missingness is intensity-dependent
+                        mnar: bool = True, # treat non-detections as censored where the data say missingness is intensity-dependent: they inform each glycan's level, and imputations are pulled towards the detection limit
                         draw: bool = False, # add a random draw of the held-out prediction error to every imputed value, so imputed replicates keep the spread of measured ones (for rhythm tests that weigh each timepoint by its standard error)
-                        random_state: int | np.random.Generator | None = None # optional random state for reproducibility
+                        random_state: int | np.random.Generator | None = None, # optional random state for reproducibility
+                        unmeasured: np.ndarray | None = None # boolean mask in the shape of df of cells that were never measured (e.g., a glycosite not covered in a sample): imputed, but not read as non-detections
                         ) -> pd.DataFrame: # dataframe with every missing value imputed
-    "Imputes missing glycomics values with a low-rank model whose glycan loadings include each glycan's count of every biosynthetic step, stacked with stable-ratio partner glycans and corrected for detection-limit censoring by a fitted selection model"
-    from scipy.optimize import minimize
+    "Imputes missing glycomics values with a low-rank model whose glycan loadings include each glycan's count of every biosynthetic step, stacked with stable-ratio partner glycans; non-detections are censored observations of a fitted selection model, which sets each glycan's level together with its measured values and gives glycans detected at most once their posterior mean"
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         L = np.log2(df.to_numpy(dtype = float))
     M = ~np.isfinite(L)
@@ -306,6 +434,7 @@ def impute_biosynthetic(df: pd.DataFrame, # glycans as rows, samples as columns;
         warnings.warn("impute_biosynthetic got no observed value to impute from; the input is returned unchanged.")
         return df.copy()
     L[M] = np.nan
+    Mi = M & ~np.asarray(unmeasured, dtype = bool) if unmeasured is not None else M  # the non-detections; a cell never measured says nothing about abundance
     F = np.zeros((n, 0))
     if glycans is not None:
         from glycowork.motif.processing import canonicalize_iupac, canonicalize_composition, is_composition
@@ -335,9 +464,25 @@ def impute_biosynthetic(df: pd.DataFrame, # glycans as rows, samples as columns;
         C[(M | C).all(axis = 1)] = False
         folds.append(C)
     truth = np.concatenate([L[C] for C in folds])
+    lmin = np.nanmin(np.where(M, np.inf, L), axis = 0)
+    lmin = np.where(np.isfinite(lmin), lmin, np.nanmin(L))
+    prior, cnt = None, (~M).sum(axis = 1)
+    if mnar and Mi.any():
+        # Glycan levels with censoring (Oct 2026): fitted on observed cells only, a glycan seen in one sample took that one value as its level, and one
+        # never seen took the default 0, i.e. about 1% of the sample (on GlycoForge simulations 4% of the missing cells, but 71% of the squared error)
+        seen = cnt > 0
+        R0 = _factor_fit(L[seen], (~M[seen]).astype(float), np.zeros((seen.sum(), 0)), 0, 1)
+        b0, sw = R0[0] - R0[0].mean(), max(float(np.nanstd((L[seen] - R0)[~M[seen]])), 0.1)
+        grid_mu, t, post, missed = _censored_levels(L, Mi, b0, sw, lmin, rng)
+        # each glycan's level as its non-detections alone place it, a Gaussian prior on the intercept, so the factor model weighs them against its measured values;
+        # a glycan detected everywhere keeps its plain fit
+        wts = np.exp(missed - missed.max(axis = 1, keepdims = True))
+        wts /= wts.sum(axis = 1, keepdims = True)
+        pm = wts @ grid_mu
+        prior = (pm, np.where(Mi.any(axis = 1), sw ** 2 / np.maximum(wts @ grid_mu ** 2 - pm ** 2, 1e-4), 0.0))
     grid = [(r, beta) for r in (0, 1, 2, 4) for beta in ((1, 10) if F.shape[1] else (1,))]
     if truth.size:
-        cv = {g: np.concatenate([_factor_fit(L, (~(M | C)).astype(float), F, *g)[C] for C in folds]) for g in grid}
+        cv = {g: np.concatenate([_factor_fit(L, (~(M | C)).astype(float), F, *g, prior = prior)[C] for C in folds]) for g in grid}
         best = min(grid, key = lambda g: np.mean((cv[g] - truth) ** 2))
         partner = np.concatenate([_partner_fit(L, ~(M | C))[C] for C in folds])
         weights = np.linspace(0, 1, 21)
@@ -345,23 +490,14 @@ def impute_biosynthetic(df: pd.DataFrame, # glycans as rows, samples as columns;
         w, sigma = weights[int(np.argmin(err))], np.sqrt(min(err))
     else:  # no cell can be held out without emptying its glycan (e.g., a single sample): the smallest factor model, with the spread of the observed values as its error
         best, w, sigma = grid[0], 1.0, np.nanstd(L)
-    R = w * _factor_fit(L, (~M).astype(float), F, *best) + (1 - w) * _partner_fit(L, ~M)
-    if mnar:
-        lmin = np.nanmin(np.where(M, np.inf, L), axis = 0)
-        lmin = np.where(np.isfinite(lmin), lmin, np.nanmin(L))
-
-        def nll(p):
-            "Negative log-likelihood of the missingness pattern under P(missing | y) = pi + (1 - pi) * Phi((lmin_j + d - y) / s), a constant random dropout rate plus soft censoring below each sample's detection limit, with y ~ N(R, sigma^2)"
-            pi, sc = expit(p[0]), np.sqrt(sigma ** 2 + np.exp(2 * np.clip(p[2], -10, 10)))
-            q = np.clip(pi + (1 - pi) * norm.cdf((lmin + p[1] - R) / sc), 1e-9, 1 - 1e-9)
-            return -(np.log(q[M]).sum() + np.log1p(-q[~M]).sum())
-
-        p = min((minimize(nll, x0, method = 'Nelder-Mead', options = {'maxiter': 400}) for x0 in ([-2, 0, 0], [0, 1, -1], [-4, -1, 0.5])), key = lambda o: o.fun).x
-        sc = np.sqrt(sigma ** 2 + np.exp(2 * np.clip(p[2], -10, 10)))
-        z = (lmin + p[1] - R) / sc
-        # E[y | missing] under that selection model, in log space: far above the detection limit pdf(z) and cdf(z) underflow together, and pi can be 0, so the direct ratio is 0/0
-        R = R - sigma ** 2 / sc * np.exp(
-            log_expit(-p[0]) + norm.logpdf(z) - np.logaddexp(log_expit(p[0]), log_expit(-p[0]) + norm.logcdf(z)))
+    R = w * _factor_fit(L, (~M).astype(float), F, *best, prior = prior) + (1 - w) * _partner_fit(L, ~M)
+    if mnar and Mi.any():
+        R = np.where(Mi, _censored_mean(R, lmin, _detection_fit(L, Mi, R, sigma, lmin), sigma), R)  # a cell never measured was not missed, so it keeps its unconditional prediction
+        # a glycan detected at most once has no spread of its own to fit, so its cells are the posterior mean of E[y | missed] over its level, given all its cells
+        few = cnt <= 1
+        if few.any():
+            wf = np.exp(post[few] - post[few].max(axis = 1, keepdims = True))
+            R[few] = np.where(Mi[few], (wf / wf.sum(axis = 1, keepdims = True)) @ _censored_mean(grid_mu[:, None] + b0, lmin, t[2:], sw), R[few])
     if draw:
         # a conditional mean carries none of a measurement's noise, so a timepoint with imputed replicates would get a too-small standard error and too much weight in a rhythm test
         R = R + rng.normal(0, sigma, R.shape)
@@ -374,8 +510,9 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
                          min_samples: float = 0.1,  # fraction (0-1) of samples that need non-zero values for glycan to be kept
                          protect: pd.DataFrame | None = None,  # boolean frame in the shape/order of the abundance block, marking cells that were never measured and must stay NaN
                          circadian: bool = False,  # data for a rhythm test: every imputed value gets a draw of the prediction error, so imputed replicates keep the spread of measured ones
-                         random_state: int | np.random.Generator | None = None # optional random state for reproducibility
-                         ) -> pd.DataFrame:  # normalized dataframe in same style as input
+                         random_state: int | np.random.Generator | None = None, # optional random state for reproducibility
+                         return_masks: bool = False # also return which cells got the floor of a group without any detection, and which were detected
+                         ) -> pd.DataFrame | tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:  # normalized dataframe in same style as input (with return_masks: and the floored and detected masks, samples as columns)
     "discards rows with too many missings, imputes the rest, and normalizes"
     if not 0 <= min_samples <= 1:
         raise ValueError(
@@ -383,7 +520,7 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
     df = df_in.copy()
     if min_samples:
         min_count = max(np.floor((df.shape[1] - 1) * min_samples), 1)
-        mask = (df.iloc[:, 1:] != 0).sum(axis = 1) >= min_count
+        mask = (df.iloc[:, 1:].fillna(0) != 0).sum(axis = 1) >= min_count  # a missing cell is no detection; counted as one, an all-NaN row passed and was imputed from nothing
         df = df[mask].reset_index(drop = True)
         if protect is not None:
             protect = protect[mask.values].reset_index(drop = True)
@@ -396,6 +533,7 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
         df = df.mask(
             protect)  # a cell that was never measured is not a zero; NaN keeps it out of floors, imputation targets, column totals, and geometric means
     floor = 1e-7 if len(groups) == 2 else 1e-5
+    detected = df.fillna(0) > 0
     floored = pd.DataFrame(False, index = df.index, columns = df.columns)
     for group in groups:
         group_data = df[group]
@@ -411,7 +549,8 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
     if impute:
         # floored cells go in as missing, since a 1e-7 floor read as a measurement is an extreme outlier on the log scale, and come back as the floor
         df = df.mask(floored).replace(0, np.nan)
-        df = impute_biosynthetic(df, glycans = glycans.tolist(), draw = circadian, random_state = random_state)
+        df = impute_biosynthetic(df, glycans = glycans.tolist(), draw = circadian, random_state = random_state,
+                                 unmeasured = None if protect is None else protect.to_numpy())
         df = df.mask(floored, floor)
         if protect is not None:
             df = df.mask(
@@ -421,6 +560,8 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
     if len(old_cols) > 0:
         df.columns = old_cols
     df.insert(loc = 0, column = colname, value = glycans)
+    if return_masks:
+        return df, floored.set_axis(df.columns[1:], axis = 1), detected.set_axis(df.columns[1:], axis = 1)
     return df
 
 
@@ -441,7 +582,6 @@ class JTKTest:
         self.max_stat = (self.n**2 - squared_sizes.sum()) * 0.5 if self.n > 0 else 0
         self.interval = interval
         self.periods = periods  # Keep original periods
-        self.timepoint_periods = np.array(periods) / interval
         self.variance = (self.n**2 * (2 * self.n + 3) - (squared_sizes * (2 * self.group_sizes + 3)).sum()) / 72
         self.waveforms = self._generate_reference_waveforms(timepoints)
         # The (period, phase) pairs test() scores, in its order, with their waveforms stacked so that one product scores them all
@@ -483,6 +623,19 @@ class JTKTest:
         return best_stats
 
 
+def _bf_prior_b(n: int, # sample size
+                method: str, # method for choice of 'b': "JAB", "min", "robust", "balanced"
+                upper: float # upper limit for range of realistic effect sizes
+                ) -> float: # fraction b of the sample that informs the prior of Jeffreys' approximate Bayes factor
+    "Chooses b for get_BF and get_alphaN"
+    if method == "balanced":
+        return max(2 / n, min(0.5, integrate.quad(lambda x: np.exp(-n * x ** 2 / 4), 0, upper)[0]))
+    method_dict = {"JAB": lambda n: 1 / n, "min": lambda n: 2 / n, "robust": lambda n: max(2 / n, 1 / np.sqrt(n))}
+    if method not in method_dict:
+        raise ValueError(f"'{method}' is not a valid method; choose from 'JAB', 'min', 'robust', or 'balanced'.")
+    return method_dict[method](n)
+
+
 def get_BF(n: int, # sample size
            p: float, # p-value
            z: bool = False, # True if p-value from z-statistic, False if t-statistic
@@ -490,16 +643,9 @@ def get_BF(n: int, # sample size
            upper: float = 10 # upper limit for range of realistic effect sizes
            ) -> float: # Bayes factor in favor of H1
     "Transforms a p-value into Jeffreys' approximate Bayes factor (BF)"
-    method_dict = {"JAB": lambda n: 1/n, "min": lambda n: 2/n, "robust": lambda n: max(2/n, 1/np.sqrt(n))}
-    if method == "balanced":
-        integrand = lambda x: np.exp(-n * x**2 / 4)
-        method_dict["balanced"] = lambda n: max(2/n, min(0.5, integrate.quad(integrand, 0, upper)[0]))
+    b = _bf_prior_b(n, method, upper)
     t_statistic = norm.ppf(1 - p/2) if z else t.ppf(1 - p/2, n - 2)
-    if method not in method_dict:
-        raise ValueError(f"'{method}' is not a valid method; choose from 'JAB', 'min', 'robust', or 'balanced'.")
-    b = method_dict[method](n)
-    BF = np.exp(0.5 * t_statistic ** 2) * np.sqrt(b)
-    return BF
+    return np.exp(0.5 * t_statistic ** 2) * np.sqrt(b)
 
 
 def get_alphaN(n: int, # sample size
@@ -509,14 +655,7 @@ def get_alphaN(n: int, # sample size
                verbose: bool = False # whether to print the adjusted alpha
                ) -> float: # alpha level required to achieve desired evidence
     "Set the alpha level based on sample size via Bayesian-Adaptive Alpha Adjustment"
-    method_dict = {"JAB": lambda n: 1/n, "min": lambda n: 2/n, "robust": lambda n: max(2/n, 1/np.sqrt(n))}
-    if method == "balanced":
-        integrand = lambda x: np.exp(-n * x**2 / 4)
-        method_dict["balanced"] = lambda n: max(2/n, min(0.5, integrate.quad(integrand, 0, upper)[0]))
-    if method not in method_dict:
-        raise ValueError(f"'{method}' is not a valid method; choose from 'JAB', 'min', 'robust', or 'balanced'.")
-    b = method_dict[method](n)
-    alpha = 1 - chi2.cdf(2 * np.log(BF / np.sqrt(b)), 1)
+    alpha = 1 - chi2.cdf(2 * np.log(BF / np.sqrt(_bf_prior_b(n, method, upper))), 1)
     if verbose:
         print(f"You're working with an alpha of {alpha} that has been adjusted for your sample size of {n}.")
     return alpha
@@ -526,22 +665,11 @@ def pi0_tst(p_values: np.ndarray, # array of p-values
             alpha: float = 0.05 # significance threshold for testing
             ) -> float: # estimate of π0, proportion of true null hypotheses
     "estimate the proportion of true null hypotheses in a set of p-values"
-    alpha_prime = alpha / (1 + alpha)
     n = len(p_values)
     if not n:
         return 1.0  # an empty family has nothing to reject, so no signal is the only defensible estimate
-    # Apply the BH procedure at level α'
-    sorted_indices = np.argsort(p_values)
-    sorted_p_values = p_values[sorted_indices]
-    bh_values = (n / rankdata(sorted_p_values)) * sorted_p_values
-    corrected_p_values = np.minimum.accumulate(bh_values[::-1])[::-1]
-    corrected_p_values_sorted_indices = np.argsort(sorted_indices)
-    corrected_p_values = corrected_p_values[corrected_p_values_sorted_indices]
-    # Estimate π0
-    rejected = corrected_p_values < alpha_prime
-    n_rejected = np.sum(rejected)
-    pi0_estimate = (n - n_rejected) / n
-    return pi0_estimate
+    # The BH procedure at level alpha / (1 + alpha) counts the rejections; ranking ties by their average rank instead of their position rejected fewer of a tied block (permutation, exact or rounded p-values)
+    return (n - _bh(np.sort(p_values), alpha / (1 + alpha))[0].sum()) / n
 
 
 def TST_grouped_benjamini_hochberg(identifiers_grouped: dict[str, list], # dictionary of group : list of glycans
@@ -558,14 +686,13 @@ def TST_grouped_benjamini_hochberg(identifiers_grouped: dict[str, list], # dicti
             continue
         # Estimate π0 for the group within the Two-Stage method
         pi0_estimate = pi0_tst(group_p_values[~np.isnan(group_p_values)], alpha = alpha)
-        # π0 = 1 just means stage 1 found no signal in this family; standard TST then falls back to ordinary within-group BH (adjusted_alpha = alpha below), instead of discarding the whole family, which silently wipes out sparse-signal conditions
-        # Weight the alpha value by π0 estimate
-        adjusted_alpha = alpha / max(pi0_estimate, 0.3)
-        # Calculate the BH adjusted p-values; an untestable feature (NaN p-value) stays NaN instead of turning its whole family NaN
-        group_adjusted_p_values = np.maximum(bh_adjust(group_p_values, alpha, two_stage = False), group_p_values)
+        # π0 = 1 just means stage 1 found no signal in this family; standard TST then falls back to ordinary within-group BH, instead of discarding the whole family, which silently wipes out sparse-signal conditions
+        # The π0 weight (π0 at least 0.3) goes into the BH q-values, as bh_adjust's two-stage step does, so the corrected p-value says what is significant; as in
+        # correct_multiple_testing it never falls below the raw p-value. An untestable feature (NaN p-value) stays NaN instead of turning its whole family NaN
+        group_adjusted_p_values = np.maximum(np.minimum(bh_adjust(group_p_values, alpha, two_stage = False) * max(pi0_estimate, 0.3), 1), group_p_values)
         for identifier, corrected_pval in zip(identifiers_grouped[group], group_adjusted_p_values):
             adjusted_p_values[identifier] = corrected_pval
-            significance_dict[identifier] = bool(corrected_pval < adjusted_alpha)
+            significance_dict[identifier] = bool(corrected_pval < alpha)
     return adjusted_p_values, significance_dict
 
 
@@ -659,7 +786,7 @@ def hotellings_t2(group1: np.ndarray, # comparison group containing numerical da
     F = 0 if denom < 1 or df2 < 1 else T2 * df2 / (denom * p)
     if F == 0:
         return F, 1.0
-    p_value = f.sf(F, p, df2)
+    p_value = fdtrc(p, df2, F)  # what f.sf(F, p, df2) evaluates, without its ~35 us of argument handling per call in the per-parent loops
     return F, p_value
 
 
@@ -718,6 +845,28 @@ def get_equivalence_test(row_a: np.ndarray, # array of control samples for one g
     return p if np.ndim(row_a) > 1 else p[0]
 
 
+def detection_test(detected: np.ndarray, # booleans, features as rows and samples as columns
+                   groups: list[list[int]], # column positions of each group
+                   paired: bool = False, # two groups whose columns are paired by position
+                   random_state: int | np.random.Generator | None = None # optional random state for reproducibility (Monte Carlo for more than two groups)
+                   ) -> tuple[np.ndarray, np.ndarray]: # (p-value, effect size) per feature
+    "Tests whether detection differs between groups: Fisher's exact test (2 x k tables beyond two groups by Monte Carlo), or for paired samples the exact McNemar test on the discordant pairs; the effect size is Cohen's h of the detection rates (second group minus first), or Cramer's V beyond two groups"
+    local_rng = np.random.default_rng(random_state) if not isinstance(random_state, np.random.Generator) else random_state
+    pvals, effects = [], []
+    for row in np.asarray(detected, dtype = bool):
+        table = np.array([[row[g].sum() for g in groups], [len(g) - row[g].sum() for g in groups]])
+        if paired:
+            a, b = row[groups[0]], row[groups[1]]
+            n = int((a ^ b).sum())
+            pvals.append(binomtest(int((a & ~b).sum()), n).pvalue if n else 1.0)
+        else:
+            pvals.append(fisher_exact(table).pvalue if len(groups) == 2 else fisher_exact(table, method = MonteCarloMethod(rng = local_rng)).pvalue)
+        rates = table[0] / table.sum(axis = 0)
+        effects.append(2 * np.arcsin(np.sqrt(rates[1])) - 2 * np.arcsin(np.sqrt(rates[0])) if len(groups) == 2 else
+                       np.sqrt(chi2_contingency(table, correction = False)[0] / table.sum()))
+    return np.array(pvals, dtype = float), np.array(effects, dtype = float)
+
+
 def clr_transformation(df: pd.DataFrame, # dataframe with features as rows and samples as columns
                        group1: list[str | int], # column indices/names for first group of samples, usually control
                        group2: list[str | int], # column indices/names for second group of samples
@@ -745,13 +894,14 @@ def clr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
         group1i = [df.columns.get_loc(c) for c in group1]
         group2i = [df.columns.get_loc(c) for c in group2] if group2 else group1i
         geometric_mean = -np.log2(geometric_mean)
+        vals = df.to_numpy()  # the groups are taken by position, since selecting them as frames cost more than the transform itself on the many small per-glycosite frames
         if group2:
-            clr_adjusted[:, group1i] = np.log2(df[group1]) + (geometric_mean[group1i] if not custom_scale else norm.rvs(loc = np.log2(1), scale = gamma, random_state = local_rng, size = (df.shape[0], len(group1))))
+            clr_adjusted[:, group1i] = np.log2(vals[:, group1i]) + (geometric_mean[group1i] if not custom_scale else norm.rvs(loc = np.log2(1), scale = gamma, random_state = local_rng, size = (df.shape[0], len(group1))))
             condition = norm.rvs(loc = geometric_mean[group2i], scale = gamma, random_state = local_rng, size = (df.shape[0], len(group2))) if not custom_scale else \
                 norm.rvs(loc = np.log2(custom_scale), scale = gamma, random_state = local_rng, size = (df.shape[0], len(group2)))
-            clr_adjusted[:, group2i] = np.log2(df[group2]) + condition
+            clr_adjusted[:, group2i] = np.log2(vals[:, group2i]) + condition
         else:
-            clr_adjusted[:, group1i] = np.log2(df[group1]) + norm.rvs(loc = geometric_mean[group1i], scale = gamma, random_state = local_rng, size = (df.shape[0], len(group1)))
+            clr_adjusted[:, group1i] = np.log2(vals[:, group1i]) + norm.rvs(loc = geometric_mean[group1i], scale = gamma, random_state = local_rng, size = (df.shape[0], len(group1)))
     elif not group2 and isinstance(custom_scale, dict):
         gamma = max(gamma, 0.1)
         for idx, group_id in enumerate(group1):
@@ -826,8 +976,11 @@ def _permutation_labels(codes: tuple, # integer group code per sample
     distinct = factorial(n) // int(np.prod([factorial(v) for v in Counter(codes).values()]))
     if n <= 8 and distinct <= permutations + 1:
         # A small design has very few distinct labellings, so enumerating them is both cheaper than sampling and free of Monte Carlo error
-        return np.array([list(codes)] + [list(r) for r in sorted(set(iter_permutations(codes)) - {codes})])
-    return np.vstack([np.asarray(codes), (np.random.default_rng(seed) if seed is not None else rng).permuted(np.tile(np.asarray(codes), (permutations, 1)), axis = 1)])
+        P = np.array([list(codes)] + [list(r) for r in sorted(set(iter_permutations(codes)) - {codes})])
+    else:
+        P = np.vstack([np.asarray(codes), (np.random.default_rng(seed) if seed is not None else rng).permuted(np.tile(np.asarray(codes), (permutations, 1)), axis = 1)])
+    P.setflags(write = False)  # cached, so a caller writing into it would change every later test of the same design
+    return P
 
 
 def permanova_with_permutation(df: pd.DataFrame, # square distance matrix
@@ -891,31 +1044,31 @@ def get_procrustes_scores(df: pd.DataFrame, # dataframe with features as rows an
                           group2: list[str | int], # column indices/names for second group of samples
                           paired: bool = False, # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
                           custom_scale: float | dict = 0, # ratio total signal group2/group1 for scale model (or group_idx:mean/min dict)
-                          random_state: int | np.random.Generator | None = None # optional random state for reproducibility
-                          ) -> tuple[list[float], list[float], list[float]]: # (Procrustes scores, correlations, variances)
+                          random_state: int | np.random.Generator | None = None, # optional random state for reproducibility
+                          reference: list | None = None # index labels of the rows that may be the reference and define the CLR it is compared with; default: all
+                          ) -> tuple[list[float], list[float], list[float]]: # (Procrustes scores, correlations, variances: with two groups of the feature's CLR value over all samples, paired the mean square of its paired differences; with one group of its log2 values)
     "For each feature, estimates its value as ALR reference component"
     local_rng = np.random.default_rng(random_state) if random_state is not None else rng
     if isinstance(group1[0], int):
         group1 = [df.columns.tolist()[k] for k in group1]
         group2 = [df.columns.tolist()[k] for k in group2]
+    labels = df.iloc[:, 0]
     df = df.iloc[:, 1:].astype(float)
-    ref_matrix = clr_transformation(df, group1, group2, gamma = 0.01, custom_scale = custom_scale, random_state = local_rng)
+    ref_matrix = clr_transformation(df, group1, group2, gamma = 0.01, custom_scale = custom_scale, random_state = local_rng, reference = reference)
     df = np.log2(df)
     if group2:
-        if paired:
-            differences = df[group1].values - df[group2].values
-            variances = np.var(differences, axis = 1, ddof = 1)
-        else:
-            var_group1 = df[group1].var(axis = 1)
-            var_group2 = df[group2].var(axis = 1)
-            variances = abs(var_group1 - var_group2)
+        # A reference has to keep its log-ratio to the other features, since any shift of it between the groups moves every feature's log2FC; the
+        # difference of its group variances said nothing about that and is near 0 by chance for many features of small groups
+        clr_values = ref_matrix[group1 + group2].to_numpy()
+        variances = np.mean((clr_values[:, :len(group1)] - clr_values[:, len(group1):]) ** 2, axis = 1) if paired else clr_values.var(axis = 1, ddof = 1)
     else:
         variances = abs(df[group1].var(axis = 1))
     ref_values = ref_matrix.to_numpy()
     # Arrays instead of frames, column-major as the frames' values were, since procrustes' column reductions round by memory layout
     procrustes_corr = [1 - procrustes(np.asfortranarray(ref_values[~ref_matrix.index.isin([ref_matrix.index[i]])]),
                                       alr_transformation(df, i, group1, group2, gamma = 0.01, custom_scale = custom_scale, random_state = local_rng).to_numpy())[2] for i in range(df.shape[0])]
-    return [a / max(b, 1e-8) for a, b in zip(procrustes_corr, variances)], procrustes_corr, variances
+    allowed = df.index.isin(df.index if reference is None else reference) & ~labels.duplicated(keep = False).to_numpy()
+    return [a / max(b, 1e-8) if ok else -np.inf for a, b, ok in zip(procrustes_corr, variances, allowed)], procrustes_corr, variances
 
 
 def get_additive_logratio_transformation(df: pd.DataFrame, # dataframe with features as rows and samples as columns
@@ -924,7 +1077,8 @@ def get_additive_logratio_transformation(df: pd.DataFrame, # dataframe with feat
                                          paired: bool = False, # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
                                          gamma: float = 0.1, # degree of uncertainty that CLR assumption holds
                                          custom_scale: float | dict = 0, # ratio total signal group2/group1 for scale model
-                                         random_state: int | np.random.Generator | None = None # optional random state for reproducibility
+                                         random_state: int | np.random.Generator | None = None, # optional random state for reproducibility
+                                         reference: list | None = None # index labels of the rows that may be the reference, and the CLR reference if it falls back to CLR; default: all
                                          ) -> pd.DataFrame: # ALR-transformed dataframe
     "Identifies ALR reference component and transforms data according to ALR"
     local_rng = np.random.default_rng(random_state) if random_state is not None else rng
@@ -933,7 +1087,7 @@ def get_additive_logratio_transformation(df: pd.DataFrame, # dataframe with feat
     # A zero left by impute = False has no log; it gets the floor the CLR route adds, instead of an -inf that made the Procrustes search raise
     df = pd.concat([df.iloc[:, :1], df.iloc[:, 1:].astype(float).replace(0, 0.0000001)], axis = 1)
     scores, procrustes_corr, variances = get_procrustes_scores(df, group1, group2, paired = paired,
-                                                               custom_scale = custom_scale, random_state = local_rng)
+                                                               custom_scale = custom_scale, random_state = local_rng, reference = reference)
     ref_component = np.argmax(scores)
     ref_component_string = df.iloc[:, 0].values[ref_component]
     print(f"Reference component for ALR is {ref_component_string}, with Procrustes correlation of {procrustes_corr[ref_component]} and variance of {variances[ref_component]}")
@@ -941,7 +1095,7 @@ def get_additive_logratio_transformation(df: pd.DataFrame, # dataframe with feat
         print("Metrics of chosen reference component not good enough for ALR; switching to CLR instead.")
         df = df.astype({c: float for c in df.columns[1:]})
         df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma, custom_scale = custom_scale,
-                                            random_state = local_rng)
+                                            random_state = local_rng, reference = reference)
         return df
     glycans = df.iloc[:, 0].values.tolist()
     glycans = glycans[:ref_component] + glycans[ref_component+1:]
@@ -962,8 +1116,8 @@ def correct_multiple_testing(pvals: list[float] | np.ndarray, # list of raw p-va
     corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
     significance = [bool(p < alpha) for p in corrpvals]
     if len(significance) >= 10 and sum(significance) > 0.9 * len(significance):
-        print("Significance inflation detected. The CLR/ALR transformation possibly cannot handle this dataset. Consider running again with a higher gamma value.\
-             Proceed with caution; for now switching to Bonferroni correction to be conservative about this.")
+        print("Significance inflation detected. The CLR/ALR transformation possibly cannot handle this dataset. Consider running again with a higher gamma value. "
+              "Proceed with caution; for now switching to Bonferroni correction to be conservative about this.")
         corrpvals = np.minimum(np.asarray(pvals) * len(pvals), 1)
         significance = [bool(p < alpha) for p in corrpvals]
     return corrpvals, significance
@@ -1008,6 +1162,59 @@ def dag_neighbors(index: list[str], # feature labels in the order they are teste
     pos = {g: i for i, g in enumerate(index)}
     return [sorted({pos[x] for x in list(dag.predecessors(g)) + list(dag.successors(g)) if x in pos}) if g in dag else []
             for g in index]
+
+
+def _covariate_fit(X: np.ndarray, # features x samples, NaN where a cell was never measured
+                   groups: np.ndarray | list, # group label of each sample, in column order
+                   covariates: pd.DataFrame | pd.Series | dict, # per-sample nuisance variables indexed by sample name (a dict maps sample name to the value of one covariate)
+                   samples: list # sample names in column order
+                   ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, int]: # (adjusted values, residual SS, residual df, group SS given the covariates, variance factor of group 2 - group 1, covariate columns)
+    "Fits every feature as group means plus covariates (y = G.beta + Z.gamma) and returns the values with the covariate part removed, so group means of the adjusted values are the adjusted group effects, together with what a t or F test of the groups needs"
+    cov = covariates.copy() if isinstance(covariates, pd.DataFrame) else pd.Series(covariates).to_frame()
+    if cov.index.duplicated().any():
+        raise ValueError(f"covariates lists samples more than once ({cov.index[cov.index.duplicated()].unique().tolist()[:5]}); give one value per sample.")
+    missing = [s for s in samples if s not in cov.index]
+    if missing:
+        raise ValueError(f"covariates has no value for samples {missing[:5]}{' ...' if len(missing) > 5 else ''}; index it by sample name, with a value for every sample tested.")
+    cov = cov.loc[list(samples)]
+    if cov.isna().any().any():
+        raise ValueError(f"covariates has missing values for {cov.index[cov.isna().any(axis = 1)].tolist()[:5]}; every tested sample needs a value.")
+    parts = []
+    for c in cov.columns:
+        v = cov[c]
+        # a numeric covariate with more than two values is a slope; anything else (status, sex, batch, a 0/1 flag) is a factor with one column per level beyond the first
+        if pd.api.types.is_numeric_dtype(v) and not pd.api.types.is_bool_dtype(v) and v.nunique() > 2:
+            parts.append(((v - v.mean()) / (v.std() or 1)).to_numpy(dtype = float)[:, None])
+        else:
+            parts.append(pd.get_dummies(v.astype(str), drop_first = True, dtype = float).to_numpy())
+    Z = np.hstack(parts) if parts else np.zeros((len(samples), 0))
+    Z = Z[:, Z.std(axis = 0) > 0]
+    Z = Z - Z.mean(axis = 0)  # centered, so removing the covariate part leaves each feature's overall level where it was
+    levels, codes = np.unique(np.asarray(groups), return_inverse = True)
+    G = (codes[:, None] == np.arange(len(levels))).astype(float)
+    full, reduced = np.hstack([G, Z]), np.hstack([np.ones((len(codes), 1)), Z])
+    if np.linalg.matrix_rank(full) < full.shape[1]:
+        raise ValueError("The covariates are confounded with the groups (a covariate is constant within each group, or repeats the grouping), so no group effect can be told apart from them.")
+    n, p = X.shape[0], Z.shape[1]
+    adj, ssr, dfr, ssb, cvar = np.full(X.shape, np.nan), np.full(n, np.nan), np.full(n, np.nan), np.full(n, np.nan), np.full(n, np.nan)
+    ok = np.isfinite(X)
+    # one least-squares solve for every feature measured in every sample, a solve per feature for the rest (glycoproteomics leaves unmeasured cells NaN)
+    for rows, cols in ([np.flatnonzero(ok.all(axis = 1)), np.ones(X.shape[1], dtype = bool)],) + tuple(([i], ok[i]) for i in np.flatnonzero(~ok.all(axis = 1))):
+        if not len(rows):
+            continue
+        Xf, Xr, Y = full[cols], reduced[cols], X[np.ix_(rows, np.flatnonzero(cols))].T
+        if not Xf[:, :len(levels)].any(axis = 0).all() or Xf.shape[0] <= Xf.shape[1] or np.linalg.matrix_rank(Xf) < Xf.shape[1]:
+            continue  # a group without measured samples, too few samples for the model, or the covariates confounded with the groups among them
+        bf, br = np.linalg.lstsq(Xf, Y, rcond = None)[0], np.linalg.lstsq(Xr, Y, rcond = None)[0]
+        res = Y - Xf @ bf
+        ssr[rows] = (res ** 2).sum(axis = 0)
+        ssb[rows] = ((Y - Xr @ br) ** 2).sum(axis = 0) - ssr[rows]
+        dfr[rows] = Xf.shape[0] - Xf.shape[1]
+        adj[np.ix_(rows, np.flatnonzero(cols))] = (Y - Z[cols] @ bf[Xf.shape[1] - p:]).T
+        if len(levels) == 2:
+            V = np.linalg.inv(Xf.T @ Xf)
+            cvar[rows] = V[0, 0] + V[1, 1] - 2 * V[0, 1]
+    return adj, ssr, dfr, ssb, cvar, p
 
 
 def meta_analysis(effect_sizes: np.ndarray | list[float], # per-study effect sizes
@@ -1078,8 +1285,9 @@ def get_glycoform_diff(df_res: pd.DataFrame, # result from .motif.analysis.get_d
     label_col = 'Glycosite' if 'Glycosite' in df_res.columns else 'Glycan'
     labels = [split_glycoform_id(k)[0] for k in df_res[label_col]]  # per-glycosite motifs keep the underscores of their names out of the site
     labels = [s.rpartition('_')[0] or s for s in labels] if level == 'protein' else labels  # the accession is everything in front of the site, which can hold underscores itself (A1AG1_HUMAN)
-    grouped = df_res['p-val'].groupby(labels).agg(lambda p: combine_pvalues(p)[1])  # Fisher’s Combined Probability Test
-    mean_effect_size = df_res['Effect size'].groupby(labels).mean()
+    # plain Series, since every group pandas hands the lambda deep-copies the attrs of df_res, once per glycosite
+    grouped = pd.Series(df_res['p-val'].to_numpy()).groupby(labels).agg(lambda p: combine_pvalues(p)[1])  # Fisher’s Combined Probability Test
+    mean_effect_size = pd.Series(df_res['Effect size'].to_numpy()).groupby(labels).mean()
     pvals, sig = correct_multiple_testing(grouped, alpha)
     df_out = type(df_res)(
         {'Glycosite': grouped.index, 'corr p-val': pvals, 'significant': sig, 'Effect size': mean_effect_size.values})
@@ -1171,25 +1379,28 @@ def estimate_technical_variance(df: pd.DataFrame, # dataframe with abundances in
                                 num_instances: int = 128, # number of Monte Carlo instances to sample
                                 gamma: float = 0.1, # uncertainty parameter for CLR transformation scale
                                 custom_scale: float | dict = 0,  # ratio total signal group2/group1 for scale model
-                                random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
+                                random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
+                                reference: list | None = None  # index labels of the rows whose geometric mean is each sample's CLR reference (e.g., without features absent from a whole group); default: all
                                 ) -> pd.DataFrame:  # transformed df (features, samples*num_instances) with CLR-transformed Monte Carlo instances
     "Monte Carlo sampling from Dirichlet distribution with relative abundances as concentration, followed by CLR transformation"
     local_rng = np.random.default_rng(random_state) if random_state is not None else rng
     df = df.apply(lambda col: (col / col.sum()) * 5000, axis = 0)
     features, samples = df.shape
+    ref = slice(None) if reference is None else df.index.get_indexer(reference)
     transformed_data = np.zeros((features, samples, num_instances))
     for j in range(samples):
-        dirichlet_samples = dirichlet.rvs(alpha = np.maximum(df.iloc[:, j].to_numpy(float), 1e-6), random_state = local_rng, size = num_instances).T
+        # a component with a concentration far below 1 draws 0 or 1e-300, whose log is no measurement, so draws are floored at the share impute_and_normalize gives a feature absent from a group (1e-7 %)
+        dirichlet_samples = np.maximum(dirichlet.rvs(alpha = np.maximum(df.iloc[:, j].to_numpy(float), 1e-6), random_state = local_rng, size = num_instances).T, 1e-9)
         if isinstance(custom_scale, dict) or custom_scale:
             for n in range(num_instances):
                 sample_instance = pd.DataFrame(dirichlet_samples[:, n])
                 transformed_data[:, j, n] = clr_transformation(sample_instance, sample_instance.columns.tolist(), [],
                                                                gamma = gamma, custom_scale = custom_scale,
-                                                               random_state = local_rng).squeeze()
+                                                               random_state = local_rng, reference = None if reference is None else ref.tolist()).squeeze()
         else:
             # CLR on a single column is just log2(x) minus the log2 geometric mean, plus the gamma uncertainty term
             log_samples = np.log2(np.where(dirichlet_samples > 0, dirichlet_samples, np.nan))
-            log_gmean = np.nanmean(log_samples, axis = 0)
+            log_gmean = np.nanmean(log_samples[ref], axis = 0)
             transformed_data[:, j, :] = log_samples + norm.rvs(loc = -log_gmean, scale = gamma,
                                                                random_state = local_rng,
                                                                size = (features, num_instances))
@@ -1203,7 +1414,8 @@ def perform_tests_monte_carlo(group_a: pd.DataFrame, # rows as features, columns
                               group_b: pd.DataFrame, # rows as features, columns as sample instances from one condition
                               num_instances: int = 128,  # number of Monte Carlo instances to sample
                               paired: bool = False,  # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
-                              alpha: float = 0.05  # error rate the within-instance FDR correction is calibrated to
+                              alpha: float = 0.05,  # error rate the within-instance FDR correction is calibrated to
+                              fixed_pvals: np.ndarray | None = None  # per-feature p-values that replace every instance's test where not NaN (e.g., detection tests of features absent from a whole group)
                               ) -> tuple[list[float], list[float], list[float]]:  # (uncorrected p-vals, corrected p-vals, effect sizes)
     "Perform tests on each Monte Carlo instance, apply Benjamini-Hochberg correction, calculate effect sizes"
     num_features, _ = group_a.shape
@@ -1216,6 +1428,8 @@ def perform_tests_monte_carlo(group_a: pd.DataFrame, # rows as features, columns
         instance_p_values = np.nan_to_num((
             ttest_rel(sample_b, sample_a, axis = 1) if paired else ttest_ind(sample_b, sample_a, equal_var = False,
                                                                              axis = 1))[1], nan = 1.0)
+        if fixed_pvals is not None:
+            instance_p_values = np.where(np.isnan(fixed_pvals), instance_p_values, fixed_pvals)
         instance_effect_sizes = cohen_d(sample_b, sample_a, paired = paired)[0]
         # Apply Benjamini-Hochberg correction for multiple testing within the instance
         avg_uncorrected_p_values += instance_p_values

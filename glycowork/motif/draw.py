@@ -1,18 +1,21 @@
+from __future__ import annotations
 from pathlib import Path
-from glycowork.glycan_data.loader import unwrap, resolve_motif_name, lib
+from glycowork.glycan_data.loader import unwrap, resolve_motif_name, lib, pd
 from glycowork.motif.regex import get_match
-from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, compare_glycans, graph_to_string, resolve_anchor
+from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, graph_to_string, resolve_anchor
 from glycowork.motif.tokenization import get_core, get_modification, SIALIC_KEYS
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit, is_composition, canonicalize_composition, _COMP_ORDER, PDB_TO_IUPAC
+import copy
+import os
 import warnings
 import html
+import base64
 import hashlib
 from io import BytesIO
 from typing import Any
 import networkx as nx
-import drawsvg as draw
+from glycorender import svgdraw as draw
 import numpy as np
-import pandas as pd
 import struct
 import re
 from math import sin, cos, radians, sqrt, atan, degrees
@@ -132,6 +135,8 @@ _SEGMENT_PREFIXES = {'04', '15', '02', '13', '24', '35', '25', '03', '14'}
 _SVG_NUMBER = re.compile(r'-?\d+(?:\.\d+)?(?:e-?\d+)?')
 _SVG_LINE_PATH = re.compile(r'<path d="M(-?[\d.eE+-]+),(-?[\d.eE+-]+) L(-?[\d.eE+-]+),(-?[\d.eE+-]+)"[^>]*?id="([^"]+)"')
 _SVG_TEXT_PATH = re.compile(r'<text([^>]*)><textPath xlink:href="#([^"]+)" startOffset="([^"]+)">\s*(?:<tspan dy="([^"]+)">(.*?)</tspan>)?\s*</textPath></text>', re.S)
+# Outline coordinates of each glyph at unit size, per font, as every label placement measures the ink of its glyphs
+_GLYPH_INK = {}
 
 
 def _get_glycorender():
@@ -140,7 +145,7 @@ def _get_glycorender():
 
 
 def _flatten_text_paths(
-        data: str,  # SVG code as emitted by drawsvg
+        data: str,  # SVG code as emitted by GlycanDrawing.as_svg
         turn: float = 0  # Rotation the drawing gets on top of the labels, in degrees (90 in vertical mode)
 ) -> str:  # SVG code with every label as plainly positioned text
     "Rewrites text-on-a-path as absolutely positioned, rotated text, since vector editors such as Affinity Designer silently drop <textPath>"
@@ -174,10 +179,10 @@ def _flatten_text_paths(
 
 
 def _drawn_extent(
-        element: Any, # drawsvg element or container to measure
+        element: Any, # svgdraw element or container to measure
         acc: list # Accumulator of (x0, y0, x1, y1) boxes in user space
 ) -> list: # The accumulator, so the caller can fold it in one expression
-    "Collects the bounding boxes of everything visible in a drawsvg tree, so a drawing can be cropped to what it actually contains"
+    "Collects the bounding boxes of everything visible in an svgdraw tree, so a drawing can be cropped to what it actually contains"
     from glycorender.render import pdfmetrics, font_to_use
     a = getattr(element, 'args', {}) or {}
     if isinstance(element, draw.Circle) and not a.get('fill') == a.get('stroke') == 'none':
@@ -294,7 +299,7 @@ def draw_shape(
         conf: str = '', # Ring configuration text
         deg: float = 0, # Rotation angle in degrees
         text_anchor: str = 'middle', # Text alignment for postbiosynthetic modifications
-        scalar: float = 0 # Intensity scaling factor for drawsvg output
+        scalar: float = 0 # Intensity scaling factor, drawn as a gradient halo behind the symbol
 ) -> None:
     "Draws SNFG glycan symbol with specified shape, color, position, and optional annotations"
     x_base = -x_pos * dim
@@ -1111,6 +1116,24 @@ def is_jupyter() -> bool:
         return False
 
 
+def _returns_drawing() -> bool:
+    "Whether drawings are returned to display themselves (_repr_png_): in Jupyter, or where the frontend sets GLYCOWORK_RICH_DISPLAY=1"
+    return is_jupyter() or os.environ.get('GLYCOWORK_RICH_DISPLAY') == '1'
+
+
+def _dark_display() -> bool:
+    "Whether the frontend shows drawings on a dark background (GLYCOWORK_DARK_DISPLAY=1, as the slate editor's console sets), where they display as die-cut stickers"
+    return os.environ.get('GLYCOWORK_DARK_DISPLAY') == '1'
+
+
+def _margin(dim: float, # Base dimension for scaling
+            shadow: bool = False, # Drop shadow under the symbols
+            sticker: bool = False # Die-cut sticker
+           ) -> float: # Canvas margin around what was drawn
+    "Room around a drawing for its sticker cut or shadow, so neither is clipped at the canvas edge"
+    return dim * (0.45 if sticker else 0.35 if shadow else 0.2)
+
+
 def display_svg_with_matplotlib(
         svg_data: Any, # SVG drawing object
         chem: bool = False, # Whether svg_data comes from RDKit chemical
@@ -1142,6 +1165,17 @@ def _written_positions(graph: nx.DiGraph # Glycan graph from glycan_to_nxGraph
     return {n: i for i, n in enumerate(sorted(graph, key = lambda n: (n in main, n)))}
 
 
+def _drawn_from(draw_this: str, # reordered IUPAC-condensed glycan sequence
+                glycan: str # original IUPAC-condensed glycan sequence
+                ) -> list[int]: # Per residue of draw_this, in written order, its index in glycan
+    "Matches the reordered residues to the original ones by exact label, as compare_glycans would let b1-? stand in for b1-2"
+    g1, g2 = glycan_to_nxGraph(glycan), glycan_to_nxGraph(draw_this)
+    mappy = next(nx.isomorphism.DiGraphMatcher(g2, g1, node_match = nx.isomorphism.categorical_node_match(
+        'string_labels', None)).isomorphisms_iter())
+    pos1, at2 = _written_positions(g1), {i: n for n, i in _written_positions(g2).items()}
+    return [pos1[mappy[at2[i]]] // 2 for i in range(0, len(g2), 2)]
+
+
 def process_per_residue(
         draw_this: str, # reordered IUPAC-condensed glycan sequence
         per_residue: list[float], # Scalar values per residue
@@ -1153,10 +1187,7 @@ def process_per_residue(
         raise ValueError(
             f"per_residue has {len(per_residue)} values but {glycan} has {n_residues} monosaccharides to color")
     if glycan != draw_this:
-        g1, g2 = glycan_to_nxGraph(glycan), glycan_to_nxGraph(draw_this)
-        _, mappy = compare_glycans(g2, g1, return_matches = True)
-        pos1, at2 = _written_positions(g1), {i: n for n, i in _written_positions(g2).items()}
-        per_residue = [per_residue[pos1[mappy[at2[i * 2]]] // 2] for i in range(len(per_residue))]
+        per_residue = [per_residue[k] for k in _drawn_from(draw_this, glycan)]
     return {i * 2: v for i, v in enumerate(per_residue)}
 
 
@@ -1172,11 +1203,8 @@ def process_per_linkage(
             f"highlight_linkages {highlight_linkages} has to index the {n_linkages} linkages of {glycan}, starting from 0")
     per_linkage = [i in highlight_linkages for i in range(n_linkages)]
     if glycan != draw_this:
-        g1, g2 = glycan_to_nxGraph(glycan), glycan_to_nxGraph(draw_this)
-        _, mappy = compare_glycans(g2, g1, return_matches = True)
-        # A linkage moves with the residue it leaves, which precedes it in the written sequence
-        pos1, at2 = _written_positions(g1), {i: n for n, i in _written_positions(g2).items()}
-        per_linkage = [per_linkage[pos1[mappy[at2[i * 2]]] // 2] for i in range(len(per_linkage))]
+        # A linkage moves with the residue it leaves, which precedes it in the written sequence; the root, last in both, has none
+        per_linkage = [per_linkage[k] for k in _drawn_from(draw_this, glycan)[:n_linkages]]
     return {i * 2 + 1: v for i, v in enumerate(per_linkage)}
 
 
@@ -1203,23 +1231,27 @@ chem_cols_alpha = ['#0385AE', '#0385AE', '#0385AE',     # blue
                    '#9F6D55', '#9F6D55', '#9F6D55',     # brown
                    '#C23537']                           # red
 
+_CHEM_INDEX = {m: i for i, m in enumerate(mono_list)}
+
 
 def get_mono_atoms(
         draw_this: str, # IUPAC-condensed glycan sequence
         mono_list: str | list[str]  # Monosaccharide(s) to highlight
-) -> tuple[str, dict[int, int]]:  # (SMILES, {atom index: index into mono_list})
-    "Maps every atom of a glycan's SMILES onto the monosaccharide it was built from"
+) -> tuple[str, dict[int, int]]:  # (SMILES, {atom index: index of its color in chem_cols})
+    "Maps every atom of a glycan's SMILES onto the color of the monosaccharide it was built from"
     mono_list = [mono_list] if isinstance(mono_list, str) else mono_list
+    if unknown := [k for k in mono_list if k not in _CHEM_INDEX]:
+        raise ValueError(f"No highlight color for {unknown}; choose from {list(_CHEM_INDEX)}")
     from glycowork.motif.smiles import glycan_to_smiles
     smiles, owners = glycan_to_smiles(draw_this, mapping = True)
     graph = glycan_to_nxGraph(draw_this)
     cores = {node: get_core(graph.nodes[node]['string_labels']) for node in set(owners)}
-    return smiles, {atom: mono_list.index(cores[owner]) for atom, owner in enumerate(owners) if cores[owner] in mono_list}
+    return smiles, {atom: _CHEM_INDEX[cores[owner]] for atom, owner in enumerate(owners) if cores[owner] in mono_list}
 
 
 def color_by_mono(
         mol: Any, # RDKit molecule object
-        atom_monos: dict[int, int], # {atom index: index into mono_list}
+        atom_monos: dict[int, int], # {atom index: index of its color in chem_cols}
         atom_colors: dict[int, list], # Color map to fill for atoms
         bond_colors: dict[int, list], # Color map to fill for bonds
         alpha: bool = True, # Use alpha-adjusted colors
@@ -1315,8 +1347,8 @@ def draw_chem3d(
     except ImportError:
         raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
     mono_list = [mono_list] if isinstance(mono_list, str) else mono_list
-    smiles, atom_monos = get_mono_atoms(draw_this, mono_list)
-    smiles_mol = MolFromSmiles(smiles)
+    if unknown := [k for k in mono_list if k not in _CHEM_INDEX]:
+        raise ValueError(f"No highlight color for {unknown}; choose from {list(_CHEM_INDEX)}")
     from_pdb = False
     if pdb_file:
         mol = MolFromPDBFile(str(pdb_file))
@@ -1335,7 +1367,8 @@ def draw_chem3d(
             mol = glycoshape_mol
             from_pdb = True
         else:
-            mol = AddHs(smiles_mol)
+            smiles, atom_monos = get_mono_atoms(draw_this, mono_list)
+            mol = AddHs(MolFromSmiles(smiles))
             if EmbedMolecule(mol, randomSeed = 42) == -1 and EmbedMolecule(mol, randomSeed = 42,
                                                                            useRandomCoords = True) == -1:
                 raise ValueError(f"RDKit could not embed a 3D conformer for {draw_this}")
@@ -1349,7 +1382,7 @@ def draw_chem3d(
             info = atom.GetPDBResidueInfo()
             mono_name = PDB_TO_IUPAC.get(info.GetResidueName().strip(), '').split('(')[0].strip() if info else ''
             if mono_name and get_core(mono_name) in mono_list:
-                add_colors_to_map([atom.GetIdx()], atom_colors, mono_list.index(get_core(mono_name)), alpha = False)
+                add_colors_to_map([atom.GetIdx()], atom_colors, _CHEM_INDEX[get_core(mono_name)], alpha = False)
         # ROH reducing end oxygen belongs to adjacent monosaccharide
         for atom in mol.GetAtoms():
             info = atom.GetPDBResidueInfo()
@@ -1388,26 +1421,55 @@ def draw_chem3d(
 
 
 class GlycanDrawing:
-    def __init__(self, drawing_obj, shadow = False, sticker = False, vertical = False, alt_text = None):
+    def __init__(self, drawing_obj, shadow = False, sticker = False, vertical = False, alt_text = None, dim = 50):
         self.drawing_obj = drawing_obj
         self.shadow = shadow
         self.sticker = sticker
         self.vertical = vertical
         self.alt_text = alt_text
+        self.dim = dim
 
     def as_svg(self):
         data = self.drawing_obj.as_svg()
         return data.replace('<svg ', f'<svg aria-label="{self.alt_text}" role="img" ', 1) if self.alt_text else data
 
-    def save_svg(self, filepath):
+    def as_standalone_svg(self):
+        "SVG code that looks the same in any viewer: effects baked in by glycorender, labels as plainly positioned text"
         data = self.as_svg()
-        # drawsvg has no cut layer of its own, so route the SVG through glycorender as well
+        # The built SVG has no shadow or cut layer of its own, so glycorender bakes them in
         if self.shadow or self.sticker:
             from glycorender.render import pdf_to_svg_bytes
             data = pdf_to_svg_bytes(data, shadow = self.shadow, sticker = self.sticker)
             data = data.replace('<svg ', f'<svg aria-label="{self.alt_text}" role="img" ', 1) if self.alt_text else data
+        return _flatten_text_paths(data, turn = 90 if self.vertical else 0)
+
+    def save_svg(self, filepath):
         with open(filepath, 'w', encoding = "utf-8") as f:
-            f.write(_flatten_text_paths(data, turn = 90 if self.vertical else 0))
+            f.write(self.as_standalone_svg())
+
+    def as_sticker(self) -> GlycanDrawing: # The drawing as a die-cut sticker
+        "The drawing as GlycoDraw(..., sticker = True) draws it, e.g., for a dark background; this drawing stays as it is"
+        if self.sticker:
+            return self
+        # A sticker's cut and its shadow need a wider margin than the drawing was made with
+        extra = _margin(self.dim, sticker = True) - _margin(self.dim, shadow = self.shadow)
+        canvas = copy.copy(self.drawing_obj)
+        x, y, w, h = canvas.view_box
+        canvas.view_box = (x - extra, y - extra, w + 2 * extra, h + 2 * extra)
+        canvas.width, canvas.height = canvas.width + 2 * extra, canvas.height + 2 * extra
+        return GlycanDrawing(canvas, sticker = True, vertical = self.vertical, alt_text = self.alt_text, dim = self.dim)
+
+    def as_markdown(self,
+                    size: float = 14  # Height of one monosaccharide symbol in pixels, about that of a line of text
+    ) -> str:  # HTML <img> tag with the drawing as an SVG data URI
+        "Inline image of the drawing for Markdown text, e.g., Markdown(f'binds {d.as_markdown()}'); a die-cut sticker where GLYCOWORK_DARK_DISPLAY=1"
+        drawing = self.as_sticker() if _dark_display() else self
+        data = base64.b64encode(drawing.as_standalone_svg().encode('utf-8')).decode('ascii')
+        h = max(1, round(drawing.drawing_obj.height * size / self.dim))
+        # An <img>, not ![alt](...), since glycan brackets would end the alt text. The height goes in twice: Jupyter's
+        # stylesheet (img {height: auto}) overrides the attribute, and GitHub strips style
+        return (f'<img src="data:image/svg+xml;base64,{data}" alt="{self.alt_text or ""}" '
+                f'height="{h}" style="height: {h}px; vertical-align: middle">')
 
     def save(self, filepath):
         "Saves as .svg, .pdf, or .png (300 dpi) and returns the drawing, so saves can be chained"
@@ -1429,11 +1491,13 @@ class GlycanDrawing:
         return self
 
     def _repr_png_(self):
+        drawing = self.as_sticker() if _dark_display() else self
         _, convert_svg_to_png = _get_glycorender()
-        # Rendered at twice its size but displayed at its size, so high-DPI screens show it crisp
-        png = convert_svg_to_png(self.as_svg(), None, scale = 2.0, return_bytes = True, shadow = self.shadow,
-                                 sticker = self.sticker, background = (1.0, 1.0, 1.0))
-        return png, {'width': self.drawing_obj.width, 'height': self.drawing_obj.height}
+        # Rendered at twice its size but displayed at its size, so high-DPI screens show it crisp. A sticker brings its
+        # own white cut and stays transparent around it, on light and dark pages alike
+        png = convert_svg_to_png(drawing.as_svg(), None, scale = 2.0, return_bytes = True, shadow = drawing.shadow,
+                                 sticker = drawing.sticker, background = None if drawing.sticker else (1.0, 1.0, 1.0))
+        return png, {'width': drawing.drawing_obj.width, 'height': drawing.drawing_obj.height}
 
 
 def _finish_drawing(
@@ -1547,9 +1611,11 @@ def _finish_drawing(
                 ''.join(str(k.escaped_text or '') for k in el.children[0].children)).replace(' ', '')
             if (dy == '-0.5em' or dy == '-3.15em' and sym is not None) and text:
                 font = pdfmetrics.fonts[font_to_use + ('-Bold' if dy == '-3.15em' else '')]
-                ink = [[k / font.ttf.units_per_em for _, args in font.ttf.outline(font.ttf.gid(ch)) for k in
-                        args] or [
-                           0, 0] for ch in text]
+                for ch in text:
+                    if (font, ch) not in _GLYPH_INK:
+                        _GLYPH_INK[font, ch] = [k / font.ttf.units_per_em for _, args in
+                                                font.ttf.outline(font.ttf.gid(ch)) for k in args] or [0, 0]
+                ink = [_GLYPH_INK[font, ch] for ch in text]
                 ys = [k for g in ink for k in g[1::2]]
                 # At unit size: advance with glycorender's 0.05 em tracking, the side bearings of the first and last
                 # glyph, and the ink band about the baseline
@@ -1661,16 +1727,16 @@ def _finish_drawing(
         c_x, c_y = (x0 + x1) / 2, (y0 + y1) / 2
         d.args['transform'] = f'rotate(90 {c_x} {c_y})'
         x0, y0, x1, y1 = c_x - (y1 - y0) / 2, c_y - (x1 - x0) / 2, c_x + (y1 - y0) / 2, c_y + (x1 - x0) / 2
-    margin = dim * (0.45 if sticker else 0.35 if shadow else 0.2)
+    margin = _margin(dim, shadow = shadow, sticker = sticker)
     # Namespace the element IDs per drawing, so that several GlycoDraw SVGs inlined into one HTML document do not resolve each other's <use> references
     tag = hashlib.blake2s(repr(id_key).encode(), digest_size = 4).hexdigest()
     d2 = draw.Drawing(x1 - x0 + 2 * margin, y1 - y0 + 2 * margin, origin = (x0 - margin, y0 - margin),
                       id_prefix = f'g{tag}_')
     d2.append(d)
-    drawing = GlycanDrawing(d2, shadow = shadow, sticker = sticker, vertical = vertical, alt_text = alt_text)
+    drawing = GlycanDrawing(d2, shadow = shadow, sticker = sticker, vertical = vertical, alt_text = alt_text, dim = dim)
     if filepath:
         drawing.save(str(filepath).replace(in_glycan, re.sub(r'[<>:"/\\|?*]', '_', in_glycan)))
-    return drawing if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(
+    return drawing if suppress or filepath or _returns_drawing() else display_svg_with_matplotlib(
         d2, shadow = shadow, sticker = sticker)
 
 
@@ -1764,9 +1830,9 @@ def GlycoDraw(
         if per_residue:
             per_residue = per_residue + [0]
     cut = glycan.rfind('}') + 1 if '^' in glycan else 0
-    draw_this = glycan[:cut] + (
-        graph_to_string(glycan_to_nxGraph(glycan[cut:]), order_by = "linkage") if not glycan[cut:].startswith(
-            '[') else glycan[cut:])
+    # A repeat unit is laid out as written, so that its backbone stays the main chain; reordered by linkage, the chain could run into a branch, with the brackets around a side residue
+    draw_this = glycan[:cut] + (glycan[cut:] if glycan[cut:].startswith('[') or (repeat and not repeat_range) else graph_to_string(
+        glycan_to_nxGraph(glycan[cut:]), order_by = "linkage"))
     if per_residue:
         per_residue_by_node = process_per_residue(draw_this, per_residue, glycan)
     if highlight_linkages:
@@ -2129,10 +2195,10 @@ def plot_glycans_grid(
                                   text_anchor = 'middle', fill = col_dict_base['black']))
     alt_text = html.escape(f"SNFG diagrams of {len(glycans)} glycans: " + "; ".join(glycans) + ".")
     drawing = GlycanDrawing(grid, shadow = kwargs.get('shadow', False), sticker = kwargs.get('sticker', False),
-                            vertical = kwargs.get('vertical', False), alt_text = alt_text)
+                            vertical = kwargs.get('vertical', False), alt_text = alt_text, dim = dim)
     if filepath:
         drawing.save(filepath)
-    return drawing if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(
+    return drawing if suppress or filepath or _returns_drawing() else display_svg_with_matplotlib(
         grid, shadow = drawing.shadow, sticker = drawing.sticker)
 
 
@@ -2226,7 +2292,6 @@ def annotate_figure(
     matches = re.findall(r"<!--.*-->[\s\S]*?<\/g>", svg_tmp)
     # Prepare for appending
     svg_tmp = svg_tmp.replace('</svg>', '')
-    element_id = 0
     edit_svg = False
     drawn = []
     for match in matches:
@@ -2269,10 +2334,6 @@ def annotate_figure(
                 d = GlycoDraw(current_label, compact = compact, dim = _dim, suppress = True, restrict_vocab = True)
             svg_from_pdf = pdf_to_svg_bytes(d.as_svg())
             data = svg_from_pdf.replace('<?xml version="1.0" encoding="UTF-8"?>', '').replace('<?xml version="1.0"?>', '')
-            id_matches = re.findall(r'(?:font_\d+_\d+|d\d+)', data)
-            for idx in id_matches:
-                data = data.replace(idx, 'd' + str(element_id))
-                element_id += 1
             size = re.search(r'<svg[^>]*?width="([\d.]+)"[^>]*?height="([\d.]+)"', data)
             gw, gh = (float(size.group(1)) * glyc_scale, float(size.group(2)) * glyc_scale) if size else (0.0, 0.0)
             drawn.append((anchor[0], anchor[1] + glyc_offset * glyc_scale, gw, gh, anchor[0], anchor[1], data))
@@ -2357,11 +2418,14 @@ def plot_glycans_excel(
     for i, glycan_structure in enumerate(column):
         if isinstance(glycan_structure, (list, tuple)) and glycan_structure:
             glycan_structure = glycan_structure[0] if isinstance(glycan_structure[0], str) else glycan_structure[0][0]
-        if isinstance(glycan_structure, str) and glycan_structure:
+        hit = resolve_motif_name(glycan_structure) if isinstance(glycan_structure, str) and glycan_structure else None
+        if isinstance(glycan_structure, str) and glycan_structure and not (hit and hit[0].startswith('r')):
             # Generate glycan image using GlycoDraw
             try:
-                drawing = GlycoDraw(glycan_structure, compact = compact, suppress = True, restrict_vocab = True, **kwargs)
+                drawing = GlycoDraw(glycan_structure, **{'compact': compact, 'suppress': True, 'restrict_vocab': True, **kwargs})
             except Exception as e:
+                writer.close()
+                out.unlink()  # the writer holds the file open from its creation on, and a half-drawn workbook would pass for a finished export
                 raise ValueError(f"Could not draw the glycan in row {i + 2} of the sheet: {glycan_structure}") from e
             svg_data = drawing.as_svg()
             # Excel 2016+ draws the vector twin added below; other readers show the PNG, rasterized at 4x the
