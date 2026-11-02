@@ -14,6 +14,7 @@
 - `GlycanDrawing.as_sticker()` returns any drawing as a die-cut sticker, exactly as `GlycoDraw(..., sticker = True)` would have drawn it, e.g., for slides or pages with a dark background (0820c34)
 - frontends with a dark background can set `GLYCOWORK_DARK_DISPLAY=1`, and drawings then display, and inline with `as_markdown`, as die-cut stickers (0820c34)
 - frontends that show rich output outside Jupyter (such as an editor's console) can set `GLYCOWORK_RICH_DISPLAY=1`, and `GlycoDraw` and `plot_glycans_grid` then return their drawing instead of opening a matplotlib window (6957d6a)
+- `annotate_figure` can now also draws glycan fragments (185471b)
 
 ##### Changed 🔄
 - a sticker drawing (`sticker = True`) now displays on a transparent background in notebooks, so it looks the same in light and dark themes, instead of on a white box (0820c34)
