@@ -19,7 +19,7 @@ import numpy as np
 import struct
 import re
 from math import sin, cos, radians, sqrt, atan, degrees
-
+import ast
 
 # Adjusted SNFG color palette
 col_dict_base = {
@@ -130,6 +130,8 @@ _BOND_DIGIT = re.compile(r"^\d-\d")
 _CONF_PATTERN = re.compile(r'^L-|^D-|(\d,\d+lactone)')
 _LABEL_PATTERN = re.compile(r'<!--\s*(.*?)\s*-->')
 _TRANSFORM_PATTERN = re.compile(r'transform\s*=\s*"([^"]*)"')
+_FRAGMENT_NAME = re.compile(r'[0-9A-Z]+_\w+')
+_WILDCARD_LINKAGE = re.compile(r'[ab?]?[\d?]-[\d?](?:/[\d?])*')
 _CONF_DISPLAY = {'L-': 'L', 'D-': 'D', '1,7lactone': 'on'}
 _SEGMENT_PREFIXES = {'04', '15', '02', '13', '24', '35', '25', '03', '14'}
 _SVG_NUMBER = re.compile(r'-?\d+(?:\.\d+)?(?:e-?\d+)?')
@@ -2151,8 +2153,9 @@ def _drawable(glycan: str, # Candidate label
     "Mirrors GlycoDraw's own restrict_vocab test, so annotate_figure never rejects a label GlycoDraw can draw"
     if libr is None:
         libr = lib
-    return in_lib(glycan, expand_lib(libr, list(sugar_dict.keys())
-                                     + [k for k in min_process_glycans([glycan])[0] if '/' in k]))
+    return in_lib(glycan, expand_lib(libr, list(sugar_dict.keys()) + [
+        k for k in min_process_glycans([glycan])[0] if '/' in k and (
+            _WILDCARD_LINKAGE.fullmatch(k) or all(get_core(p) in sugar_dict for p in k.split('/')))]))
 
 
 def plot_glycans_grid(
@@ -2205,12 +2208,13 @@ def plot_glycans_grid(
 def _spread_glycans(placements: list, # (x, y, w, h, anchor_x, anchor_y) per glycan, (x, y) being its natural corner
                     canvas: tuple, # (width, height) of the figure
                     iterations: int = 300, # Relaxation passes
-                    pad: float = 4.0 # Minimum gap to open between boxes
+                    pad: float = 4.0, # Minimum gap to open between boxes
+                    fixed: list | tuple = () # (x, y, w, h) of boxes that stay where they are, such as text the glycans must not cover
                     ) -> list: # Settled top-left corners
-    "Nudges overlapping glycan boxes apart while keeping them near their anchors"
+    "Nudges overlapping glycan boxes apart, and off any fixed box, while keeping them near their anchors"
     pos = [[x, y] for x, y, _w, _h, _ax, _ay in placements]
     n = len(placements)
-    if n < 2:
+    if n < 2 and not fixed:
         return pos
     cw, ch = canvas
     for _ in range(iterations):
@@ -2232,6 +2236,17 @@ def _spread_glycans(placements: list, # (x, y, w, h, anchor_x, anchor_y) per gly
                     d = oy / 2.0 * (1 if yi < yj else -1)
                     pos[i][1] -= d
                     pos[j][1] += d
+            for fx, fy, fw, fh in fixed:
+                (xi, yi), wi, hi = pos[i], placements[i][2], placements[i][3]
+                ox = min(xi + wi, fx + fw) - max(xi, fx) + pad
+                oy = min(yi + hi, fy + fh) - max(yi, fy) + pad
+                if ox <= 0 or oy <= 0:
+                    continue
+                hot[i] = True
+                if oy < ox and 2 * fy + fh > 2 * yi + hi:
+                    pos[i][1] -= oy
+                else:
+                    pos[i][0] += ox if 2 * xi + wi > 2 * fx + fw else -ox
         for i, (x, y, w, h, _ax, _ay) in enumerate(placements):
             if not hot[i]:  # only drift home once this box has stopped colliding
                 pos[i][0] += (x - pos[i][0]) * 0.05
@@ -2256,6 +2271,35 @@ def _leader_line(anchor: tuple, # (x, y) of the data point
             'fill="none" stroke-linecap="round" />' % (ax, ay, cx, cy))
 
 
+def _text_box(match: str # SVG block of a text label that matplotlib drew as glyphs
+              ) -> tuple[float, float, float, float] | None: # (x, y, width, height), or None for a label without an upright position
+    "Estimates the box of a text label; matplotlib draws glyphs at 100 units per em, and digits stand about 0.75 em tall"
+    transform = _TRANSFORM_PATTERN.findall(match)
+    position = re.search(r'translate\(([-\d.e]+)[,\s]+([-\d.e]+)\)', transform[0]) if transform else None
+    if not position or 'rotate' in transform[0]:
+        return None
+    scale = re.search(r'scale\(([-\d.e]+)', transform[0])
+    scale = abs(float(scale.group(1))) if scale else 1.0
+    # Each glyph sits at the summed advances of those before it, so the last offset spans all but the last glyph,
+    # whose advance is taken as their mean
+    offsets = [float(k) for k in re.findall(r'<use [^>]*?translate\(([-\d.e]+)', match)]
+    n_glyphs = match.count('<use ')
+    width = (max(offsets) * n_glyphs / (n_glyphs - 1) if offsets and n_glyphs > 1 else 60.0 * n_glyphs) * scale
+    return float(position.group(1)), float(position.group(2)) - 75.0 * scale, width, 75.0 * scale
+
+
+def _fragment_label(label: str # Text of a figure label
+                    ) -> list[str] | None: # Its Domon-Costello names, or None if it is not a fragment label
+    "Reads a fragment label as CandyCrunch writes them into annotated spectra, a list such as ['Y_1_Alpha', 'M_H2O']"
+    try:
+        names = ast.literal_eval(label) if label.startswith('[') else None
+    except (ValueError, SyntaxError, TypeError):
+        names = None
+    # A list of lists is read flat, as fragment_to_fragIUPAC reads it
+    names = [k for sub in names for k in (sub if isinstance(sub, list) else [sub])] if isinstance(names, list) else []
+    return names if names and all(isinstance(k, str) and _FRAGMENT_NAME.fullmatch(k) for k in names) else None
+
+
 def annotate_figure(
         svg_input: str, # Input SVG file path
         scale_range: tuple[int, int] = (25, 80), # Min/max glycan dimensions
@@ -2265,10 +2309,17 @@ def annotate_figure(
         scale_by_DE_res: pd.DataFrame | None = None, # Differential expression results (motif_analysis.get_differential_expression)
         x_thresh: float = 1, # X metric threshold
         y_thresh: float = 0.05, # P-value threshold
-        x_metric: str = 'Log2FC' # X axis metric ('Log2FC', 'Effect size')
+        x_metric: str = 'Log2FC', # X axis metric ('Log2FC', 'Effect size')
+        glycan: str | None = None, # Glycan that the fragment labels of an annotated spectrum (e.g., ['Y_1_Alpha', 'B_3_Beta']) come from, so they are drawn as those fragments
+        **kwargs # Passed on to GlycoDraw for every drawing, e.g., vertical, show_linkage, highlight_motif
 ) -> str | None: # Modified SVG code
-    "Replaces text labels with glycan drawings in SVG figure"
+    "Replaces text labels with glycan drawings in SVG figure, and with glycan also the fragment labels of annotated spectra"
     from glycorender.render import pdf_to_svg_bytes
+    if glycan:
+        try:
+            from candycrunch.analysis import fragment_to_fragIUPAC
+        except ImportError as e:
+            raise ImportError("Annotating fragments needs candycrunch.analysis.fragment_to_fragIUPAC") from e
     glycan_size_dict = {'small': (0.1, -74), 'medium': (0.2, -55), 'large': (0.3, -49)}
     glyc_scale, glyc_offset = glycan_size_dict[glycan_size]
     glycan_scale = ''
@@ -2297,6 +2348,13 @@ def annotate_figure(
     for match in matches:
         # Keep track of current label and position in figure
         current_label = _LABEL_PATTERN.findall(match)[0]
+        fragment = _fragment_label(current_label) if glycan else None
+        if fragment is not None:
+            current_label = fragment_to_fragIUPAC(glycan, fragment)
+            if current_label is None:
+                if not any(k.startswith('I_') for k in fragment):
+                    warnings.warn(f"Could not draw {fragment} as a fragment of {glycan}")
+                continue
         if current_label.lower().startswith('terminal') and resolve_motif_name(current_label) is None:
             if _drawable(current_label.split('_')[-1]):
                 edit_svg = True
@@ -2304,9 +2362,9 @@ def annotate_figure(
         if _drawable(current_label):
             edit_svg = True
         try:
-            glycan = resolve_motif_name(current_label)[0]
-            if not glycan.startswith('r') and (_drawable(
-                    glycan) or "!" in glycan):  # glyco-regex motifs (r-prefixed) have no structure to draw, and their '!' is a lookbehind, not a negation
+            motif = resolve_motif_name(current_label)[0]
+            if not motif.startswith('r') and (_drawable(
+                     motif) or "!" in motif):  # glyco-regex motifs (r-prefixed) have no structure to draw, and their '!' is a lookbehind, not a negation
                 edit_svg = True
         except Exception:
             pass
@@ -2327,20 +2385,27 @@ def annotate_figure(
             svg_tmp = svg_tmp.replace(match, ''.join(re.findall(r'<defs>[\s\S]*?</defs>', match)))
             if glycan_scale == '' or current_label not in glycan_scale[
                 1]:  # a label the DE table does not rank still gets drawn, just unscaled
-                d = GlycoDraw(current_label, compact = compact, suppress = True, restrict_vocab = True)
+                d = GlycoDraw(current_label, compact = compact, suppress = True, restrict_vocab = True, **kwargs)
             else:
                 _dim = (scale_range[1] - scale_range[0]) * (
                         (glycan_scale[0][glycan_scale[1].index(current_label)] - _y_min) / _y_range) + scale_range[0]
-                d = GlycoDraw(current_label, compact = compact, dim = _dim, suppress = True, restrict_vocab = True)
+                d = GlycoDraw(current_label, compact = compact, suppress = True, restrict_vocab = True, **{**kwargs, 'dim': _dim})
             svg_from_pdf = pdf_to_svg_bytes(d.as_svg())
             data = svg_from_pdf.replace('<?xml version="1.0" encoding="UTF-8"?>', '').replace('<?xml version="1.0"?>', '')
             size = re.search(r'<svg[^>]*?width="([\d.]+)"[^>]*?height="([\d.]+)"', data)
             gw, gh = (float(size.group(1)) * glyc_scale, float(size.group(2)) * glyc_scale) if size else (0.0, 0.0)
-            drawn.append((anchor[0], anchor[1] + glyc_offset * glyc_scale, gw, gh, anchor[0], anchor[1], data))
+            if fragment is None:
+                drawn.append((anchor[0], anchor[1] + glyc_offset * glyc_scale, gw, gh, anchor[0], anchor[1], data))
+            else:
+                # A fragment stands on the baseline of the label it replaces centered at the label over its peak
+                box = _text_box(match)
+                center = box[0] + box[2] / 2 if box else anchor[0]
+                drawn.append((center - gw / 2, anchor[1] - gh, gw, gh, center, anchor[1], data))
         edit_svg = False
     canvas = re.search(r'<svg[^>]*?width="([\d.]+)[a-z]*"[^>]*?height="([\d.]+)[a-z]*"', svg_tmp)
     canvas = (float(canvas.group(1)), float(canvas.group(2))) if canvas else (1000.0, 1000.0)
-    for (_x, _y, gw, gh, ax, ay, data), (gx, gy) in zip(drawn, _spread_glycans([d[:6] for d in drawn], canvas)):
+    fixed = [box for match in matches if match in svg_tmp and (box := _text_box(match))] if glycan else []
+    for (_x, _y, gw, gh, ax, ay, data), (gx, gy) in zip(drawn, _spread_glycans([d[:6] for d in drawn], canvas, fixed = fixed)):
         svg_tmp += '\n' + _leader_line((ax, ay), (gx, gy, gw, gh))
         svg_tmp += '\n<g transform="translate(%.2f %.2f) scale(%s %s)">\n%s\n</g>' % (gx, gy, glyc_scale,
                                                                                       glyc_scale, data)
