@@ -15,7 +15,7 @@ for package in ('glycowork', 'glycorender'):
 icon = os.path.join(SPECPATH, 'glycowork.icns' if sys.platform == 'darwin' else 'glycowork.ico')
 # PyInstaller only collects the matplotlib backends named in a matplotlib.use() call (the worker's Agg), and savefig looks up the backend of each format by name
 a = Analysis([os.path.join(SPECPATH, 'glycowork_app.py')], datas = datas,
-             hiddenimports = ['openpyxl.cell._writer', 'scipy._cyutility', 'matplotlib.backends.backend_svg', 'matplotlib.backends.backend_pdf'],
+             hiddenimports = ['openpyxl.cell._writer', 'scipy._cyutility'],
              # The optional ml and chem dependencies, which the app never imports, the other Qt bindings, and test and notebook tooling
              excludes = ['torch', 'torch_geometric', 'xgboost', 'huggingface_hub', 'rdkit', 'py3Dmol', 'glycontact', 'glyles', 'pubchempy', 'tkinter', 'PyQt5',
                          'PyQt6', 'PySide2', 'IPython', 'notebook', 'jupyter_client', 'nbdev', 'pytest', 'pandas.tests', 'numpy.tests', 'scipy.io.tests'])

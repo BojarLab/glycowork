@@ -5,17 +5,6 @@ import pickle
 import pandas as pd
 import numpy as np
 import networkx as nx
-import matplotlib.pyplot as plt
-
-plt.rcParams.update({
-    'font.size': 11, 'axes.labelsize': 12, 'axes.titlesize': 13,
-    'xtick.labelsize': 10, 'ytick.labelsize': 10, 'axes.linewidth': 0.8,
-    'xtick.major.size': 4, 'ytick.major.size': 4, 'xtick.major.width': 0.8,
-    'ytick.major.width': 0.8, 'figure.facecolor': 'white', 'axes.facecolor': 'white',
-    'figure.dpi': 120, 'savefig.dpi': 300, 'savefig.bbox': 'tight',
-    'axes.prop_cycle': plt.cycler('color',
-                                  ['#2D6A9F', '#C84B55', '#3A9268', '#E8863A', '#7B5EA7', '#C4843A', '#4AADA8'])
-})
 from collections import Counter
 from math import comb
 from typing import Any, Callable
@@ -43,6 +32,7 @@ from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, create_
                                       load_lectin_lib, get_motif_dag, get_composition_dag, _motif_sequence,
                                       create_lectin_and_motif_mappings, lectin_motif_scoring, deduplicate_motifs)
 from glycowork.motif.graph import subgraph_isomorphism, glycan_to_nxGraph
+from glycowork.motif.draw import check_kwargs, finish, subplots, vc
 
 
 def _glycans_to_column(df: pd.DataFrame  # Abundance table, glycans in the first column or in the index
@@ -511,14 +501,15 @@ def get_heatmap(
         filepath: str | Path = '',  # Path to save plot
         index_col: str = 'glycan',  # Column to use as index
         custom_motifs: str | list[str] = [],  # Custom motifs if using 'custom' feature set
-        return_plot: bool = False,  # Return plot object
+        return_plot: bool = False,  # Return the viscose figure, the column names, and the transformed dataframe instead of showing or saving
         show_all: bool = False,  # Show all tick labels
         title: str | None = None,  # Plot title; None for none, as before
-        dist_func: str | Callable | None = None,  # scipy.spatial.distance metric name or callable on two vectors to cluster rows and columns with; None keeps seaborn's default euclidean
-        **kwargs: Any  # Keyword args passed to seaborn clustermap
-) -> tuple[Any, list[str], pd.DataFrame] | None:  # None or (plot object, column names, transformed dataframe) if return_plot=True
+        dist_func: str | Callable | None = None,  # scipy.spatial.distance metric name or callable on two vectors to cluster rows and columns with; None keeps the default euclidean
+        **kwargs: Any  # Keyword args passed to viscose.clustermap: figsize, palette, cmap, vmin, vmax, center, method, metric, row_cluster, col_cluster, row_linkage, col_linkage, xticklabels, yticklabels, colorbar, colorbar_label, subtitle
+) -> tuple[Any, list[str], pd.DataFrame] | None:  # None or (viscose figure, column names, transformed dataframe) if return_plot=True
     "Creates hierarchically clustered heatmap visualization of glycan/motif abundances"
-    import seaborn as sns
+    check_kwargs(kwargs, 'get_heatmap', ('figsize', 'palette', 'cmap', 'vmin', 'vmax', 'center', 'method', 'metric', 'row_cluster', 'col_cluster',
+                                         'row_linkage', 'col_linkage', 'xticklabels', 'yticklabels', 'colorbar', 'colorbar_label', 'subtitle'))
     df = _features_as_rows(df, index_col)
     if transform:
         df = df[(df > 0).sum(axis = 1) >= np.max([np.round(rarity_filter * df.shape[1]), 1])]
@@ -544,35 +535,26 @@ def get_heatmap(
         df = get_additive_logratio_transformation(df.reset_index(), df.columns.tolist(), [], paired = False, gamma = 0)
         df = df.set_index(df.columns[0])
     df = df.dropna(axis = 1)
-    if not (df < 0).any().any():
+    signed = (df < 0).any().any()
+    if not signed:
         df /= df.sum()
         df *= 100
-    else:  # centered at 0 by limits symmetric around it, which colors every value as seaborn's center = 0 does; center resamples the colormap through Colormap.set_bad, which matplotlib deprecates
-        vlim = np.abs(df.to_numpy()).max()
-        kwargs = {'cmap': 'icefire', 'vmin': -vlim, 'vmax': vlim, **kwargs}
     # Cluster the abundances
     if dist_func is not None:
         from scipy.cluster.hierarchy import linkage
         method = kwargs.pop('method', 'average')
         kwargs = {'row_linkage': linkage(pdist(df.values, metric = dist_func), method = method),
                   'col_linkage': linkage(pdist(df.values.T, metric = dist_func), method = method), **kwargs}
-    ticklabels = {'yticklabels': True, 'xticklabels': True} if show_all else {}
-    combined_kwargs = {**ticklabels, **kwargs}
-    g = sns.clustermap(df, **combined_kwargs)
-    if max(len(str(label)) for label in df.index) > 100:
-        g.ax_heatmap.set_yticklabels(g.ax_heatmap.get_yticklabels(), fontsize = 6)
-    g.ax_heatmap.set_xlabel('Samples')
-    g.ax_heatmap.set_ylabel('Glycans' if not motifs else 'Motifs')
-    if title is not None:
-        g.fig.suptitle(title)
-    plt.tight_layout()
+    # Signed values (CLR, ALR) diverge from 0; everything else is a magnitude
+    kwargs = {'figsize': (10, 10), 'cmap': 'diverging' if signed else 'sequential', **kwargs}
+    fig, _ = vc.clustermap(df, show_all = show_all, xlabel = 'Samples', ylabel = 'Glycans' if not motifs else 'Motifs',
+                           title = '' if title is None else title, **kwargs)
     if filepath and not return_plot:
-        plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
-        plt.close(g.fig)
+        fig.save(filepath)
     elif return_plot:
-        return g, df.columns.tolist(), df
+        return fig, df.columns.tolist(), df
     else:
-        plt.show()
+        fig.show()
 
 
 def get_distance_matrix(
@@ -616,13 +598,13 @@ def plot_embeddings(
         shape_feature: str | None = None,  # Monosaccharide/bond for point shapes
         filepath: str | Path = '',  # Path to save plot
         alpha: float = 0.8,  # Point transparency
-        palette: str = 'colorblind',  # Color palette for groups
+        palette: str | None = None,  # viscose palette ('aura', 'lumen', 'couture', 'poster'); None for the current default
         title: str | None = None,  # Plot title; None for none, as before
-        **kwargs: Any  # Keyword args passed to seaborn scatterplot
+        **kwargs: Any  # Keyword args passed to viscose's scatter: s, size, sizes, marker, edge
 ) -> None:
     "Visualizes learned glycan embeddings using t-SNE dimensionality reduction with optional group coloring"
-    import seaborn as sns
     from sklearn.manifold import TSNE
+    check_kwargs(kwargs, 'plot_embeddings', ('s', 'size', 'sizes', 'marker', 'edge'))
     idx = [i for i, g in enumerate(glycans) if '{' not in g]
     glycans = [glycans[i] for i in idx]
     if label_list is not None:
@@ -643,20 +625,11 @@ def plot_embeddings(
     if shape_feature is not None:
         markers = {shape_feature: "X", "Absent": "o"}
         shape_feature = [shape_feature if shape_feature in nx.get_node_attributes(glycan_to_nxGraph(g), 'string_labels').values() else 'Absent' for g in glycans]  # whole monosaccharides and linkages: 'Gal' is not in GalNAc
-    sns.scatterplot(x = embs[:, 0], y = embs[:, 1], hue = label_list if label_list is not None else None,
-                    palette = palette if label_list is not None else None, style = shape_feature,
-                    markers = markers, alpha = alpha, **kwargs)
-    sns.despine(left = True, bottom = True)
-    plt.xlabel('Dim1')
-    plt.ylabel('Dim2')
-    if label_list is not None:
-        plt.legend(bbox_to_anchor = (1.05, 1), loc = 2, borderaxespad = 0.)
-    if title is not None:
-        plt.title(title)
-    plt.tight_layout()
-    if filepath:
-        plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
-    plt.show()
+    fig, ax = subplots(palette = palette)
+    ax.scatter(embs[:, 0], embs[:, 1], hue = label_list, style = shape_feature, markers = markers, alpha = alpha, hue_label = 'Label',
+               style_label = 'Feature', **kwargs)
+    ax.set(xlabel = 'Dim1', ylabel = 'Dim2', title = '' if title is None else title)
+    finish(fig, filepath = filepath)
 
 
 def characterize_monosaccharide(
@@ -671,7 +644,6 @@ def characterize_monosaccharide(
         title: str | None = None  # Plot title; None keeps the default, '' removes it
 ) -> None:
     "Analyzes connectivity and modification patterns of specified monosaccharides/linkages in glycan sequences"
-    import seaborn as sns
     if mode not in ('sugar', 'bond', 'sugarbond'):
         raise ValueError(f"mode has to be 'sugar', 'bond', or 'sugarbond', got '{mode}'.")
     if modifications and mode == 'bond':
@@ -715,7 +687,8 @@ def characterize_monosaccharide(
         raise ValueError(f"'{sugar}' never occurs in mode = '{mode}' in this dataset; check the spelling (e.g., 'Neu5Ac' not 'NeuAc', 'a2-3' not 'alpha2-3') and that mode matches what you passed ('bond' expects a linkage, 'sugar'/'sugarbond' a monosaccharide).")
     cou_v = [v / len(pool) for v in cou_v]
     # Start plotting
-    fig, (a0, a1) = plt.subplots(1, 2, figsize = (8, 4), gridspec_kw = {'width_ratios': [1, 1]})
+    fig, axes = subplots(1, 2 if modifications else 1, figsize = (8, 4))
+    a0, a1 = axes if modifications else (None, axes)
     if modifications:
         # Get counts and proportions for the input monosaccharide + its modifications
         cou2 = Counter(sugars).most_common()
@@ -723,54 +696,27 @@ def characterize_monosaccharide(
         cou_k2, cou_v2 = zip(*filtered_items) if filtered_items else ((), ())
         cou_v2 = [v / len(sugars) for v in cou_v2]
         # Map the input monosaccharide + its modifications to colors
-        color_list = plt.get_cmap('tab20')
-        color_map = {key: color_list(idx / len(cou_k2)) for idx, key in enumerate(cou_k2)}
-        palette = [color_map[k] for k in cou_k2]
+        palette = fig.pal.contrast(len(cou_k2))
         # Start linking downstream monosaccharides / linkages to the input monosaccharide + its modifications
         pos, cou_k_set, by_key = 2 if mode == 'sugar' else 1, set(cou_k), {}
         for k in pool_in_split:
             if k[pos] in cou_k_set:
                 by_key.setdefault(k[0], []).append(k[pos])
-        cou_for_df = []
-        for key in cou_k2:
-            counts = Counter(by_key.get(key, []))
-            cou_v_t = [counts.get(item, 0) for item in cou_k]
-            if len(cou_k2) > 1:
-                cou_for_df.append(
-                    pd.DataFrame({'monosaccharides': cou_k, 'counts': cou_v_t, 'colors': [key] * len(cou_k)}))
-            else:
-                sns.barplot(x = cou_k, y = cou_v_t, ax = a1, color = "#2D6A9F")
-        if len(cou_k2) > 1:
-            cou_df = pd.concat(cou_for_df).reset_index(drop = True)
-            sns.histplot(data = cou_df, x = 'monosaccharides', hue = 'colors', weights = 'counts',
-                         multiple = 'stack', palette = palette, ax = a1, legend = False, shrink = 0.8)
+        cou_stack = [[Counter(by_key.get(key, [])).get(item, 0) for key in cou_k2] for item in cou_k]
+        if cou_stack and cou_k2:
+            a1.stacked_bar(cou_k, cou_stack, colors = palette)
         a1.set_ylabel('Absolute Occurrence')
     else:
-        sns.barplot(x = cou_k, y = cou_v, ax = a1, color = "#2D6A9F")
+        a1.bar(cou_k, cou_v, color = 'a1')
         a1.set_ylabel('Relative Proportion')
-    sns.despine(left = True, bottom = True)
-    a1.set_xlabel('')
     a1.set_title(f'{sugar} and variants are connected to')
-    plt.setp(a1.get_xticklabels(), rotation = 'vertical')
     # Confusingly, this second plot block refers to the *first* plot, depicting the input monosaccharide + its modifications
     if modifications:
-        if len(cou_k2) > 1:
-            cou_df2 = pd.DataFrame({'monosaccharides': cou_k2, 'counts': cou_v2})
-            sns.histplot(data = cou_df2, x = 'monosaccharides', weights = 'counts',
-                         hue = 'monosaccharides', shrink = 0.8, legend = False, ax = a0, palette = palette,
-                         alpha = 0.75)
-        else:
-            sns.barplot(x = cou_k2, y = cou_v2, ax = a0, color = "#2D6A9F")
-        sns.despine(left = True, bottom = True)
+        a0.bar(cou_k2, cou_v2, color = palette)
         a0.set_ylabel('Relative Proportion')
-        a0.set_xlabel('')
         a0.set_title(f'Observed Modifications of {sugar}')
-        plt.setp(a0.get_xticklabels(), rotation = 'vertical')
     fig.suptitle(f'Characterizing {sugar}' if title is None else title)
-    fig.tight_layout()
-    if filepath:
-        plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
-    plt.show()
+    finish(fig, filepath = filepath)
 
 
 @_abundance_input('df')
@@ -780,19 +726,16 @@ def get_coverage(
         title: str | None = None  # Plot title; None for none, as before
 ) -> None:
     "Visualizes glycan detection frequency across samples with intensity-based ordering"
-    import seaborn as sns
     d = df.iloc[:, 1:]
     # arrange by mean intensity across all samples
     order = d.mean(axis = 1).sort_values().index
     # plot figure
-    ax = sns.heatmap(d.loc[order], cmap = sns.color_palette("mako", as_cmap = True),
-                     cbar_kws = {'label': 'Relative Intensity', 'shrink': 0.5},
-                     cbar = True, mask = d.loc[order] == 0, linewidths = 0, rasterized = True)
+    fig, ax = subplots()
+    ax.heatmap(d.loc[order].replace(0, np.nan), d.columns, order, cmap = 'sequential', labels_right = False,
+               colorbar = True, colorbar_label = 'Relative Intensity')
     ax.set(xlabel = 'Samples', ylabel = 'Glycan ID', title = '' if title is None else title)
     # save figure
-    if filepath:
-        plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
-    plt.show()
+    finish(fig, filepath = filepath)
 
 
 @_abundance_input('df')
@@ -814,7 +757,6 @@ def get_pca(
         title: str | None = None  # Plot title; None for none, as before
 ) -> None:
     "Performs PCA on glycan/motif abundance data with group-based visualization"
-    import seaborn as sns
     from sklearn.decomposition import PCA
     from sklearn.preprocessing import StandardScaler
     df = df.fillna(0)
@@ -857,25 +799,21 @@ def get_pca(
     if isinstance(groups, list):
         color = groups
     # make plot
-    _, axes = plt.subplots(1, 2) if eigenvalues else plt.subplots()
+    fig, axes = subplots(1, 2, figsize = (11, 4.8)) if eigenvalues else subplots()
     ax = axes[0] if eigenvalues else axes
-    sns.scatterplot(x = pc_x - 1, y = pc_y - 1, data = df_pca, hue = color, style = shape, size = size, ax = ax)
+    # A metadata column by name, or one label per sample
+    hue, style, sizes = (df_pca[v].values if isinstance(v, str) else v or None for v in (color, shape, size))
+    ax.scatter(df_pca[pc_x - 1], df_pca[pc_y - 1], hue = hue, style = style, size = sizes, hue_label = color if isinstance(color, str) else 'Group',
+               style_label = shape, size_label = size)
     ax.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance',
            ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
     if title is not None:
         ax.set_title(title)
-    if color or shape or size:
-        ax.legend(bbox_to_anchor = (1.05, 1), loc = 'upper left', borderaxespad = 0)
     if eigenvalues:
-        axes[1].bar(x = range(1, len(percent_var) + 1), height = percent_var, tick_label = percent_var_labels, edgecolor = "black", linewidth = 1)
+        axes[1].bar(percent_var_labels, percent_var, color = 'a1')
         axes[1].set(ylabel = 'Explained Variance (%)', xlabel = 'Principal Component')
-        axes[1].tick_params(axis = "x", labelrotation = 45)
-        axes[1].grid(visible = False)
-    sns.despine()
-    if filepath:
-        plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
-    plt.show()
-    plt.close()
+        axes[1].set_xticks(range(len(percent_var)), percent_var_labels, rotation = 45)
+    finish(fig, filepath = filepath)
 
 
 def get_pcoa(
@@ -894,7 +832,6 @@ def get_pcoa(
         title: str | None = None  # Plot title; None for none
 ) -> pd.DataFrame:  # Sample coordinates on all principal coordinates, explained variance and PERMANOVA in .attrs
     "Performs principal coordinate analysis (PCoA) on any sample distance matrix with group-based visualization and PERMANOVA"
-    import seaborn as sns
     if isinstance(df, (str, Path)):
         df = read_abundances(df)
     if df.shape[0] == df.shape[1] and df.index.equals(df.columns):
@@ -922,9 +859,9 @@ def get_pcoa(
     coords = pd.DataFrame(vecs[:, keep] * np.sqrt(vals[keep]), index = dm.index,
                           columns = [f'PCo{i + 1}' for i in range(keep.sum())])
     coords.attrs['explained_variance'] = vals[keep] / vals[keep].sum()
-    _, ax = plt.subplots()
-    sns.scatterplot(x = coords.iloc[:, pco_x - 1].values, y = coords.iloc[:, pco_y - 1].values,
-                    hue = [str(g) for g in groups] if groups is not None else None, ax = ax)
+    fig, ax = subplots()
+    ax.scatter(coords.iloc[:, pco_x - 1].values, coords.iloc[:, pco_y - 1].values,
+               hue = [str(g) for g in groups] if groups is not None else None)
     ax.set(xlabel = f'PCo{pco_x}: {coords.attrs["explained_variance"][pco_x - 1] * 100:.1f}% variance',
            ylabel = f'PCo{pco_y}: {coords.attrs["explained_variance"][pco_y - 1] * 100:.1f}% variance')
     if groups is not None:
@@ -935,15 +872,13 @@ def get_pcoa(
                                                                    random_state = random_state)
             ax.text(0.02, 0.98,
                     f'PERMANOVA F = {coords.attrs["permanova"][0]:.2f}, p = {coords.attrs["permanova"][1]:.3g}',
-                    transform = ax.transAxes, va = 'top')
-        ax.legend(bbox_to_anchor = (1.05, 1), loc = 'upper left', borderaxespad = 0)
+                    axes_fraction = True, va = 'top')
+            # A band of its own above the points
+            y_lo, y_hi = coords.iloc[:, pco_y - 1].min(), coords.iloc[:, pco_y - 1].max()
+            ax.set_ylim(y_lo - 0.05 * (y_hi - y_lo), y_hi + 0.15 * (y_hi - y_lo))
     if title is not None:
         ax.set_title(title)
-    sns.despine()
-    if filepath:
-        plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
-    plt.show()
-    plt.close()
+    finish(fig, filepath = filepath)
     return coords
 
 
@@ -1297,16 +1232,13 @@ def get_pval_distribution(
         title: str | None = None  # Plot title; None for none, as before
 ) -> None:
     "Creates histogram of p-values from differential expression analysis"
-    import seaborn as sns
     df_res = _read_results(df_res)
     # make plot
-    ax = sns.histplot(x = 'p-val', data = df_res, stat = 'frequency')
+    fig, ax = subplots()
+    ax.hist(df_res['p-val'], bins = 'auto', color = 'a1', frequency = True)
     ax.set(xlabel = 'p-values', ylabel = 'Frequency', title = '' if title is None else title)
-    sns.despine(left = True, bottom = True)
     # save to file
-    if filepath:
-        plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
-    plt.show()
+    finish(fig, filepath = filepath)
 
 
 def get_ma(
@@ -1317,7 +1249,6 @@ def get_ma(
         title: str | None = None  # Plot title; default: the dataset name the analysis stamped on df_res, '' for none
 ) -> None:
     "Generates MA plot (mean abundance vs log2 fold change) from differential expression results"
-    import seaborn as sns
     df_res = _read_results(df_res)
     if 'Log2FC' not in df_res.columns and 'glycoforms' in df_res.attrs:
         df_res = df_res.attrs['glycoforms']  # glycoproteomics results are per glycosite, without abundances or fold changes; the glycoform table they were built from has both
@@ -1325,20 +1256,16 @@ def get_ma(
         sig_thresh = df_res.attrs.get('alpha', 0.05)
     # Create masks for significant and non-significant points
     sig_mask = (abs(df_res['Log2FC']) > log2fc_thresh) & (df_res['corr p-val'] < sig_thresh)
-    ax = sns.scatterplot(x = 'Mean abundance', y = 'Log2FC', data = df_res[~sig_mask],
-                         color = '#CCCCCC', alpha = 0.5, s = 20, linewidth = 0)
-    sns.scatterplot(x = 'Mean abundance', y = 'Log2FC', data = df_res[sig_mask & (df_res['Log2FC'] > 0)],
-                    color = '#C84B55', alpha = 0.9, s = 30, linewidth = 0, ax = ax)
-    sns.scatterplot(x = 'Mean abundance', y = 'Log2FC', data = df_res[sig_mask & (df_res['Log2FC'] <= 0)],
-                    color = '#2D6A9F', alpha = 0.9, s = 30, linewidth = 0, ax = ax)
-    ax.axhline(0, color = '#888888', ls = '--', lw = 0.8, alpha = 0.5)
+    fig, ax = subplots()
+    x, y = df_res['Mean abundance'].values, df_res['Log2FC'].values
+    ax.scatter(x[~sig_mask], y[~sig_mask], color = 'a3', s = 20)
+    ax.scatter(x[sig_mask & (y > 0)], y[sig_mask & (y > 0)], color = 'a1', alpha = 0.9, s = 30)
+    ax.scatter(x[sig_mask & (y <= 0)], y[sig_mask & (y <= 0)], color = 'b1', alpha = 0.9, s = 30)
+    ax.axhline(0)
     ax.set(xlabel = 'Mean Abundance', ylabel = 'Log2FC',
            title = df_res.attrs.get('dataset', '') if title is None else title)
-    sns.despine(left = True, bottom = True)
     # save to file
-    if filepath:
-        plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
-    plt.show()
+    finish(fig, filepath = filepath)
 
 
 def get_volcano(
@@ -1351,16 +1278,19 @@ def get_volcano(
         annotate_volcano: bool = True,  # Annotate dots with SNFG images
         filepath: str | Path = '',  # Path to save plot
         title: str | None = None,  # Plot title; default: the dataset name the analysis stamped on df_res, '' for none
-        **kwargs: Any  # Keyword args passed to seaborn scatterplot
+        **kwargs: Any  # Keyword args passed to viscose's scatter: s, alpha, marker, edge
 ) -> None:  # Displays volcano plot, or returns it as a Jupyter-renderable SVG when annotate_volcano
     "Creates volcano plot showing -log10(FDR-corrected p-values) vs Log2FC or effect size"
-    import seaborn as sns
+    kwargs.pop('color', None)
+    kwargs.pop('hue', None)
+    check_kwargs(kwargs, 'get_volcano', ('s', 'alpha', 'marker', 'edge'))
+    kwargs = {'s': 25, 'alpha': 0.85, **kwargs}
     df_res = _read_results(df_res)
     df_res = df_res.copy()
     if x_metric == 'Log2FC' and 'Log2FC' not in df_res.columns and 'Effect size' in df_res.columns:
         x_metric = 'Effect size'  # get_differential_expression on glycoforms returns one row per glycosite, with a mean effect size but no fold change
     p = df_res['corr p-val'].to_numpy(dtype = float)
-    df_res['corr p-val'] = np.where(p == 0, p[p > 0].min() if (p > 0).any() else 1e-300, p)  # an underflowed 0 (Fisher's combination over a large glycosite) has an infinite -log10, which matplotlib drops and the SNFG scaling divides by
+    df_res['corr p-val'] = np.where(p == 0, p[p > 0].min() if (p > 0).any() else 1e-300, p)  # an underflowed 0 (Fisher's combination over a large glycosite) has an infinite -log10, which no axis can show and the SNFG scaling divides by
     df_res['log_p'] = -np.log10(df_res['corr p-val'].values)
     x = df_res[x_metric].values
     y = df_res['log_p'].values
@@ -1370,36 +1300,26 @@ def get_volcano(
     if y_thresh is None:
         y_thresh = get_alphaN(n) if n else df_res.attrs.get('alpha', 0.05)
     # Make plot
-    kwargs.pop('color', None)
-    kwargs.pop('hue', None)
-    sig = (df_res['log_p'] > -np.log10(y_thresh)) & (df_res[x_metric].abs() > x_thresh)  # the hits the threshold lines frame and label_changed labels
-    df_res['_cat'] = np.where(sig & (df_res[x_metric] > 0), 'up', np.where(sig, 'down', 'ns'))
-    ax = sns.scatterplot(x = x_metric, y = 'log_p', data = df_res, hue = '_cat',
-                         palette = {'up': '#C84B55', 'down': '#2D6A9F', 'ns': '#BBBBBB'},
-                         alpha = 0.85, s = 25, linewidth = 0, legend = False, **kwargs)
-    df_res.drop('_cat', axis = 1, inplace = True)
+    sig = (y > -np.log10(y_thresh)) & (np.abs(x) > x_thresh)  # the hits the threshold lines frame and label_changed labels
+    fig, ax = subplots()
+    ax.scatter(x[~sig], y[~sig], color = 'a3', **kwargs)
+    ax.scatter(x[sig & (x <= 0)], y[sig & (x <= 0)], color = 'b1', **kwargs)
+    ax.scatter(x[sig & (x > 0)], y[sig & (x > 0)], color = 'a1', **kwargs)
     ax.set(xlabel = x_metric, ylabel = '-log10(corr p-val)',
            title = df_res.attrs.get('dataset', '') if title is None else title)
-    plt.axhline(y = -np.log10(y_thresh), c = '#888888', ls = '--', lw = 0.8, alpha = 0.5)
-    plt.axvline(x = x_thresh, c = '#888888', ls = '--', lw = 0.8, alpha = 0.5)
-    plt.axvline(x = -x_thresh, c = '#888888', ls = '--', lw = 0.8, alpha = 0.5)
-    sns.despine(bottom = True, left = True)
+    ax.axhline(-np.log10(y_thresh))
+    ax.axvline(x_thresh)
+    ax.axvline(-x_thresh)
     # Text labels
     if label_changed:
-        for i in np.where((y > -np.log10(y_thresh)) & (np.abs(x) > x_thresh))[0]:
-            plt.text(x[i], y[i], labels[i], fontsize = 8, alpha = 0.85,
-                     bbox = dict(boxstyle = 'round,pad=0.15', facecolor = 'white', alpha = 0.5, linewidth = 0))
+        for i in np.where(sig)[0]:
+            ax.annotate(labels[i], (x[i], y[i]), size = 8, va = 'baseline', svg_label = annotate_volcano)
     # Save to file
     if annotate_volcano:
-        import tempfile
         from glycowork.motif.draw import annotate_figure, is_jupyter
-        with tempfile.TemporaryDirectory() as tmp:
-            svg_temp = str(Path(tmp) / 'volcano_temp.svg')
-            plt.savefig(svg_temp, format = 'svg', bbox_inches = 'tight')
-            plt.close()
-            svg = annotate_figure(svg_temp, filepath = filepath, scale_by_DE_res = df_res, y_thresh = y_thresh,
-                                  x_thresh = x_thresh, x_metric = x_metric)
-        # what matplotlib would show here is the unannotated figure, so hand back the annotated SVG instead
+        svg = annotate_figure(fig.to_svg(), filepath = filepath, scale_by_DE_res = df_res, y_thresh = y_thresh,
+                              x_thresh = x_thresh, x_metric = x_metric)
+        # what fig.show() would show here is the unannotated figure, so hand back the annotated SVG instead
         if svg is None and Path(filepath).suffix.lower() == '.svg':
             svg = Path(filepath).read_text(encoding = 'utf-8')
         if svg and is_jupyter():
@@ -1409,10 +1329,7 @@ def get_volcano(
             from glycowork.motif.draw import display_svg_with_matplotlib
             display_svg_with_matplotlib(svg)
         return
-    if filepath:
-        plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
-    plt.show()
-    plt.close()
+    finish(fig, filepath = filepath)
 
 
 @_abundance_input('df')
@@ -1618,22 +1535,17 @@ def get_meta_analysis(
         df_temp['lower'] = df_temp['EffectSize'] - 1.96 * standard_error
         df_temp['upper'] = df_temp['EffectSize'] + 1.96 * standard_error
         # Create a new figure and a axes to plot on
-        _, ax = plt.subplots(figsize = (7, max(len(df_temp) * 0.55, 3)))
+        fig, ax = subplots(figsize = (7, max(len(df_temp) * 0.55, 3)))
         y_pos = np.arange(len(df_temp))
-        ax.hlines(y_pos, df_temp['lower'], df_temp['upper'], color = '#2D6A9F', lw = 2.5, alpha = 0.6)
-        ax.scatter(df_temp['EffectSize'], y_pos, color = '#2D6A9F', s = 55, zorder = 3)
-        ax.axvline(0, color = '#888888', ls = '--', lw = 0.9, alpha = 0.7)
-        ax.set_yticks(y_pos)
-        ax.set_yticklabels(df_temp['Study'])
+        ax.hlines(y_pos, df_temp['lower'], df_temp['upper'], color = 'a1', lw = 2.5, alpha = 0.6)
+        ax.scatter(df_temp['EffectSize'], y_pos, color = 'a1', s = 55)
+        ax.axvline(0)
+        ax.set_yticks(y_pos, df_temp['Study'])
         ax.invert_yaxis()
         ax.set_xlabel('Effect size')
-        for spine in ['right', 'top', 'left']:
-            ax.spines[spine].set_visible(False)
-        ax.tick_params(left = False)
         if title is not None:
             ax.set_title(title)
-        plt.tight_layout()
-        plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
+        fig.save(filepath)
     return res if full_output else (combined_effect_size, p_value)
 
 
@@ -2195,6 +2107,20 @@ def get_SparCC(
     return correlation_df, p_value_df
 
 
+def _plot_roc(fpr: np.ndarray,  # False positive rates
+              tpr: np.ndarray,  # True positive rates
+              roc_auc: float,  # Area under the curve
+              title: str  # Plot title
+              ) -> Any:  # viscose figure
+    "Draws a ROC curve with its legend and the diagonal of chance"
+    fig, ax = subplots()
+    ax.plot([0, 1], [0, 1], color = 'muted', lw = 1.2, dash = (4, 3))
+    ax.plot(fpr, tpr, color = 'a1', label = f'ROC Curve (area = {roc_auc:.2f})')
+    ax.set(xlabel = 'False Positive Rate', ylabel = 'True Positive Rate', title = title)
+    ax.legend('lower right')
+    return fig
+
+
 def multi_feature_scoring(
         df: pd.DataFrame,  # Transformed dataframe with glycans in rows, abundances in columns
         group1: list[str | int],  # First group indices/names
@@ -2239,15 +2165,7 @@ def multi_feature_scoring(
     roc_auc = roc_auc_score(y, y_scores)
     # Plot ROC curve
     fpr, tpr, _ = roc_curve(y, y_scores)
-    plt.figure()
-    plt.plot(fpr, tpr, label = f'ROC Curve (area = {roc_auc:.2f})')
-    plt.plot([0, 1], [0, 1], 'r--')
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title('ROC Curve with Optimal Features' if title is None else title)
-    plt.legend(loc = "lower right")
-    if filepath:
-        plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
+    finish(_plot_roc(fpr, tpr, roc_auc, 'ROC Curve with Optimal Features' if title is None else title), filepath = filepath)
     return model, roc_auc, selected_features
 
 
@@ -2304,15 +2222,7 @@ def get_roc(
         y_true = [0] * len(values_group1) + [1] * len(values_group2)
         y_scores = np.concatenate([values_group1, values_group2])
         fpr, tpr, _ = roc_curve(y_true, y_scores)
-        plt.figure()
-        plt.plot(fpr, tpr, label = f'ROC Curve (area = {res:.2f})')
-        plt.plot([0, 1], [0, 1], 'r--')
-        plt.xlabel('False Positive Rate')
-        plt.ylabel('True Positive Rate')
-        plt.title(f'ROC Curve for {best}' if title is None else title)
-        plt.legend(loc = 'lower right')
-        if filepath:
-            plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
+        finish(_plot_roc(fpr, tpr, res, f'ROC Curve for {best}' if title is None else title), filepath = filepath)
     else:  # multi-group comparison
         classes = list(dict.fromkeys(group1))  # first-appearance order; a set's order changes with PYTHONHASHSEED
         df = df.groupby(df.index).mean()
@@ -2342,20 +2252,9 @@ def get_roc(
                     best_tpr[classes[i]] = tpr
         # Plot average ROC curves for the best features
         for classy, (best_feature, best_auc) in sorted_auc_scores.items():
-            plt.figure()
-            plt.plot(best_fpr[classy], best_tpr[classy], label = f'ROC curve (area = {best_auc:.2f})')
-            plt.plot([0, 1], [0, 1], 'k--')
-            plt.xlim([0.0, 1.0])
-            plt.ylim([0.0, 1.05])
-            plt.xlabel('False Positive Rate')
-            plt.ylabel('True Positive Rate')
-            plt.title(f'Best Feature ROC for {classy}: {best_feature}' if title is None else title)
-            plt.legend(loc = "lower right")
-            if filepath:
-                filepath = Path(filepath)
-                plt.savefig(filepath.with_name(f"{filepath.stem}_{classy}{filepath.suffix}"), format = filepath.suffix[1:], dpi = 300,
-                            bbox_inches = 'tight')
-    plt.show()
+            finish(_plot_roc(best_fpr[classy], best_tpr[classy], best_auc,
+                             f'Best Feature ROC for {classy}: {best_feature}' if title is None else title),
+                   filepath = Path(filepath).with_name(f"{Path(filepath).stem}_{classy}{Path(filepath).suffix}") if filepath else '')
     return sorted_auc_scores
 
 

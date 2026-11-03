@@ -174,7 +174,7 @@ plot_network(net, draw_glycans=True)
 - `mz_to_composition` needs the ion mode via the sign of `max_charge` and a `glycan_class`; pass `modification` (`reduced`, `2AA`, `2AB`, `procainamide`, `PA`) and `sample_prep` (`permethylated`, `peracetylated`) when they apply.
 - Linkage-specific sialic acid derivatization (EE, EEA, ME, DMA, SALSA, or a pair of `SIALIC_PRODUCTS`): compositions keep the linkage as `Neu5Ac_a2-6`/`Neu5Ac_a2-3` (shorthand `E`/`L`, as in `H5N4E1L1`; LaCyTools, GlycoGenius, GlyCombo and GlyHunter derivative codes map onto them and are no longer folded into `A`), and their masses need `sialic_derivatization=` on `composition_to_mass`, `glycan_to_mass`, `mz_to_composition` or `mz_to_structures`; `sialic_linkage_splits` and `resolve_sialic_linkages` go between plain and linkage-resolved compositions and structures.
 - For Oxford-style N-glycan names (`A2G2S2`, `FA2`, `M5`), `canonicalize_iupac` expands them to full structures; do not maintain a lookup table.
-- Plots return matplotlib figures and display in Jupyter; set `filepath=` to save (SVG/PDF keep the SNFG drawings vectorial).
+- Plots are drawn with viscose (default palette Aura; `viscose.set_palette('poster')` picks another) and display in Jupyter; set `filepath=` to save as .png, .pdf, or .svg (SVG/PDF keep the SNFG drawings vectorial).
 
 ## Citation
 

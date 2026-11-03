@@ -7,6 +7,7 @@ from typing import Callable
 from functools import lru_cache
 from glycowork.glycan_data.loader import GlycoList, resolve_motif_name
 from glycowork.motif.graph import subgraph_isomorphism
+from glycowork.motif.draw import finish, subplots
 
 # Get the directory and filename of the current script
 this_dir = Path(__file__).parent
@@ -121,26 +122,20 @@ def dendrogram_from_distance(dm: pd.DataFrame, # Rank x rank distance matrix (e.
     "Plot dendrogram from distance matrix"
     from scipy.cluster.hierarchy import dendrogram, linkage
     from scipy.spatial.distance import squareform
-    import matplotlib.pyplot as plt
     # Hierarchical clustering on the distance matrix
     Z = linkage(squareform(dm.values))
-    plt.figure(figsize = (10, 10))
-    plt.title('Hierarchical Clustering Dendrogram')
-    plt.xlabel('Distance')
-    plt.ylabel(ylabel)
-    dendrogram(
+    tree = dendrogram(
         Z,
+        no_plot = True,
         truncate_mode = 'lastp',  # Show only the last p merged clusters
-        orientation = 'left',
         p = 300,  # Show only the last p merged clusters
         show_leaf_counts = False,  # Otherwise numbers in brackets are counts
-        leaf_rotation = 0.,
         labels = dm.columns.tolist(),
-        leaf_font_size = 11.,
-        show_contracted = True,  # To get a distribution impression in truncated branches
     )
-    if filepath:
-        plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
+    fig, ax = subplots(figsize = (10, 10))
+    ax.dendrogram(tree['icoord'], tree['dcoord'], 'left', len(tree['ivl']), labels = tree['ivl'], scale = True)
+    ax.set(title = 'Hierarchical Clustering Dendrogram', xlabel = 'Distance', ylabel = ylabel)
+    finish(fig, filepath = filepath)
 
 
 def check_conservation(glycan: str, # Glycan or motif in IUPAC-condensed format

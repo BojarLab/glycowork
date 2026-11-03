@@ -19,7 +19,10 @@ import numpy as np
 import struct
 import re
 from math import sin, cos, radians, sqrt, atan, degrees
+import viscose as vc
 
+# Aura unless the user chose another palette with viscose.set_palette, before or after importing this
+vc.default_palette('aura')
 
 # Adjusted SNFG color palette
 col_dict_base = {
@@ -1134,28 +1137,46 @@ def _margin(dim: float, # Base dimension for scaling
     return dim * (0.45 if sticker else 0.35 if shadow else 0.2)
 
 
+def subplots(*args: Any,  # nrows and ncols, as in viscose.subplots
+             figsize: tuple[float, float] = (6.4, 4.8),  # Figure size in inches
+             **kwargs: Any  # Passed on to viscose.subplots
+             ) -> tuple:  # (figure, axes)
+    "viscose.subplots at the size glycowork's figures have always had"
+    return vc.subplots(*args, figsize = figsize, **kwargs)
+
+
+def finish(fig: vc.Figure,  # The finished figure
+           filepath: str | Path = ''  # Path to save it to (.png, .pdf, or .svg)
+           ) -> None:
+    "Saves a figure if given a path, and shows it inline wherever that works; only an unsaved figure may open the system's image viewer, or a script saving many figures opens a window for each"
+    if filepath:
+        fig.save(filepath)
+    fig.show(viewer = not filepath)
+
+
+def check_kwargs(kwargs: dict[str, Any],  # Extra keyword arguments a function received
+                 func: str,  # The function's name
+                 allowed: tuple[str, ...]  # What it passes on to viscose
+                 ) -> None:
+    "Stops extra keyword arguments that viscose would not understand, with a message naming the ones it would"
+    if unknown := sorted(set(kwargs) - set(allowed)):
+        raise TypeError(f"{func} got {', '.join(map(repr, unknown))}; its extra keyword arguments go to viscose, which takes {', '.join(allowed)}.")
+
+
 def display_svg_with_matplotlib(
         svg_data: Any, # SVG drawing object
         chem: bool = False, # Whether svg_data comes from RDKit chemical
         shadow: bool = False,  # Draw a soft drop shadow under the monosaccharide symbols
         sticker: bool = False  # Cut the whole structure out as a die-cut sticker
 ) -> None:
-    "Renders SVG using matplotlib for non-Jupyter environments"
+    "Renders SVG to a PNG for non-Jupyter environments, shown in the system's image viewer from a terminal and skipped where nothing can show it"
     _, convert_svg_to_png = _get_glycorender()
-    import matplotlib.pyplot as plt
     # Get original SVG dimensions and scale them up
     width, height = getattr(svg_data, 'width', 800), getattr(svg_data, 'height', 800)
     svg_data = svg_data if isinstance(svg_data, str) else svg_data.as_svg()
     # Convert to PNG with larger dimensions
-    png_output = convert_svg_to_png(svg_data, output_width = width, background = (1.0, 1.0, 1.0), shadow = shadow,
-                                    sticker = sticker, output_height = height, scale = 2.0, return_bytes = True, chem = chem)
-    img = plt.imread(BytesIO(png_output), format = 'png')
-    dpi = plt.rcParams['figure.dpi']
-    fig = plt.figure(figsize = (img.shape[1] / dpi, img.shape[0] / dpi))
-    plt.imshow(img)
-    plt.axis('off')
-    plt.show()
-    plt.close(fig)
+    vc.show_png(lambda: convert_svg_to_png(svg_data, output_width = width, background = (1.0, 1.0, 1.0), shadow = shadow, sticker = sticker,
+                                           output_height = height, scale = 2.0, return_bytes = True, chem = chem))
 
 
 def _written_positions(graph: nx.DiGraph # Glycan graph from glycan_to_nxGraph
@@ -1274,9 +1295,8 @@ def add_colors_to_map(
         hex_codes: bool = True # Return hex color codes
 ) -> None:
     "Adds color assignments to mapping dictionary for chemical structure visualization"
-    from matplotlib.colors import ColorConverter
     color = chem_cols_alpha[col_num] if alpha else chem_cols[col_num]
-    color = color if hex_codes else ColorConverter().to_rgb(color)
+    color = color if hex_codes else tuple(int(color[i:i + 2], 16) / 255 for i in (1, 3, 5))
     for el in els:
         cols.setdefault(el, [])
         if color not in cols[el]: cols[el].append(color)

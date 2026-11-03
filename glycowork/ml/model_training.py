@@ -20,6 +20,7 @@ try:
 except ImportError:
     raise ImportError("<torch or torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
 from glycowork.motif.annotate import annotate_dataset, deduplicate_motifs
+from glycowork.motif.draw import finish, subplots
 
 
 class EarlyStopping:
@@ -99,7 +100,6 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
     str, dict[str, list[float]]]]:  # best model from training and the training and validation metrics
     "trains a deep learning model on predicting glycan properties"
     from sklearn.metrics import accuracy_score, label_ranking_average_precision_score, matthews_corrcoef, mean_absolute_error, mean_squared_error, ndcg_score, r2_score, roc_auc_score
-    import matplotlib.pyplot as plt
     since = time.time()
     if mode in {'multiclass', 'binary'}:  # the mode names of training_setup, which would otherwise fall through to regression
         mode, mode2 = 'classification', 'multi' if mode == 'multiclass' else 'binary'
@@ -239,17 +239,12 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
     if return_metrics:
         return model, metrics
     # Plot loss & score over the course of training
-    _, _ = plt.subplots(nrows = 2, ncols = 1)
-    plt.subplot(2, 1, 1)
-    plt.plot(range(epoch + 1), metrics["val"]["loss"])
-    plt.title('Model Training')
-    plt.ylabel('Validation Loss')
-    plt.legend(['Validation Loss'], loc = 'best')
-    plt.subplot(2, 1, 2)
-    plt.xlabel('Number of Epochs')
-    plt.plot(range(epoch + 1), metrics["val"][lead])
-    plt.ylabel(f'Validation {lead_name}')
-    plt.legend([f'Validation {lead_name}'], loc = 'best')
+    fig, (top, bottom) = subplots(2, 1)
+    top.plot(np.arange(epoch + 1), metrics["val"]["loss"], color = 'a1')
+    top.set(title = 'Model Training', ylabel = 'Validation Loss')
+    bottom.plot(np.arange(epoch + 1), metrics["val"][lead], color = 'b1')
+    bottom.set(xlabel = 'Number of Epochs', ylabel = f'Validation {lead_name}')
+    finish(fig)
     return model
 
 
@@ -506,23 +501,17 @@ def train_ml_model(X_train: pd.DataFrame | list,  # training data/glycans
 def analyze_ml_model(model: xgb.XGBModel  # trained ML model from train_ml_model
                      ) -> None:
     "plots relevant features for model prediction"
-    import matplotlib.pyplot as plt
-    import seaborn as sns
     # Get important features
     feat_imp = model.get_booster().get_score(importance_type = 'gain')
     feat_imp = pd.DataFrame(feat_imp, index = [0]).T
     feat_imp = feat_imp.sort_values(by = feat_imp.columns.values.tolist()[0], ascending = False)
     feat_imp = feat_imp[:10]
     # Plot important features
-    sns.barplot(x = feat_imp.index.values.tolist(), y = feat_imp[feat_imp.columns.values.tolist()[0]],
-                color = 'cornflowerblue')
-    sns.despine(left = True, bottom = True)
-    plt.xticks(rotation = 90)
-    plt.xlabel('Important Variables')
-    plt.ylabel('Relative Importance (Gain)')
-    plt.title('Feature Importance')
-    plt.tight_layout()
-    plt.show()
+    fig, ax = subplots()
+    ax.bar(feat_imp.index.values.tolist(), feat_imp[feat_imp.columns.values.tolist()[0]].values, color = 'a1')
+    ax.set_xticks(range(len(feat_imp)), feat_imp.index.values.tolist(), rotation = 90)
+    ax.set(xlabel = 'Important Variables', ylabel = 'Relative Importance (Gain)', title = 'Feature Importance')
+    finish(fig)
 
 
 def get_mismatch(model: xgb.XGBModel,  # trained ML model from train_ml_model

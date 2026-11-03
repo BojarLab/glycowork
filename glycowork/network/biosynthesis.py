@@ -15,6 +15,7 @@ from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_s
 from glycowork.motif.processing import get_lib, rescue_glycans, in_lib, get_class, canonicalize_iupac, canonicalize_composition, is_composition
 from glycowork.motif.tokenization import get_stem_lib, get_core, glycan_to_composition, map_to_basic
 from glycowork.motif.annotate import get_k_saccharides
+from glycowork.motif.draw import subplots, vc
 
 def __getattr__(name):
     if name == "net_dic":
@@ -527,6 +528,7 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
                  title: str | None = None  # Plot title; None for none, as before
                  ) -> None:  # Jupyter-renderable plot (interactive HTML, or SVG with draw_glycans); outside Jupyter it opens in the browser
     "Visualize biosynthetic network"
+    pal = vc.get_palette()
     if plot_format == 'hierarchical':
         roots = [n for n in network.nodes() if network.in_degree(n) == 0]
         levels = {}
@@ -565,14 +567,9 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
         node_data['name'].append(str(node))
         node_data['size'].append(node_attributes.get(node, 50) / 2)
         if origin_attrs:
-            node_data['color'].append(origin_attrs.get(node, 'cornflowerblue'))
+            node_data['color'].append(pal.css(origin_attrs.get(node, 'a1')))
         else:
-            if virtual_attrs.get(node, 0) == 1:
-                node_data['color'].append('darkorange')
-            elif virtual_attrs.get(node, 0) == 0:
-                node_data['color'].append('cornflowerblue')
-            else:
-                node_data['color'].append('seagreen')
+            node_data['color'].append(pal.css({1: 'b1', 0: 'a1'}.get(virtual_attrs.get(node, 0), 'a2')))
         node_data['alpha'].append(0.2 if virtual_attrs.get(node, 0) == 1 else 1)
     # Draw edges and labels
     edge_data = {'xs': [], 'ys': [], 'label': [], 'color': [], 'width': []}
@@ -583,13 +580,14 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
         # Determine edge color and width
         if edge_label_draw and lfc_dict:
             if lfc_dict.get(attr, 0) < 0:
-                edge_color = 'red'
+                edge_color = pal.css('b1')
             elif lfc_dict.get(attr, 0) > 0:
-                edge_color = 'green'
+                edge_color = pal.css('a1')
             else:
-                edge_color = 'cornflowerblue'
+                edge_color = pal.css('muted')
             width = abs(lfc_dict.get(attr, 0)) or 1
         elif not edge_label_draw:
+            # These colors name the sugar, as in SNFG, so they do not follow the palette
             if 'Glc' in attr:
                 edge_color = 'cornflowerblue'
             elif 'Gal' in attr:
@@ -604,7 +602,7 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
                 edge_color = 'silver'
             width = 1 if 'b1' in attr else 3
         else:
-            edge_color = 'cornflowerblue'
+            edge_color = pal.css('muted')
             width = 1
         edge_data['xs'].append([x0 + 0.15*(x1-x0), x1 - 0.15*(x1-x0)])
         edge_data['ys'].append([y0 + 0.15*(y1-y0), y1 - 0.15*(y1-y0)])
@@ -613,7 +611,6 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
         edge_data['width'].append(width)
     if filepath or draw_glycans:
         # Static rendering, so that annotate_figure can swap the node labels for SNFG drawings in the saved SVG
-        import matplotlib.pyplot as plt
         from glycowork.motif.draw import annotate_figure
         # the SNFGs have a fixed size on the canvas, so the canvas has to grow with the layout instead of the other way around
         rows = Counter(round(y, 6) for y in node_data['y'])
@@ -621,40 +618,30 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
             raise ValueError(f"glycan_size has to be 'small', 'medium', or 'large' (got '{glycan_size}').")
         w, h = (1.5 * f * max(rows.values()), 1.8 * f * len(rows)) if max(rows.values(), default = 0) > 1 else (1.5 * f * len(
             network) ** 0.5,) * 2
-        fig, ax = plt.subplots(figsize = (min(60, max(12, w)), min(60, max(9, h))))
+        fig, ax = subplots(figsize = (min(60, max(12, w)), min(60, max(9, h))))
         # gids tag each arrow and node in the SVG, so the Jupyter display can attach hover text to them
         for i, ((x0, x1), (y0, y1), color, width) in enumerate(zip(edge_data['xs'], edge_data['ys'], edge_data['color'],
                                                                    edge_data['width'])):
-            ax.annotate('', xy = (x1, y1), xytext = (x0, y0),
-                        arrowprops = dict(arrowstyle = '-|>', color = color, linewidth = width, shrinkA = 0,
-                                          shrinkB = 0)).arrow_patch.set_gid(f'gwedge{i}')
+            ax.arrow(x0, y0, x1, y1, color = color, lw = width, gid = f'gwedge{i}')
         for i, (x, y, name, s, color, alpha) in enumerate(zip(node_data['x'], node_data['y'], node_data['name'],
                                                               node_data['size'], node_data['color'], node_data['alpha'])):
-            ax.scatter(x, y, s = s ** 2, color = color, alpha = alpha, edgecolors = '#888888', linewidths = 1,
-                       gid = f'gwnode{i}')
+            ax.scatter([x], [y], s = s ** 2, color = color, alpha = alpha, edge = ('muted', 1.0), gid = f'gwnode{i}')
             # anchored just right of the node, since annotate_figure grows the SNFG from the label's own origin
-            ax.annotate(name, (x, y), textcoords = 'offset points', xytext = (s / 2 + 4, 0), fontsize = 8, ha = 'left',
-                        va = 'center')
+            ax.annotate(name, (x, y), offset = (s / 2 + 4, 0.0), size = 8, svg_label = draw_glycans)
         if edge_label_draw:
             for (x0, x1), (y0, y1), label in zip(edge_data['xs'], edge_data['ys'], edge_data['label']):
-                ax.text((x0 + x1) / 2, (y0 + y1) / 2, label, fontsize = 8, ha = 'center', va = 'center')
+                ax.text((x0 + x1) / 2, (y0 + y1) / 2, label, size = 8, ha = 'center', halo = 2.6)
         ax.margins(0.12)
-        ax.axis('off')
+        ax.off()
         if title is not None:
             ax.set_title(title)
         if filepath:
             Path(filepath).parent.mkdir(parents = True, exist_ok = True)
         if not draw_glycans:
-            plt.savefig(filepath, bbox_inches = 'tight')
-            plt.close(fig)
+            fig.save(filepath)
             return
-        import tempfile
         from glycowork.motif.draw import is_jupyter
-        with tempfile.TemporaryDirectory() as tmp:
-            svg_temp = str(Path(tmp) / 'network_temp.svg')
-            plt.savefig(svg_temp, format = 'svg', bbox_inches = 'tight')
-            plt.close(fig)
-            svg = annotate_figure(svg_temp, filepath = filepath, compact = compact, glycan_size = glycan_size)
+        svg = annotate_figure(fig.to_svg(), filepath = filepath, compact = compact, glycan_size = glycan_size)
         if svg is None and filepath and Path(filepath).suffix.lower() == '.svg':
             svg = Path(filepath).read_text(encoding = 'utf-8')
         if not (svg and is_jupyter()):
@@ -767,7 +754,7 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
 def network_alignment(network_a: nx.DiGraph, # First network
                       network_b: nx.DiGraph # Second network
                       ) -> nx.DiGraph: # Combined network
-    "Combine two networks into one with color coding (brown: shared, blue: only in a, orange: only in b)"""
+    "Combine two networks into one with color coding in the palette (a neutral: shared, main hue: only in a, second hue: only in b)"""
     U = nx.Graph()
     network_a_nodes = set(network_a.nodes)
     network_b_nodes = set(network_b.nodes)
@@ -775,9 +762,9 @@ def network_alignment(network_a: nx.DiGraph, # First network
     only_a = network_a_nodes - network_b_nodes
     only_b = network_b_nodes - network_a_nodes
     both = network_a_nodes & network_b_nodes
-    node_origin = {node: 'cornflowerblue' for node in only_a}
-    node_origin.update({node: 'darkorange' for node in only_b})
-    node_origin.update({node: 'saddlebrown' for node in both})
+    node_origin = {node: 'a1' for node in only_a}
+    node_origin.update({node: 'b1' for node in only_b})
+    node_origin.update({node: 'muted' for node in both})
     all_nodes = list(network_a.nodes(data = True)) + list(network_b.nodes(data = True))
     U.add_nodes_from(all_nodes)
     nx.set_node_attributes(U, {node: 1 if network_a.nodes[node]['virtual'] == 1 and network_b.nodes[node]['virtual'] == 1 else 0 for node in both}, 'virtual')
@@ -1062,17 +1049,17 @@ def highlight_network(network: nx.DiGraph, # Biosynthetic network
     elif highlight == 'conservation' and conservation_df is None:
         raise ValueError("You have to provide a dataframe with species-glycan associations to check conservation")
     network_out = deepcopy(network)
-    # Color nodes as to whether they contain the motif (green) or not (violet)
+    # Color nodes as to whether they contain the motif (the palette's main hue) or not (its second hue)
     if highlight == 'motif':
         from glycowork.glycan_data.loader import resolve_motif_name
         motif, termini = resolve_motif_name(motif) or (motif, [])
-        motif_presence = {k: ('limegreen' if subgraph_isomorphism(k, motif, termini_list = termini) else 'darkviolet')
+        motif_presence = {k: ('a1' if subgraph_isomorphism(k, motif, termini_list = termini) else 'b2')
                           for k in network_out.nodes()}
         nx.set_node_attributes(network_out, motif_presence, name = 'origin')
-    # Color nodes as to whether they are from a species (green) or not (violet)
+    # Color nodes as to whether they are from a species (the palette's main hue) or not (its second hue)
     elif highlight == 'species':
         temp_net_nodes = set(network_dic[species].nodes())
-        node_presence = {k: ('limegreen' if k in temp_net_nodes else 'darkviolet') for k in network_out.nodes()}
+        node_presence = {k: ('a1' if k in temp_net_nodes else 'b2') for k in network_out.nodes()}
         nx.set_node_attributes(network_out, node_presence, name = 'origin')
     # Add relative intensity values as 'abundance' node attribute used for node size scaling
     elif highlight == 'abundance':

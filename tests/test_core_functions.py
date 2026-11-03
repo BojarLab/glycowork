@@ -1,11 +1,13 @@
+import re
+import sys
 from pathlib import Path
+import subprocess
 import pytest
 import networkx as nx
 import networkx.algorithms.isomorphism as iso
 import pandas as pd
 import numpy as np
 import xgboost as xgb
-import seaborn as sns
 import sys, os, re, base64
 os.environ.setdefault("LOKY_MAX_CPU_COUNT", "1")  # joblib's physical-core probe shells out to a tool Windows no longer ships; nothing here needs more than one worker
 import shutil
@@ -15,11 +17,6 @@ from glycorender import svgdraw as draw
 import warnings
 from huggingface_hub.errors import LocalEntryNotFoundError, HfHubHTTPError
 import importlib
-import matplotlib
-matplotlib.use('Agg')  # Set non-interactive backend before importing pyplot
-import matplotlib.pyplot as plt
-from matplotlib.collections import PathCollection, LineCollection
-from matplotlib.patches import FancyArrowPatch
 from unittest.mock import Mock, patch, MagicMock, mock_open
 from torch_geometric.data import Data
 from collections import Counter
@@ -5059,7 +5056,6 @@ def test_draw_chem2d():
         pytest.skip(f"Required dependencies not installed: {', '.join(missing_deps)}")
     # Test basic 2D drawing
     result = draw_chem2d("GlcNAc(b1-4)GlcA", ["GlcNAc"])
-    plt.close('all')
     # Test with filepath
     draw_chem2d("GlcNAc(b1-4)GlcA", ["GlcNAc"], filepath="test.svg")
     assert Path("test.svg").exists()
@@ -5075,7 +5071,6 @@ def test_draw_chem2d():
 def test_draw_chem2d_file_formats(tmp_path):
     pytest.importorskip("rdkit")
     draw_chem2d("GlcNAc(b1-4)GlcA", ["GlcNAc"], filepath = tmp_path / "chem.png")
-    plt.close('all')
     assert (tmp_path / "chem.png").read_bytes()[:8] == b'\x89PNG\r\n\x1a\n'
     # Anything but .svg, .pdf, or .png is refused, and nothing is written
     with pytest.raises(ValueError, match = r"\.svg, \.pdf, or \.png"):
@@ -5094,7 +5089,6 @@ def test_draw_chem3d():
         pytest.skip(f"Required dependencies not installed: {', '.join(missing_deps)}")
     # Test basic 3D drawing
     draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc"])
-    plt.close('all')
     with pytest.raises(ValueError, match = r"No highlight color for \['Foo'\]"):
         draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc", "Foo"])
     # Test with filepath
@@ -5104,12 +5098,9 @@ def test_draw_chem3d():
         draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc"], filepath = "test.svg")
     # Test RDKit fallback with glycan not on GlycoShape
     draw_chem3d("Fuc(a1-2)Gal6S(b1-3)[Fuc(a1-4)]GlcNAc6S", ["Fuc"])
-    plt.close('all')
     # Test reading an existing conformer back in instead of embedding one
     draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc"], pdb_file = "test.pdb")
-    plt.close('all')
     GlycoDraw("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", draw_method = 'chem3d')
-    plt.close('all')
 
 
 def test_glycodraw():
@@ -5700,26 +5691,11 @@ def test_display_svg_with_matplotlib():
 <text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#d2" startOffset="50%"></textPath></text>
 </g>
 </svg>"""
-    # Test with mocked matplotlib
-    class MockPlt:
-        @staticmethod
-        def imread(*args, **kwargs):
-            return np.zeros((100, 100))
-        @staticmethod
-        def imshow(*args, **kwargs):
-            pass
-        @staticmethod
-        def axis(*args, **kwargs):
-            pass
-        @staticmethod
-        def show():
-            pass
-    import matplotlib.pyplot as plt
-    old_plt = plt
-    plt = MockPlt()
-    display_svg_with_matplotlib(test_svg)
-    display_svg_with_matplotlib(test_svg, sticker = True)
-    plt = old_plt
+    # What is shown is a function giving the PNG, so nothing is rendered where nothing can show it
+    with patch('viscose.show_png') as mock_png:
+        display_svg_with_matplotlib(test_svg)
+        display_svg_with_matplotlib(test_svg, sticker = True)
+    assert mock_png.call_count == 2 and all(c.args[0]()[:8] == b'\x89PNG\r\n\x1a\n' for c in mock_png.call_args_list)
 
 
 def test_draw_shape_hex():
@@ -6025,11 +6001,9 @@ def test_file_loading_branches(tmp_path):
         get_coverage(str(tmp_path / f"cov.{ext}"))
     for ext in ["csv", "tsv", "xlsx"]:
         get_heatmap(str(tmp_path / f"test.{ext}"))
-        plt.close('all')
         # get_pca — reuses test.* files; groups list drives column slicing
     for ext in ["csv", "tsv", "xlsx"]:
         get_pca(str(tmp_path / f"test.{ext}"), groups = [1, 1, 2, 2])
-        plt.close('all')
         # get_time_series — needs sample columns in 'ID_hN_rN' format
     ts_df = pd.DataFrame({
         'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man'],
@@ -7062,12 +7036,11 @@ def simple_glycans():
     ]
 
 
-# Mock plt.show() to avoid displaying plots during tests
+# Records the figures that would be shown, which costs no rendering; the first argument of each call is the figure
 @pytest.fixture(autouse=True)
 def mock_show():
-    with patch('matplotlib.pyplot.show'):
-        yield
-    plt.close('all')
+    with patch('viscose.Figure.show', autospec = True) as show:
+        yield show
 
 
 # Sample data fixtures
@@ -7110,39 +7083,38 @@ def sample_diff_expr_results():
 
 def test_get_coverage_basic(sample_df):
     """Test basic functionality of get_coverage"""
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         get_coverage(sample_df)
         mock_savefig.assert_not_called()
 
 
 def test_get_coverage_with_filepath(sample_df):
     """Test get_coverage with filepath saving"""
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         get_coverage(sample_df, filepath='test.png')
         mock_savefig.assert_called_once()
 
 
-def test_get_ma_basic(sample_diff_expr_results):
+def test_get_ma_basic(sample_diff_expr_results, mock_show):
     """Test basic functionality of get_ma"""
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         get_ma(sample_diff_expr_results)
         mock_savefig.assert_not_called()
     # Per-glycosite results (glycoproteomics) carry no Log2FC, so the glycoforms they were built from are plotted instead of raising a KeyError
     get_ma(get_differential_expression('human_milk_N_PMID34087070', random_state = 0))
-    assert len(plt.gca().collections[0].get_offsets()) > 0
-    plt.close('all')
+    assert sum(len(a['x']) for a in mock_show.call_args[0][0].axes[0].artists if a['kind'] == 'points') > 0
 
 
 def test_get_ma_with_filepath(sample_diff_expr_results):
     """Test get_ma with filepath saving"""
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         get_ma(sample_diff_expr_results, filepath='test.png')
         mock_savefig.assert_called_once()
 
 
 def test_get_ma_with_custom_thresholds(sample_diff_expr_results):
     """Test get_ma with custom thresholds"""
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         get_ma(sample_diff_expr_results, log2fc_thresh = 2, sig_thresh = 0.01)
         mock_savefig.assert_not_called()
         # Without an explicit threshold the sample-size-adjusted alpha the analysis stamped is used, so MA and volcano agree
@@ -7152,9 +7124,9 @@ def test_get_ma_with_custom_thresholds(sample_diff_expr_results):
         mock_savefig.assert_not_called()
 
 
-def test_get_volcano_basic(sample_diff_expr_results):
+def test_get_volcano_basic(sample_diff_expr_results, mock_show):
     """Test basic functionality of get_volcano"""
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         get_volcano(sample_diff_expr_results, n = 6, annotate_volcano = False)
         mock_savefig.assert_not_called()
     # without a filepath the annotated figure is built in a temp dir and handed back for Jupyter to render
@@ -7162,31 +7134,41 @@ def test_get_volcano_basic(sample_diff_expr_results):
         out = get_volcano(sample_diff_expr_results)
     assert out is not None and '<svg' in out.data
     assert not list(Path('.').glob('*_temp.svg'))
-    # ...and outside Jupyter it is shown through matplotlib instead of vanishing
+    # ...and outside Jupyter it is shown as a PNG instead of vanishing
     with patch('glycowork.motif.draw.is_jupyter', return_value = False), patch(
             'glycowork.motif.draw.display_svg_with_matplotlib') as mock_display:
         get_volcano(sample_diff_expr_results)
     mock_display.assert_called_once()
-    plt.close('all')
+    # Up and down take the palette's two hues, and a threshold of 1 leaves the others pale
+    get_volcano(sample_diff_expr_results, x_thresh = 1, annotate_volcano = False)
+    fig = mock_show.call_args[0][0]
+    points = [a for a in fig.axes[0].artists if a['kind'] == 'points']
+    assert fig.pal.name == 'aura' and [a['rgb'] for a in points] == [fig.pal.color(c) for c in ('a3', 'b1', 'a1')]
+    assert [len(a['x']) for a in points] == [2, 0, 1]
+    # Extra arguments go to viscose, and what it does not know says so
+    get_volcano(sample_diff_expr_results, annotate_volcano = False, s = 40, alpha = 0.5, marker = 's')
+    assert mock_show.call_args[0][0].axes[0].artists[0]['s'] == 40
+    with pytest.raises(TypeError, match = "'linewidth'.*takes s, alpha"):
+        get_volcano(sample_diff_expr_results, annotate_volcano = False, linewidth = 1)
 
 
 def test_get_volcano_with_filepath(sample_diff_expr_results):
     """Test get_volcano with filepath saving"""
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         get_volcano(sample_diff_expr_results, filepath = 'test.png', annotate_volcano = False)
         mock_savefig.assert_called_once()
 
 
 def test_get_volcano_with_custom_thresholds(sample_diff_expr_results):
     """Test get_volcano with custom thresholds"""
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         get_volcano(sample_diff_expr_results, y_thresh = 0.01, x_thresh = 1.0, annotate_volcano = False)
         mock_savefig.assert_not_called()
 
 
-def test_get_volcano_with_effect_size(sample_diff_expr_results):
+def test_get_volcano_with_effect_size(sample_diff_expr_results, mock_show):
     """Test get_volcano using effect size instead of Log2FC"""
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         get_volcano(sample_diff_expr_results, x_metric = 'Effect size', annotate_volcano = False)
         mock_savefig.assert_not_called()
     # Glycoproteomics results come per glycosite, without a Log2FC, so the default falls back to the effect size instead of a KeyError
@@ -7195,15 +7177,13 @@ def test_get_volcano_with_effect_size(sample_diff_expr_results):
     get_volcano(sites, annotate_volcano = False)
     with patch('glycowork.motif.draw.is_jupyter', return_value = True):
         assert '<svg' in get_volcano(sites, x_thresh = 0.5).data
-    plt.close('all')
-    # An underflowed corrected p-value of 0 is drawn at the most significant finite height instead of at -log10(0) = inf, which matplotlib dropped
+    # An underflowed corrected p-value of 0 is drawn at the most significant finite height instead of at -log10(0) = inf
     zero_p = sample_diff_expr_results.copy()
     zero_p.loc[zero_p.index[0], 'corr p-val'] = 0.0
-    with warnings.catch_warnings(), patch('matplotlib.pyplot.close'):
+    with warnings.catch_warnings():
         warnings.simplefilter('error', RuntimeWarning)
         get_volcano(zero_p, annotate_volcano = False)
-        assert np.isfinite(plt.gca().collections[0].get_offsets()).all()
-    plt.close('all')
+    assert all(np.isfinite(a['y']).all() for a in mock_show.call_args[0][0].axes[0].artists if a['kind'] == 'points')
 
 
 def test_get_meta_analysis_fixed():
@@ -7217,7 +7197,7 @@ def test_get_meta_analysis_fixed():
     # ignoring between-study variance can only make the pooled estimate look more certain than the random-effects one
     heterogeneous = ([-2.0, 0.0, 2.0], [0.01, 0.01, 0.01])
     assert meta_analysis(*heterogeneous, model = 'fixed')['se'] < meta_analysis(*heterogeneous, model = 'random')['se']
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         get_meta_analysis(effect_sizes, variances, model = 'fixed', filepath = 'meta.png', title = 'Pooled')
         mock_savefig.assert_called_once()
 
@@ -7246,15 +7226,11 @@ def test_get_meta_analysis_with_study_names():
     effect_sizes = [0.5, 0.3, 0.7]
     variances = [0.1, 0.15, 0.08]
     study_names = ['Study1', 'Study2', 'Study3']
-    with patch('matplotlib.pyplot.subplots') as mock_subplots:
-        mock_fig = MagicMock()
-        mock_ax = MagicMock()
-        mock_subplots.return_value = (mock_fig, mock_ax)
-        with patch('matplotlib.pyplot.savefig') as mock_savefig:
-            get_meta_analysis(effect_sizes, variances, study_names = study_names, filepath = 'test.png')
-            mock_savefig.assert_called_once()
-            get_meta_analysis(effect_sizes, variances, filepath = 'test.png')  # study names default to Study 1..k
-            assert mock_savefig.call_count == 2
+    with patch('viscose.Figure.save') as mock_savefig:
+        get_meta_analysis(effect_sizes, variances, study_names = study_names, filepath = 'test.png')
+        mock_savefig.assert_called_once()
+        get_meta_analysis(effect_sizes, variances, filepath = 'test.png')  # study names default to Study 1..k
+        assert mock_savefig.call_count == 2
 
 
 def test_get_meta_analysis_invalid_model():
@@ -7277,15 +7253,25 @@ def test_get_meta_analysis_mismatched_lengths():
         meta_analysis(effect_sizes, variances)
 
 
-def test_plot_embeddings_basic():
+def test_plot_embeddings_basic(mock_show):
     """Test basic functionality of plot_embeddings"""
     glycans = ['Man3GlcNAc2', 'Man5GlcNAc2', 'Man9GlcNAc2']
     emb = pd.DataFrame(np.random.rand(3, 10))
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         plot_embeddings(glycans, emb)
         mock_savefig.assert_not_called()
         plot_embeddings(glycans, emb, title = 'Embeddings')
-        assert plt.gca().get_title() == 'Embeddings'
+        assert mock_show.call_args[0][0].axes[0].title_text == 'Embeddings'
+    # palette names a viscose palette, and extra arguments go to viscose
+    plot_embeddings(glycans, emb = emb, palette = 'poster', s = 50)
+    assert mock_show.call_args[0][0].pal.name == 'poster' and mock_show.call_args[0][0].axes[0].artists[0]['s'] == 50
+    with pytest.raises(ValueError, match = 'colorblind'):
+        plot_embeddings(glycans, emb = emb, palette = 'colorblind')
+    with pytest.raises(TypeError, match = "'legend'"):
+        plot_embeddings(glycans, emb = emb, legend = False)
+    # Plotting never brings matplotlib or seaborn back
+    code = "import sys, glycowork.motif.analysis, glycowork.network.biosynthesis; sys.exit(any(m in sys.modules for m in ('matplotlib', 'seaborn')))"
+    assert subprocess.run([sys.executable, '-c', code]).returncode == 0
 
 
 def test_plot_embeddings_with_labels():
@@ -7293,7 +7279,7 @@ def test_plot_embeddings_with_labels():
     glycans = ['Man3GlcNAc2', 'Man5GlcNAc2', 'Man9GlcNAc2']
     emb = pd.DataFrame(np.random.rand(3, 10))
     labels = ['A', 'B', 'A']
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         plot_embeddings(glycans, emb, label_list=labels)
         mock_savefig.assert_not_called()
 
@@ -7302,7 +7288,7 @@ def test_plot_embeddings_with_shape_feature():
     """Test plot_embeddings with shape feature"""
     glycans = ['Man3GlcNAc2', 'Man5GlcNAc2', 'Man9GlcNAc2']
     emb = pd.DataFrame(np.random.rand(3, 10))
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         plot_embeddings(glycans, emb, shape_feature='Man')
         mock_savefig.assert_not_called()
 
@@ -7312,7 +7298,7 @@ def test_plot_embeddings_with_filepath(tmp_path):
     glycans = ['Man3GlcNAc2', 'Man5GlcNAc2', 'Man9GlcNAc2']
     emb = pd.DataFrame(np.random.rand(3, 10))
     filepath = tmp_path / "test.png"
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         plot_embeddings(glycans, emb, filepath=str(filepath))
         mock_savefig.assert_called_once()
 
@@ -7321,7 +7307,7 @@ def test_get_pval_distribution(tmp_path):
     """Test plot_embeddings with file saving"""
     df = pd.DataFrame(np.random.rand(3, 1), columns=['p-val'])
     filepath = tmp_path / "test.png"
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         get_pval_distribution(df, filepath=str(filepath))
         mock_savefig.assert_called_once()
 
@@ -7354,7 +7340,7 @@ def sample_glycoshift_df():
 
 def test_characterize_monosaccharide_basic():
     """Test basic functionality of characterize_monosaccharide"""
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         characterize_monosaccharide('Man', rank = "Class", focus = "Actinopterygii")
         mock_savefig.assert_not_called()
     with pytest.raises(ValueError):
@@ -7367,21 +7353,21 @@ def test_characterize_monosaccharide_basic():
 
 def test_characterize_monosaccharide_with_custom_df(sample_df):
     """Test characterize_monosaccharide with custom DataFrame"""
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         characterize_monosaccharide('Man', df=sample_df, thresh=1)
         mock_savefig.assert_not_called()
 
 
 def test_characterize_monosaccharide_with_bond_mode():
     """Test characterize_monosaccharide in bond mode"""
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         characterize_monosaccharide('a1-3', mode='bond', rank="Class", focus="Actinopterygii")
         mock_savefig.assert_not_called()
 
 
 def test_characterize_monosaccharide_with_modifications():
     """Test characterize_monosaccharide with modifications enabled"""
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         characterize_monosaccharide('Man', modifications=True, rank="Class", focus="Actinopterygii")
         characterize_monosaccharide('a1-3', mode = 'bond', rank = "Class", focus = "Actinopterygii")
         characterize_monosaccharide('Gal', modifications = True, rank = "Kingdom", focus = "Animalia", thresh = 5)
@@ -7395,8 +7381,15 @@ def test_get_heatmap_basic(sample_df):
     result_with_plot = get_heatmap(sample_df, return_plot = True)
     assert result_with_plot is not None
     # Axis labels belong to the heatmap, not the colorbar
-    assert (result_with_plot[0].ax_heatmap.get_xlabel(), result_with_plot[0].ax_heatmap.get_ylabel()) == ('Samples',
-                                                                                                          'Glycans')
+    assert (result_with_plot[0].axes[0].xlabel, result_with_plot[0].axes[0].ylabel) == ('Samples', 'Glycans')
+    # Magnitudes take the palette's sequential scale; extra arguments go to viscose, and what it does not know says so
+    assert result_with_plot[0].axes[0]._scale['cmap'] == 'sequential'
+    fig, _, _ = get_heatmap(sample_df, figsize = (5, 5), yticklabels = 1, xticklabels = False, metric = 'cityblock', method = 'complete', return_plot = True)
+    assert fig._base == (360, 360) and fig.axes[0]._xtl is None and fig.axes[0].show_all == (False, True)
+    with pytest.raises(TypeError, match = "'linewidths'.*takes figsize"):
+        get_heatmap(sample_df, linewidths = 0.5)
+    with pytest.raises(ValueError, match = "'vlag'"):
+        get_heatmap(sample_df, cmap = 'vlag')
     # Add test for filepath saving
     result_with_save = get_heatmap(sample_df, filepath="test.png")
     presence_df = pd.DataFrame({
@@ -7422,8 +7415,7 @@ def test_get_heatmap_basic(sample_df):
     get_heatmap(df_renamed)
     df_transposed = sample_df.set_index('glycan').T
     get_heatmap(df_transposed)
-    assert get_heatmap(sample_df, title = 'Heatmap', return_plot = True)[0].fig._suptitle.get_text() == 'Heatmap'
-    plt.close('all')
+    assert get_heatmap(sample_df, title = 'Heatmap', return_plot = True)[0]._title == 'Heatmap'
 
 
 def test_get_distance_matrix(sample_df):
@@ -7446,7 +7438,6 @@ def test_get_distance_matrix(sample_df):
         bracket_df[f'KO (clone {k})'] = [11.0 + k, 21.0, 31.0]
     assert get_distance_matrix(bracket_df).shape == (7, 7)
     assert list(get_heatmap(bracket_df, return_plot = True)[2].index) == sample_df['glycan'].tolist()
-    plt.close('all')
     for kwargs in [{'compare': 'rows'}, {'transform': 'log'}, {'dist_func': 'not_a_metric'}]:
         with pytest.raises(ValueError):
             get_distance_matrix(sample_df, **kwargs)
@@ -7455,9 +7446,10 @@ def test_get_distance_matrix(sample_df):
 def test_get_heatmap_dist_func(sample_df):
     """Test get_heatmap clustering with a custom distance"""
     g, _, _ = get_heatmap(sample_df, transform = 'CLR', dist_func = 'euclidean', return_plot = True)
-    assert g.dendrogram_col.linkage.shape == (2, 4) and g.dendrogram_row.linkage.shape == (2, 4)
+    assert sorted(g.row_order) == [0, 1, 2] and sorted(g.col_order) == [0, 1, 2]
+    # Signed values diverge from 0, symmetrically
+    assert g.axes[0]._scale['cmap'] == 'diverging' and np.isclose(g.axes[0]._scale['lo'], -g.axes[0]._scale['hi'])
     get_heatmap(sample_df, dist_func = lambda x, y: np.abs(x - y).sum(), method = 'complete', return_plot = True)
-    plt.close('all')
 
 
 def test_get_pcoa(sample_df):
@@ -7465,7 +7457,7 @@ def test_get_pcoa(sample_df):
     df = sample_df.copy()
     df['sample4'], df['sample5'], df['sample6'] = [30.0, 20.0, 10.0], [35.0, 25.0, 12.0], [28.0, 22.0, 9.0]
     groups = [1, 1, 1, 2, 2, 2]
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         coords = get_pcoa(df, groups = groups, permutations = 99, random_state = 42)
         mock_savefig.assert_not_called()
     dm = get_distance_matrix(df)
@@ -7479,41 +7471,37 @@ def test_get_pcoa(sample_df):
     with pytest.raises(ValueError, match = 'principal coordinates carry variance'):  # three glycans leave only two axes
         get_pcoa(df, pco_y = 9)
     labelled = GlycoDataFrame(df, contrasts = {'sample1': 'a', 'sample2': 'a', 'sample3': 'a', 'sample4': 'b', 'sample5': 'b'})
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         from_contrasts = get_pcoa(labelled, title = 'PCoA', filepath = 'pcoa.png', permutations = 9)
         mock_savefig.assert_called_once()
     assert list(from_contrasts.index) == ['sample1', 'sample2', 'sample3', 'sample4', 'sample5']  # sample6 carries no contrast label
-    plt.close('all')
 
 
 def test_get_heatmap_with_motifs(sample_df):
     """Test get_heatmap with motif analysis"""
     result = get_heatmap(sample_df, motifs=True)
-    plt.close('all')
 
 
 def test_get_heatmap_with_transform(sample_df):
     """Test get_heatmap with data transformation"""
     result = get_heatmap(sample_df, transform='CLR')
     result_alr = get_heatmap(sample_df, transform='ALR')
-    plt.close('all')
 
 
 def test_get_heatmap_with_custom_feature_set(sample_df):
     """Test get_heatmap with custom feature set"""
     result = get_heatmap(sample_df, motifs=True, feature_set=['known'], show_all=True)
-    plt.close('all')
 
 
 def test_get_pca_basic(sample_df):
     """Test basic functionality of get_pca"""
     groups = [1, 1, 1]
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         get_pca(sample_df, groups, transform="CLR")
         get_pca(sample_df, groups, transform="ALR")
         mock_savefig.assert_not_called()
     labelled = GlycoDataFrame(sample_df, contrasts = {'sample1': 'a', 'sample2': 'b'})  # groups come from the contrasts, the unlabelled sample3 is dropped
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         get_pca(labelled, title = 'PCA', filepath = 'pca.png')
         get_pca(sample_df, groups, eigenvalues = True, title = 'PCA', filepath = 'pca.png')
         assert mock_savefig.call_count == 2
@@ -7521,14 +7509,13 @@ def test_get_pca_basic(sample_df):
     with warnings.catch_warnings():
         warnings.simplefilter('error', pd.errors.PerformanceWarning)
         get_pca(pd.DataFrame(glycomics_data_loader.human_serum_ovarian_N_PMID41366864).set_index('glycan'))
-    plt.close('all')
 
 
 def test_get_pca_with_metadata(sample_df):
     """Test get_pca with metadata DataFrame"""
     metadata = pd.DataFrame({'id': ['sample1', 'sample2', 'sample3'],
                            'group': ['A', 'A', 'B']})
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         get_pca(sample_df, metadata)
         mock_savefig.assert_not_called()
 
@@ -7536,7 +7523,7 @@ def test_get_pca_with_metadata(sample_df):
 def test_get_pca_with_motifs(sample_df):
     """Test get_pca with motif analysis"""
     groups = [1, 1, 1]
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         get_pca(sample_df, groups, motifs=True)
         get_pca(sample_df, groups, motifs = True, transform = "CLR")
         mock_savefig.assert_not_called()
@@ -7544,7 +7531,7 @@ def test_get_pca_with_motifs(sample_df):
 def test_get_pca_motifs_transform():
     df = sample_comp_glycomics_data()
     groups = [1]*6 + [2]*6
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         get_pca(df, groups, motifs=True, transform="ALR")
         mock_savefig.assert_not_called()
 
@@ -7552,14 +7539,14 @@ def test_get_pca_motifs_transform():
 def test_get_pca_with_custom_components(sample_df):
     """Test get_pca with custom principal components"""
     groups = [1, 1, 1]
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         get_pca(sample_df, groups, pc_x=2, pc_y=3)
         mock_savefig.assert_not_called()
 
 def test_get_pca_with_subplots():
     df = sample_comp_glycomics_data()
     groups = [1]*6 + [2]*6
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         get_pca(df, groups, pc_x = 1, pc_y=2, eigenvalues=True)
         mock_savefig.assert_not_called()
 
@@ -7741,18 +7728,13 @@ def test_multi_feature_scoring_basic(sample_df):
     df_transformed = pd.DataFrame(data)
     group1 = [0, 1, 2, 3, 4]
     group2 = [5, 6, 7, 8, 9]
-    with patch('matplotlib.pyplot.subplots') as mock_subplots:
-        mock_fig = MagicMock()
-        mock_ax = MagicMock()
-        mock_subplots.return_value = (mock_fig, mock_ax)
-        model, roc_auc, selected_features = multi_feature_scoring(df_transformed, group1, group2)
-        assert hasattr(model, 'predict')
-        assert 0 <= roc_auc <= 1
-        assert roc_auc > 0.5
-        # Small values zero every L1 coefficient at the default penalty, which left no feature to fit
-        _, roc_small, selected_small = multi_feature_scoring(df_transformed * 0.05, group1, group2)
-        assert selected_small and roc_small > 0.5
-    plt.close('all')
+    model, roc_auc, selected_features = multi_feature_scoring(df_transformed, group1, group2)
+    assert hasattr(model, 'predict')
+    assert 0 <= roc_auc <= 1
+    assert roc_auc > 0.5
+    # Small values zero every L1 coefficient at the default penalty, which left no feature to fit
+    _, roc_small, selected_small = multi_feature_scoring(df_transformed * 0.05, group1, group2)
+    assert selected_small and roc_small > 0.5
 
 
 def test_multi_feature_scoring_with_filepath(sample_df):
@@ -7767,13 +7749,9 @@ def test_multi_feature_scoring_with_filepath(sample_df):
     df_transformed = pd.DataFrame(data)
     group1 = [0, 1, 2, 3, 4]
     group2 = [5, 6, 7, 8, 9]
-    with patch('matplotlib.pyplot.subplots') as mock_subplots:
-        mock_fig = MagicMock()
-        mock_ax = MagicMock()
-        mock_subplots.return_value = (mock_fig, mock_ax)
-        with patch('matplotlib.pyplot.savefig') as mock_savefig:
-            multi_feature_scoring(df_transformed, group1, group2, filepath='test.png')
-            mock_savefig.assert_called_once()
+    with patch('viscose.Figure.save') as mock_savefig:
+        multi_feature_scoring(df_transformed, group1, group2, filepath='test.png')
+        mock_savefig.assert_called_once()
 
 
 def test_multi_feature_scoring_imbalanced_groups(sample_df):
@@ -7788,8 +7766,7 @@ def test_multi_feature_scoring_imbalanced_groups(sample_df):
     df_transformed = pd.DataFrame(data)
     group1 = [0, 1, 2, 3]
     group2 = [4, 5, 6, 7, 8, 9]
-    with patch('matplotlib.pyplot.figure'):
-        model, roc_auc, selected_features = multi_feature_scoring(df_transformed, group1, group2)
+    model, roc_auc, selected_features = multi_feature_scoring(df_transformed, group1, group2)
     assert hasattr(model, 'predict')
     assert 0 <= roc_auc <= 1
     assert roc_auc > 0.5
@@ -7809,15 +7786,11 @@ def test_multi_feature_scoring_no_group2(sample_df):
     data[1, 5:] = 0.7
     df_transformed = pd.DataFrame(data)
     group1 = [0, 0, 0, 0, 0, 1, 1, 1, 1, 1]
-    with patch('matplotlib.pyplot.subplots') as mock_subplots:
-        mock_fig = MagicMock()
-        mock_ax = MagicMock()
-        mock_subplots.return_value = (mock_fig, mock_ax)
-        model, roc_auc, selected_features = multi_feature_scoring(df_transformed, group1, None)
-        assert hasattr(model, 'predict')
-        assert 0 <= roc_auc <= 1
-        assert roc_auc > 0.5
-        assert 0 in selected_features
+    model, roc_auc, selected_features = multi_feature_scoring(df_transformed, group1, None)
+    assert hasattr(model, 'predict')
+    assert 0 <= roc_auc <= 1
+    assert roc_auc > 0.5
+    assert 0 in selected_features
 
 
 def test_get_glycoshift_per_site_glycan_class():
@@ -8013,7 +7986,7 @@ def test_highlight_network_motif(simple_network):
     highlighted = highlight_network(simple_network, highlight="motif", motif=motif)
     assert isinstance(highlighted, nx.DiGraph)
     assert all("origin" in data for _, data in highlighted.nodes(data=True))
-    assert all(data["origin"] in ["limegreen", "darkviolet"]
+    assert all(data["origin"] in ["a1", "b2"]
               for _, data in highlighted.nodes(data=True))
     highlighted = highlight_network(simple_network, highlight="motif", motif="Gal(b1-4)")
     highlighted = highlight_network(simple_network, highlight="motif", motif="r.-.")
@@ -8370,9 +8343,9 @@ def test_network_alignment_basic(simple_networks):
     assert ('C', 'D') in combined.edges()
     # Test node colors
     node_colors = nx.get_node_attributes(combined, 'origin')
-    assert node_colors['A'] == 'cornflowerblue'  # only in network_a
-    assert node_colors['B'] == 'saddlebrown'     # in both networks
-    assert node_colors['D'] == 'darkorange'      # only in network_b
+    assert node_colors['A'] == 'a1'  # only in network_a
+    assert node_colors['B'] == 'muted'  # in both networks
+    assert node_colors['D'] == 'b1'  # only in network_b
 
 
 def test_network_alignment_empty():
@@ -8719,7 +8692,6 @@ def test_plot_network_basic(mock_jupyter, evo_test_networks):
     # Test without edge labels
     plot = plot_network(main_net, plot_format = 'kamada_kawai', edge_label_draw = False, draw_glycans = False)
     assert '<text ' not in plot.data
-    plt.close('all')
 
 
 @patch('glycowork.motif.draw.is_jupyter', return_value = True)
@@ -8730,7 +8702,6 @@ def test_plot_network_n(mock_jupyter, n_glycan_network):
     # Test without edge labels
     plot = plot_network(n_glycan_network, plot_format = 'spring', edge_label_draw = False, draw_glycans = False)
     assert '<text ' not in plot.data
-    plt.close('all')
 
 
 @patch('glycowork.motif.draw.is_jupyter', return_value = True)
@@ -8739,7 +8710,6 @@ def test_plot_network_with_edge_labels(mock_jupyter, evo_test_networks):
     main_net, _ = evo_test_networks
     plot = plot_network(main_net, plot_format = 'kamada_kawai', edge_label_draw = True, draw_glycans = False)
     assert '<text ' in plot.data
-    plt.close('all')
 
 
 @patch('glycowork.motif.draw.is_jupyter', return_value = True)
@@ -8749,7 +8719,6 @@ def test_plot_network_with_lfc(mock_jupyter, evo_test_networks):
     main_net, _ = evo_test_networks
     plot = plot_network(main_net, plot_format = 'kamada_kawai', edge_label_draw = True, lfc_dict = lfc_dict, draw_glycans = False)
     assert '<circle' in plot.data and '<marker' in plot.data
-    plt.close('all')
 
 
 @patch('glycowork.motif.draw.is_jupyter', return_value = True)
@@ -8761,7 +8730,6 @@ def test_plot_network_layouts(mock_jupyter, evo_test_networks):
     for layout in safe_layouts:
         plot = plot_network(main_net, plot_format = layout, draw_glycans = False)
         assert plot is not None
-        plt.close('all')
     # Test pydot2 layout with proper error handling
     try:
         with suppress_pydot_warnings():
@@ -8769,7 +8737,6 @@ def test_plot_network_layouts(mock_jupyter, evo_test_networks):
             assert plot is not None
     except (ImportError, FileNotFoundError):
         print("Graphviz not installed, skipping pydot2 layout test")
-    plt.close('all')
 
 
 def test_plot_network_static_figure(tmp_path, evo_test_networks):
@@ -8783,12 +8750,12 @@ def test_plot_network_static_figure(tmp_path, evo_test_networks):
     assert (tmp_path / 'net_titled.svg').exists()
     with pytest.raises(ValueError):
         plot_network(main_net, plot_format = 'kamada_kawai', filepath = tmp_path / 'x.svg', glycan_size = 'huge')
-    # without a filepath the SNFG figure is built in a temp dir and handed back for Jupyter to render
+    # without a filepath the SNFG figure is handed back for Jupyter to render, with its hover text on the tagged elements
     with patch('glycowork.motif.draw.is_jupyter', return_value = True):
         out = plot_network(main_net, plot_format = 'kamada_kawai')
     assert out is not None and '<svg' in out.data and 'Node: ' in out.data and 'Reaction: ' in out.data
-    assert not list(tmp_path.glob('*_temp.svg'))
-    # ...and outside Jupyter it is shown through matplotlib instead of vanishing
+    assert re.search(r'id="\w*gwedge0"><title>Reaction: [^<]*</title><path d="[^"]*" style="fill:none;stroke:transparent', out.data)
+    # ...and outside Jupyter it is shown as a PNG instead of vanishing
     with patch('glycowork.motif.draw.is_jupyter', return_value = False), patch(
             'glycowork.motif.draw.display_svg_with_matplotlib') as mock_display:
         plot_network(main_net, plot_format = 'kamada_kawai')
@@ -8796,7 +8763,6 @@ def test_plot_network_static_figure(tmp_path, evo_test_networks):
     # a network pruned down to nothing still gets its (empty) figure
     plot_network(nx.DiGraph(), filepath = tmp_path / 'empty.svg')
     assert (tmp_path / 'empty.svg').exists()
-    plt.close('all')
 
 
 def test_plot_network_no_notebook(evo_test_networks):
@@ -8810,7 +8776,6 @@ def test_plot_network_no_notebook(evo_test_networks):
     text = page.read_text(encoding = 'utf-8')
     page.unlink()
     assert '<title>Milk</title>' in text and 'Node: ' in text and '<script>' in text
-    plt.close('all')
 
 
 def test_add_high_man_removal(evo_test_networks):
@@ -8898,7 +8863,6 @@ def test_infer_network(mock_jupyter):
     net2 = infer_network(net, "org", ["test", "org"], spec_dic)
     assert nx.get_node_attributes(net2, "virtual")["GlcNAc(b1-3)Gal(b1-4)Glc-ol"] == 2
     plot = plot_network(net2, draw_glycans = False)
-    plt.close('all')
 
 
 def test_export_network(tmp_path):
@@ -9453,7 +9417,6 @@ def test_read_abundances(tmp_path):
     assert np.allclose(get_pcoa(tmp_path / 'abund.csv', groups = [1, 1, 1, 2, 2, 2], permutations = 9, random_state = 0).values, get_pcoa(abund, groups = [1, 1, 1, 2, 2, 2], permutations = 9, random_state = 0).values)
     pd.testing.assert_frame_equal(get_biodiversity(tmp_path / 'abund.csv', group1 = g1, group2 = g2, metrics = ['alpha'])[0], get_biodiversity(abund, group1 = g1, group2 = g2, metrics = ['alpha'])[0])
     assert get_roc(tmp_path / 'abund.csv', group1 = g1, group2 = g2, random_state = 0) == get_roc(abund, group1 = g1, group2 = g2, random_state = 0)
-    plt.close('all')
 
 
 def test_read_abundances_dataset_names():
@@ -10260,15 +10223,11 @@ def test_train_ml_model(mock_xgb_data):
     )
     assert isinstance(model, xgb.XGBClassifier)
     assert isinstance(train, pd.DataFrame)
-
-
-@patch('matplotlib.pyplot.show')
 def test_analyze_ml_model(mock_show, mock_xgb_data):
     X_train, X_test, y_train, y_test = mock_xgb_data
     model = train_ml_model(X_train, X_test, y_train, y_test, mode='classification')
     analyze_ml_model(model)
     mock_show.assert_called_once()
-    plt.close('all')
 
 
 def test_get_mismatch(mock_xgb_data):
@@ -11251,7 +11210,7 @@ def test_analysis_filepath_and_contrast_branches(tmp_path):
                        'sample1': [100, 200, 150, 300], 'sample2': [110, 220, 140, 280], 'sample3': [120, 210, 160, 290],
                        'sample4': [500, 600, 450, 700], 'sample5': [480, 580, 470, 680], 'sample6': [520, 620, 430, 720]})
     gdf = GlycoDataFrame(df, contrasts = {f'sample{i}': ('control' if i < 4 else 'tumor') for i in range(1, 7)})
-    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+    with patch('viscose.Figure.save') as mock_savefig:
         characterize_monosaccharide('a1-3', mode = 'bond', modifications = True, rank = "Class", focus = "Actinopterygii",
                                     filepath = tmp_path / "mono.png")
         get_pca(df, [1, 1, 1, 2, 2, 2], filepath = tmp_path / "pca.png")
@@ -11331,9 +11290,11 @@ def test_get_biosynthetic_coherence_nothing_scorable():
 def test_plot_network_hierarchical_and_origin(mock_jupyter, sample_network):
     assert plot_network(sample_network, plot_format = 'hierarchical', draw_glycans = False) is not None  # diamond revisits a levelled node
     assert '<circle' not in plot_network(nx.DiGraph(), draw_glycans = False).data
+    # A color set by hand on a node is kept, as are the palette's own names
     nx.set_node_attributes(sample_network, {n: 'red' for n in sample_network.nodes()}, 'origin')
-    assert plot_network(sample_network, plot_format = 'hierarchical', draw_glycans = False) is not None
-    plt.close('all')
+    assert 'fill="#FF0000"' in plot_network(sample_network, plot_format = 'hierarchical', draw_glycans = False).data
+    nx.set_node_attributes(sample_network, {n: 'a1' for n in sample_network.nodes()}, 'origin')
+    assert 'fill="#A3214E"' in plot_network(sample_network, plot_format = 'hierarchical', draw_glycans = False).data
 
 
 def test_choose_path_missing_alternative():

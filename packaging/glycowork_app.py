@@ -16,7 +16,6 @@ import threading
 import time
 import traceback
 import urllib.request
-import warnings
 import pandas as pd
 try:
     from PySide6.QtCore import Qt, QObject, Signal, QTimer, QSettings, QAbstractTableModel, QModelIndex, QSortFilterProxyModel, QRectF, QSize, QUrl
@@ -85,18 +84,12 @@ def _worker_main(jobs, messages):
 
     sys.stdout = sys.stderr = Pipe()
     try:
-        import matplotlib
-        matplotlib.use('Agg')
-        import matplotlib.pyplot as plt
         from glycowork.glycan_data.data_entry import read_abundances
         from glycowork.motif import analysis
         from glycowork.motif.processing import GLYCOFORM_ID, is_composition
     except Exception:
         messages.put(('fatal', traceback.format_exc()))
         return
-    # The plotting functions end with plt.show(), which only warns under Agg
-    warnings.filterwarnings('ignore', message = '.*non-interactive.*')
-    warnings.filterwarnings('ignore', message = '.*FigureCanvasAgg.*')
     glycanish = lambda x: isinstance(x, str) and ('(' in x or is_composition(x))
     messages.put(('ready', None))
     parent = mp.parent_process()
@@ -166,7 +159,6 @@ def _worker_main(jobs, messages):
                 for n, (name, (func, kwargs)) in enumerate(figures.items()):
                     path = os.path.join(p['folder'], f'{p["stamp"]}_{n}.png')
                     result = getattr(analysis, func)(**kwargs, filepath = path)
-                    plt.close('all')
                     out[name] = (path, (func, kwargs))
                     if func == 'get_pcoa':
                         # The coordinates come with the figure, and PERMANOVA and the explained variance in their attrs
@@ -179,8 +171,6 @@ def _worker_main(jobs, messages):
                 messages.put(('saved', path))
         except Exception:
             messages.put(('error', traceback.format_exc()))
-        finally:
-            plt.close('all')
 
 
 class Runner(QObject):
