@@ -2086,6 +2086,14 @@ def test_composition_to_mass():
         assert get_formula('GalNAc', sample_prep = sample_prep, modification = 'benzyl') == formula
         assert abs(glycan_to_mass('GalNAc', sample_prep = sample_prep, modification = 'benzyl') - calculate_adduct_mass(formula)) < 1e-9
     assert abs(composition_to_mass('H1N1A1', sample_prep = 'permethylated', modification = 'benzyl') - composition_to_mass('H1N1A1', sample_prep = 'permethylated', modification = 'reduced') - 60.0000) < 1e-3
+    # O-glycans released oxidatively keep their Ser as a glycolic acid glycoside (+C2H2O2) and their Thr as a lactic acid glycoside (+C3H4O2): ring kept, the acid methyl-esterified by permethylation in place of the C1-OH's cap, not acetylated
+    for modification, formulas in [('glycolate', ('C10H17NO8', 'C15H27NO8', 'C16H23NO11')), ('lactate', ('C11H19NO8', 'C16H29NO8', 'C17H25NO11'))]:
+        for sample_prep, formula in zip(('underivatized', 'permethylated', 'peracetylated'), formulas):
+            assert get_formula('GalNAc', sample_prep = sample_prep, modification = modification) == formula
+            assert abs(glycan_to_mass('GalNAc', sample_prep = sample_prep, modification = modification) - calculate_adduct_mass(formula)) < 1e-9
+    # Kelly and Ashwood 2026 (Skyline, GPST000629): (NeuAc)1 (GalNAc-Ser)1 570.1908, (NeuAc)1 (GalNAc-Thr)1 584.2065
+    assert abs(glycan_to_mass('Neu5Ac(a2-6)GalNAc', modification = 'glycolate') - 570.1908) < 1e-3
+    assert abs(composition_to_mass('H0N1A1', modification = 'lactate') - 584.2065) < 1e-3
     # NaBD4 reduction adds HD, one D above NaBH4; APTS labels by reductive amination (label minus O), aminoxyTMT0 (C15H30N4O3) and Girard's P as oxime and hydrazone (label minus H2O)
     assert abs(composition_to_mass('H5N4', modification = 'reduced_D') - composition_to_mass('H5N4', modification = 'reduced') - 1.006277) < 1e-6
     assert abs(composition_to_mass('H3N2', modification = 'APTS') - composition_to_mass('H3N2') - 440.9647) < 1e-3
