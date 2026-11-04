@@ -135,7 +135,7 @@ def preprocess_data(
                                                  random_state = random_state, return_masks = True)
     # A feature without any detection in a whole group holds a floor there, which is no measurement: in the log-ratio reference it shifted every
     # feature of the samples it floors, so it stays out of the reference (and gets a detection test from the callers, through attrs['absent'])
-    absent = floored.any(axis = 1).to_numpy() & (not glycoproteomics)
+    absent = floored.any(axis = 1).to_numpy() & (not (glycoproteomics and motifs))
     # A glycan given more than once is averaged after the transform, so a floored copy next to measured ones put the group it floors ~11 log2 low
     # with no spread (the remaining false calls of split replicates); it carries no measurement and is left out
     copies = df.iloc[:, 0]
@@ -254,9 +254,11 @@ def preprocess_data(
                 cols = df_org.columns.tolist() if experiment == "anova" else ((group1 + group2) if paired else group1)
                 grp2 = [] if (paired or experiment == "anova") else group2
                 parts = []
+                floored_parts = set() if absent_rows is None else set(absent_rows.index)
                 for _, g in df_org.groupby(sites):
-                    ref = [g.mean(axis = 1).idxmax()] if len(
-                        g) < 4 else None  # with 2-3 parts the geometric mean is dominated by the very feature being tested, so we pin the denominator to the site's dominant glycoform instead
+                    measured = [k for k in g.index if k not in floored_parts] or g.index.tolist()
+                    # with 2-3 parts the geometric mean is dominated by the very feature being tested, so we pin the denominator to the site's dominant glycoform instead
+                    ref = [g.loc[measured].mean(axis = 1).idxmax()] if len(g) < 4 else measured if len(measured) < len(g) else None
                     parts.append(clr_transformation(g + 0.0000001, cols, grp2, gamma = gamma,
                                                     custom_scale = 0 if paired else custom_scale,
                                                     random_state = random_state, reference = ref))
@@ -328,7 +330,7 @@ def get_pvals_motifs(
         multiple_samples: bool = False,  # Multiple samples with glycan columns
         motifs: pd.DataFrame | None = None,  # Modified motif_list
         custom_motifs: str | list[str] = [],  # Custom motifs if using 'custom' feature set
-        grouped_BH: bool = True,  # Two-stage adaptive Benjamini-Hochberg within DAG-grouped motif families
+        grouped_BH: bool = False,  # Two-stage adaptive Benjamini-Hochberg within groups instead of over all features: DAG-grouped families for motifs and glycoforms; at equal false positives this does worse than a flat correction, so it is only on request
         moderate_variance: bool = True,  # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
         top_explained: int | None = 5  # How many child motifs to name in 'Explained by'; None names all of them
 ) -> GlycoDataFrame:  # DataFrame with p-values, FDR-corrected p-values, significance, Cohen's d effect sizes, and equivalence p-values for glycan motifs
@@ -989,7 +991,7 @@ def get_differential_expression(
         set_thresh: float = 0.9,  # Correlation threshold for clusters
         effect_size_variance: bool = False,  # Calculate effect size variance
         min_samples: float = 0.1,  # Min fraction (0-1) of non-zero samples required
-        grouped_BH: bool | None = None,  # Use two-stage adaptive Benjamini-Hochberg; None infers True for motifs (DAG-grouped families) and False for sequences
+        grouped_BH: bool = False,  # Two-stage adaptive Benjamini-Hochberg within groups instead of over all features: DAG-grouped families for motifs and glycoforms; at equal false positives this does worse than a flat correction, so it is only on request
         custom_motifs: str | list[str] = [],  # Custom motifs if using 'custom' feature set
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"; None auto-decides
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
@@ -1003,7 +1005,6 @@ def get_differential_expression(
         covariates: pd.DataFrame | pd.Series | dict | None = None  # per-sample nuisance variables indexed by sample name (e.g., secretor status, sex, age, batch; a dict maps samples to one covariate); each feature is fit as group plus covariates and the group effect is tested within them
 ) -> GlycoDataFrame:  # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes (Cohen's h of the detection rates for features absent from a whole group)
     "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets, or a linear model with covariates) with multiple testing correction on glycomics abundance data"
-    grouped_BH = ((motifs or glycoproteomics) and not sets) if grouped_BH is None else grouped_BH
     if glycoproteomics and monte_carlo:
         raise ValueError(
             "monte_carlo is not available for glycoproteomics: the per-glycosite closure replaces the run-wide CLR that estimate_technical_variance simulates over, so no Monte Carlo frame is ever built.")
@@ -1382,7 +1383,7 @@ def get_glycanova(
         feature_set: str | list[str] = ['exhaustive', 'known'],  # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
         min_samples: float = 0.1,  # Min fraction (0-1) of non-zero samples required
         posthoc: bool = True,  # Perform Tukey's HSD test post-hoc (pairwise Fisher tests with Holm for features absent from a whole group)
-        grouped_BH: bool | None = None,  # Use two-stage adaptive Benjamini-Hochberg; None infers True for motifs (DAG-grouped families) and False for sequences
+        grouped_BH: bool = False,  # Two-stage adaptive Benjamini-Hochberg within groups instead of over all features: DAG-grouped families for motifs and glycoforms; at equal false positives this does worse than a flat correction, so it is only on request
         custom_motifs: str | list[str] = [],  # Custom motifs if using 'custom' feature set
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"; None auto-decides
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
@@ -1395,7 +1396,6 @@ def get_glycanova(
 ) -> tuple[GlycoDataFrame, dict[str, pd.DataFrame]]:  # (ANOVA results with F-stats and omega-squared effect sizes (Cramer's V for features absent from a whole group), post-hoc results)
     "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
     from scipy.stats import studentized_range
-    grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     if groups is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         groups = list(df.groups)
         df = df[[df._glycan_col or df.columns[0]] + [c for c in df.columns if c in df._contrasts]]  # the labels only cover the contrast columns, and preprocess_data pairs them with columns by position
@@ -1624,7 +1624,7 @@ def get_time_series(
         feature_set: str | list[str] = ['known', 'exhaustive'],  # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
         degree: int = 1,  # Polynomial degree for regression
         min_samples: float = 0.1,  # Min fraction (0-1) of non-zero samples required
-        grouped_BH: bool | None = None,  # Family-grouped two-stage Benjamini-Hochberg via the motif DAG; None infers True for motifs and False for sequences
+        grouped_BH: bool = False,  # Two-stage adaptive Benjamini-Hochberg within groups instead of over all features: DAG-grouped families for motifs and glycoforms; at equal false positives this does worse than a flat correction, so it is only on request
         custom_motifs: str | list[str] = [],  # Custom motifs if using 'custom' feature set
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"; None auto-decides
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
@@ -1638,7 +1638,6 @@ def get_time_series(
     if glycoproteomics is None:  # decided on the labels, which survive pd.DataFrame(), to_csv, and a reader; attrs did not, and outlived a collapse to compositions
         labels = df.iloc[:, 0] if isinstance(df.iloc[0, 0], str) else df.index
         glycoproteomics = len(labels) > 0 and all(GLYCOFORM_ID.fullmatch(str(k)) for k in labels)
-    grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     df = df.fillna(0)
     if isinstance(df.iloc[0, 0], str):
         df = df.set_index(df.columns[0])
@@ -1768,13 +1767,12 @@ def get_jtk(
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"; None auto-decides
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
         correction_method: str = "two-stage",  # Multiple testing correction method
-        grouped_BH: bool | None = None,  # Family-grouped two-stage Benjamini-Hochberg via the motif DAG; None infers True for motifs and False for sequences
+        grouped_BH: bool = False,  # Two-stage adaptive Benjamini-Hochberg within groups instead of over all features: DAG-grouped families for motifs and glycoforms; at equal false positives this does worse than a flat correction, so it is only on request
         glycoproteomics: bool | None = None,  # Whether rows are glycoforms, ordered by composition containment instead of substructure containment; default: whenever every row label is protein_site_glycan
         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> GlycoDataFrame:  # DataFrame with JTK results: adjusted p-values, period length, lag phase, amplitude
     "Identifies rhythmically expressed glycans using Jonckheere-Terpstra-Kendall algorithm for time series analysis"
     df = df_in.copy(deep = True)
-    grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     if (df.shape[1] - 1) % timepoints:
         raise ValueError(
             f"{df.shape[1] - 1} sample columns cannot be split into {timepoints} timepoints with the same number of replicates each; check timepoints and that the first column holds the glycans.")
@@ -1811,7 +1809,7 @@ def get_cosinor(
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"; None auto-decides
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
         correction_method: str = "two-stage",  # Multiple testing correction method
-        grouped_BH: bool | None = None,  # Family-grouped two-stage Benjamini-Hochberg via the motif DAG; None infers True for motifs and False for sequences
+        grouped_BH: bool = False,  # Two-stage adaptive Benjamini-Hochberg within groups instead of over all features: DAG-grouped families for motifs and glycoforms; at equal false positives this does worse than a flat correction, so it is only on request
         glycoproteomics: bool | None = None,  # Whether rows are glycoforms, ordered by composition containment instead of substructure containment; default: whenever every row label is protein_site_glycan
         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> GlycoDataFrame:  # DataFrame with cosinor results: best period, mesor, amplitude, acrophase (peak time, on the time axis of timepoints), R2, raw and adjusted p-values
@@ -1822,7 +1820,6 @@ def get_cosinor(
     if not periods or min(periods) <= 0:
         raise ValueError(f"periods have to be positive cycle lengths in time units, got {periods}.")
     df = df_in.copy(deep = True)
-    grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     n = df.shape[1] - 1
     if isinstance(timepoints, (int, np.integer)):
         if n % timepoints:
@@ -2132,18 +2129,7 @@ def get_SparCC(
     if df1.shape[0] <= 8:
         # spearmanr's t approximation is badly anti-conservative at small n: at n = 5 it gives r = 1 a p-value below 1e-20, while 2 of the 120 rank orders reach |r| = 1
         p_value_matrix = spearman_exact_pvals(correlation_matrix, df1.shape[0])
-    if motifs:
-        # Each motif's correlations are one family, grouped by rarest ancestral motif family so that branches with different null proportions each get their own pi0
-        family = _root_families(get_motif_dag(df1.columns.tolist()))
-        grouped_cells, grouped_pvals = {}, {}
-        for i, m in enumerate(df1.columns):
-            grp = family.get(m, "rest")
-            grouped_cells.setdefault(grp, []).extend((i, j) for j in range(df2.shape[1]))
-            grouped_pvals.setdefault(grp, []).extend(p_value_matrix[i, :].tolist())
-        corrected, _ = TST_grouped_benjamini_hochberg(grouped_cells, grouped_pvals, alpha)
-        p_value_matrix = np.array([[corrected[(i, j)] for j in range(df2.shape[1])] for i in range(df1.shape[1])])
-    else:
-        p_value_matrix = np.reshape(correct_multiple_testing(p_value_matrix.flatten(), alpha)[0], p_value_matrix.shape)
+    p_value_matrix = np.reshape(correct_multiple_testing(p_value_matrix.flatten(), alpha)[0], p_value_matrix.shape)
     correlation_df = pd.DataFrame(correlation_matrix, index = df1.columns, columns = df2.columns)
     p_value_df = pd.DataFrame(p_value_matrix, index = df1.columns, columns = df2.columns)
     correlation_df.attrs.update(

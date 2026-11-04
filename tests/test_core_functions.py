@@ -3222,6 +3222,8 @@ def test_GlycoDataFrame():
     df_t = GlycoDataFrame(pd.DataFrame([[1.0, 2.0], [3.0, 4.0]], index = ['s1', 's2'], columns = ['Gal(b1-4)GlcNAc', 'Fuc(a1-2)Gal']))
     assert list(df_t.glycans) == ['Gal(b1-4)GlcNAc', 'Fuc(a1-2)Gal']
     assert list(df_t.abundance.index) == ['Gal(b1-4)GlcNAc', 'Fuc(a1-2)Gal'] and list(df_t.abundance.columns) == ['s1', 's2']
+    df_dup = GlycoDataFrame(pd.DataFrame([[1.0, 2.0, 5.0], [3.0, 4.0, 6.0]], index = ['s1', 's2'], columns = ['Gal(b1-4)GlcNAc', 'Fuc(a1-2)Gal', 'Gal(b1-4)GlcNAc']))
+    assert list(df_dup.abundance.index) == list(df_dup.glycans) == ['Gal(b1-4)GlcNAc', 'Fuc(a1-2)Gal', 'Gal(b1-4)GlcNAc']  # a duplicated glycan column stays one row per copy
     filtered = df_t.glyco_filter('Fuc(a1-2)Gal')
     assert list(filtered.columns) == ['Fuc(a1-2)Gal'] and list(filtered.index) == ['s1', 's2']  # the glycan columns are filtered, not the sample rows
     # Glycans in the index keep their labels through glyco_filter
@@ -7688,7 +7690,7 @@ def glycoform_timecourse():
 
 
 def test_time_series_and_jtk_accept_glycoforms(glycoform_timecourse, capsys):
-    ts = get_time_series(glycoform_timecourse, glycoproteomics = True)  # the IUPAC orientation heuristic must not transpose glycoform IDs
+    ts = get_time_series(glycoform_timecourse, glycoproteomics = True, grouped_BH = True)  # the IUPAC orientation heuristic must not transpose glycoform IDs
     assert 'corr p-val' in ts.columns and len(ts) > 0
     assert 'by_motif_family' in capsys.readouterr().out  # the composition DAG, not the Sia/Fuc fallback, drove the grouping
     jtk = get_jtk(glycoform_timecourse, timepoints = 3, interval = 4, periods = [2], glycoproteomics = True)
@@ -7748,7 +7750,7 @@ def test_get_cosinor_motifs(sample_jtk_df):
 
 def test_get_cosinor_glycoforms(glycoform_timecourse, capsys):
     res = get_cosinor(glycoform_timecourse, timepoints = [0, 4, 8, 12, 16, 20],
-                      glycoproteomics = True)  # unreplicated timepoints
+                      glycoproteomics = True, grouped_BH = True)  # unreplicated timepoints
     assert 'by_motif_family' in capsys.readouterr().out  # the composition DAG drove the grouping
     assert len(res) > 0 and res['P_value'].between(0, 1).all()
 
@@ -11079,6 +11081,27 @@ def test_sequence_analysis_gets_no_decomposition_columns():
     out = get_differential_expression(glycomics_data_loader.human_skin_O_PMC5871710_BCC, motifs = False,
                                       random_state = 42)
     assert 'Redistribution p-val' not in out.columns
+
+
+def test_motif_correction_is_flat_unless_asked(bcc_result, capsys):
+    assert np.allclose(bcc_result['corr p-val'].values, correct_multiple_testing(bcc_result['p-val'].tolist(), bcc_result.attrs['alpha'])[0])
+    df = glycomics_data_loader.human_skin_O_PMC5871710_BCC
+    grouped = get_differential_expression(df, motifs = True, grouped_BH = True, random_state = 42)
+    assert 'by_motif_family' in capsys.readouterr().out
+    assert set(grouped['Glycan']) == set(bcc_result['Glycan'])
+    assert np.allclose(grouped.set_index('Glycan')['p-val'].sort_index(), bcc_result.set_index('Glycan')['p-val'].sort_index())  # the moderated test, with its containment neighborhood, does not depend on the correction
+    assert 'moderated' in bcc_result.attrs['test']
+
+
+def test_glycoproteomics_floors_stay_out_of_the_reference():
+    df = glycoproteomics_data_loader.human_milk_N_PMID34087070
+    shuffled = ['Colostrum1', 'Mature1', 'Mature2'], ['Colostrum2', 'Colostrum3', 'Mature3']
+    tf, org = preprocess_data(df, *shuffled, experiment = 'diff', glycoproteomics = True, random_state = 1)[:2]
+    assert len(org.attrs['absent']) > 0  # glycoforms without detection in a whole group get a detection test
+    res = get_differential_expression(df, *shuffled, glycoproteomics = True, random_state = 1).attrs['glycoforms']
+    assert res['significant'].mean() < 0.05  # a floor in the reference shifted its whole site, and about 80% of glycoforms were significant under shuffled labels
+    floored = tf.index.isin(org.attrs['absent'].index)
+    assert np.nanmedian(np.abs(tf[~floored].mean(axis = 1))) < 2
 
 
 def test_get_motif_dag_carriers_refute_label_containment():

@@ -10,8 +10,9 @@
 - Added `glycan_to_kcf`, which writes KCF as KEGG GLYCAN does, for KEGG's KCaM search or the RINGS tools ()
 
 ##### Fixed 🐛
-- `kcf_to_iupac` reads KEGG's bare `Fuc`, `Ara`, and `AllNAc` as D, as KEGG means them; both anomers of a sucrose linkage, unknown anomers (`2:1`), phosphoethanolamines, carriers such as `PP-Dol` and `protein`, inositol, and KEGG's spellings (`Cym`, `2,6daraHex`, `L4-en-thrHexA`, `Formyl`) are read as well, so all 1,000 KEGG entries tested now read ()
-- `kcf_to_iupac` keeps `dHex` as it is, which it turned into `D-Hex` ()
+- `kcf_to_iupac` reads KEGG's bare `Fuc`, `Ara`, and `AllNAc` as D, as KEGG means them; both anomers of a sucrose linkage, unknown anomers (`2:1`), phosphoethanolamines, carriers such as `PP-Dol` and `protein`, inositol, and KEGG's spellings (`Cym`, `2,6daraHex`, `L4-en-thrHexA`, `Formyl`) are read as well, so all 1,000 KEGG entries tested now read (bfa9757)
+- `kcf_to_iupac` keeps `dHex` as it is, which it turned into `D-Hex` (bfa9757)
+- `PDB_TO_IUPAC` now maps `NDG3SO3` to `GlcNAc3S` instead of `GlcNAc3S6S` and adds `BGC6SO3`, `NGA3SO3`, `NGA6SO3`, `NGA4SO36SO3`, and `GAL3SO34SO3` ()
 
 #### tokenization
 ##### Added ✨
@@ -30,16 +31,24 @@
 
 #### annotate
 ##### Added ✨
-- Added `get_motif_atoms` and `get_composition_atoms`, which split a parent motif or glycoform by the children covering it, into parts that sum to the parent ()
-- Added the `carriers` keyword argument to `get_motif_dag` and `return_counts` to `quantify_motifs` ()
+- Added `get_motif_atoms` and `get_composition_atoms`, which split a parent motif or glycoform by the children covering it, into parts that sum to the parent (bfa9757)
+- Added the `carriers` keyword argument to `get_motif_dag` and `return_counts` to `quantify_motifs` (bfa9757)
 
 ##### Fixed 🐛
-- `get_motif_dag` proves containment on the measured structures when they are given, since wildcard matching accepted edges such as `Neu5Ac` to `Sia(a2-3)Gal` ()
+- `get_motif_dag` proves containment on the measured structures when they are given, since wildcard matching accepted edges such as `Neu5Ac` to `Sia(a2-3)Gal` (bfa9757)
 
 #### analysis
 ##### Added ✨
-- `get_differential_expression`, `get_glycanova`, and `get_pvals_motifs` now also report `Own share`, `Shared share`, and `Share shift` for parent motifs ()
+- `get_differential_expression`, `get_glycanova`, and `get_pvals_motifs` now also report `Own share`, `Shared share`, and `Share shift` for parent motifs (bfa9757)
 
 ##### Changed 🔄
-- Residuals and redistributions come from an exact partition of each parent, so overlapping children no longer overshoot it; glycoform containment uses the cumulative abundance at or above a composition ()
-- Redistribution in `get_differential_expression` falls back to a permutation test where Hotelling's T2 is undefined, and in `get_glycanova` it runs on Aitchison distances, which do not depend on part order ()
+- Residuals and redistributions come from an exact partition of each parent, so overlapping children no longer overshoot it; glycoform containment uses the cumulative abundance at or above a composition (bfa9757)
+- Redistribution in `get_differential_expression` falls back to a permutation test where Hotelling's T2 is undefined, and in `get_glycanova` it runs on Aitchison distances, which do not depend on part order (bfa9757)
+
+##### Fixed 🐛
+- Glycoforms without detection in a whole group get a detection test and stay out of their site's log-ratio reference; the floor shifted every other glycoform of the site otherwise ()
+
+### glycan_data
+#### frame
+##### Fixed 🐛
+- `GlycoDataFrame.abundance` keeps one row per copy of a duplicated glycan column in the transposed layout, in line with `.glycans` ()

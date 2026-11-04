@@ -1450,20 +1450,16 @@ def get_differential_biosynthesis(df: pd.DataFrame | str | Path, # Glycan abunda
         pvals = np.maximum(2 * tdist.sf(np.abs(eff / np.sqrt(s2_mod * scale)), df_post), np.finfo(float).tiny)
         # Shadow reactions are averages of their own variants, so testing both in one family nearly doubles it with redundant hypotheses; two-stage grouped BH gives each family its own pi0 instead of correcting them as unrelated runs
         alpha = get_alphaN(len(all_groups))
-        if analysis == "steps":  # a step family is the rarest root it descends from, as for motifs, so each branch gets its own pi0
-            from glycowork.motif.analysis import _root_families
-            root_of, grouped_f, grouped_p = _root_families(step_dag), defaultdict(list), defaultdict(list)
-            for feat, pv in zip(features, pvals):
-                grouped_f[root_of.get(feat, 'rest')].append(feat)
-                grouped_p[root_of.get(feat, 'rest')].append(pv)
+        if analysis == "steps":
+            corrpvals, significance = correct_multiple_testing(pvals, alpha)
         else:
             fam = np.isin(features, list(shadow_set))
             grouped_f = {k: [f for f, m in zip(features, mask) if m] for k, mask in (('collapsed', fam), ('variant', ~fam))
                          if mask.any()}
             grouped_p = {k: [p for p, m in zip(pvals, mask) if m] for k, mask in (('collapsed', fam), ('variant', ~fam)) if
                          mask.any()}
-        cp, sd = TST_grouped_benjamini_hochberg(grouped_f, grouped_p, alpha)
-        corrpvals, significance = [cp[f] for f in features], [sd[f] for f in features]
+            cp, sd = TST_grouped_benjamini_hochberg(grouped_f, grouped_p, alpha)
+            corrpvals, significance = [cp[f] for f in features], [sd[f] for f in features]
         pvals = list(pvals)
         # the test statistic uses the moderated variance, so standardizing the effect by anything else makes the two columns disagree on the same row
         effect_sizes = eff / np.sqrt(s2_mod)

@@ -67,9 +67,9 @@ class GlycoDataFrame(pd.DataFrame):
             return self.drop(columns = col)
         if self.index.dtype != float and any(isinstance(v, str) and '(' in v for v in self.index[:3]):
             return self
-        cols = [c for c in self.columns if isinstance(c, str) and '(' in c]
-        if len(cols) > sum(1 for v in self.iloc[:, 0] if isinstance(v, str) and '(' in v):
-            return self[cols].T  # the transposed layout .glycans now recognizes; every other branch hands back glycans as rows
+        cols = [isinstance(c, str) and '(' in c for c in self.columns]
+        if sum(cols) > sum(1 for v in self.iloc[:, 0] if isinstance(v, str) and '(' in v):
+            return self.loc[:, cols].T  # the transposed layout .glycans now recognizes; every other branch hands back glycans as rows
         return self.iloc[:, 1:]
 
     @property
