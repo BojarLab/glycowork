@@ -819,7 +819,8 @@ def simpson_diversity_index(counts: np.ndarray # array of counts
 
 def get_equivalence_test(row_a: np.ndarray, # array of control samples for one glycan/motif
                          row_b: np.ndarray, # array of case samples for one glycan/motif
-                         paired: bool = False # whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient)
+                         paired: bool = False, # whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient)
+                         scale_var: float = 0 # scale uncertainty of a sample's log-ratio, added to the variance of the standard error
                          ) -> float: # p-value for equivalence test
     "performs equivalence test (two one-sided t-tests) to test whether differences between group means are considered practically equivalent, for one feature or for a whole feature x sample frame"
     A, B = np.atleast_2d(np.asarray(row_a, dtype = float)), np.atleast_2d(np.asarray(row_b, dtype = float))
@@ -835,10 +836,9 @@ def get_equivalence_test(row_a: np.ndarray, # array of control samples for one g
         assert A.shape[1] == B.shape[1], "For paired samples, the size of row_a and row_b should be the same"
         diff = A - B
         nd = np.isfinite(diff).sum(axis = 1)
-        mdiff, se, dof = np.nanmean(diff, axis = 1), np.nanstd(diff, axis = 1, ddof = 1) / np.sqrt(nd), nd - 1
+        mdiff, se, dof = np.nanmean(diff, axis = 1), np.sqrt((np.nanvar(diff, axis = 1, ddof = 1) + 2 * scale_var) / nd), nd - 1  # a paired difference holds two log-ratios
     else:
-        mdiff, se, dof = amean(A, axis = 1) - bmean(B, axis = 1), pooled_std * np.sqrt(
-            1 / na + 1 / nb), na + nb - 2
+        mdiff, se, dof = amean(A, axis = 1) - bmean(B, axis = 1), np.sqrt((pooled_std ** 2 + scale_var) * (1 / na + 1 / nb)), na + nb - 2
     # TOST: the equivalence p-value is the larger of the two one-sided t-tests against the -delta and +delta bounds
     se = np.maximum(se, 1e-300)
     p = np.maximum(t.sf((mdiff + delta) / se, dof), t.cdf((mdiff - delta) / se, dof))
@@ -1113,10 +1113,8 @@ def correct_multiple_testing(pvals: list[float] | np.ndarray, # list of raw p-va
     corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
     significance = [bool(p < alpha) for p in corrpvals]
     if len(significance) >= 10 and sum(significance) > 0.9 * len(significance):
-        print("Significance inflation detected. The CLR/ALR transformation possibly cannot handle this dataset. Consider running again with a higher gamma value. "
-              "Proceed with caution; for now switching to Bonferroni correction to be conservative about this.")
-        corrpvals = np.minimum(np.asarray(pvals) * len(pvals), 1)
-        significance = [bool(p < alpha) for p in corrpvals]
+        print("Possible significance inflation: more than 90% of tests are significant, which in log-ratio data can also come from a moved reference instead of from each feature. "
+              "Proceed with caution, and consider running again with a higher gamma value.")
     return corrpvals, significance
 
 

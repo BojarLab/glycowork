@@ -220,23 +220,21 @@ def parse_floating_bit(bit: str # Content of one {...} floating bit, without bra
     alts = [a for a in bit.split('|') if a]
     if not any('^' in a for a in alts):
         return bit, {}
-    import networkx as nx
-    from glycowork.motif.graph import glycan_to_nxGraph_int, graph_to_string
+    from glycowork.motif.graph import _glycan_graph_int, _descendants, graph_to_string
     fragments, links, anchors = set(), set(), {}
     for a in alts:
         marked = [i for i, x in enumerate(min_process_glycans([a])[0]) if x.endswith('^')]
         if len(marked) != 1:
             raise ValueError(f"Every floating-bit alternative needs exactly one '^' marking the uncertain residue: {a}")
-        g = glycan_to_nxGraph_int(a.replace('^', ''))
-        floating = nx.descendants(g, marked[0]) | {marked[0]}
-        link = next(g.predecessors(marked[0]))
+        g = _glycan_graph_int(a.replace('^', ''))
+        floating = _descendants(g, marked[0]) | {marked[0]}
+        link = next(iter(g.pred[marked[0]]))
         linkage = g.nodes[link]['string_labels']
         fragments.add(graph_to_string(g.subgraph(floating)))
         links.add(linkage)
-        if (parent := next(g.predecessors(link), None)) is not None:
-            context = g.subgraph(set(g.nodes) - floating - {link}).copy()
-            context.nodes[parent]['string_labels'] += '^'
-            anchors[linkage] = graph_to_string(context)
+        if (parent := next(iter(g.pred[link]), None)) is not None:
+            context = g.subgraph(set(g) - floating - {link})
+            anchors[linkage] = graph_to_string(context.with_attr('string_labels', {parent: context.nodes[parent]['string_labels'] + '^'}))
     if len(fragments) > 1:
         raise ValueError(f"All alternatives of a floating bit must share the same fragment: {bit}")
     prefixes = {l[:l.index('-')] for l in links}
@@ -705,7 +703,7 @@ def glycoct_to_iupac(glycoct: str # Glycan in GlycoCT format
         iupac = iupac.replace(']', '', 1)
     iupac = iupac.replace('[[', '[').replace(']]', ']')
     if floating_specs:
-        from glycowork.motif.graph import glycan_to_nxGraph, resolve_anchor
+        from glycowork.motif.graph import _glycan_graph, resolve_anchor
         parent_of = {c: (p, l) for p, kids in iupac_parts.items() for l, c in kids}
 
         def gct_subtree(n, depth, extra = ''):
@@ -722,7 +720,7 @@ def glycoct_to_iupac(glycoct: str # Glycan in GlycoCT format
                 chain += f"({l}){residue_dic[n]}"
             return chain
 
-        main_graph = glycan_to_nxGraph(iupac)
+        main_graph = _glycan_graph(iupac)
         for part, parents, linkage in floating_specs:
             alternatives = []
             for pid in parents:
@@ -2264,23 +2262,22 @@ def _canonicalize_iupac(glycan: str | int  # Glycan sequence in any supported fo
         raise ValueError(f"Mismatching brackets in formatted glycan string: {glycan}")
     # Canonicalize branch ordering
     if '[' in glycan and not glycan.startswith('[') and ']' in glycan and not repeat:
-        from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string
+        from glycowork.motif.graph import _glycan_graph, graph_to_string
         if '^' not in glycan:
-            g = glycan_to_nxGraph.__wrapped__(glycan).copy()  # a copy, since the graph can come straight out of glycan_to_nxGraph_int's cache
-            clash = False
+            g, clash = _glycan_graph.__wrapped__(glycan), {}
             for n in g:  # one acceptor position takes one child; sanitize_iupac only sees a branch next to its main chain, so sibling branches that only meet after reordering are caught here, else a second pass would make them uncertain
-                pos = [(c, g.nodes[c]['string_labels'].rpartition('-')) for c in g.successors(n)]
+                pos = [(c, g.nodes[c]['string_labels'].rpartition('-')) for c in g.succ[n]]
                 for c, (donor, _, acc) in pos:
                     if acc.isdigit() and sum(a == acc for _, (_, _, a) in pos) > 1:
-                        g.nodes[c]['string_labels'], clash = f"{donor}-?", True
-            glycan = graph_to_string(g) if not clash else graph_to_string(glycan_to_nxGraph.__wrapped__(multireplace(_sia_onto_neu(graph_to_string(g)), _POST_PROCESS)))  # a sialic acid made uncertain here takes the a2-3/6 (a2-8 on Neu) default a second pass would give it, and may then sort elsewhere
+                        clash[c] = f"{donor}-?"
+            glycan = graph_to_string(g) if not clash else graph_to_string(_glycan_graph.__wrapped__(multireplace(_sia_onto_neu(graph_to_string(g.with_attr('string_labels', clash))), _POST_PROCESS)))  # a sialic acid made uncertain here takes the a2-3/6 (a2-8 on Neu) default a second pass would give it, and may then sort elsewhere
         elif (cut := glycan.rfind('}') + 1) and '[' in glycan[cut:]:
-            glycan = glycan[:cut] + graph_to_string(glycan_to_nxGraph.__wrapped__(glycan[cut:]))
+            glycan = glycan[:cut] + graph_to_string(_glycan_graph.__wrapped__(glycan[cut:]))
     if '{' in glycan:
         if '^' in glycan:
-            from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string
+            from glycowork.motif.graph import _glycan_graph, graph_to_string
             for bit in [b for b in re.findall(r'\{.*?\}', glycan) if '^' in b]:
-                alts = sorted((graph_to_string(glycan_to_nxGraph.__wrapped__(a)) for a in bit[1:-1].split('|')),
+                alts = sorted((graph_to_string(_glycan_graph.__wrapped__(a)) for a in bit[1:-1].split('|')),
                               key = lambda a: (not (p := re.search(r'\^\([ab?][12]-([\d?/]+)\)', a).group(1)).isdigit(),
                                                int(p) if p.isdigit() else 99, a))
                 glycan = glycan.replace(bit, '{' + '|'.join(alts) + '}')

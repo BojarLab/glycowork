@@ -1,12 +1,10 @@
 from __future__ import annotations
 import re
 import warnings
-import networkx as nx
 from itertools import chain
-from glycowork.glycan_data.loader import lib, unwrap, pd
+from glycowork.glycan_data.loader import lib, unwrap, pd, nx
 from glycowork.motif.processing import canonicalize_iupac, min_process_glycans
-from weakref import WeakKeyDictionary
-from glycowork.motif.graph import graph_to_string, subgraph_isomorphism, glycan_to_nxGraph, LINKAGE_LABEL, _tree_embeddings, _sl, _has_o, _ptm_wildcarded, build_wildcard_cache, categorical_node_match_wildcard
+from glycowork.motif.graph import graph_to_string, subgraph_isomorphism, LINKAGE_LABEL, _tree_embeddings, _sl, _has_o, _ptm_wildcarded, build_wildcard_cache, categorical_node_match_wildcard, GlycanGraph, _glycan_graph, _as_graph, _slim, _is_graph, _component, _components, _descendants, _label_match, _ANY_ORDER
 
 PREPROCESS_SPLIT = re.compile(r'(-?\s*(?:\((?:\?<=|\?<!)[^()]*\))?\s*\(?\[.*?\]\)?\s*(?:\{,?\d*,?\d*\}\?|\{,?\d*,?\d*\}|\*\?|\+\?|\?|\*|\+)\s*(?:\((?:\?=|\?!)[^()]*\))?\s*-?)')
 LINKAGE_SHORTHAND = re.compile(r'[\d\?]\(|\d$')
@@ -18,7 +16,6 @@ LOOKAROUND = re.compile(r'\((\?<=|\?<!|\?=|\?!)([^()]*)\)')
 QUANTIFIER = re.compile(r'\{([^}]*)\}')
 ALTERNATIVES = re.compile(r'\[([^\]]*)\]')
 _COMPONENT_CACHE = {}  # pre-compiled pattern -> its compiled chunks, which get_match would otherwise rebuild for every glycan
-_HITS_CACHE = WeakKeyDictionary()  # glycan graph -> {chunk motif: its subgraph matches}, as the known motifs' glyco-regexes search the same chunks in the same glycan
 
 
 def preprocess_pattern(pattern: str # Glyco-regular expression like "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
@@ -136,7 +133,7 @@ def compile_component(pattern_component: str # Chunk of glyco-regular expression
 
 
 def filter_matches_by_location(matches: list[list[int]], # List of node index lists
-                               ggraph: nx.DiGraph, # Glycan graph
+                               ggraph: GlycanGraph | nx.DiGraph, # Glycan graph
                                match_location: str | set[str] | None # Location(s) to match: start/end/internal
                                ) -> list[list[int]]: # Filtered matches
     "Filter matches by location requirement"
@@ -147,27 +144,38 @@ def filter_matches_by_location(matches: list[list[int]], # List of node index li
     if isinstance(match_location, str):
         match_location = {match_location}
     # glycan_to_nxGraph numbers the main chain first and every floating bit above it, so the reducing end is the top of the component holding node 0, not the highest node id
-    root = max(min(nx.weakly_connected_components(ggraph), key = min)) if len(ggraph) else -1
+    ggraph = _slim(ggraph)
+    root = max(min(_components(ggraph), key = min)) if len(ggraph) else -1
     if 'start' in match_location:
-        matches = [m for m in matches if m and ggraph.out_degree[m[0]] == 0]
+        matches = [m for m in matches if m and not ggraph.succ[m[0]]]
     if 'end' in match_location:
         matches = [m for m in matches if root in m]
     if 'internal' in match_location:
-        matches = [m for m in matches if m and ggraph.out_degree[m[0]] > 0 and root not in m]
+        matches = [m for m in matches if m and ggraph.succ[m[0]] and root not in m]
     return matches
 
 
+def _alternating(ggraph, root, offset):  # the nodes below root, root included, at a depth of the parity offset
+    level, depth, out = [root], 0, set()
+    while level:
+        if depth % 2 == offset:
+            out.update(level)
+        level, depth = [c for n in level for c in ggraph.succ[n]], depth + 1
+    return out
+
+
 def trace_matches(components: list[dict], # Compiled pattern chunks
-                  ggraph: nx.DiGraph # Glycan graph
+                  ggraph: GlycanGraph | nx.DiGraph # Glycan graph
                   ) -> list[list[int]]: # Node lists of complete matches
     "Walk the glycan graph to chain pattern chunks into complete matches"
-    parent = {c: p for p in ggraph.nodes() for c in ggraph.successors(p)}
+    ggraph = _slim(ggraph)
+    parent = {c: p for p, cs in ggraph.succ.items() for c in cs}
     monos = set()
-    for comp in nx.weakly_connected_components(ggraph):
+    for comp in _components(ggraph):
         root = max(comp)
         # A motif can end in a dangling linkage, which puts a linkage rather than a monosaccharide at the root and flips the alternation
         offset = bool(LINKAGE_LABEL.match(ggraph.nodes[root].get('string_labels', '')))
-        monos.update(n for n, d in nx.single_source_shortest_path_length(ggraph, root).items() if d % 2 == offset)
+        monos.update(_alternating(ggraph, root, offset))
 
     def attach(nodes):  # monosaccharide directly rootward of a matched chunk, -1 if the chunk reaches the reducing end
         top = max(nodes)
@@ -177,25 +185,26 @@ def trace_matches(components: list[dict], # Compiled pattern chunks
                 return -1
         return parent.get(top, -1)
 
-    hits_cache = _HITS_CACHE.setdefault(ggraph, {})
+    if ggraph.hits is None:
+        ggraph.hits = {}
+    hits_cache = ggraph.hits
 
     def candidates(motifs, location):
         out = []
         for m in motifs:
             if m not in hits_cache:
                 if m.startswith('!') and '(' not in m:  # a lone negated residue has no positive motif graph to search for
-                    _, hits = subgraph_isomorphism(ggraph, glycan_to_nxGraph('Monosaccharide'), count = True, return_matches = True)
-                    _, excluded = subgraph_isomorphism(ggraph, glycan_to_nxGraph(m[1:]), count = True, return_matches = True)
+                    _, hits = subgraph_isomorphism(ggraph, _glycan_graph('Monosaccharide'), count = True, return_matches = _ANY_ORDER)
+                    _, excluded = subgraph_isomorphism(ggraph, _glycan_graph(m[1:]), count = True, return_matches = _ANY_ORDER)
                     banned = {e[0] for e in excluded}
                     hits = [h for h in hits if h[0] not in banned]
-                elif not len(g2 := glycan_to_nxGraph(m)):
+                elif not len(g2 := _glycan_graph(m)):
                     hits = []
                 else:
                     # The same node match subgraph_isomorphism builds; its tree embeddings are VF2's matches up to order, which only matters when two share the (first, last) node they are sorted on below
                     g1, g2p = (_ptm_wildcarded(ggraph), _ptm_wildcarded(g2)) if _has_o(g2) or _has_o(ggraph) else (ggraph, g2)
                     wl = build_wildcard_cache(set(_sl(g1)) | set(_sl(g2p)))
-                    emb = None if '!' in m else _tree_embeddings(g1, g2p, categorical_node_match_wildcard('string_labels', 'unknown', wl, 'termini', 'flexible') if wl or g1 is not ggraph else
-                                                                 nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
+                    emb = None if '!' in m else _tree_embeddings(g1, g2p, categorical_node_match_wildcard('string_labels', 'unknown', wl, 'termini', 'flexible') if wl or g1 is not ggraph else _label_match)
                     hits = None if emb is None else sorted(sorted(h) for h in set().union(*emb))
                     if hits is None or len({(h[0], h[-1]) for h in hits}) < len(hits):
                         _, hits = subgraph_isomorphism(ggraph, g2, count = True, return_matches = True)
@@ -314,15 +323,13 @@ def parse_pattern(pattern: str # Pattern component from glyco-regular motif
 
 
 def format_retrieved_matches(lists: list[list[int]], # List of traces
-                             ggraph: nx.DiGraph # Glycan graph
+                             ggraph: GlycanGraph | nx.DiGraph # Glycan graph
                              ) -> list[str]: # Matching glycan strings
     "Convert traces into glycan strings"
-    out = []
-    for t in lists:  # a standalone copy is much faster to canonicalize than a subgraph view
-        sub = nx.DiGraph()
-        sub.add_nodes_from((n, ggraph.nodes[n]) for n in t)
-        sub.add_edges_from((n, c) for n in t for c in ggraph.succ[n] if c in sub)
-        if nx.is_weakly_connected(sub):
+    out, ggraph = [], _slim(ggraph)
+    for t in lists:
+        sub = ggraph.subgraph(t)
+        if len(_component(sub, t[0])) == len(sub):
             out.append((graph_to_string(sub), t))
     return [s for s, _ in sorted(out, key = lambda x: (-len(x[0]), min(x[1])))]
 
@@ -334,7 +341,7 @@ def compile_pattern(pattern: str # Glyco-regular expression, e.g., "Hex-HexNAc-(
 
 
 def get_match(pattern: str | list[str], # Expression or pre-compiled pattern; e.g., "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
-              glycan: str | nx.DiGraph, # Glycan string or graph
+              glycan: str | GlycanGraph | nx.DiGraph, # Glycan string or graph
               return_matches: bool = True # Whether to return matches vs boolean
               ) -> bool | list[str]: # Match results
     "Find matches for glyco-regular expression in glycan"
@@ -342,9 +349,9 @@ def get_match(pattern: str | list[str], # Expression or pre-compiled pattern; e.
         if any(k in glycan for k in (';', '-D-', 'RES', '=', 'α', 'β')) or (
                 '(' not in glycan and re.search(r'[ab?][12]-', glycan)):
             glycan = canonicalize_iupac(glycan)
-        ggraph = glycan_to_nxGraph(glycan)
-    elif isinstance(glycan, nx.Graph):
-        ggraph = glycan
+        ggraph = _glycan_graph(glycan)
+    elif _is_graph(glycan):
+        ggraph = _slim(glycan)
     else:
         raise ValueError(
             f"get_match expects one glycan as a string or graph, got {type(glycan).__name__}; for several glycans at once use get_match_batch.")
@@ -360,10 +367,10 @@ def get_match(pattern: str | list[str], # Expression or pre-compiled pattern; e.
 
 
 def explain_match(pattern: str, # Glyco-regular expression, e.g., "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
-                  glycan: str | nx.DiGraph # Glycan string or graph
+                  glycan: str | GlycanGraph | nx.DiGraph # Glycan string or graph
                   ) -> pd.DataFrame: # One row per pattern chunk, with what it compiled to and how often it occurs
     "Show what each chunk of a glyco-regular expression means and where it does or does not occur in a glycan"
-    ggraph = glycan_to_nxGraph(glycan) if isinstance(glycan, str) else glycan
+    ggraph = _as_graph(glycan)
     rows = []
     for chunk in preprocess_pattern(pattern):
         c = compile_component(chunk)
@@ -376,12 +383,12 @@ def explain_match(pattern: str, # Glyco-regular expression, e.g., "Hex-HexNAc-([
 
 
 def get_match_batch(pattern: str | list[str], # Expression or pre-compiled pattern; e.g., "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
-                    glycan_list: str | nx.DiGraph | list[str | nx.DiGraph], # Glycan(s) as strings or graphs
+                    glycan_list: str | GlycanGraph | nx.DiGraph | list[str | GlycanGraph | nx.DiGraph], # Glycan(s) as strings or graphs
                     return_matches: bool = True # Whether to return matches vs boolean
                     ) -> list[bool] | list[list[str]]: # Match results for each glycan
     "Find glyco-regular expression matches in list of glycans"
     pattern = compile_pattern(pattern) if isinstance(pattern, str) else pattern
-    glycan_list = [glycan_list] if isinstance(glycan_list, (str, nx.Graph)) else glycan_list
+    glycan_list = [glycan_list] if isinstance(glycan_list, str) or _is_graph(glycan_list) else glycan_list
     out = []
     for g in glycan_list:
         try:
@@ -404,32 +411,32 @@ def motif_to_regex(motif: str # Glycan in IUPAC-condensed
                    ) -> str: # Regular expression
     "Convert glycan motif to regular expression pattern"
     motif = canonicalize_iupac(motif) if '!' not in motif else motif
-    ggraph = glycan_to_nxGraph(motif)
-    parent = {c: p for p in ggraph.nodes() for c in ggraph.successors(p)}
-    root = max(ggraph.nodes())
+    ggraph = _glycan_graph(motif)
+    parent = {c: p for p, cs in ggraph.succ.items() for c in cs}
+    root = max(ggraph.nodes)
     # A motif can end in a dangling linkage, which puts a linkage rather than a monosaccharide at the root and flips the alternation
     offset = bool(LINKAGE_LABEL.match(ggraph.nodes[root]['string_labels']))
-    monos = {n for n, d in nx.single_source_shortest_path_length(ggraph, root).items() if d % 2 == offset}
+    monos = _alternating(ggraph, root, offset)
     depth = {}
-    for n in sorted(ggraph.nodes()):
-        depth[n] = 1 + max([depth[c] for c in ggraph.successors(n)], default = -1)
+    for n in sorted(ggraph.nodes):
+        depth[n] = 1 + max([depth[c] for c in ggraph.succ[n]], default = -1)
     # Main chain: deepest path from the root, everything hanging off it becomes a branch group
-    main, node = [], max(ggraph.nodes())
+    main, node = [], max(ggraph.nodes)
     while True:
         main.append(node)
-        kids = [c for c in ggraph.successors(node)]
+        kids = ggraph.succ[node]
         if not kids:
             break
         node = max(kids, key = lambda c: (depth[c], -c))
     main = [n for n in main if n in monos]
     on_main, tokens = set(main), []
     for m in reversed(main):
-        for link in sorted(ggraph.successors(m)):
-            kid = next(iter(ggraph.successors(link)), None)
+        for link in sorted(ggraph.succ[m]):
+            kid = next(iter(ggraph.succ[link]), None)
             if kid is None or kid in on_main:
                 continue
-            sub = {link} | nx.descendants(ggraph, link)
-            if any(sum(1 for _ in ggraph.successors(n)) > 1 for n in sub):
+            sub = {link} | _descendants(ggraph, link)
+            if any(len(ggraph.succ[n]) > 1 for n in sub):
                 raise ValueError(
                     f"Motif '{motif}' has a branch that itself branches, which glyco-regular expressions cannot express.")
             tokens.append('([' + reformat_glycan_string(graph_to_string(ggraph.subgraph(sub))) + ']){1}-')
@@ -438,9 +445,9 @@ def motif_to_regex(motif: str # Glycan in IUPAC-condensed
     pattern = ''.join(tokens).strip('-')
     control = motif
     if '!' in motif:  # the motif itself violates its own absence constraints, so validate on the positive skeleton
-        negated = {n for n, d in ggraph.nodes(data = True) if d['string_labels'].startswith('!')}
+        negated = {n for n, d in ggraph.nodes.items() if d['string_labels'].startswith('!')}
         negated |= {parent[n] for n in negated if n in parent}
-        control = graph_to_string(ggraph.subgraph(set(ggraph.nodes()) - negated))
+        control = graph_to_string(ggraph.subgraph(set(ggraph) - negated))
     if not get_match(pattern, control, return_matches = False):
         raise ValueError(
             f"Could not build a working glyco-regular expression for motif '{motif}' (generated pattern: '{pattern}').")

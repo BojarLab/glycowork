@@ -72,7 +72,7 @@ from glycowork.motif.graph import (
     graph_to_string, largest_subgraph, get_possible_topologies,
     deduplicate_glycans, try_string_conversion, resolve_anchor,
     subgraph_isomorphism_with_negation, categorical_node_match_wildcard,
-    expand_termini_list, ensure_graph, possible_topology_check
+    expand_termini_list, ensure_graph, possible_topology_check, _glycan_graph, _slim
 )
 from glycowork.motif.annotate import (
     annotate_glycan, annotate_dataset, get_molecular_properties, get_motif_dag, get_composition_dag, get_motif_atoms, get_composition_atoms,
@@ -3329,6 +3329,26 @@ def test_get_equivalence_test():
     assert 0 <= p_val_paired <= 1
 
 
+def test_equivalence_test_takes_the_scale_uncertainty(monkeypatch):
+    from scipy.stats import t as t_dist
+    rng = np.random.default_rng(0)
+    a, b = rng.normal(0, 1, (3, 300)), rng.normal(0, 1, (3, 300))
+    pooled = (a.var(axis = 1, ddof = 1) + b.var(axis = 1, ddof = 1)) / 2
+    m, delta, se = a.mean(axis = 1) - b.mean(axis = 1), 0.2 * np.sqrt(pooled), np.sqrt((pooled + 0.04) * 2 / 300)
+    assert np.allclose(get_equivalence_test(a, b, scale_var = 0.04), np.maximum(t_dist.sf((m + delta) / se, 598), t_dist.cdf((m - delta) / se, 598)))
+    d = a - b
+    se = np.sqrt((d.var(axis = 1, ddof = 1) + 0.08) / 300)
+    assert np.allclose(get_equivalence_test(a, b, paired = True, scale_var = 0.04), np.maximum(t_dist.sf((d.mean(axis = 1) + delta) / se, 299), t_dist.cdf((d.mean(axis = 1) - delta) / se, 299)))
+    assert (get_equivalence_test(a, b, scale_var = 0.04) > get_equivalence_test(a, b)).all()
+    seen = []
+    monkeypatch.setattr('glycowork.motif.analysis.get_equivalence_test', lambda x, y, paired = False, scale_var = 0: seen.append(scale_var) or get_equivalence_test(x, y, paired = paired, scale_var = scale_var))
+    samples = ['a1', 'a2', 'a3', 'a4', 'b1', 'b2', 'b3', 'b4']
+    frame = pd.DataFrame([[16, 19, 16, 18, 19, 21, 19, 21], [23, 23, 22, 21, 22, 24, 21, 22], [13, 12, 11, 11, 15, 16, 16, 14], [14, 13, 15, 13, 22, 20, 21, 22]], columns = samples)
+    frame.insert(0, 'glycan', ['Gal(b1-3)GalNAc', 'Neu5Ac(a2-3)Gal(b1-3)GalNAc', 'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc', 'Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc'])
+    get_differential_expression(frame, group1 = samples[:4], group2 = samples[4:], gamma = 0.3)
+    assert seen and np.isclose(seen[0], 0.09)
+
+
 def test_hotellings_t2():
     # Create multivariate test data
     group1 = np.array([[1, 2], [3, 4], [5, 6]])
@@ -3562,7 +3582,7 @@ def test_compare_inter_vs_intra_group():
     intra, inter = compare_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, paired=True)
 
 
-def test_correct_multiple_testing():
+def test_correct_multiple_testing(capsys):
     # Create test p-values
     p_values = [0.01, 0.02, 0.03, 0.04, 0.05]
     # Test correction
@@ -3570,6 +3590,8 @@ def test_correct_multiple_testing():
     assert len(corrected_pvals) == len(significance) == len(p_values)
     assert all(0 <= p <= 1 for p in corrected_pvals)
     assert all(isinstance(s, bool) for s in significance)
+    assert all(correct_multiple_testing([0.01] * 20, 0.05)[1]) and 'inflation' in capsys.readouterr().out
+    assert all(correct_multiple_testing([0.01] * 9, 0.05)[1]) and 'inflation' not in capsys.readouterr().out
     corrected_pvals, significance = correct_multiple_testing([], 0.05)
     assert len(corrected_pvals) == 0
     # two-stage adjusted p-values are calibrated to alpha and must track it; one-stage must not
@@ -4237,7 +4259,7 @@ def test_ensure_graph():
     assert isinstance(result, nx.Graph)
     # Test with graph input
     G = nx.Graph()
-    G.add_node(0, string_labels="Gal")
+    G.add_node(0, string_labels = "Gal")
     result = ensure_graph(G)
     assert result is G
     # Anything else (a composition dict, a list of glycans, None) gets an actionable TypeError instead of "'dict' object has no attribute 'nodes'" deep inside
@@ -4246,6 +4268,27 @@ def test_ensure_graph():
                      lambda: subgraph_isomorphism(glycan, bad), lambda: get_terminal_structures(bad), lambda: annotate_glycan(bad)):
             with pytest.raises(TypeError, match = 'one glycan as an IUPAC-condensed string'):
                 call()
+    # The motif code's GlycanGraph holds what a networkx graph of the glycan holds, in the same order, also when converted from one
+    for g, kwargs in (("Gal(b1-4)GlcNAc", {}), ("Fuc(a1-2)Gal(b1-3)[GlcNAc(b1-6)]GalNAc", {'termini': 'calc'}), ("Gal(b1-4)GlcNAc", {'termini': 'provided', 'termini_list': ['terminal', 'flexible']}),
+                      ("{Neu5Ac(a2-3)}{Fuc(a1-3)}Gal(b1-4)GlcNAc", {}), ("{Fuc^(a1-6)GlcNAc|Fuc^(a1-3)GlcNAc}Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc", {}), ("Gal(b1-4)", {})):
+        slim, full = _glycan_graph(g, **kwargs), glycan_to_nxGraph(g, **kwargs)
+        for s in (slim, _slim(full), _slim(full.copy())):
+            assert list(s.nodes.items()) == list(full.nodes(data = True))
+            assert s.succ == {n: tuple(full.successors(n)) for n in full} and s.pred == {n: tuple(full.predecessors(n)) for n in full}
+            assert list(s) == list(full) and len(s) == len(full) and all(n in s for n in full)
+    # Attribute dicts are shared between GlycanGraphs, so neither their methods nor editing a networkx graph may reach them
+    slim = _glycan_graph(glycan)
+    marked = slim.with_attr('string_labels', {0: 'Fuc'})
+    assert marked.nodes[0]['string_labels'] == 'Fuc' and slim.nodes[0]['string_labels'] == 'Gal' and slim.subgraph({0, 1}).succ == {0: (), 1: (0,)} and slim.subgraph({0, 1}).pred == {0: (1,), 1: ()}
+    H = glycan_to_nxGraph(glycan).copy()
+    assert get_match('Gal-GlcNAc', H) == [glycan] and subgraph_isomorphism(H, 'Gal(b1-4)GlcNAc')
+    H.nodes[0]['string_labels'] = 'Fuc'  # a networkx graph may change between calls, and is read afresh each time
+    assert get_match('Gal-GlcNAc', H) == [] and graph_to_string(H) == 'Fuc(b1-4)GlcNAc' and not subgraph_isomorphism(H, 'Gal(b1-4)GlcNAc')
+    assert _glycan_graph(glycan).nodes[0]['string_labels'] == 'Gal' and graph_to_string(glycan_to_nxGraph(glycan)) == glycan
+    # Importing glycowork and drawing a glycan stay free of networkx, whereas the graphs users get stay networkx graphs
+    code = "import sys; from glycowork import GlycoDraw; GlycoDraw('Neu5Ac(a2-3)Gal(b1-4)GlcNAc', suppress = True); print('networkx' in sys.modules)"
+    assert subprocess.run([sys.executable, '-c', code], capture_output = True, text = True, stdin = subprocess.DEVNULL).stdout.strip() == 'False'
+    assert all(isinstance(g, nx.DiGraph) for g in get_possible_topologies("{Fuc(a1-3)}Gal(b1-4)GlcNAc", return_graphs = True))
 
 
 def test_possible_topology_check():

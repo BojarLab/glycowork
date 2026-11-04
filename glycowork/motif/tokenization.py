@@ -1,7 +1,6 @@
 from __future__ import annotations
 import csv
 import numpy as np
-import networkx as nx
 import re
 from random import sample
 from importlib import resources
@@ -11,7 +10,7 @@ from functools import lru_cache, reduce
 from glycowork.glycan_data import loader
 from glycowork.glycan_data.loader import lib, unwrap, Hex, dHex, HexA, HexN, HexNAc, Pen, linkages, multireplace, pd
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, rescue_compositions, parse_floating_bit, FLOATY_ALT, is_composition, canonicalize_composition
-from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, IS_LINKAGE
+from glycowork.motif.graph import compare_glycans, graph_to_string, IS_LINKAGE, _glycan_graph
 from glycowork.motif.smiles import glycan_to_molecule, _anomeric_position, GlycanSMILESError
 
 chars = {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7, 'H': 8, 'I': 9, 'J': 10, 'K': 11,
@@ -533,19 +532,15 @@ def structure_to_basic(glycan: str # Glycan in IUPAC-condensed format
         glycan = glycan[:-3]
     if '(' not in glycan:
         return map_to_basic(glycan)
-    ggraph = glycan_to_nxGraph(glycan).copy()
-    node_dict = dict(ggraph.nodes(data = True))
-    nx.set_node_attributes(ggraph, {k: map_to_basic(node_dict[k]['string_labels']) for k in ggraph.nodes},
-                           'string_labels')
-    for _, d in ggraph.nodes(data = True):
+    ggraph = _glycan_graph(glycan)
+    ggraph = ggraph.with_attr('string_labels', {k: map_to_basic(d['string_labels']) for k, d in ggraph.nodes.items()})
+    for d in ggraph.nodes.values():
         if 'anchors' in d:  # an anchor that still names specific monosaccharides can no longer resolve against the mapped backbone
             for link, anchor in list(d['anchors'].items()):
-                ag = glycan_to_nxGraph(anchor.replace('^', '')).copy()
-                nx.set_node_attributes(ag, {k2: map_to_basic(v['string_labels']) for k2, v in ag.nodes(data = True)},
-                                       'string_labels')
-                ag.nodes[next(i for i, x in enumerate(min_process_glycans([anchor])[0]) if x.endswith('^'))][
-                    'string_labels'] += '^'
-                d['anchors'][link] = graph_to_string(ag)
+                ag = _glycan_graph(anchor.replace('^', ''))
+                labels = {k2: map_to_basic(v['string_labels']) for k2, v in ag.nodes.items()}
+                labels[next(i for i, x in enumerate(min_process_glycans([anchor])[0]) if x.endswith('^'))] += '^'
+                d['anchors'][link] = graph_to_string(ag.with_attr('string_labels', labels))
     return graph_to_string(ggraph)
 
 
@@ -763,9 +758,9 @@ def _check_reducing_end(glycan: str | dict[str, int], # Glycan, composition, or 
             anomeric = _anomeric_position(token)
         except GlycanSMILESError:  # aglycones without a SMILES (1Ser, 1Fer, 1Bn) sit on an aldose's C1
             anomeric = 1
-        graph = glycan_to_nxGraph(glycan.split('}')[-1])  # floating parts are numbered after the root
+        graph = _glycan_graph(glycan.split('}')[-1])  # floating parts are numbered after the root
         blocked = anomeric is None or token.endswith(('-onic', '-aric')) or re.search(rf'(?<![\d,]){anomeric}(?:[A-Z]|,\d+-Anhydro)', token) or any(
-            graph.nodes[n]['string_labels'].split('-')[-1] == str(anomeric) for n in graph.neighbors(max(graph.nodes)))  # linked through its own anomeric carbon, as sucrose and trehalose
+            graph.nodes[n]['string_labels'].split('-')[-1] == str(anomeric) for n in graph.succ[max(graph.nodes)])  # linked through its own anomeric carbon, as sucrose and trehalose
     if blocked:
         raise ValueError(f"'{glycan}' has no free reducing end to carry '{modification}'.")
 

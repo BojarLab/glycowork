@@ -8,7 +8,6 @@ import gc
 import json
 import lzma
 import pickle
-import networkx as nx
 from pathlib import Path
 from itertools import chain
 from importlib import import_module, resources
@@ -16,7 +15,7 @@ from typing import Any
 
 
 class LazyModule:
-    "A module imported on its first attribute access: glycowork reaches pandas through one, since importing glycowork or drawing a glycan never needs it, and it adds 0.6 s and 31 MB"
+    "A module imported on its first attribute access: glycowork reaches pandas and networkx through one, since importing glycowork or drawing a glycan needs neither, and pandas adds 0.6 s and 31 MB, networkx 0.6 s and 15 MB"
     def __init__(self, name: str # module to import when first used, e.g., 'pandas'
                  ):
         self.__name = name
@@ -28,6 +27,7 @@ class LazyModule:
 
 
 pd = LazyModule('pandas')
+nx = LazyModule('networkx')
 _MOTIF_IDX, _MOTIF_NORM_IDX, _MOTIFS = {}, {}, []
 # Get the directory and filename of the current script
 this_dir = Path(__file__).parent

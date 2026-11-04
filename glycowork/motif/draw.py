@@ -1,8 +1,8 @@
 from __future__ import annotations
 from pathlib import Path
-from glycowork.glycan_data.loader import unwrap, resolve_motif_name, lib, pd
+from glycowork.glycan_data.loader import unwrap, resolve_motif_name, lib, pd, nx
 from glycowork.motif.regex import get_match
-from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, graph_to_string, resolve_anchor
+from glycowork.motif.graph import subgraph_isomorphism, graph_to_string, resolve_anchor, GlycanGraph, _glycan_graph, _slim, _component, _for_vf2, _label_match, _ANY_ORDER
 from glycowork.motif.tokenization import get_core, get_modification, SIALIC_KEYS
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit, is_composition, canonicalize_composition, _COMP_ORDER, PDB_TO_IUPAC
 import copy
@@ -13,7 +13,6 @@ import base64
 import hashlib
 from io import BytesIO
 from typing import Any
-import networkx as nx
 from glycorender import svgdraw as draw
 import numpy as np
 import struct
@@ -683,37 +682,39 @@ def process_bonds(
 
 
 def get_highlight_attribute(
-        glycan_graph: nx.DiGraph, # NetworkX glycan graph
+        glycan_graph: GlycanGraph | nx.DiGraph, # Glycan graph; a networkx graph gets the attribute in place
         motif_string: str, # Motif to highlight
         termini_list: list = [], # Terminal position specifications
         reverse_highlight: bool = False # Whether to highlight everything EXCEPT highlight_motif
-) -> nx.DiGraph: # Graph with highlight attributes
+) -> GlycanGraph | nx.DiGraph: # Graph with highlight attributes
     "Labels nodes in glycan graph based on presence in specified motif"
     if motif_string:
-        motif = glycan_to_nxGraph(motif_string, termini = 'provided' if termini_list else None, termini_list = termini_list)
-        _, mappings = subgraph_isomorphism(glycan_graph, motif, termini_list = termini_list, return_matches = True)
+        motif = _glycan_graph(motif_string, termini = 'provided' if termini_list else None, termini_list = termini_list)
+        _, mappings = subgraph_isomorphism(glycan_graph, motif, termini_list = termini_list, return_matches = _ANY_ORDER)
         matched = set(unwrap(mappings))
         if not matched:
             warnings.warn(
                 f"highlight_motif '{motif_string}' does not occur in {graph_to_string(glycan_graph)}, so nothing is highlighted.")
         in_label, out_label = ('hide', 'show') if reverse_highlight else ('show', 'hide')
-        mapping_show = {node: in_label if node in matched else out_label for node in glycan_graph.nodes()}
+        mapping_show = {node: in_label if node in matched else out_label for node in glycan_graph}
     else:
-        mapping_show = {node: 'show' for node in glycan_graph.nodes()}
+        mapping_show = {node: 'show' for node in glycan_graph}
+    if isinstance(glycan_graph, GlycanGraph):
+        return glycan_graph.with_attr('highlight_labels', mapping_show)
     nx.set_node_attributes(glycan_graph, dict(sorted(mapping_show.items())), 'highlight_labels')
     return glycan_graph
 
 
-def get_branches_from_graph(graph: nx.DiGraph, main_chain: list, main_chain_sugars: list):
+def get_branches_from_graph(graph: GlycanGraph | nx.DiGraph, main_chain: list, main_chain_sugars: list):
     """Extract branch structures based on paths to lowest node index tips"""
-    main_chain_set = set(main_chain)
+    graph, main_chain_set = _slim(graph), set(main_chain)
     all_nodes = main_chain_set.copy()
     main_chain_sugars = sorted(main_chain_sugars, reverse = True)
 
     def add_branch(branch_list: list, start_node: int, connection: tuple):
         # A branch always follows the lowest node index at a fork
         path = [start_node]
-        while successors := [n for n in graph.successors(path[-1]) if n not in all_nodes]:
+        while successors := [n for n in graph.succ[path[-1]] if n not in all_nodes]:
             path.append(min(successors))
         branch_list.append({'nodes': path, 'sugar_nodes': sorted([n for n in path if n % 2 == 0], reverse = True),
                             'connection': connection})
@@ -723,16 +724,16 @@ def get_branches_from_graph(graph: nx.DiGraph, main_chain: list, main_chain_suga
         level = []
         for i, branch in enumerate(parent_level):
             for j, node in enumerate(branch['sugar_nodes']):
-                if graph.out_degree(node) > 1:
-                    for succ in sorted(graph.successors(node)):
+                if len(graph.succ[node]) > 1:
+                    for succ in sorted(graph.succ[node]):
                         if succ not in all_nodes:
                             add_branch(level, succ, (i, j))
         return level
 
     first_level = []
     for node in main_chain:
-        if node % 2 == 0 and graph.out_degree(node) > 1:  # Sugar with branches
-            for succ in sorted(graph.successors(node)):
+        if node % 2 == 0 and len(graph.succ[node]) > 1:  # Sugar with branches
+            for succ in sorted(graph.succ[node]):
                 if succ not in all_nodes:
                     add_branch(first_level, succ, (0, main_chain_sugars.index(node)))
     levels = [first_level]
@@ -749,10 +750,9 @@ def get_coordinates_and_labels(
         reverse_highlight: bool = False # Whether to highlight everything EXCEPT highlight_motif
 ) -> list[list]: # Drawing coordinates and labels (monosaccharide label, x position, y position, modification, bond, conformation)
     "Calculates drawing coordinates and formats labels for glycan visualization"
-    graph = glycan_to_nxGraph(draw_this, termini = 'calc' if termini_list else 'ignore').copy()
+    graph = _glycan_graph(draw_this, termini = 'calc' if termini_list else 'ignore')
     graph = get_highlight_attribute(graph, highlight_motif, termini_list = termini_list, reverse_highlight = reverse_highlight)
-    node_values = list(nx.get_node_attributes(graph, 'string_labels').values())
-    highlight_values = list(nx.get_node_attributes(graph, 'highlight_labels').values())
+    node_values, highlight_values = [d['string_labels'] for d in graph.nodes.values()], [d['highlight_labels'] for d in graph.nodes.values()]
     parsed_sugars = {}
     for idx, raw_label in enumerate(node_values):
         if idx % 2:
@@ -785,16 +785,18 @@ def get_coordinates_and_labels(
             modification_text = f"{match.group(1)}Subst" if match else (
                 modification_text if ('Subst' in modification_text or normalized_label != 'Unknown') else '')
         parsed_sugars[idx] = (normalized_label, ('!' + modification_text) if negated else modification_text)
-    root = max(graph.nodes())
-    leaves = [n for n in graph.nodes() if graph.out_degree(n) == 0 and n != root] if len(graph) > 1 else [0]
-    main_chain = nx.shortest_path(graph.reverse(copy = False), leaves[0], root) if leaves else []
+    root = max(graph.nodes)
+    leaves = [n for n in graph if not graph.succ[n] and n != root] if len(graph) > 1 else [0]
+    main_chain = leaves[:1]
+    while main_chain and main_chain[-1] != root:
+        main_chain.append(graph.pred[main_chain[-1]][0])
     # A bisected N-glycan core is laid out from its a1-3 arm as the chain, which puts the bisecting GlcNAc in line and the a1-6 arm above; a sequence written along the a1-6 arm stacked the a1-3 arm and the bisecting GlcNAc above it instead, so the chain is rerouted into the a1-3 arm
     for i in range(2, len(main_chain) - 1, 2):
-        kids = {node_values[e]: next(iter(graph.successors(e))) for e in graph.successors(main_chain[i])}
+        kids = {node_values[e]: next(iter(graph.succ[e])) for e in graph.succ[main_chain[i]]}
         if (parsed_sugars[main_chain[i]][0] == 'Man' and node_values[main_chain[i + 1]] == 'b1-4' and node_values[main_chain[i - 1]] == 'a1-6'
                 and parsed_sugars.get(kids.get('b1-4'), ('',))[0] == 'GlcNAc' and parsed_sugars.get(kids.get('a1-3'), ('',))[0] == 'Man'):
-            path = [next(e for e in graph.successors(main_chain[i]) if node_values[e] == 'a1-3')]
-            while successors := list(graph.successors(path[-1])):
+            path = [next(e for e in graph.succ[main_chain[i]] if node_values[e] == 'a1-3')]
+            while successors := graph.succ[path[-1]]:
                 path.append(min(successors))
             main_chain = path[::-1] + main_chain[i:]
             break
@@ -1179,10 +1181,10 @@ def display_svg_with_matplotlib(
                                            output_height = height, scale = 2.0, return_bytes = True, chem = chem))
 
 
-def _written_positions(graph: nx.DiGraph # Glycan graph from glycan_to_nxGraph
+def _written_positions(graph: GlycanGraph # Glycan graph from _glycan_graph
                        ) -> dict[int, int]: # Node: its position in the sequence as written
     "glycan_to_nxGraph numbers the main part from 0 and the floating parts after it, although they are written before it"
-    main = nx.node_connected_component(graph.to_undirected(as_view = True), 0)
+    main = _component(graph, 0)
     return {n: i for i, n in enumerate(sorted(graph, key = lambda n: (n in main, n)))}
 
 
@@ -1190,9 +1192,8 @@ def _drawn_from(draw_this: str, # reordered IUPAC-condensed glycan sequence
                 glycan: str # original IUPAC-condensed glycan sequence
                 ) -> list[int]: # Per residue of draw_this, in written order, its index in glycan
     "Matches the reordered residues to the original ones by exact label, as compare_glycans would let b1-? stand in for b1-2"
-    g1, g2 = glycan_to_nxGraph(glycan), glycan_to_nxGraph(draw_this)
-    mappy = next(nx.isomorphism.DiGraphMatcher(g2, g1, node_match = nx.isomorphism.categorical_node_match(
-        'string_labels', None)).isomorphisms_iter())
+    g1, g2 = _glycan_graph(glycan), _glycan_graph(draw_this)
+    mappy = next(nx.isomorphism.DiGraphMatcher(_for_vf2(g2), _for_vf2(g1), node_match = _label_match).isomorphisms_iter())
     pos1, at2 = _written_positions(g1), {i: n for n, i in _written_positions(g2).items()}
     return [pos1[mappy[at2[i]]] // 2 for i in range(0, len(g2), 2)]
 
@@ -1203,7 +1204,7 @@ def process_per_residue(
         glycan: str, # original IUPAC-condensed glycan sequence
 ) -> dict[int, float]: # Value per sugar node of the drawn sequence
     "Maps per-residue scalar values onto the sugar nodes of the drawn sequence"
-    n_residues = (len(glycan_to_nxGraph(draw_this)) + 1) // 2
+    n_residues = (len(_glycan_graph(draw_this)) + 1) // 2
     if n_residues != len(per_residue):
         raise ValueError(
             f"per_residue has {len(per_residue)} values but {glycan} has {n_residues} monosaccharides to color")
@@ -1218,7 +1219,7 @@ def process_per_linkage(
         glycan: str, # original IUPAC-condensed glycan sequence
 ) -> dict[int, bool]: # Flag per linkage node of the drawn sequence
     "Maps which linkages to highlight onto the linkage nodes of the drawn sequence"
-    n_linkages = len(glycan_to_nxGraph(glycan)) // 2
+    n_linkages = len(_glycan_graph(glycan)) // 2
     if any(not 0 <= i < n_linkages for i in highlight_linkages):
         raise ValueError(
             f"highlight_linkages {highlight_linkages} has to index the {n_linkages} linkages of {glycan}, starting from 0")
@@ -1265,7 +1266,7 @@ def get_mono_atoms(
         raise ValueError(f"No highlight color for {unknown}; choose from {list(_CHEM_INDEX)}")
     from glycowork.motif.smiles import glycan_to_smiles
     smiles, owners = glycan_to_smiles(draw_this, mapping = True)
-    graph = glycan_to_nxGraph(draw_this)
+    graph = _glycan_graph(draw_this)
     cores = {node: get_core(graph.nodes[node]['string_labels']) for node in set(owners)}
     return smiles, {atom: _CHEM_INDEX[cores[owner]] for atom, owner in enumerate(owners) if cores[owner] in mono_list}
 
@@ -1852,7 +1853,7 @@ def GlycoDraw(
     cut = glycan.rfind('}') + 1 if '^' in glycan else 0
     # A repeat unit is laid out as written, so that its backbone stays the main chain; reordered by linkage, the chain could run into a branch, with the brackets around a side residue
     draw_this = glycan[:cut] + (glycan[cut:] if glycan[cut:].startswith('[') or (repeat and not repeat_range) else graph_to_string(
-        glycan_to_nxGraph(glycan[cut:]), order_by = "linkage"))
+        _glycan_graph(glycan[cut:]), order_by = "linkage"))
     if per_residue:
         per_residue_by_node = process_per_residue(draw_this, per_residue, glycan)
     if highlight_linkages:
@@ -1860,7 +1861,7 @@ def GlycoDraw(
     if highlight_residues is not None:
         # Mapped like per_residue, with the leading repeat placeholder and the trailing blank as residues that are never highlighted
         shift = 1 if repeat and not repeat_range else 0
-        shown_by_node = process_per_residue(draw_this, [k - shift in highlight_residues for k in range((len(glycan_to_nxGraph(glycan)) + 1) // 2)], glycan)
+        shown_by_node = process_per_residue(draw_this, [k - shift in highlight_residues for k in range((len(_glycan_graph(glycan)) + 1) // 2)], glycan)
     if compact:
         show_linkage = False
     if isinstance(highlight_motif, str):
@@ -1900,7 +1901,7 @@ def GlycoDraw(
         draw_this = draw_this[:openpos-1] + len(draw_this[openpos-1:closepos+1])*'*' + draw_this[closepos+1:]
     draw_this = draw_this.replace('*', '')
     if anchored_bits:  # An anchor matching nothing must not silently delete its residue from the drawing
-        anchor_graph = glycan_to_nxGraph(draw_this)
+        anchor_graph = _glycan_graph(draw_this)
         placeable = [any(resolve_anchor(anchor_graph, anchor) for anchor in bit_anchors.values()) for _, bit_anchors, _ in
                      anchored_bits]
         floaty_bits += [(bit, off) for (bit, _, off), ok in zip(anchored_bits, placeable) if not ok]
@@ -1918,7 +1919,7 @@ def GlycoDraw(
     lv_sugar, lv_x_pos, lv_y_pos, lv_sugar_modification, lv_bond, lv_connection, lv_conf, lv_sugar_label, lv_bond_label = map(
         list, zip(*data[1:-1]))
     if highlight_residues is not None:
-        tree, shown = glycan_to_nxGraph(draw_this), {node for node, flag in shown_by_node.items() if flag}
+        tree, shown = _glycan_graph(draw_this), {node for node, flag in shown_by_node.items() if flag}
 
         def bond_label(child):
             # A drawn residue's linkage stays visible when both of its residues are highlighted, or when it is one of highlight_linkages

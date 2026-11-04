@@ -1,6 +1,6 @@
+from __future__ import annotations
 import pandas as pd
-import networkx as nx
-from glycowork.glycan_data.loader import GlycoList, lib, resolve_motif_name
+from glycowork.glycan_data.loader import GlycoList, lib, resolve_motif_name, nx
 
 
 class NamedGroup(list):

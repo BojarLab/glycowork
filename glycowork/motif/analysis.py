@@ -1,10 +1,10 @@
+from __future__ import annotations
 import inspect
 from functools import wraps
 from pathlib import Path
 import pickle
 import pandas as pd
 import numpy as np
-import networkx as nx
 from collections import Counter
 from math import comb
 from typing import Any, Callable
@@ -12,7 +12,7 @@ from scipy.stats import ttest_ind, ttest_rel, levene, f, f_oneway, spearmanr, t 
 from scipy.spatial.distance import squareform, pdist
 
 from glycowork.glycan_data import loader
-from glycowork.glycan_data.loader import strip_suffixes, download_model, GlycoDataFrame
+from glycowork.glycan_data.loader import strip_suffixes, download_model, GlycoDataFrame, nx
 from glycowork.glycan_data.stats import (cohen_d, _ttest_pvalue, _studentized_range_sf, mahalanobis_distance, mahalanobis_variance,
                                          impute_and_normalize, JTKTest,
                                          impute_biosynthetic, get_alphaN, TST_grouped_benjamini_hochberg,
@@ -31,7 +31,7 @@ from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, create_
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type,
                                       load_lectin_lib, get_motif_dag, get_composition_dag, get_motif_atoms, get_composition_atoms, _motif_sequence,
                                       create_lectin_and_motif_mappings, lectin_motif_scoring, deduplicate_motifs)
-from glycowork.motif.graph import subgraph_isomorphism, glycan_to_nxGraph
+from glycowork.motif.graph import subgraph_isomorphism, _glycan_graph, _sl
 from glycowork.motif.draw import check_kwargs, finish, subplots, vc
 
 
@@ -490,12 +490,12 @@ def get_representative_substructures(
             gmotifs[m] = (s, [])  # subgraph_isomorphism routes a glyco-regex to the regex engine itself
             continue
         try:
-            gmotifs[m] = (glycan_to_nxGraph(s, termini = 'provided', termini_list = sp), sp)
+            gmotifs[m] = (_glycan_graph(s, termini = 'provided', termini_list = sp), sp)
         except Exception:
             continue  # non-structural features (graph/chemical/size_branch) cannot be searched for in a sequence
     motif_scores, size = [], {}
     for k in glycans:
-        ggraph = glycan_to_nxGraph(k, termini = 'calc')
+        ggraph = _glycan_graph(k, termini = 'calc')
         hit = {m for m, (p, sp) in gmotifs.items() if subgraph_isomorphism(ggraph, p, termini_list = sp)}
         motif_scores.append(sum(weight_of[m] for m in hit if not (descendants.get(m, set()) & hit)))
         size[k] = len(ggraph)  # residues and linkages; the string length made a Neu5Gc twice the size of a Fuc
@@ -662,7 +662,7 @@ def plot_embeddings(
     markers = None
     if shape_feature is not None:
         markers = {shape_feature: "X", "Absent": "o"}
-        shape_feature = [shape_feature if shape_feature in nx.get_node_attributes(glycan_to_nxGraph(g), 'string_labels').values() else 'Absent' for g in glycans]  # whole monosaccharides and linkages: 'Gal' is not in GalNAc
+        shape_feature = [shape_feature if shape_feature in _sl(_glycan_graph(g)) else 'Absent' for g in glycans]  # whole monosaccharides and linkages: 'Gal' is not in GalNAc
     fig, ax = subplots(palette = palette)
     ax.scatter(embs[:, 0], embs[:, 1], hue = label_list, style = shape_feature, markers = markers, alpha = alpha, hue_label = 'Label',
                style_label = 'Feature', **kwargs)
@@ -697,12 +697,12 @@ def characterize_monosaccharide(
     # Get all disaccharides by extracting adjacent pairs from graph structure
     pool_in_split = []
     for glycan in df[glycan_col_name].tolist():
-        graph = glycan_to_nxGraph(glycan)
-        node_labels = nx.get_node_attributes(graph, 'string_labels')
-        for parent_mono in graph.nodes():
+        graph = _glycan_graph(glycan)
+        node_labels = dict(zip(graph, _sl(graph)))
+        for parent_mono in graph:
             if parent_mono % 2 == 0:
-                for linkage in graph.successors(parent_mono):
-                    for child_mono in graph.successors(linkage):
+                for linkage in graph.succ[parent_mono]:
+                    for child_mono in graph.succ[linkage]:
                         pool_in_split.append((node_labels[child_mono], node_labels[linkage], node_labels[parent_mono]))
     pool, sugars = [], []
     if mode == 'bond':
@@ -1154,7 +1154,7 @@ def get_differential_expression(
             equivalence_pvals = np.full(len(A), np.nan)
             todo = (np.array(pvals) > alpha) & ~absent & ~const
             if todo.any():
-                equivalence_pvals[todo] = get_equivalence_test(A[todo], B[todo], paired = paired)
+                equivalence_pvals[todo] = get_equivalence_test(A[todo], B[todo], paired = paired, scale_var = scale_var)
             valid = ~np.isnan(equivalence_pvals)
             equivalence_pvals[valid] = correct_multiple_testing(equivalence_pvals[valid], alpha)[0] if valid.any() else []
             equivalence_pvals[np.isnan(equivalence_pvals)] = 1.0

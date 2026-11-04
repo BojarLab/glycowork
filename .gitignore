@@ -12,6 +12,7 @@ tags
 /build/
 /_proc/
 desktop.ini
+.claude/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
