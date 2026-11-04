@@ -368,6 +368,14 @@ def glycan_to_nxGraph(glycan: str, # Glycan in IUPAC-condensed format
                                  termini_list = expand_termini_list(glycan, termini_list) if termini_list else None)
 
 
+def glycan_to_glycangraph(glycan: str, # Glycan in IUPAC-condensed format
+                          termini: str = 'ignore', # How to encode terminal/internal position; options: ignore, calc, provided
+                          termini_list: str | list[str] | None = None # List of positions from terminal/internal/flexible
+                          ) -> GlycanGraph: # Read-only GlycanGraph: nodes maps a node to its attributes, succ and pred a node to a tuple of neighbors; cached and shared between calls, so never edit it
+    "Convert glycans into the lightweight graph glycowork's motif code runs on, for code that only reads the graph: the nodes, attributes, and neighbor order of glycan_to_nxGraph at a tenth of its memory and without networkx; also works with floating substituents"
+    return _glycan_graph(glycan, termini = termini, termini_list = termini_list)
+
+
 def _check_glycans(*glycans: Any # Inputs that have to be single glycans
                    ) -> None:
     "Raises an actionable TypeError for anything that is no glycan string or graph, which otherwise failed deep inside with \"'dict' object has no attribute 'nodes'\""

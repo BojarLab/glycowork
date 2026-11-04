@@ -72,7 +72,7 @@ from glycowork.motif.graph import (
     graph_to_string, largest_subgraph, get_possible_topologies,
     deduplicate_glycans, try_string_conversion, resolve_anchor,
     subgraph_isomorphism_with_negation, categorical_node_match_wildcard,
-    expand_termini_list, ensure_graph, possible_topology_check, _glycan_graph, _slim
+    expand_termini_list, ensure_graph, possible_topology_check, _glycan_graph, _slim, glycan_to_glycangraph
 )
 from glycowork.motif.annotate import (
     annotate_glycan, annotate_dataset, get_molecular_properties, get_motif_dag, get_composition_dag, get_motif_atoms, get_composition_atoms,
@@ -4289,6 +4289,11 @@ def test_ensure_graph():
     code = "import sys; from glycowork import GlycoDraw; GlycoDraw('Neu5Ac(a2-3)Gal(b1-4)GlcNAc', suppress = True); print('networkx' in sys.modules)"
     assert subprocess.run([sys.executable, '-c', code], capture_output = True, text = True, stdin = subprocess.DEVNULL).stdout.strip() == 'False'
     assert all(isinstance(g, nx.DiGraph) for g in get_possible_topologies("{Fuc(a1-3)}Gal(b1-4)GlcNAc", return_graphs = True))
+    # glycan_to_glycangraph is the public, read-only view: what glycan_to_nxGraph holds, shared between calls
+    for g in ("Neu5Ac(a2-3)Gal(b1-4)GlcNAc", "{Fuc(a1-3)}Gal(b1-4)GlcNAc"):
+        slim, full = glycan_to_glycangraph(g, termini = 'calc'), glycan_to_nxGraph(g, termini = 'calc')
+        assert list(slim.nodes.items()) == list(full.nodes(data = True)) and slim.succ == {n: tuple(full.successors(n)) for n in full}
+    assert glycan_to_glycangraph(glycan) is glycan_to_glycangraph(glycan) and graph_to_string(glycan_to_glycangraph(glycan)) == glycan
 
 
 def test_possible_topology_check():
