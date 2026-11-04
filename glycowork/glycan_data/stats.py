@@ -454,7 +454,7 @@ def impute_biosynthetic(df: pd.DataFrame, # glycans as rows, samples as columns;
             pass  # rows that are not glycans (motifs, glycoforms with protein IDs) are imputed without biosynthetic step loadings
         F = F[:, F.std(axis = 0) > 0]
         F = F - F.mean(axis = 0)
-    rng = np.random.default_rng(0 if random_state is None else random_state)
+    rng = np.random.default_rng(0)
     # two held-out sets of observed cells pick the model and the stacking weight, and calibrate the prediction error
     obs, folds = np.argwhere(~M), []
     for _ in range(2):
@@ -500,7 +500,7 @@ def impute_biosynthetic(df: pd.DataFrame, # glycans as rows, samples as columns;
             R[few] = np.where(Mi[few], (wf / wf.sum(axis = 1, keepdims = True)) @ _censored_mean(grid_mu[:, None] + b0, lmin, t[2:], sw), R[few])
     if draw:
         # a conditional mean carries none of a measurement's noise, so a timepoint with imputed replicates would get a too-small standard error and too much weight in a rhythm test
-        R = R + rng.normal(0, sigma, R.shape)
+        R = R + np.random.default_rng(0 if random_state is None else random_state).normal(0, sigma, R.shape)
     return pd.DataFrame(np.exp2(np.where(M, R, L)), index = df.index, columns = df.columns)
 
 
@@ -848,10 +848,9 @@ def get_equivalence_test(row_a: np.ndarray, # array of control samples for one g
 def detection_test(detected: np.ndarray, # booleans, features as rows and samples as columns
                    groups: list[list[int]], # column positions of each group
                    paired: bool = False, # two groups whose columns are paired by position
-                   random_state: int | np.random.Generator | None = None # optional random state for reproducibility (Monte Carlo for more than two groups)
+                   random_state: int | np.random.Generator | None = None # unused, since the Monte Carlo sample is fixed; kept so existing calls keep working
                    ) -> tuple[np.ndarray, np.ndarray]: # (p-value, effect size) per feature
     "Tests whether detection differs between groups: Fisher's exact test (2 x k tables beyond two groups by Monte Carlo), or for paired samples the exact McNemar test on the discordant pairs; the effect size is Cohen's h of the detection rates (second group minus first), or Cramer's V beyond two groups"
-    local_rng = np.random.default_rng(random_state) if not isinstance(random_state, np.random.Generator) else random_state
     pvals, effects = [], []
     for row in np.asarray(detected, dtype = bool):
         table = np.array([[row[g].sum() for g in groups], [len(g) - row[g].sum() for g in groups]])
@@ -860,7 +859,7 @@ def detection_test(detected: np.ndarray, # booleans, features as rows and sample
             n = int((a ^ b).sum())
             pvals.append(binomtest(int((a & ~b).sum()), n).pvalue if n else 1.0)
         else:
-            pvals.append(fisher_exact(table).pvalue if len(groups) == 2 else fisher_exact(table, method = MonteCarloMethod(rng = local_rng)).pvalue)
+            pvals.append(fisher_exact(table).pvalue if len(groups) == 2 else fisher_exact(table, method = MonteCarloMethod(rng = np.random.default_rng(0))).pvalue)
         rates = table[0] / table.sum(axis = 0)
         effects.append(2 * np.arcsin(np.sqrt(rates[1])) - 2 * np.arcsin(np.sqrt(rates[0])) if len(groups) == 2 else
                        np.sqrt(chi2_contingency(table, correction = False)[0] / table.sum()))
@@ -890,7 +889,7 @@ def clr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
                               np.exp(np.nansum(logs, axis = 0) / np.maximum(cnt, 1)),
                               np.nan)  # a negative abundance has no log, so the column stays undefined exactly as gmean left it
     clr_adjusted = np.zeros(df.shape, dtype = float)
-    if gamma and not isinstance(custom_scale, dict):
+    if (gamma or custom_scale) and not isinstance(custom_scale, dict):
         group1i = [df.columns.get_loc(c) for c in group1]
         group2i = [df.columns.get_loc(c) for c in group2] if group2 else group1i
         geometric_mean = -np.log2(geometric_mean)
@@ -903,7 +902,6 @@ def clr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
         else:
             clr_adjusted[:, group1i] = np.log2(vals[:, group1i]) + norm.rvs(loc = geometric_mean[group1i], scale = gamma, random_state = local_rng, size = (df.shape[0], len(group1)))
     elif not group2 and isinstance(custom_scale, dict):
-        gamma = max(gamma, 0.1)
         for idx, group_id in enumerate(group1):
             scale_factor = custom_scale.get(group_id, 1)
             clr_adjusted[:, idx] = np.log2(df.iloc[:, idx]) + norm.rvs(loc = np.log2(scale_factor), scale = gamma, random_state = local_rng, size = df.shape[0])
@@ -1029,7 +1027,6 @@ def alr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
         scale_adjustment = np.log2(custom_scale) if custom_scale else 0
         alr_transformed[:, group2i] = X[:, group2i] - (reference_values[group2i] - norm.rvs(loc = scale_adjustment, scale = gamma, random_state = local_rng, size = len(group2i)))
     else:
-        gamma = max(gamma, 0.1)
         for idx in range(df.shape[1]):
             group_id = group1[idx] if isinstance(group1[0], int) else group1[idx].split('_')[1]
             scale_factor = custom_scale.get(group_id, 1)
@@ -1054,7 +1051,7 @@ def get_procrustes_scores(df: pd.DataFrame, # dataframe with features as rows an
         group2 = [df.columns.tolist()[k] for k in group2]
     labels = df.iloc[:, 0]
     df = df.iloc[:, 1:].astype(float)
-    ref_matrix = clr_transformation(df, group1, group2, gamma = 0.01, custom_scale = custom_scale, random_state = local_rng, reference = reference)
+    ref_matrix = clr_transformation(df, group1, group2, gamma = 0, custom_scale = custom_scale, random_state = local_rng, reference = reference)
     df = np.log2(df)
     if group2:
         # A reference has to keep its log-ratio to the other features, since any shift of it between the groups moves every feature's log2FC; the
@@ -1066,7 +1063,7 @@ def get_procrustes_scores(df: pd.DataFrame, # dataframe with features as rows an
     ref_values = ref_matrix.to_numpy()
     # Arrays instead of frames, column-major as the frames' values were, since procrustes' column reductions round by memory layout
     procrustes_corr = [1 - procrustes(np.asfortranarray(ref_values[~ref_matrix.index.isin([ref_matrix.index[i]])]),
-                                      alr_transformation(df, i, group1, group2, gamma = 0.01, custom_scale = custom_scale, random_state = local_rng).to_numpy())[2] for i in range(df.shape[0])]
+                                      alr_transformation(df, i, group1, group2, gamma = 0, custom_scale = custom_scale, random_state = local_rng).to_numpy())[2] for i in range(df.shape[0])]
     allowed = df.index.isin(df.index if reference is None else reference) & ~labels.duplicated(keep = False).to_numpy()
     return [a / max(b, 1e-8) if ok else -np.inf for a, b, ok in zip(procrustes_corr, variances, allowed)], procrustes_corr, variances
 

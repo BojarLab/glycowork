@@ -6500,6 +6500,8 @@ def test_absent_in_a_group_stays_out_of_the_reference():
     assert not twice.index.duplicated().any() and np.allclose(twice.loc[single.index, ['Log2FC', 'p-val', 'Effect size']], single[['Log2FC', 'p-val', 'Effect size']], rtol = 1e-6)
     p, h = detection_test(np.array([[1, 1, 1, 0, 0, 0], [1, 0, 0, 1, 0, 0]], bool), [[0, 1, 2], [3, 4, 5]])
     assert np.allclose(p, [0.1, 1.0]) and np.allclose(h, [-np.pi, 0])
+    three = detection_test(np.array([[1, 1, 1, 0, 0, 0, 0, 0, 0]], bool), [[0, 1, 2], [3, 4, 5], [6, 7, 8]], random_state = 1)[0]
+    assert np.allclose(three, 3 / 84, atol = 0.003) and three == detection_test(np.array([[1, 1, 1, 0, 0, 0, 0, 0, 0]], bool), [[0, 1, 2], [3, 4, 5], [6, 7, 8]], random_state = 2)[0]
 
 
 def test_alr_reference_is_stable_between_groups():
@@ -6517,7 +6519,7 @@ def test_alr_reference_is_stable_between_groups():
     assert not res.drop('Hex1HexNAc2', errors = 'ignore')['significant'].any()
     # paired: the mean square of the paired differences
     _, _, paired_var = get_procrustes_scores(df, g1, g2, paired = True, random_state = 0)
-    assert paired_var[0] > 0.5 and np.argmax(get_procrustes_scores(df, g1, g2, paired = True, random_state = 0)[0]) != 0
+    assert paired_var[0] > 0.45 and np.argmax(get_procrustes_scores(df, g1, g2, paired = True, random_state = 0)[0]) != 0
 
 
 def test_get_glycanova():
@@ -11083,8 +11085,77 @@ def test_sequence_analysis_gets_no_decomposition_columns():
     assert 'Redistribution p-val' not in out.columns
 
 
+def test_scale_uncertainty_is_a_variance_and_takes_no_draw():
+    from scipy.stats import t as t_dist
+    from glycowork.glycan_data.stats import dag_neighbors, moderated_variance
+    glycans = ['Gal(b1-3)GalNAc', 'Neu5Ac(a2-3)Gal(b1-3)GalNAc', 'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc', 'Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc', 'Gal(b1-3)[Gal(b1-4)GlcNAc(b1-6)]GalNAc', 'Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]GalNAc']
+    values = [[16, 19, 16, 18, 19, 21, 19, 21], [23, 23, 22, 21, 9, 10, 8, 8], [13, 12, 11, 0, 15, 16, 16, 14], [14, 13, 15, 13, 22, 20, 21, 22], [14, 14, 15, 16, 22, 22, 24, 24], [20, 19, 21, 21, 13, 11, 12, 11]]
+    samples = ['a1', 'a2', 'a3', 'a4', 'b1', 'b2', 'b3', 'b4']
+    df = pd.DataFrame(values, columns = samples).assign(glycan = glycans)[['glycan'] + samples]
+    g1, g2, groups = samples[:4], samples[4:], ['a', 'a', 'a', 'b', 'b', 'b', 'c', 'c']
+    # the seed no longer matters: not in the transform, the imputation, or a default run
+    for kwargs in ({'motifs': True}, {'motifs': False}, {'motifs': True, 'transform': 'ALR'}, {'motifs': True, 'moderate_variance': False}):
+        base = get_differential_expression(df.copy(), group1 = g1, group2 = g2, random_state = 0, **kwargs)
+        pd.testing.assert_frame_equal(base, get_differential_expression(df.copy(), group1 = g1, group2 = g2, random_state = 7, **kwargs))
+        pd.testing.assert_frame_equal(base, get_differential_expression(df.copy(), group1 = g1, group2 = g2, **kwargs))
+    pd.testing.assert_frame_equal(get_glycanova(df.copy(), groups = groups, motifs = True, posthoc = False, random_state = 0)[0], get_glycanova(df.copy(), groups = groups, motifs = True, posthoc = False, random_state = 7)[0])
+    assert impute_biosynthetic(df[samples].astype(float), glycans = glycans, random_state = 0).equals(impute_biosynthetic(df[samples].astype(float), glycans = glycans, random_state = 7))
+    # gamma leaves the change alone and widens the test by exactly its variance
+    wide, narrow = [get_differential_expression(df.copy(), group1 = g1, group2 = g2, motifs = True, gamma = g, random_state = 0).set_index('Glycan') for g in (0.5, 0)]
+    assert np.allclose(wide['Log2FC'], narrow['Log2FC'].reindex(wide.index))
+    tested = wide['p-val'] < 1
+    assert (wide.loc[tested, 'p-val'] > narrow['p-val'].reindex(wide.index)[tested]).all()
+    trans, org = preprocess_data(df.copy(), group1 = g1, group2 = g2, motifs = True, random_state = 0)[:2]
+    assert org.attrs['scale_var'] == 0.1 ** 2 and trans.equals(preprocess_data(df.copy(), group1 = g1, group2 = g2, motifs = True, gamma = 0.7, random_state = 3)[0])
+    A, B = trans[g1].to_numpy(), trans[g2].to_numpy()
+    s2, dfp = moderated_variance((3 * A.var(axis = 1, ddof = 1) + 3 * B.var(axis = 1, ddof = 1)) / 6, df_resid = np.full(len(trans), 6.0), neighbors = dag_neighbors(trans.index.tolist(), org.attrs['motif_dag']))
+    expected = 2 * t_dist.sf(np.abs(B.mean(axis = 1) - A.mean(axis = 1)) / np.sqrt((s2 + 0.1 ** 2) * 0.5), dfp)
+    res = get_differential_expression(df.copy(), group1 = g1, group2 = g2, motifs = True, random_state = 0).set_index('Glycan')
+    live = res['p-val'].reindex(trans.index).to_numpy() < 1
+    assert np.allclose(expected[live], res['p-val'].reindex(trans.index).to_numpy()[live])
+    # written out, Welch's tests are scipy's as the scale uncertainty vanishes
+    for paired in (False, True):
+        tiny, none = [get_differential_expression(df.copy(), group1 = g1, group2 = g2, motifs = True, moderate_variance = False, paired = paired, gamma = g, random_state = 0).set_index('Glycan')['p-val'] for g in (1e-9, 0)]
+        assert np.allclose(tiny, none.reindex(tiny.index))
+    tiny, none = [get_glycanova(df.copy(), groups = groups, motifs = True, moderate_variance = False, posthoc = False, gamma = g, random_state = 0)[0].set_index('Glycan')['p-val'] for g in (1e-9, 0)]
+    assert np.allclose(tiny.dropna(), none.reindex(tiny.index).dropna())
+    # an informed scale survives gamma = 0
+    frame = df.set_index('glycan').astype(float) + 1
+    scaled = clr_transformation(frame, g1, g2, gamma = 0, custom_scale = 2.0)
+    assert np.allclose(scaled[g2], np.log2(frame[g2]) + 1) and np.allclose(scaled[g1], np.log2(frame[g1]))
+
+
+def test_constant_motifs_get_no_marginal_test():
+    glycans = ['Gal(b1-3)GalNAc', 'Neu5Ac(a2-3)Gal(b1-3)GalNAc', 'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc', 'Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc', 'Gal(b1-3)[Gal(b1-4)GlcNAc(b1-6)]GalNAc', 'Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]GalNAc']
+    values = [[16, 19, 16, 18, 19, 21, 19, 21], [23, 23, 22, 21, 9, 10, 8, 8], [13, 12, 11, 11, 15, 16, 16, 14], [14, 13, 15, 13, 22, 20, 21, 22], [14, 14, 15, 16, 22, 22, 24, 24], [20, 19, 21, 21, 13, 11, 12, 11]]
+    samples = ['a1', 'a2', 'a3', 'a4', 'b1', 'b2', 'b3', 'b4']
+    df = pd.DataFrame(values, columns = samples).assign(glycan = glycans)[['glycan'] + samples]
+    res = get_differential_expression(df.copy(), group1 = samples[:4], group2 = samples[4:], motifs = True, random_state = 0).set_index('Glycan')
+    const = res.loc['Gal(b1-3)GalNAc']
+    assert const['Log2FC'] == 0 and const['p-val'] == 1 and const['corr p-val'] == 1 and not const['significant'] and const['Effect size'] == 0
+    assert np.isfinite(const['Redistribution p-val'])  # it stays a parent, split into core 1 and core 2
+    tested = res.drop('Gal(b1-3)GalNAc')
+    assert np.allclose(tested['corr p-val'], correct_multiple_testing(tested['p-val'].tolist(), res.attrs['alpha'])[0])
+    assert res.loc['Neu5Ac', 'significant']  # the other motifs keep their reference
+    groups = ['a', 'a', 'a', 'b', 'b', 'b', 'c', 'c']
+    anova = get_glycanova(df.copy(), groups = groups, motifs = True, posthoc = False, random_state = 0)[0].set_index('Glycan')
+    assert anova.loc['Gal(b1-3)GalNAc', 'p-val'] == 1 and anova.loc['Gal(b1-3)GalNAc', 'F statistic'] == 0 and not anova.loc['Gal(b1-3)GalNAc', 'significant'] and np.isfinite(anova.loc['Gal(b1-3)GalNAc', 'Redistribution p-val'])
+    timed = df.copy().set_axis(['glycan'] + [f'T{i}_h{i}_r1' for i in range(8)], axis = 1)
+    trend = get_time_series(timed, motifs = True, random_state = 0)
+    assert 'Gal(b1-3)GalNAc' not in set(trend['Glycan']) and 'Neu5Ac' in set(trend['Glycan'])
+    jtk = get_jtk(df.copy(), timepoints = 4, interval = 6, periods = [24], motifs = True, random_state = 0)
+    assert 'Gal(b1-3)GalNAc' not in set(jtk['Molecule_Name']) and 'Neu5Ac' in set(jtk['Molecule_Name'])
+    cosinor = get_cosinor(df.copy(), timepoints = 8, interval = 3, periods = [24], motifs = True, random_state = 0)
+    assert 'Gal(b1-3)GalNAc' not in set(cosinor['Molecule_Name'])
+    sites = [f'P1_{s}_{g}' for s in (10, 20) for g in ['Gal(b1-3)GalNAc', 'Neu5Ac(a2-3)Gal(b1-3)GalNAc', 'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc']]
+    gp = pd.DataFrame(np.array([[30, 32, 31, 33, 12, 13, 11, 12], [40, 41, 39, 40, 60, 59, 62, 61], [30, 27, 30, 27, 28, 28, 27, 27]] * 2, dtype = float), columns = samples).assign(glycan = sites)[['glycan'] + samples]
+    glycoforms = get_differential_expression(gp, group1 = samples[:4], group2 = samples[4:], motifs = True, glycoproteomics = True, random_state = 0).attrs['glycoforms'].set_index('Glycan')
+    assert glycoforms.loc['P1_10_Oglycan_core1', 'p-val'] == 1 and glycoforms.loc['P1_10_Oglycan_core1', 'Log2FC'] == 0 and glycoforms.loc['P1_10_Neu5Ac(a2-3)Gal', 'significant']
+
+
 def test_motif_correction_is_flat_unless_asked(bcc_result, capsys):
-    assert np.allclose(bcc_result['corr p-val'].values, correct_multiple_testing(bcc_result['p-val'].tolist(), bcc_result.attrs['alpha'])[0])
+    tested = bcc_result[bcc_result['Log2FC'] != 0]
+    assert np.allclose(tested['corr p-val'].values, correct_multiple_testing(tested['p-val'].tolist(), bcc_result.attrs['alpha'])[0])
     df = glycomics_data_loader.human_skin_O_PMC5871710_BCC
     grouped = get_differential_expression(df, motifs = True, grouped_BH = True, random_state = 42)
     assert 'by_motif_family' in capsys.readouterr().out

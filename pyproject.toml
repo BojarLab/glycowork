@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64.0"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 # Project metadata
@@ -8,6 +8,8 @@ name = "glycowork"
 version = "1.12.0"
 description = "The Python package for glycan data science: reads any glycan notation, motif search, SNFG drawing, glycomics statistics, curated glycan data"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     {name = "Daniel Bojar", email = "daniel.bojar@gu.se"}
 ]
