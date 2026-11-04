@@ -1,11 +1,18 @@
 # Changelog
 
 ## [1.12.0]
-- All figures are now drawn with `viscose` instead of `matplotlib` and `seaborn`, which are no longer dependencies. The default palette is Aura; `viscose.set_palette` picks another ()
-- `**kwargs` of `get_heatmap`, `get_volcano`, and `plot_embeddings` go to `viscose`, and anything it does not know raises a `TypeError` listing what it takes; `plot_embeddings(palette = ...)` names a viscose palette; `get_heatmap(return_plot = True)` returns a `viscose` figure first ()
-- Up and down in volcano and MA plots, heatmap and coverage scales, and network nodes and fold-change edges take the palette's colors; the `origin` values of `highlight_network` and `network_alignment` are palette names now ()
+- All figures are now drawn with `viscose` instead of `matplotlib` and `seaborn`, which are no longer dependencies. The default palette is Aura; `viscose.set_palette` picks another (73bca70)
+- `**kwargs` of `get_heatmap`, `get_volcano`, and `plot_embeddings` go to `viscose`, and anything it does not know raises a `TypeError` listing what it takes; `plot_embeddings(palette = ...)` names a viscose palette; `get_heatmap(return_plot = True)` returns a `viscose` figure first (73bca70)
 
 ### motif
+#### processing
+##### Added ✨
+- Added `glycan_to_kcf`, which writes KCF as KEGG GLYCAN does, for KEGG's KCaM search or the RINGS tools ()
+
+##### Fixed 🐛
+- `kcf_to_iupac` reads KEGG's bare `Fuc`, `Ara`, and `AllNAc` as D, as KEGG means them; both anomers of a sucrose linkage, unknown anomers (`2:1`), phosphoethanolamines, carriers such as `PP-Dol` and `protein`, inositol, and KEGG's spellings (`Cym`, `2,6daraHex`, `L4-en-thrHexA`, `Formyl`) are read as well, so all 1,000 KEGG entries tested now read ()
+- `kcf_to_iupac` keeps `dHex` as it is, which it turned into `D-Hex` ()
+
 #### tokenization
 ##### Added ✨
 - Added mass support for `glycolate` and `lactate` reducing end modifications, from hypochlorite O-glycan release (bbadeb4)
@@ -16,3 +23,23 @@
 ##### Fixed 🐛
 
 ##### Deprecated ⚠️
+
+#### draw
+##### Changed 🔄
+- Up and down in volcano and MA plots, heatmap and coverage scales, and network nodes and fold-change edges take the palette's colors; the `origin` values of `highlight_network` and `network_alignment` are palette names now (73bca70)
+
+#### annotate
+##### Added ✨
+- Added `get_motif_atoms` and `get_composition_atoms`, which split a parent motif or glycoform by the children covering it, into parts that sum to the parent ()
+- Added the `carriers` keyword argument to `get_motif_dag` and `return_counts` to `quantify_motifs` ()
+
+##### Fixed 🐛
+- `get_motif_dag` proves containment on the measured structures when they are given, since wildcard matching accepted edges such as `Neu5Ac` to `Sia(a2-3)Gal` ()
+
+#### analysis
+##### Added ✨
+- `get_differential_expression`, `get_glycanova`, and `get_pvals_motifs` now also report `Own share`, `Shared share`, and `Share shift` for parent motifs ()
+
+##### Changed 🔄
+- Residuals and redistributions come from an exact partition of each parent, so overlapping children no longer overshoot it; glycoform containment uses the cumulative abundance at or above a composition ()
+- Redistribution in `get_differential_expression` falls back to a permutation test where Hotelling's T2 is undefined, and in `get_glycanova` it runs on Aitchison distances, which do not depend on part order ()

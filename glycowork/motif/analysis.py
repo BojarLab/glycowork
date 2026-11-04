@@ -29,7 +29,7 @@ from glycowork.motif.processing import enforce_class, process_for_glycoshift, sp
 from glycowork.glycan_data.data_entry import read_abundances
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type,
-                                      load_lectin_lib, get_motif_dag, get_composition_dag, _motif_sequence,
+                                      load_lectin_lib, get_motif_dag, get_composition_dag, get_motif_atoms, get_composition_atoms, _motif_sequence,
                                       create_lectin_and_motif_mappings, lectin_motif_scoring, deduplicate_motifs)
 from glycowork.motif.graph import subgraph_isomorphism, glycan_to_nxGraph
 from glycowork.motif.draw import check_kwargs, finish, subplots, vc
@@ -186,17 +186,21 @@ def preprocess_data(
             # of the same glycan in the other group, so a glycan seen in few samples made its motifs differ between any two groups (~20 calls per random split)
             df_org.iloc[:, 1:] = df_org.iloc[:, 1:].mask(absent[:, None] & ~detected.to_numpy(), 0.0)
             seen = detected.astype(float).set_axis([f'\x00{c}' for c in samples], axis = 1)
-            both = quantify_motifs(pd.concat([df_org, seen], axis = 1), feature_set = feature_set, custom_motifs = custom_motifs)
+            per_glycan = df_org[samples].to_numpy(dtype = float)
+            both, counts = quantify_motifs(pd.concat([df_org, seen], axis = 1), feature_set = feature_set, custom_motifs = custom_motifs, return_counts = True)
             df_org, detected = both[samples], both[seen.columns].set_axis(samples, axis = 1) > 0
             absent = np.logical_or.reduce([(df_org[g] == 0).all(axis = 1).to_numpy() for g in split if len(g)])
             reference = df_org.index[~absent].tolist() if absent.any() and not absent.all() else None
             absent_rows = detected[absent] if absent.any() else None
         else:
-            df_org = quantify_motifs(df_org, feature_set = feature_set, custom_motifs = custom_motifs)
+            per_glycan = df_org.iloc[:, 1:].to_numpy(dtype = float)
+            df_org, counts = quantify_motifs(df_org, feature_set = feature_set, custom_motifs = custom_motifs, return_counts = True)
         # Re-normalization
+        scale = 100 / df_org.sum(axis = 0).to_numpy()
         df_org = df_org.apply(lambda col: col / col.sum() * 100, axis = 0)
         if motif_dag:
-            df_org.attrs['motif_dag'] = get_motif_dag(df_org.index.tolist(), abundances = df_org)
+            df_org.attrs['motif_dag'] = get_motif_dag(df_org.index.tolist(), carriers = counts)
+            df_org.attrs['motif_parts'] = {p: (labels, (m @ per_glycan) * scale) for p, (labels, m) in get_motif_atoms(df_org.attrs['motif_dag'], counts[[c for c in counts.columns if c in df_org.index]]).items()}
         df = df_org + 0.0000001
         if monte_carlo:
             df = estimate_technical_variance(df, group1, group2, gamma = gamma, custom_scale = custom_scale, random_state = random_state, reference = reference).set_axis(df.index)
@@ -228,7 +232,7 @@ def preprocess_data(
         df_org = df_org.set_index(df_org.columns[0])
         df_org = df_org.groupby(df_org.index).sum() if glycoproteomics else df_org.groupby(df_org.index).mean()
         if glycoproteomics:
-            # Component-wise composition containment forces the same abundance inequality as substructure containment, so glycoforms admit the same balances and residuals as motifs
+            # A glycoform's abundance does not include the glycoforms above it, so what admits the balances of motifs is the cumulative abundance at or above a composition: containment is then a set relation, and a parent's own part is its measured abundance
             sites = pd.Series([split_glycoform_id(k)[0] for k in df_org.index], index = df_org.index)
             keep = sites.groupby(sites).transform(
                 'size') > 1  # a one-part subcomposition carries no log-ratio and would CLR to an all-zero row
@@ -260,7 +264,11 @@ def preprocess_data(
                     raise ValueError("No glycosite has two or more glycoforms measured in at least two samples per group, so there is no within-site log-ratio to test; run without glycoproteomics = True to compare the glycopeptides as whole-sample features.")
                 df = pd.concat(parts).loc[df_org.index]
             if motif_dag:
-                df_org.attrs['motif_dag'] = get_motif_dag(df_org.index.tolist()) if motifs else get_composition_dag(df_org.index.tolist(), abundances = df_org)
+                df_org.attrs['motif_dag'] = get_motif_dag(df_org.index.tolist()) if motifs else get_composition_dag(df_org.index.tolist())
+                if not motifs:
+                    values = df_org.to_numpy()
+                    place = {g: i for i, g in enumerate(df_org.index)}
+                    df_org.attrs['motif_parts'] = {p: (labels, np.vstack([np.nansum(values[[place[q] for q in qs]], axis = 0) for qs in members]) * np.where(np.isnan(values[place[p]]), np.nan, 1)) for p, (labels, members) in get_composition_atoms(df_org.attrs['motif_dag']).items()}
     if absent_rows is not None:
         df_org.attrs['absent'] = absent_rows  # detection per sample of the features absent from a whole group
     df_org.attrs['dataset'], df_org.attrs['provenance'] = prov
@@ -282,16 +290,31 @@ def _explained_by(parent: str,  # Parent motif whose signal is being decomposed
     return ', '.join(labels) + (f', +{len(shown) - n} more' if len(shown) > n else '')
 
 
+def _parent_parts(parent: np.ndarray, # The parent's abundance per sample
+                  children: np.ndarray, # Its children's abundances, children x samples
+                  atoms: tuple | None # The parent's atoms (labels, atoms x samples), where structures were available to split it
+                  ) -> tuple[np.ndarray, np.ndarray, np.ndarray]: # (parts outside the parent's own context, own context, share of the parent in contexts several children cover)
+    "The parts of a parent: its occurrences split by the children covering them, which sum to the parent; without structures (per-glycosite motifs), parent minus children, which overlapping children can overshoot"
+    if atoms is None:
+        return children, parent - children.sum(axis = 0), np.zeros_like(parent)
+    labels, m = atoms
+    with np.errstate(invalid = 'ignore', divide = 'ignore'):
+        shared = m[[i for i, k in enumerate(labels) if len(k) > 1]].sum(axis = 0) / m.sum(axis = 0)
+    return m[[i for i, k in enumerate(labels) if k]], m[labels.index(())] if () in labels else np.zeros(m.shape[1]), shared
+
+
 def _decomposition_columns(rows: dict[str, tuple], # parent motif to (explained by, residual p-value, residual effect size, redistribution p-value)
                            motifs: list[str], # motifs in the row order of the results table
                            alpha: float # significance threshold of the corrections
-                           ) -> dict[str, list]: # the four decomposition columns of a results table
+                           ) -> dict[str, list]: # the decomposition columns of a results table
     "Corrects residual and redistribution p-values, each as its own, much smaller family, since they answer different questions than the marginals"
     cp = dict(zip(rows, correct_multiple_testing([v[1] for v in rows.values()], alpha)[0])) if rows else {}
     bk = [m for m in rows if not np.isnan(rows[m][3])]
     bp = dict(zip(bk, correct_multiple_testing([rows[m][3] for m in bk], alpha)[0])) if bk else {}
     return {'Explained by': [rows[m][0] if m in rows else '' for m in motifs], 'Redistribution p-val': [bp.get(m, np.nan) for m in motifs],
-            'Residual p-val': [cp.get(m, np.nan) for m in motifs], 'Residual effect size': [rows[m][2] if m in rows else np.nan for m in motifs]}
+            'Residual p-val': [cp.get(m, np.nan) for m in motifs], 'Residual effect size': [rows[m][2] if m in rows else np.nan for m in motifs],
+            'Own share': [rows[m][4] if m in rows else np.nan for m in motifs], 'Shared share': [rows[m][5] if m in rows else np.nan for m in motifs],
+            'Share shift': [rows[m][6] if m in rows else np.nan for m in motifs]}
 
 
 @_abundance_input('df')
@@ -343,8 +366,7 @@ def get_pvals_motifs(
     na, nb = A.shape[1], B.shape[1]
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(na + nb)
-    dag = get_motif_dag(motif_names, abundances = pd.DataFrame(M.T,
-                                                               index = motif_names)) if grouped_BH or moderate_variance else None  # duplicated columns add no constraint to the dominance prefilter, so the glycan-level matrix gives the same DAG without the per-sample broadcast
+    dag = get_motif_dag(motif_names, carriers = df_motif) if grouped_BH or moderate_variance else None
     # Test statistical enrichment for motifs in above vs below
     live = (A.var(axis = 1, ddof = 1) > 1e-12) | (B.var(axis = 1, ddof = 1) > 1e-12)
     Al, Bl = A[live], B[live]
@@ -376,6 +398,7 @@ def get_pvals_motifs(
         significance = [significance_dict[m] for m in motif_names]
     else:
         ttests_corr, significance = correct_multiple_testing(ttests, alpha)
+    atoms = {p: (labels, m[:, rows] if multiple_samples else m) for p, (labels, m) in get_motif_atoms(dag, df_motif).items()} if dag is not None else {}
     rows = {}
     if dag is not None:
         # A parent's count in a glycan is its children's counts plus whatever sits in a context no child covers, so the decomposition the differential functions report is available here too
@@ -384,12 +407,15 @@ def get_pvals_motifs(
         for p in [m for m in motif_names if m in dag and dag.out_degree(m)]:
             kids = [c for c in dag.successors(p) if c in idx]
             kv = F[[idx[c] for c in kids]].astype(np.float64)  # promotes resid, parts, and bal below back to double, since F only stores counts
-            resid = F[idx[p]] - kv.sum(axis = 0)
-            usable = resid > 1e-6  # siblings can double-count a glycan that carries both, so the sum is not bounded by the parent
-            parts = np.vstack([kv, np.where(usable, resid, np.nan)])
+            others, resid, shared = _parent_parts(F[idx[p]].astype(np.float64), kv, atoms.get(p))
+            usable = resid > 1e-6
+            parts = np.vstack([others, np.where(usable, resid, np.nan)])
             parts = parts[(parts > 1e-6).any(
                 axis = 1)]  # a part that never occurs is not in the sub-composition and cannot redistribute
-            # Children and residual sum to the parent, so subtracting one part gives the additive logratio of a genuine sub-composition
+            with np.errstate(invalid = 'ignore', divide = 'ignore'):
+                shares = np.vstack([others, resid]) / (others.sum(axis = 0) + resid)
+                stats = (np.nanmedian(resid / (others.sum(axis = 0) + resid)), np.nanmean(shared), np.nanmax(np.abs(np.nanmean(shares[:, pos_i], axis = 1) - np.nanmean(shares[:, neg_i], axis = 1))) * 100)
+            # The parts sum to the parent, so subtracting one part gives the additive logratio of a genuine sub-composition
             # A balance is only defined in a glycan where every part was measured; leaving the NaN in makes that row's std NaN, so the residual direction silently drops out of the very test it belongs to
             obs = ~np.isnan(parts).any(axis = 0)
             cols_b = np.where(obs)[0]
@@ -402,11 +428,11 @@ def get_pvals_motifs(
             okp, okn = usable[pos_i], usable[neg_i]
             if okp.sum() < 2 or okn.sum() < 2:
                 rows[p] = (explained, 1.0, 0.0,
-                           bal_p)  # parent occurs only inside its children: no context of its own left to test
+                           bal_p, *stats)  # parent occurs only inside its children: no context of its own left to test
                 continue
             r = np.log2(np.maximum(resid, 0.0000001))
             rows[p] = (explained, _ttest_pvalue(r[pos_i][okp], r[neg_i][okn]),
-                       cohen_d(r[pos_i][okp], r[neg_i][okn])[0], bal_p)
+                       cohen_d(r[pos_i][okp], r[neg_i][okn])[0], bal_p, *stats)
     out = GlycoDataFrame(pd.DataFrame({
         'motif': motif_names,
         'pval': ttests,
@@ -1003,6 +1029,7 @@ def get_differential_expression(
                                                  custom_motifs = custom_motifs,
                                                  monte_carlo = monte_carlo, random_state = random_state)
     dag = df_org.attrs.pop('motif_dag', None)  # pandas deep-copies attrs into every frame derived from df_org, which for a glycoproteomics composition DAG cost 0.3 s per copy
+    motif_parts = df_org.attrs.pop('motif_parts', {})
     absent_rows = df_org.attrs.pop('absent', None)
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(len(group1 + group2))
@@ -1159,24 +1186,38 @@ def get_differential_expression(
         for p in [m for m in full.index if m in dag and dag.out_degree(m)]:
             kids = [c for c in dag.successors(p) if c in pos]
             kv = F[[pos[c] for c in kids]]
-            resid = F[pos[p]] - kv.sum(axis = 0)
-            # Pairwise dominance does not bound the sum, so a parent with several children can be over-explained; that sample has no residual part at all, and a clipped zero is a fabricated -23 in log space rather than a measurement
+            others, resid, shared = _parent_parts(F[pos[p]], kv, motif_parts.get(p))
+            # A sample without an own context has no residual part at all, and a clipped zero is a fabricated -23 in log space rather than a measurement
             usable = resid > 1e-6
-            # A per-sample scalar cancels from a parent/child logratio, so these balances carry no reference frame and no scale model; alone among the outputs they are pure data
-            parts = np.vstack([kv, np.where(usable, resid, np.nan)])
+            # A per-sample scalar cancels from a logratio of parts, so these balances carry no reference frame and no scale model; alone among the outputs they are pure data
+            parts = np.vstack([others, np.where(usable, resid, np.nan)])
             parts = parts[(parts > 1e-6).any(
                 axis = 1)]  # a part that never occurs is not in the sub-composition and cannot redistribute
+            with np.errstate(invalid = 'ignore', divide = 'ignore'):
+                shares = np.vstack([others, resid]) / (others.sum(axis = 0) + resid)
+                stats = (np.nanmedian(resid / (others.sum(axis = 0) + resid)), np.nanmean(shared), np.nanmax(np.abs(np.nanmean(shares[:, g2i], axis = 1) - np.nanmean(shares[:, g1i], axis = 1))) * 100)
             # A balance is only defined in a sample where every part was measured; a structurally missing cell is not a zero, and leaving it in makes the whole row's std NaN, fails the variance filter, and empties bal
             obs = ~np.isnan(parts).any(axis = 0)
             cols_b = [c for k in range(len(g1i)) if obs[g1i[k]] and obs[g2i[k]] for c in
                       (g1i[k], g2i[k])] if paired else [c for c in g1i + g2i if obs[c]]
             b1, b2 = [k for k, c in enumerate(cols_b) if c in g1i], [k for k, c in enumerate(cols_b) if c in g2i]
-            # Children and residual sum to the parent, so they are a genuine sub-composition; subtracting one part gives its additive logratio, which is the isometric test in disguise (Hotelling's T2 is affine-invariant) and drops the evenness direction that dividing by the parent leaves behind
+            # The parts sum to the parent, so they are a genuine sub-composition; subtracting one part gives its additive logratio, which is the isometric test in disguise (Hotelling's T2 is affine-invariant) and drops the evenness direction that dividing by the parent leaves behind
             bal = np.log2(parts[:, cols_b] + 0.0000001)
             bal = bal[1:] - bal[0] if len(bal) > 1 else bal[:0]
             bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9] if len(bal) and len(cols_b) > 1 else bal[:0]
             bal_p = hotellings_t2(bal[:, b1].T, bal[:, b2].T, paired = paired)[1] if 0 < len(bal) < min(len(b1),
                                                                                                         len(b2)) else np.nan
+            # More parts than samples leave T2 undefined; a permutation test on the Aitchison distances, which needs no covariance, still answers
+            if np.isnan(bal_p) and len(bal) and min(len(b1), len(b2)) > 1 and covariates is None:
+                lr = np.log2(parts[:, cols_b] + 0.0000001)
+                lr = lr - lr.mean(axis = 0)
+                if paired:
+                    diffs = lr[:, b2] - lr[:, b1]
+                    flips = np.vstack([np.ones(diffs.shape[1]), np.random.default_rng(random_state).choice([-1.0, 1.0], (999, diffs.shape[1]))])
+                    norms = ((flips @ diffs.T) ** 2).sum(axis = 1)
+                    bal_p = (np.sum(norms[1:] >= norms[0]) + 1) / len(flips)
+                else:
+                    bal_p = permanova_with_permutation(squareform(pdist(lr.T, metric = 'euclidean')), group_labels = [0 if k in b1 else 1 for k in range(len(cols_b))], permutations = 999, random_state = random_state)[1]
             if covariates is not None:
                 # the group coefficient of the multivariate linear model: T2 of the adjusted mean difference against its covariance c * E / df_e, which is Hotelling's T2 without covariate columns
                 bal_p = np.nan
@@ -1192,7 +1233,7 @@ def get_differential_expression(
             pair_ok = ok1 & ok2 if paired else None
             if (pair_ok.sum() if paired else min(ok1.sum(), ok2.sum())) < 2:
                 rows[p] = (explained, 1.0, 0.0,
-                           bal_p)  # parent occurs only inside its children: no context of its own left to test
+                           bal_p, *stats)  # parent occurs only inside its children: no context of its own left to test
                 continue
             r = np.log2(np.maximum(resid, 0.0000001)) - ref
             r_a, r_b = (r[g1i][pair_ok], r[g2i][pair_ok]) if paired else (r[g1i][ok1], r[g2i][ok2])
@@ -1200,9 +1241,9 @@ def get_differential_expression(
                 ar, ssr_r, dfr_r, _, c_r, _ = _covariate_fit(np.where(usable, r, np.nan)[None, g1i + g2i], [0] * len(g1i) + [1] * len(g2i), covariates, group1 + group2)
                 if np.isfinite(ssr_r[0]):
                     r_a, r_b = ar[0, :len(g1i)][ok1], ar[0, len(g1i):][ok2]
-                    rows[p] = (explained, 2 * t_dist.sf(abs(r_b.mean() - r_a.mean()) / np.sqrt(ssr_r[0] / dfr_r[0] * c_r[0]), dfr_r[0]), cohen_d(r_b, r_a)[0], bal_p)
+                    rows[p] = (explained, 2 * t_dist.sf(abs(r_b.mean() - r_a.mean()) / np.sqrt(ssr_r[0] / dfr_r[0] * c_r[0]), dfr_r[0]), cohen_d(r_b, r_a)[0], bal_p, *stats)
                     continue
-            rows[p] = (explained, _ttest_pvalue(r_b, r_a, paired = paired), cohen_d(r_b, r_a, paired = paired)[0], bal_p)  # r is NaN-free here, so this is the nan_policy = 'omit' test
+            rows[p] = (explained, _ttest_pvalue(r_b, r_a, paired = paired), cohen_d(r_b, r_a, paired = paired)[0], bal_p, *stats)  # r is NaN-free here, so this is the nan_policy = 'omit' test
         for k, v in _decomposition_columns(rows, df_out['Glycan'].tolist(), alpha).items():
             df_out[k] = v
     df_out.attrs.update(
@@ -1302,9 +1343,9 @@ def get_volcano(
     # Make plot
     sig = (y > -np.log10(y_thresh)) & (np.abs(x) > x_thresh)  # the hits the threshold lines frame and label_changed labels
     fig, ax = subplots()
-    ax.scatter(x[~sig], y[~sig], color = 'a3', **kwargs)
-    ax.scatter(x[sig & (x <= 0)], y[sig & (x <= 0)], color = 'b1', **kwargs)
-    ax.scatter(x[sig & (x > 0)], y[sig & (x > 0)], color = 'a1', **kwargs)
+    ax.scatter(x[~sig], y[~sig], color = 'a3', names = labels[~sig], **kwargs)
+    ax.scatter(x[sig & (x <= 0)], y[sig & (x <= 0)], color = 'b1', names = labels[sig & (x <= 0)], **kwargs)
+    ax.scatter(x[sig & (x > 0)], y[sig & (x > 0)], color = 'a1', names = labels[sig & (x > 0)], **kwargs)
     ax.set(xlabel = x_metric, ylabel = '-log10(corr p-val)',
            title = df_res.attrs.get('dataset', '') if title is None else title)
     ax.axhline(-np.log10(y_thresh))
@@ -1470,18 +1511,22 @@ def get_glycanova(
         for p in [m for m in full.index if m in dag and dag.out_degree(m)]:
             kids = [c for c in dag.successors(p) if c in pos]
             kv = F[[pos[c] for c in kids]]
-            resid = F[pos[p]] - kv.sum(axis = 0)
-            # Pairwise dominance does not bound the sum, so a parent with several children can be over-explained; that sample has no residual part at all, and a clipped zero is a fabricated -23 in log space rather than a measurement
+            others, resid, shared = _parent_parts(F[pos[p]], kv, df_org.attrs.get('motif_parts', {}).get(p))
+            # A sample without an own context has no residual part at all, and a clipped zero is a fabricated -23 in log space rather than a measurement
             usable = resid > 1e-6
-            # Children and residual sum to the parent, so subtracting one part's log gives the additive logratios of a genuine sub-composition; a one-way PERMANOVA on those balances asks whether the parent redistributes across contexts, free of any reference frame or scale model
-            parts = np.vstack([kv, np.where(usable, resid, np.nan)])
+            # The parts sum to the parent, so their centered logratios describe a genuine sub-composition; a one-way PERMANOVA on their Aitchison distances asks whether the parent redistributes across contexts, free of any reference frame, scale model, or choice of reference part
+            parts = np.vstack([others, np.where(usable, resid, np.nan)])
             parts = parts[(parts > 1e-6).any(
                 axis = 1)]  # a part that never occurs is not in the sub-composition and cannot redistribute
+            with np.errstate(invalid = 'ignore', divide = 'ignore'):
+                shares = np.vstack([others, resid]) / (others.sum(axis = 0) + resid)
+                by_group = np.vstack([np.nanmean(shares[:, garr == g], axis = 1) for g in levels])
+                stats = (np.nanmedian(resid / (others.sum(axis = 0) + resid)), np.nanmean(shared), np.nanmax(np.nanmax(by_group, axis = 0) - np.nanmin(by_group, axis = 0)) * 100)
             # A balance is only defined in a sample where every part was measured; a structurally missing cell is not a zero, and leaving it in makes the whole row's std NaN, fails the variance filter, and empties bal
             obs = ~np.isnan(parts).any(axis = 0)
             grp_b = garr[obs].tolist()
             bal = np.log2(parts[:, obs] + 0.0000001)
-            bal = bal[1:] - bal[0] if len(bal) > 1 else bal[:0]
+            bal = bal - bal.mean(axis = 0) if len(bal) > 1 else bal[:0]
             bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9] if len(bal) and obs.sum() > 1 else bal[:0]
             if covariates is not None and len(bal):  # the balances with their covariate part removed, as the marginal values
                 ab = _covariate_fit(bal, grp_b, covariates, full.columns[obs].tolist())[0]
@@ -1492,16 +1537,16 @@ def get_glycanova(
             explained = _explained_by(p, kids, eff, top = top_explained)
             if min((usable & (garr == g)).sum() for g in levels) < 2:
                 rows[p] = (explained, 1.0, 0.0,
-                           bal_p)  # parent occurs only inside its children: no context of its own left to test
+                           bal_p, *stats)  # parent occurs only inside its children: no context of its own left to test
                 continue
             r = np.log2(np.maximum(resid, 0.0000001)) - ref
             if covariates is not None:  # ANCOVA of the residual part, as for the marginal values, where it can be fit
                 ar, ssr_r, dfr_r, ssb_r, _, _ = _covariate_fit(np.where(usable, r, np.nan)[None], groups, covariates, full.columns.tolist())
                 if np.isfinite(ssr_r[0]):
-                    rows[p] = (explained, f.sf(ssb_r[0] / (len(levels) - 1) / (ssr_r[0] / dfr_r[0]), len(levels) - 1, dfr_r[0]), omega_squared(ar[0][usable], garr[usable].tolist()), bal_p)
+                    rows[p] = (explained, f.sf(ssb_r[0] / (len(levels) - 1) / (ssr_r[0] / dfr_r[0]), len(levels) - 1, dfr_r[0]), omega_squared(ar[0][usable], garr[usable].tolist()), bal_p, *stats)
                     continue
             rows[p] = (explained, f_oneway(*[r[usable & (garr == g)] for g in levels], equal_var = False)[1],
-                       omega_squared(r[usable], garr[usable].tolist()), bal_p)
+                       omega_squared(r[usable], garr[usable].tolist()), bal_p, *stats)
         for k, v in _decomposition_columns(rows, df_out['Glycan'].tolist(), alpha).items():
             df_out[k] = v
     df_out.attrs.update({'alpha': alpha, 'n': len(groups), 'test': ('moderated ' if moderate_variance and len(X) > 1 else '') + 'ANCOVA' if covariates is not None else 'moderated ANOVA' if moderate_variance and len(X) > 1 else "Welch's ANOVA", 'transform': df_org.attrs.get('transform', transform), 'paired': False,
@@ -1610,10 +1655,10 @@ def get_time_series(
     if motifs:
         # Quantify on raw abundances, then transform the motif composition (as preprocess_data/get_pca do); transforming glycans first centers motifs by the glycan geometric mean instead of the motif one
         glycans = strip_suffixes(df.iloc[:, 0])
-        df = quantify_motifs(df.iloc[:, 1:], glycans = glycans, feature_set = feature_set,
-                             custom_motifs = custom_motifs) + 0.0000001
-        # Containment DAG off the raw motif frame, so its abundance-dominance prefilter stays valid (built pre-transform)
-        dag = get_motif_dag(df.index.tolist(), abundances = df) if grouped_BH else None
+        df, counts = quantify_motifs(df.iloc[:, 1:], glycans = glycans, feature_set = feature_set,
+                                     custom_motifs = custom_motifs, return_counts = True)
+        df = df + 0.0000001
+        dag = get_motif_dag(df.index.tolist(), carriers = counts) if grouped_BH else None
         if transform == "ALR":
             df = get_additive_logratio_transformation(df.reset_index(), df.columns.tolist(), [], paired = False,
                                                       gamma = gamma, custom_scale = custom_scale, random_state = random_state)
@@ -1624,11 +1669,11 @@ def get_time_series(
             raise ValueError("Only ALR and CLR are valid transforms for now.")
     else:
         if glycoproteomics and grouped_BH:
-            # Composition containment off the raw glycoform frame (pre-transform), keeping the abundance-dominance prefilter valid
+            # Composition containment off the raw glycoform frame
             raw = df.iloc[:, 1:].copy()
             raw.index = strip_suffixes(df.iloc[:, 0])
             raw = raw.groupby(level = 0).mean()
-            dag = get_composition_dag(raw.index.tolist(), abundances = raw)
+            dag = get_composition_dag(raw.index.tolist())
         if transform == "ALR":
             df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = False,
                                                       gamma = gamma,
@@ -1682,14 +1727,14 @@ def _rhythm_input(df: pd.DataFrame, # glycans in the first column, samples in th
         transform = "CLR" if glycoproteomics else "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"  # as in preprocess_data: a glycoform ID with a sequence passes enforce_class, and one ALR reference glycoform would span every glycosite
     dag = None
     if motifs:
-        df = quantify_motifs(df, feature_set = feature_set, custom_motifs = custom_motifs) + 0.0000001
-        # Containment DAG off the raw motif frame (pre-transform), keeping the abundance-dominance prefilter valid
-        dag = get_motif_dag(df.index.tolist(), abundances = df) if grouped_BH else None
+        df, counts = quantify_motifs(df, feature_set = feature_set, custom_motifs = custom_motifs, return_counts = True)
+        df = df + 0.0000001
+        dag = get_motif_dag(df.index.tolist(), carriers = counts) if grouped_BH else None
         df = df.reset_index()
     elif glycoproteomics and grouped_BH:
-        # Composition containment off the raw glycoform frame (pre-transform), keeping the abundance-dominance prefilter valid
+        # Composition containment off the raw glycoform frame
         raw = df.set_index(df.columns[0]).astype(float)
-        dag = get_composition_dag(raw.index.tolist(), abundances = raw)
+        dag = get_composition_dag(raw.index.tolist())
     n = len(df)
     if transform == "ALR":
         df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = False, gamma = gamma, random_state = random_state)

@@ -447,7 +447,8 @@ def annotate_dataset(
 
 def get_motif_dag(
         motifs: list[str], # Motif labels as produced by annotate_dataset/quantify_motifs, optionally per glycosite as protein_site_motif
-        abundances: pd.DataFrame | None = None # Motifs x samples abundances, used as an exact prefilter for containment (not needed for per-glycosite motifs)
+        abundances: pd.DataFrame | None = None, # Motifs x samples abundances, a prefilter for containment when carriers is not given (not needed for per-glycosite motifs)
+        carriers: pd.DataFrame | None = None # Glycans x motifs counts of the measured structures; a child's carriers must all carry the parent, which makes the graph independent of samples and labels
 ) -> nx.DiGraph: # Transitively reduced containment DAG; edge parent -> child means parent is a substructure of child
     "Builds the containment DAG of a motif set, in which a parent motif is a substructure of each of its children; per-glycosite motifs are only ordered within their glycosite"
     if any(GLYCOFORM_ID.fullmatch(str(m)) for m in motifs):
@@ -490,11 +491,14 @@ def get_motif_dag(
     dag = nx.DiGraph()
     dag.add_nodes_from(cols)
     A = abundances.loc[cols].values if abundances is not None else None
+    # Node matching is symmetric for wildcards, so Neu5Ac 'contains' Sia(a2-3)Gal as labels; only structures can refute that, and only fully resolved ones can testify (a HexNAc counts toward GlcNAc(b1-3)Gal but not toward GlcNAc)
+    resolved = [] if carriers is None else [g for g in dict.fromkeys(carriers.index) if '{' not in str(g) and not is_composition(str(g)) and not _WILDCARD_RE.search(str(g))]
+    C = carriers.loc[resolved].groupby(level = 0).first().reindex(columns = cols, fill_value = 0).values.T > 0 if resolved else None
     for i, p in enumerate(cols):
         if p in regexy:
             continue  # a glyco-regex only stands for the backbone every match must contain, which proves what contains it but never what it contains
-        # p contains c implies count(p) >= count(c) in every glycan, hence abundance dominance is a necessary condition and an exact prefilter
-        dom = (A <= A[i] + 1e-9).all(axis = 1) if A is not None else np.ones(len(cols), dtype = bool)
+        # Every carrier of a child carries the parent. Count-weighted abundance need not dominate (one Man can carry two GlcNAc(b1-2/4/6)Man), so abundance only stands in when no structures are given
+        dom = ~(C & ~C[i]).any(axis = 1) if C is not None else (A <= A[i] + 1e-9).all(axis = 1) if A is not None else np.ones(len(cols), dtype = bool)
         for j, c in enumerate(cols):
             if i == j or not dom[j] or len(pat[p]) > len(tgt[c]) or not subgraph_isomorphism(tgt[c], pat[p], termini_list = spec[p]):
                 continue
@@ -579,13 +583,55 @@ def deduplicate_motifs(
     return df.iloc[keep]
 
 
+def get_motif_atoms(
+        dag: nx.DiGraph, # Containment DAG of the motifs in counts
+        counts: pd.DataFrame # Glycans x motifs occurrence counts, as from annotate_dataset
+) -> dict[str, tuple[list[tuple[str, ...]], np.ndarray]]: # Parent motif to (atoms named by the children covering them, () being the part outside every child; atoms x glycans counts)
+    "Splits every occurrence of a parent motif by which children cover it, so that overlapping children, and children holding several occurrences of their parent, still partition the parent exactly: the atoms of a parent sum to its counts in every glycan"
+    W, glycans, out = {m: counts[m].to_numpy(dtype = float) for m in counts.columns if m in dag}, counts.index.tolist(), {}
+    def occurrences(glycan, motif):
+        s, sp = _motif_sequence(motif)
+        return [] if s.startswith('r') else [frozenset(k) for k in subgraph_isomorphism(glycan_to_nxGraph(glycan), s, termini_list = sp, return_matches = True)[1]]
+    for p in [m for m in dag if m in W and dag.out_degree(m)]:
+        kids, bins = [c for c in dag.successors(p) if c in W], {}
+        for gi in np.flatnonzero(W[p] > 0):
+            carrying = tuple(c for c in kids if W[c][gi] > 0)
+            found = occurrences(glycans[gi], p) if carrying and W[p][gi] > 1 else []
+            if not found:
+                # one occurrence sits inside every child the glycan carries; a composition has no child contexts and a glyco-regex child stands for the whole glycan
+                bins.setdefault(carrying, np.zeros(len(glycans)))[gi] += W[p][gi]
+                continue
+            covers = {c: occurrences(glycans[gi], c) for c in carrying}
+            for occ in found:
+                key = tuple(c for c in carrying if not covers[c] or any(occ <= k for k in covers[c]))
+                bins.setdefault(key, np.zeros(len(glycans)))[gi] += W[p][gi] / len(found)
+        if bins:
+            out[p] = (list(bins), np.vstack(list(bins.values())))
+    return out
+
+
+def get_composition_atoms(
+        dag: nx.DiGraph # Containment DAG of glycoforms, from get_composition_dag
+) -> dict[str, tuple[list[tuple[str, ...]], list[list[str]]]]: # Parent glycoform to (atoms named by the children covering them, () being the glycoform itself; the glycoforms in each atom)
+    "Splits the glycoforms at or above a parent by which children they sit at or above, so that a parent's cumulative abundance partitions exactly: its own part is its measured abundance, the rest is what it was extended to"
+    out, order = {}, {m: i for i, m in enumerate(dag)}
+    for p in [m for m in dag if dag.out_degree(m)]:
+        kids, bins = list(dag.successors(p)), {}
+        above = {c: nx.descendants(dag, c) | {c} for c in kids}
+        for q in [p, *sorted(nx.descendants(dag, p), key = order.get)]:  # a set's iteration order changes between interpreters, and the first part is the reference of the balances
+            bins.setdefault(tuple(c for c in kids if q in above[c]), []).append(q)
+        out[p] = (list(bins), list(bins.values()))
+    return out
+
+
 def quantify_motifs(
         df: pd.DataFrame | str | Path, # DataFrame, filepath, or shipped dataset name, with samples as columns, abundances as values
         glycans: list[str] | None = None, # List of IUPAC-condensed glycan sequences or compositions, or glycoproteomics glycoforms as protein_site_glycan; auto-detected from the first column, or the index, if None
         feature_set: str | list[str] = ['known', 'exhaustive'], # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical, size_branch
         custom_motifs: str | list[str] = [], # Custom motifs (sequences, r-prefixed glyco-regexes, or motif_list names) when using 'custom' feature set
-        remove_redundant: bool = True  # Remove redundant motifs via deduplicate_motifs
-) -> pd.DataFrame:  # DataFrame with motif abundances (motifs as rows, samples as columns); for glycoforms, one row per glycosite and motif as protein_site_motif
+        remove_redundant: bool = True,  # Remove redundant motifs via deduplicate_motifs
+        return_counts: bool = False  # Also return the glycans x motifs occurrence counts the abundances were weighted with
+) -> pd.DataFrame | tuple[pd.DataFrame, pd.DataFrame]:  # DataFrame with motif abundances (motifs as rows, samples as columns); for glycoforms, one row per glycosite and motif as protein_site_motif
     "Extracts and quantifies motif abundances from glycan abundance data by weighting motif occurrences; glycoproteomics glycoforms are quantified per glycosite"
     if not isinstance(df, pd.DataFrame):
         from glycowork.glycan_data.data_entry import read_abundances
@@ -625,7 +671,8 @@ def quantify_motifs(
             owner.extend([site] * len(cols))
         out = pd.DataFrame(np.vstack(vals) if vals else np.empty((0, len(df))), index = labels, columns = df.index).assign(_site = owner)
         out = deduplicate_motifs(out) if remove_redundant else out  # the site column is part of the grouping key, so only identical motifs of the same site are merged
-        return out.set_axis([f'{s}_{m}' for s, m in zip(out['_site'], out.index)]).drop(columns = '_site')
+        out = out.set_axis([f'{s}_{m}' for s, m in zip(out['_site'], out.index)]).drop(columns = '_site')
+        return (out, df_motif) if return_counts else out
     # Motif quantification
     for col in df_motif.columns:
         indices = [i for i, x in enumerate(df_motif[col]) if x > 0]
@@ -638,7 +685,8 @@ def quantify_motifs(
         else:
             collect_dic[col] = (temp * weights).sum(axis = 1)
     df = pd.DataFrame(collect_dic).T
-    return df if not remove_redundant else deduplicate_motifs(df)
+    df = df if not remove_redundant else deduplicate_motifs(df)
+    return (df, df_motif) if return_counts else df
 
 
 def quantify_dag_steps(

@@ -2230,9 +2230,9 @@ def _spread_glycans(placements: list, # (x, y, w, h, anchor_x, anchor_y) per gly
     "Nudges overlapping glycan boxes apart while keeping them near their anchors"
     pos = [[x, y] for x, y, _w, _h, _ax, _ay in placements]
     n = len(placements)
-    if n < 2:
-        return pos
     cw, ch = canvas
+    if n < 2:
+        return [[max(0.0, min(cw - w, x)), max(0.0, min(ch - h, y))] for x, y, w, h, _ax, _ay in placements]
     for _ in range(iterations):
         hot = [False] * n
         for i in range(n):
@@ -2360,7 +2360,16 @@ def annotate_figure(
         edit_svg = False
     canvas = re.search(r'<svg[^>]*?width="([\d.]+)[a-z]*"[^>]*?height="([\d.]+)[a-z]*"', svg_tmp)
     canvas = (float(canvas.group(1)), float(canvas.group(2))) if canvas else (1000.0, 1000.0)
-    for (_x, _y, gw, gh, ax, ay, data), (gx, gy) in zip(drawn, _spread_glycans([d[:6] for d in drawn], canvas)):
+    spots = _spread_glycans([d[:6] for d in drawn], canvas)
+    # viscose widens the page by each glycan label's text, which the drawing rarely fills, so the page ends at what it holds: the width it needs without those labels, the drawings, and any label left as text
+    page = re.search(r'(<rect width=")[\d.]+(" height="[\d.]+" fill="[^"]*") data-width-unlabeled="([\d.]+)"', svg_tmp)
+    if page:
+        width = max([float(page.group(3))] + [float(v) + 4.0 for v in re.findall(r'data-right="([\d.]+)"', svg_tmp)]
+                    + [gx + d[2] + 4.0 for d, (gx, _gy) in zip(drawn, spots)])
+        svg_tmp = svg_tmp.replace(page.group(0), f'{page.group(1)}{width:.2f}{page.group(2)}', 1)
+        svg_tmp = re.sub(r'(<svg[^>]*?width=")[\d.]+("[^>]*?viewBox="0 0 )[\d.]+', rf'\g<1>{width:.2f}\g<2>{width:.2f}',
+                         svg_tmp, count = 1)
+    for (_x, _y, gw, gh, ax, ay, data), (gx, gy) in zip(drawn, spots):
         svg_tmp += '\n' + _leader_line((ax, ay), (gx, gy, gw, gh))
         svg_tmp += '\n<g transform="translate(%.2f %.2f) scale(%s %s)">\n%s\n</g>' % (gx, gy, glyc_scale,
                                                                                       glyc_scale, data)

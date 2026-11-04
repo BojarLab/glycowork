@@ -43,7 +43,7 @@ from glycowork.motif.processing import (
     in_lib, get_class, enforce_class, equal_repeats, get_matching_indices, is_composition,
     bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono, iupac_to_smiles,
     max_specify_glycan, parse_floating_bit, rescue_compositions, rescue_glycans, split_glycoform_id, glycan_to_oxford,
-    glycan_to_glycam, glycan_to_iupac_extended, glycan_to_glycoct, glycan_to_wurcs
+    glycan_to_glycam, glycan_to_iupac_extended, glycan_to_glycoct, glycan_to_wurcs, glycan_to_kcf
 )
 from glycowork.motif.smiles import (SKELETONS, ALDITOLS, SUBSTITUENTS, ENANTIOMER, CERAMIDE, GlycanSMILESError,
                                     glycan_to_smiles, glycan_to_molecule, smiles_to_iupac, looks_like_smiles,
@@ -75,7 +75,7 @@ from glycowork.motif.graph import (
     expand_termini_list, ensure_graph, possible_topology_check
 )
 from glycowork.motif.annotate import (
-    annotate_glycan, annotate_dataset, get_molecular_properties, get_motif_dag, get_composition_dag,
+    annotate_glycan, annotate_dataset, get_molecular_properties, get_motif_dag, get_composition_dag, get_motif_atoms, get_composition_atoms,
     get_k_saccharides, get_terminal_structures, create_correlation_network,
     group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type,
     Lectin, load_lectin_lib, create_lectin_and_motif_mappings, get_glycan_similarity,
@@ -967,6 +967,35 @@ EDGE        5
             4     5       2:6
             5     6:a2    4:4
 ///""") == "Neu5Gc(a2-4)GlcA(b1-3)Gal6S(b1-4)[Fuc(a1-3)]GlcNAc"
+
+    def kegg(nodes: list[str], edges: list[str]) -> str:
+        "Builds a KCF entry as KEGG writes it from its node names and edges"
+        node_lines = ''.join(f"            {i}   {n}   {-8 * i}   0\n" for i, n in enumerate(nodes, 1))
+        edge_lines = ''.join(f"            {i}   {e}\n" for i, e in enumerate(edges, 1))
+        return f"ENTRY       G00000        Glycan\nNODE        {len(nodes)}\n{node_lines}EDGE        {len(edges)}\n{edge_lines}///"
+
+    for nodes, edges, glycan in [(["Fuc", "Glc"], ["2:b1 1:3"], "Glc(b1-3)D-Fuc"), (["AllNAc", "AllNAc"], ["2:b1 1:4"], "D-AllNAc(b1-4)D-AllNAc"), (["Gal", "LFuc"], ["2:a1 1:2"], "Fuc(a1-2)Gal"),  # G00351, G00926: a bare name is D
+                                 (["Glc", "Fruf"], ["2:b2 1:a1"], "Fruf(b2-1)Glc"), (["Fruf", "Glc"], ["2:a1 1:b2"], "Glc(a1-2)Fruf"), (["Gal", "Glc"], ["2:1 1:4"], "Glc(?1-4)Gal"),  # both anomers of sucrose, an unknown anomer
+                                 (["Ser/Thr", "GlcNAc", "Gal"], ["2:a1 1:3", "3:b1 2:4"], "Gal(b1-4)GlcNAc"), (["PP-Dol", "GlcNAc", "GlcNAc"], ["2:a1 1", "3:b1 2:4"], "GlcNAc(b1-4)GlcNAc"), (["Cer", "Gal6Aep"], ["2:b1 1:1"], "Gal1Cer6Aep"),  # G00238, G00002: carriers are no residues
+                                 (["Ino(acyl)-P", "GlcN", "P", "Man", "EtN", "protein"], ["2:a1 1:6", "4:a1 2:4", "4:2 3", "5 3", "6 5"], "Man2PEtN(a1-4)GlcN(a1-6)Ins"),  # G00142: a GPI anchor, with the residue pointing at its phosphate
+                                 (["GalNAc", "S", "L4-en-thrHexA"], ["2 1:4", "3:a1 1:3"], "L-4dThrHexA4en(a1-3)GalNAc4S"), (["Gal", "L3,6-Anhydro-Gal"], ["2:a1 1:3"], "3,6-Anhydro-L-Gal(a1-3)Gal"),  # G00353, G00684: KEGG's own spellings
+                                 (["Qui", "2,6daraHex3NAc"], ["2:b1 1:3"], "Oli3NAc(b1-3)Qui"), (["Dig", "Cym"], ["2:b1 1:4"], "Dig3Me(b1-4)Dig"), (["Dig", "Dig3Formyl"], ["2:b1 1:4"], "Dig3Fo(b1-4)Dig"), (["Gal", "Neu5Gc4Ac"], ["2:a2 1:3"], "Neu4Ac5Gc(a2-3)Gal"),
+                                 (["Hex", "dHex"], ["2:1 1"], "dHex(?1-?)Hex"), (["D/LGlc", "Glc"], ["2:a1 1:4"], "Glc(a1-4)Glc"), (["Gal3S", "fuc"], ["2:a1 1:2"], "Fuc(a1-2)Gal3S")]:
+        assert canonicalize_iupac(kegg(nodes, edges)) == glycan
+    # ...and glycan_to_kcf writes it, numbered from the reducing end as KEGG does, with substituents as their own nodes
+    assert glycan_to_kcf("Gal(b1-3)GalNAc") == ("ENTRY       glycowork                   Glycan\nNODE        2\n            1   GalNAc       4     0\n            2   Gal         -4     0\n"
+                                                "EDGE        1\n            1     2:b1    1:3\n///")
+    assert glycan_to_kcf("Neu4Ac5Gc(a2-3)Gal6S(b1-4)[Fuc(a1-3)]GlcNAc1Asn", entry = "G1") == ("ENTRY       G1                          Glycan\nNODE        6\n            1   Asn            12    -2\n            2   GlcNAc          4    -2\n"
+                                                                                               "            3   Gal            -4     4\n            4   S             -12     8\n            5   LFuc           -4    -8\n            6   Neu5Gc4Ac     -12     0\n"
+                                                                                               "EDGE        5\n            1     2:1     1\n            2     3:b1    2:4\n            3     4       3:6\n            4     5:a1    2:3\n            5     6:a2    3:3\n///")
+    for glycan in ["Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", "Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc", "D-Fuc(b1-3)Gal", "IdoA2S(a1-4)GlcNS6S", "IdoA2S(a1-4)GlcN2S6S", "L-4dThrHexA4en2S(a1-3)GalNAc4S", "Dig3Me(b1-4)Dig", "Dig3Ac4Ac(b1-4)Dig3Ac",
+                   "Dig3Fo4Fo(b1-4)Dig3Fo", "Oli3NAc(b1-3)Qui", "GlcNAc1P(a1-6)Man", "GlcNAc(b1-6)Man6P", "GlcNAc(?1-?)Man", "Rib5P-ol(5-1)Rib5P-ol", "Ribf(b1-1)Rib5P(5-3)Ribf", "Gal(b1-3)GalNAc-ol", "GalOS(b1-4)GlcNAc", "dHex(?1-?)Hex", "Glc", "Gal1Cer6Aep", "GlcN1P2Pam",
+                   "3,6-Anhydro-L-Gal(a1-3)Gal", "Gal(a1-3)2,5-Anhydro-D-Alt-ol", "Glc(a1-4)[Gal(b1-6)]2,5-Anhydro-D-Tal", "QuiNAc(b1-4)D-2,7-Anhydro-3dManHep-ulosonic", "Gal(b1-4)Glc2S3S5S6S-onic", "Fruf(b2-1)Glc", "Man6PEtN(a1-2)Man(a1-6)Man2PEtN(a1-4)GlcN(a1-6)Ins",
+                   "Ribf(b1-5)GalfNAc(b1-4)[DLGlcHep3Me6Me(a1-3)]GlcA6EtN(a1-2)Ribf", "Rha(a1-2)Ara(a1-4)Gal(a1-2)AcefA(b1-3)Rha(b1-5)Apif", "Glc(b1-3)Glc6Ac1Fer(a1-2)FrufOBz1Coum"]:
+        assert canonicalize_iupac(glycan_to_kcf(glycan)) == canonicalize_iupac(glycan)
+    for glycan in ["{Fuc(a1-?)}Gal(b1-4)GlcNAc", "[Gal(b1-4)GlcNAc(b1-3)]Gal"]:
+        with pytest.raises(ValueError, match = "KCF"):
+            glycan_to_kcf(glycan)
     assert canonicalize_iupac("""<?xml version="1.0" encoding="UTF-8"?>
 <sugar version="1.0">
   <residues>
@@ -5513,6 +5542,22 @@ def test_annotate_figure(mock_svg_file):
     assert isinstance(annotate_figure(odd_labels), str)
     with pytest.raises(ValueError, match = 'corr p-val'):  # scaling needs the significance column of get_differential_expression
         annotate_figure(mock_svg_file, scale_by_DE_res = de_results.drop(columns = 'corr p-val'))
+    # A viscose page ends at what it holds, which is at least what it needs without its glycan labels
+    viscose_svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="900" height="300" viewBox="0 0 900 300">\n'
+                   '<metadata>viscose</metadata>\n'
+                   '<rect width="900" height="300" fill="#FFFFFF" data-width-unlabeled="400.00" />\n'
+                   '<!-- LABEL -->\n<g transform="translate(X 100)" data-right="800.00"><path d="M 0 0 L 1 1"/></g>\n</svg>')
+    glycan = 'Neu5Ac(a2-3)Gal(b1-3)GalNAc'
+    page_width = lambda svg: float(re.search(r'<svg[^>]*?width="([\d.]+)"', svg).group(1))
+    assert page_width(annotate_figure(viscose_svg.replace('LABEL', glycan).replace('X', '100'))) == 400
+    result = annotate_figure(viscose_svg.replace('LABEL', glycan).replace('X', '500'))
+    assert 500 < page_width(result) < 800 and 'data-width-unlabeled' not in result
+    assert f'viewBox="0 0 {page_width(result):.2f} 300"' in result and f'<rect width="{page_width(result):.2f}"' in result
+    # A label left as text keeps its room
+    assert page_width(annotate_figure(viscose_svg.replace('LABEL', 'not_a_glycan').replace('X', '500'))) == 804
+    # A lone glycan stays on the page, as several do
+    assert annotate_figure(viscose_svg.replace('LABEL', glycan).replace('X', '890').replace('data-width-unlabeled="400.00"',
+                                                                                            'data-width-unlabeled="900.00"')).count('translate(890') == 0
 
 
 def test_process_per_residue():
@@ -11034,6 +11079,94 @@ def test_sequence_analysis_gets_no_decomposition_columns():
     out = get_differential_expression(glycomics_data_loader.human_skin_O_PMC5871710_BCC, motifs = False,
                                       random_state = 42)
     assert 'Redistribution p-val' not in out.columns
+
+
+def test_get_motif_dag_carriers_refute_label_containment():
+    motifs = ['Neu5Ac', 'Sia(a2-3)Gal', 'Neu5Ac(a2-3)Gal', 'Neu5Gc(a2-3)Gal']
+    glycans = ['Neu5Ac(a2-3)Gal(b1-4)Glc', 'Neu5Gc(a2-3)Gal(b1-4)Glc']
+    carriers = pd.DataFrame([[1, 1, 1, 0], [0, 1, 0, 1]], index = glycans, columns = motifs)
+    assert get_motif_dag(motifs).has_edge('Neu5Ac', 'Sia(a2-3)Gal')  # node matching is symmetric for wildcards, so labels alone accept this
+    dag = get_motif_dag(motifs, carriers = carriers)
+    assert not nx.has_path(dag, 'Neu5Ac', 'Sia(a2-3)Gal')
+    assert not nx.has_path(dag, 'Neu5Ac', 'Neu5Gc(a2-3)Gal')
+    assert dag.has_edge('Sia(a2-3)Gal', 'Neu5Ac(a2-3)Gal') and dag.has_edge('Neu5Ac', 'Neu5Ac(a2-3)Gal')
+
+
+def test_get_motif_dag_carriers_keep_what_counts_would_lose():
+    motifs = ['Man', 'GlcNAc(b1-2/4/6)Man']
+    biantennary = 'GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)Man(b1-4)GlcNAc'
+    carriers = pd.DataFrame([[1, 2]], index = [biantennary], columns = motifs)  # one mannose carrying two GlcNAc branches: the child outnumbers its parent, which is still contained in it
+    assert get_motif_dag(motifs, carriers = carriers).has_edge('Man', 'GlcNAc(b1-2/4/6)Man')
+    unresolved = pd.DataFrame([[0, 1]], index = ['{GlcNAc(b1-2)}Man(a1-3)Man'], columns = motifs)
+    assert get_motif_dag(motifs, carriers = pd.concat([carriers, unresolved])).has_edge('Man', 'GlcNAc(b1-2/4/6)Man')  # a floating residue cannot testify against an edge
+
+
+def test_get_motif_atoms_partition_overlapping_children():
+    motifs = ['Neu5Ac', 'Neu5Ac(a2-3)Gal', 'Neu5Ac(a2-8)Neu5Ac']
+    glycans = ['Neu5Ac(a2-8)Neu5Ac(a2-3)Gal(b1-4)Glc', 'Neu5Ac(a2-3)Gal(b1-4)Glc', 'Neu5Ac(a2-6)Gal(b1-4)Glc']
+    counts = pd.DataFrame([[2, 1, 1], [1, 1, 0], [1, 0, 0]], index = glycans, columns = motifs)
+    labels, m = get_motif_atoms(get_motif_dag(motifs, carriers = counts), counts)['Neu5Ac']
+    atoms = dict(zip(labels, m))
+    assert np.allclose(m.sum(axis = 0), counts['Neu5Ac'].values)  # atoms sum to the parent although the children overlap on the first glycan
+    assert atoms[('Neu5Ac(a2-3)Gal', 'Neu5Ac(a2-8)Neu5Ac')].tolist() == [1, 0, 0]  # the inner sialic acid sits in both children
+    assert atoms[('Neu5Ac(a2-8)Neu5Ac',)].tolist() == [1, 0, 0]  # the outer one only in the alpha2-8 child
+    assert atoms[('Neu5Ac(a2-3)Gal',)].tolist() == [0, 1, 0]
+    assert atoms[()].tolist() == [0, 0, 1]  # outside every child
+
+
+def test_get_motif_atoms_composition_rows_are_own_context():
+    motifs = ['Hex', 'Gal']
+    counts = pd.DataFrame([[2.0, 2.0], [2.0, 0.0]], index = ['Gal(b1-3)Gal', 'H2N2'], columns = motifs)
+    labels, m = get_motif_atoms(get_motif_dag(motifs, carriers = counts), counts)['Hex']
+    assert dict(zip(labels, m.tolist()))[()] == [0.0, 2.0]
+
+
+def test_get_composition_atoms_partition_the_cumulative_abundance():
+    glycoforms = ['P1_100_H3N2', 'P1_100_H4N2', 'P1_100_H3N3', 'P1_100_H4N3', 'P2_9_H3N2']
+    dag = get_composition_dag(glycoforms)
+    labels, members = get_composition_atoms(dag)['P1_100_H3N2']
+    atoms = dict(zip(labels, members))
+    assert atoms[()] == ['P1_100_H3N2']  # a parent's own part is its measured glycoform
+    assert sorted(atoms[max(labels, key = len)]) == ['P1_100_H4N3']  # above both children
+    assert sorted(g for v in members for g in v) == sorted(glycoforms[:4])  # another glycosite never enters
+
+
+def test_motif_parts_sum_to_the_parent():
+    df = glycomics_data_loader.human_skin_O_PMC5871710_BCC
+    org = preprocess_data(df, list(df.group1), list(df.group2), experiment = 'diff', motifs = True, paired = df.paired, random_state = 42)[1]
+    parts = org.attrs['motif_parts']
+    assert len(parts) > 0
+    for p, (labels, m) in parts.items():
+        assert len(labels) == len(m) and np.allclose(m.sum(axis = 0), org.loc[p].values)
+
+
+def test_decomposition_reports_absolute_shares(bcc_result):
+    parents = bcc_result[bcc_result['Explained by'] != '']
+    assert parents['Own share'].between(0, 1).all() and parents['Shared share'].between(0, 1).all()
+    assert (parents['Share shift'] >= 0).all()
+    assert parents.set_index('Glycan').loc['Gal', 'Shared share'] > 0.05  # galactoses sit in several children at once
+
+
+def test_glycoproteomics_own_part_is_the_measured_glycoform():
+    df = glycoproteomics_data_loader.human_milk_N_PMID34087070
+    org = preprocess_data(df, ['Colostrum1', 'Colostrum2', 'Colostrum3'], ['Mature1', 'Mature2', 'Mature3'], experiment = 'diff', glycoproteomics = True, random_state = 42)[1]
+    parts, dag = org.attrs['motif_parts'], org.attrs['motif_dag']
+    assert len(parts) > 0
+    for p in list(parts)[:50]:
+        labels, m = parts[p]
+        measured = ~np.isnan(org.loc[p].values)
+        assert np.allclose(m[labels.index(())][measured], org.loc[p].values[measured])
+        assert np.allclose(m.sum(axis = 0)[measured], np.nansum(org.loc[[p, *nx.descendants(dag, p)]].values, axis = 0)[measured])
+
+
+def test_redistribution_answers_with_more_parts_than_samples():
+    rows = [f'Neu5Ac(a2-{k})Gal(b1-{j})GlcNAc' for k in (3, 6) for j in (3, 4)] + ['Neu5Ac(a2-8)Neu5Ac(a2-3)Gal(b1-4)GlcNAc', 'Neu5Ac(a2-8)Neu5Ac(a2-6)Gal(b1-4)GlcNAc', 'Gal(b1-3)GalNAc']
+    vals = np.random.default_rng(0).lognormal(2, 0.3, (len(rows), 8))
+    df = pd.DataFrame(vals, columns = [f'a{i}' for i in range(4)] + [f'b{i}' for i in range(4)]).assign(glycan = rows)
+    df = df[['glycan', *[c for c in df.columns if c != 'glycan']]]
+    res = get_differential_expression(df, group1 = [f'a{i}' for i in range(4)], group2 = [f'b{i}' for i in range(4)], motifs = True, min_samples = 0, random_state = 42)
+    parents = res[res['Explained by'] != '']
+    assert parents['Redistribution p-val'].notna().all()
 
 
 def test_glycodataframe_meta_helpers():
