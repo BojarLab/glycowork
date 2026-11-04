@@ -8,7 +8,7 @@
 ### motif
 #### graph
 ##### Added ✨
-- Added `glycan_to_glycangraph`, which returns the cached, read-only `GlycanGraph` glycowork's motif code runs on (the nodes, attributes, and neighbor order of `glycan_to_nxGraph`, without networkx), for code that only reads glycan graphs ()
+- Added `glycan_to_glycangraph`, which returns the cached, read-only `GlycanGraph` glycowork's motif code runs on (the nodes, attributes, and neighbor order of `glycan_to_nxGraph`, without networkx), for code that only reads glycan graphs (0f3af98)
 
 #### processing
 ##### Added ✨

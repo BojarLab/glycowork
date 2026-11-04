@@ -76,7 +76,7 @@ def preprocess_data(
         impute: bool = True,  # Replace zeros with impute_biosynthetic predictions
         min_samples: float = 0.1,  # Min fraction (0-1) of non-zero samples required
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"
-        gamma: float = 0.1,  # Uncertainty parameter for CLR transform
+        gamma: float = 0.07,  # Scale uncertainty of a sample's log-ratio, which the tests of get_differential_expression and get_glycanova add to their variance
         custom_scale: float | dict = 0,  # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
         custom_motifs: str | list[str] = [],  # Custom motifs if using 'custom' feature set
         monte_carlo: bool = False,  # Use Monte Carlo simulation to control for technical variation (will take longer to run)
@@ -144,7 +144,7 @@ def preprocess_data(
     absent_rows, constant = None, []
     df_org = df.copy(deep = True)
     if transform is None:
-        transform = "CLR" if glycoproteomics or monte_carlo else "ALR" if (isinstance(df.iloc[0, 0], str) and enforce_class(
+        transform = "CLR" if glycoproteomics or monte_carlo or motifs else "ALR" if (isinstance(df.iloc[0, 0], str) and enforce_class(
             df.iloc[0, 0], "N")) and len(df) > 50 else "CLR"  # Monte Carlo samples CLR-transformed instances (estimate_technical_variance)
     if transform not in ("ALR", "CLR", "Nothing"):
         raise ValueError("Only ALR and CLR are valid transforms for now.")
@@ -1004,7 +1004,7 @@ def get_differential_expression(
         grouped_BH: bool = False,  # Two-stage adaptive Benjamini-Hochberg within groups instead of over all features: DAG-grouped families for motifs and glycoforms; at equal false positives this does worse than a flat correction, so it is only on request
         custom_motifs: str | list[str] = [],  # Custom motifs if using 'custom' feature set
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"; None auto-decides
-        gamma: float = 0.1,  # Uncertainty parameter for CLR transform
+        gamma: float = 0.07,  # Scale uncertainty of a sample's log-ratio, added to the variance of the tests
         custom_scale: float | dict = 0,  # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
         moderate_variance: bool = True,  # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
         glycoproteomics: bool | None = None,  # Whether data is from glycoproteomics (rows protein_site_glycan); default: whenever every row label is protein_site_glycan
@@ -1276,9 +1276,9 @@ def get_differential_expression(
                 ar, ssr_r, dfr_r, _, c_r, _ = _covariate_fit(np.where(usable, r, np.nan)[None, g1i + g2i], [0] * len(g1i) + [1] * len(g2i), covariates, group1 + group2)
                 if np.isfinite(ssr_r[0]):
                     r_a, r_b = ar[0, :len(g1i)][ok1], ar[0, len(g1i):][ok2]
-                    rows[p] = (explained, 2 * t_dist.sf(abs(r_b.mean() - r_a.mean()) / np.sqrt(ssr_r[0] / dfr_r[0] * c_r[0]), dfr_r[0]), cohen_d(r_b, r_a)[0], bal_p, *stats)
+                    rows[p] = (explained, 2 * t_dist.sf(abs(r_b.mean() - r_a.mean()) / np.sqrt((ssr_r[0] / dfr_r[0] + scale_var) * c_r[0]), dfr_r[0]), cohen_d(r_b, r_a)[0], bal_p, *stats)
                     continue
-            rows[p] = (explained, _ttest_pvalue(r_b, r_a, paired = paired), cohen_d(r_b, r_a, paired = paired)[0], bal_p, *stats)  # r is NaN-free here, so this is the nan_policy = 'omit' test
+            rows[p] = (explained, _ttest_pvalue(r_b, r_a, paired = paired, scale_var = scale_var), cohen_d(r_b, r_a, paired = paired)[0], bal_p, *stats)  # r is NaN-free here, so this is the nan_policy = 'omit' test
         for k, v in _decomposition_columns(rows, df_out['Glycan'].tolist(), alpha).items():
             df_out[k] = v
     df_out.attrs.update(
@@ -1420,7 +1420,7 @@ def get_glycanova(
         grouped_BH: bool = False,  # Two-stage adaptive Benjamini-Hochberg within groups instead of over all features: DAG-grouped families for motifs and glycoforms; at equal false positives this does worse than a flat correction, so it is only on request
         custom_motifs: str | list[str] = [],  # Custom motifs if using 'custom' feature set
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"; None auto-decides
-        gamma: float = 0.1,  # Uncertainty parameter for CLR transform
+        gamma: float = 0.07,  # Scale uncertainty of a sample's log-ratio, added to the variance of the tests
         custom_scale: float | dict = 0,  # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
         moderate_variance: bool = True,  # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
         glycoproteomics: bool | None = None,  # Whether rows are glycoforms from glycoproteomics instead of glycans; default: whenever every row label is protein_site_glycan
@@ -1592,9 +1592,11 @@ def get_glycanova(
             if covariates is not None:  # ANCOVA of the residual part, as for the marginal values, where it can be fit
                 ar, ssr_r, dfr_r, ssb_r, _, _ = _covariate_fit(np.where(usable, r, np.nan)[None], groups, covariates, full.columns.tolist())
                 if np.isfinite(ssr_r[0]):
-                    rows[p] = (explained, f.sf(ssb_r[0] / (len(levels) - 1) / (ssr_r[0] / dfr_r[0]), len(levels) - 1, dfr_r[0]), omega_squared(ar[0][usable], garr[usable].tolist()), bal_p, *stats)
+                    rows[p] = (explained, f.sf(ssb_r[0] / (len(levels) - 1) / (ssr_r[0] / dfr_r[0] + scale_var), len(levels) - 1, dfr_r[0]), omega_squared(ar[0][usable], garr[usable].tolist()), bal_p, *stats)
                     continue
-            rows[p] = (explained, f_oneway(*[r[usable & (garr == g)] for g in levels], equal_var = False)[1],
+            parts_r = [x for x in (r[usable & (garr == g)] for g in levels) if len(x)]
+            dfr_r = usable.sum() - len(parts_r)
+            rows[p] = (explained, f.sf(sum(len(x) * (x.mean() - r[usable].mean()) ** 2 for x in parts_r) / (len(parts_r) - 1) / (sum(((x - x.mean()) ** 2).sum() for x in parts_r) / dfr_r + scale_var), len(parts_r) - 1, dfr_r) if len(parts_r) > 1 and dfr_r > 0 else np.nan,
                        omega_squared(r[usable], garr[usable].tolist()), bal_p, *stats)
         for k, v in _decomposition_columns(rows, df_out['Glycan'].tolist(), alpha).items():
             df_out[k] = v

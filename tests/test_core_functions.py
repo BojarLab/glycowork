@@ -6552,6 +6552,24 @@ def test_absent_in_a_group_stays_out_of_the_reference():
     assert np.allclose(three, 3 / 84, atol = 0.003) and three == detection_test(np.array([[1, 1, 1, 0, 0, 0, 0, 0, 0]], bool), [[0, 1, 2], [3, 4, 5], [6, 7, 8]], random_state = 2)[0]
 
 
+def test_power_defaults():
+    from scipy.stats import ttest_ind, ttest_rel
+    from glycowork.glycan_data.stats import moderated_variance, _ttest_pvalue
+    # homogeneous variances take the largest prior allowed, one eighth of the data's degrees of freedom, and the prior still borrows from the neighbors
+    assert moderated_variance(np.full(30, 1.0), df_resid = 8.0)[1][0] == 9.0
+    spread = np.array([0.5, 2.0, 0.5, 2.0])
+    assert moderated_variance(spread, df_resid = 8.0, neighbors = [[1], [0], [3], [2]])[0][0] > 0.5
+    # a residual carries the scale uncertainty, and without it stays scipy's
+    x, y = np.array([1.0, 1.4, 0.8, 1.2]), np.array([1.9, 2.3, 2.0, 2.2])
+    assert np.isclose(_ttest_pvalue(x, y), ttest_ind(x, y, equal_var = False)[1]) and np.isclose(_ttest_pvalue(x, y, paired = True), ttest_rel(x, y)[1])
+    assert _ttest_pvalue(x, y, scale_var = 0.05) > _ttest_pvalue(x, y) and _ttest_pvalue(x, y, paired = True, scale_var = 0.05) > _ttest_pvalue(x, y, paired = True)
+    # an N-glycan table above 50 glycans is ALR for its glycans and CLR for its motifs
+    df = glycomics_data_loader.human_serum_bacteremia_N_PMID33535571
+    g1, g2 = df.groups.mapping['EC'], df.groups.mapping['SA']
+    assert preprocess_data(df[[df.columns[0]] + list(g1) + list(g2)], group1 = list(g1), group2 = list(g2), motifs = True)[1].attrs['transform'] == 'CLR'
+    assert preprocess_data(df[[df.columns[0]] + list(g1) + list(g2)], group1 = list(g1), group2 = list(g2))[1].attrs['transform'] == 'ALR'
+
+
 def test_alr_reference_is_stable_between_groups():
     # A feature whose two group variances are equal but whose level differs between the groups used to be the ALR reference, and its shift moved
     # every other feature's log2FC; the reference now has to keep a stable log-ratio over all samples
@@ -11154,10 +11172,10 @@ def test_scale_uncertainty_is_a_variance_and_takes_no_draw():
     tested = wide['p-val'] < 1
     assert (wide.loc[tested, 'p-val'] > narrow['p-val'].reindex(wide.index)[tested]).all()
     trans, org = preprocess_data(df.copy(), group1 = g1, group2 = g2, motifs = True, random_state = 0)[:2]
-    assert org.attrs['scale_var'] == 0.1 ** 2 and trans.equals(preprocess_data(df.copy(), group1 = g1, group2 = g2, motifs = True, gamma = 0.7, random_state = 3)[0])
+    assert org.attrs['scale_var'] == 0.07 ** 2 and trans.equals(preprocess_data(df.copy(), group1 = g1, group2 = g2, motifs = True, gamma = 0.7, random_state = 3)[0])
     A, B = trans[g1].to_numpy(), trans[g2].to_numpy()
     s2, dfp = moderated_variance((3 * A.var(axis = 1, ddof = 1) + 3 * B.var(axis = 1, ddof = 1)) / 6, df_resid = np.full(len(trans), 6.0), neighbors = dag_neighbors(trans.index.tolist(), org.attrs['motif_dag']))
-    expected = 2 * t_dist.sf(np.abs(B.mean(axis = 1) - A.mean(axis = 1)) / np.sqrt((s2 + 0.1 ** 2) * 0.5), dfp)
+    expected = 2 * t_dist.sf(np.abs(B.mean(axis = 1) - A.mean(axis = 1)) / np.sqrt((s2 + 0.07 ** 2) * 0.5), dfp)
     res = get_differential_expression(df.copy(), group1 = g1, group2 = g2, motifs = True, random_state = 0).set_index('Glycan')
     live = res['p-val'].reindex(trans.index).to_numpy() < 1
     assert np.allclose(expected[live], res['p-val'].reindex(trans.index).to_numpy()[live])

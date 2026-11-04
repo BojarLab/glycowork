@@ -62,7 +62,8 @@ def cohen_d(x: np.ndarray | list[float], # comparison group containing numerical
 
 def _ttest_pvalue(x: np.ndarray, # comparison group containing numerical data
                   y: np.ndarray, # comparison group containing numerical data, same order as x if paired
-                  paired: bool = False # whether samples are paired
+                  paired: bool = False, # whether samples are paired
+                  scale_var: float = 0 # scale uncertainty of a sample's log-ratio, added to the variance; without it, the result is scipy's
                   ) -> float: # two-sided p-value of x against y
     "Welch's (or the paired) t-test p-value of one feature, computed step by step as scipy's ttest_ind(x, y, equal_var = False) or ttest_rel(x, y) compute it, so bit-identical (a NaN gives NaN, and NaN-free input gives what nan_policy = 'omit' does), without their ~0.5 ms of per-call overhead that dominated the per-parent loops"
     x, y = np.asarray(x, dtype = float), np.asarray(y, dtype = float)
@@ -71,11 +72,11 @@ def _ttest_pvalue(x: np.ndarray, # comparison group containing numerical data
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         if paired:
             d, n = x - y, len(x)
-            t_stat = np.divide(np.mean(d) - 0.0, np.sqrt(np.mean((d - np.mean(d, keepdims = True)) ** 2) * np.divide(n, n - 1) / n))
+            t_stat = np.divide(np.mean(d) - 0.0, np.sqrt((np.mean((d - np.mean(d, keepdims = True)) ** 2) * np.divide(n, n - 1) + 2 * scale_var) / n))
             return 2 * stdtr(np.asarray(n - 1, dtype = float), -np.abs(t_stat))
         nx, ny = len(x), len(y)
-        vx = np.mean((x - np.mean(x, keepdims = True)) ** 2) * np.divide(nx, nx - 1) / nx
-        vy = np.mean((y - np.mean(y, keepdims = True)) ** 2) * np.divide(ny, ny - 1) / ny
+        vx = (np.mean((x - np.mean(x, keepdims = True)) ** 2) * np.divide(nx, nx - 1) + scale_var) / nx
+        vy = (np.mean((y - np.mean(y, keepdims = True)) ** 2) * np.divide(ny, ny - 1) + scale_var) / ny
         dof = (vx + vy) ** 2 / (vx ** 2 / (nx - 1) + vy ** 2 / (ny - 1))
         t_stat = np.divide(np.mean(x) - np.mean(y), np.sqrt(vx + vy))
     return 2 * stdtr(np.where(np.isnan(dof), 1., dof), -np.abs(t_stat))
@@ -1130,8 +1131,9 @@ def moderated_variance(residual_var: np.ndarray, # per-feature within-group vari
     # Smyth's moment estimator for the prior degrees of freedom, so the amount of shrinkage is set by the data rather than chosen
     z = ls2 - digamma(d / 2) + np.log(d / 2)
     v = (np.var(z, ddof = 1) if len(z) > 1 else 0.0) - np.mean(polygamma(1, d / 2))
+    cap = float(np.median(d)) / 8  # features sharing carriers share their sampling error, so the spread across them overstates how much the table knows about the prior
     if v <= 0 or not np.isfinite(v):
-        d0 = float(np.median(d))  # variances look homogeneous, so shrink as hard as the cap allows
+        d0 = cap  # variances look homogeneous, so shrink as hard as the cap allows
     else:
         x = 0.5 / v + 0.5
         for _ in range(50):  # Newton inversion of the trigamma function
@@ -1140,8 +1142,8 @@ def moderated_variance(residual_var: np.ndarray, # per-feature within-group vari
             x += dx
             if abs(dx / x) < 1e-8:
                 break
-        # the prior may contribute at most as much information as the typical feature's data, which stops a chance-homogeneous variance set from producing absurdly small p-values in tiny cohorts
-        d0 = float(np.clip(2 * x, 0.1, np.median(d)))
+        # the prior may contribute a fraction of the typical feature's data, which stops a chance-homogeneous variance set from producing absurdly small p-values in tiny cohorts
+        d0 = float(np.clip(2 * x, 0.1, cap))
     # Motifs that contain one another are measured on overlapping structures and so share measurement noise, which makes them a better variance reference than unrelated motifs
     prior = np.array([np.exp(np.mean(ls2[nb + [i]])) if neighbors and nb else np.exp(np.mean(ls2))
                       for i, nb in enumerate(neighbors if neighbors else [[]] * len(s2))])
