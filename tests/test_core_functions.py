@@ -3614,6 +3614,62 @@ def test_partial_corr():
     assert -1 <= corr <= 1
     assert 0 <= p_val <= 1
     corr, p_val = partial_corr(x, y, np.empty(shape=(0,0)))
+    # each control costs a degree of freedom: the null stays near alpha with correlated controls
+    rng = np.random.default_rng(0)
+    pvals = []
+    for _ in range(600):
+        C = rng.normal(size = (20, 6))
+        pvals.append(partial_corr(C @ np.full(6, 0.3) + rng.normal(size = 20) * 0.7, C @ np.full(6, 0.3) + rng.normal(size = 20) * 0.7, C)[1])
+    assert np.mean(np.array(pvals) < 0.05) < 0.08
+
+
+def test_spearman_pvals_of_constant_features_and_tails():
+    from math import factorial
+    from scipy.special import stdtr
+    from glycowork.glycan_data.stats import _spearman_pvals
+    assert np.isnan(spearman_exact_pvals(np.array([np.nan, 1.0]), 5)[0])
+    assert np.isnan(_spearman_pvals(np.array([np.nan]), 20)[0])
+    # r = 1 on 10 samples: 2 of the 10! rank orders, not 0
+    assert _spearman_pvals(np.array([1.0]), 10)[0] >= 2 / factorial(10) * (1 - 1e-9)
+    # never below the t, which runs anti-conservative in the tails
+    p, t_p = _spearman_pvals(np.array([0.7576]), 10)[0], 2 * stdtr(8, -0.7576 * np.sqrt(8 / (1 - 0.7576 ** 2)))
+    assert p >= t_p
+
+
+def test_detection_test_is_exact():
+    from math import comb
+    from glycowork.glycan_data.stats import _fisher_2xk
+    assert np.isclose(_fisher_2xk(((0, 3), (3, 3))), 0.1)
+    # far below the 1e-4 a Monte Carlo test of 9999 resamples can report
+    assert _fisher_2xk(tuple(sorted(((20, 23), (0, 24), (12, 22), (10, 21))))) < 1e-8
+    # equal to brute force
+    groups = [list(range(0, 3)), list(range(3, 6)), list(range(6, 10))]
+    row = np.array([1, 1, 0, 0, 0, 0, 1, 1, 1, 1], dtype = bool)
+    p, v = detection_test(row[None], groups)
+    sizes, counts, m = [3, 3, 4], [2, 0, 4], 6
+    weight = lambda xs: comb(3, xs[0]) * comb(3, xs[1]) * comb(4, xs[2])
+    tables = [(a, b, m - a - b) for a in range(4) for b in range(4) if 0 <= m - a - b <= 4]
+    assert np.isclose(p[0], sum(weight(x) for x in tables if weight(x) <= weight(counts)) / comb(10, m))
+    assert 0 < v[0] <= 1
+    # no margin to test on gives p = 1 instead of an exception
+    assert detection_test(np.zeros((1, 10), dtype = bool), groups)[0][0] == 1.0
+    # paired: McNemar on the discordant pairs
+    paired = np.array([1, 1, 1, 0, 0, 0], dtype = bool)
+    assert np.isclose(detection_test(paired[None], [[0, 1, 2], [3, 4, 5]], paired = True)[0][0], 0.25)
+
+
+def test_get_BF_small_p():
+    from scipy.special import ndtri
+    assert np.isfinite(get_BF(20, 1e-17))
+    assert get_BF(20, 1e-17) > get_BF(20, 1e-15) > get_BF(20, 1e-10)
+    assert np.isclose(np.log(get_BF(20, 1e-15, z = True)), 0.5 * ndtri(5e-16) ** 2 + 0.5 * np.log(max(2 / 20, 1 / np.sqrt(20))))
+
+
+def test_studentized_range_isf():
+    from glycowork.glycan_data.stats import _studentized_range_isf, _studentized_range_sf
+    for alpha, k, df in [(0.05, 3, 6), (0.01, 2, 2), (0.05, 16, 1000), (0.1, 2, 1)]:
+        assert np.isclose(_studentized_range_sf(np.array([_studentized_range_isf(alpha, k, df)]), k, df)[0], alpha, rtol = 1e-9)
+    assert np.isclose(_studentized_range_isf(0.05, 3, 6), 4.339195477, atol = 1e-8)  # tables: 4.34
 
 
 def test_estimate_technical_variance():
@@ -3891,6 +3947,24 @@ def test_hsic():
     x = rng.normal(size=200)
     assert hsic(x, rng.normal(size=200))[1] > 0.05  # independent: non-significant
     assert hsic(x, x**2 + rng.normal(size=200, scale=0.1))[1] < 0.05  # nonlinear dependence: significant
+
+
+def test_structure_cache():
+    from glycowork.motif.annotate import _cached_annotation, _motif_occurrences
+    df = glycomics_data_loader.human_ovarian_O_PMC4468167
+    groups = {'group1': list(df.group1), 'group2': list(df.group2)}
+    _cached_annotation.cache_clear()
+    _motif_occurrences.cache_clear()
+    cold = get_differential_expression(df, motifs = True, feature_set = ['exhaustive', 'known'], **groups)
+    warm = get_differential_expression(df, motifs = True, feature_set = ['exhaustive', 'known'], **groups)
+    pd.testing.assert_frame_equal(pd.DataFrame(cold), pd.DataFrame(warm))
+    assert _cached_annotation.cache_info().hits and _motif_occurrences.cache_info().hits
+    glycans = df.iloc[:, 0].tolist()
+    # what a caller does to the returned counts stays with that caller, and other feature sets get their own annotation
+    _, counts = quantify_motifs(pd.DataFrame(df.iloc[:, 1:]), glycans = glycans, feature_set = ['known'], return_counts = True)
+    counts.iloc[:, 0] = -1
+    assert (quantify_motifs(pd.DataFrame(df.iloc[:, 1:]), glycans = glycans, feature_set = ['known'], return_counts = True)[1] >= 0).all().all()
+    assert quantify_motifs(pd.DataFrame(df.iloc[:, 1:]), glycans = glycans, feature_set = ['exhaustive'], return_counts = True)[1].columns.tolist() != counts.columns.tolist()
 
 
 def test_no_fresh_draws(sample_time_series_data, sample_jtk_df, sample_glycoshift_df):

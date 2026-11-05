@@ -9,12 +9,11 @@ import numpy as np
 from collections import Counter
 from math import comb
 from typing import Any, Callable
-from scipy.stats import ttest_ind, ttest_rel, levene, f, f_oneway, spearmanr, t as t_dist
-from scipy.spatial.distance import squareform, pdist
+from scipy.special import fdtrc, stdtr
 
 from glycowork.glycan_data import loader
 from glycowork.glycan_data.loader import strip_suffixes, download_model, GlycoDataFrame, nx
-from glycowork.glycan_data.stats import (cohen_d, _ttest_pvalue, _studentized_range_sf, mahalanobis_distance, mahalanobis_variance,
+from glycowork.glycan_data.stats import (cohen_d, _ttest_pvalue, _studentized_range_sf, _studentized_range_isf, _welch_anova, _average_ranks, _spearman_pvals, mahalanobis_distance, mahalanobis_variance,
                                          impute_and_normalize, JTKTest,
                                          impute_biosynthetic, get_alphaN, TST_grouped_benjamini_hochberg,
                                          compare_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
@@ -25,7 +24,7 @@ from glycowork.glycan_data.stats import (cohen_d, _ttest_pvalue, _studentized_ra
                                          omega_squared, moderated_variance, dag_neighbors, context_terms, manova_wilks,
                                          get_glycoform_diff, process_glm_results, partial_corr,
                                          estimate_technical_variance,
-                                         perform_tests_monte_carlo, cosinor_fit, spearman_exact_pvals, detection_test, _covariate_fit)
+                                         perform_tests_monte_carlo, cosinor_fit, detection_test, _covariate_fit)
 from glycowork.motif.processing import enforce_class, process_for_glycoshift, split_glycoform_id, GLYCOFORM_ID
 from glycowork.glycan_data.data_entry import read_abundances
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, create_correlation_network,
@@ -303,6 +302,27 @@ def _explained_by(parent: str,  # Parent motif whose signal is being decomposed
     return ', '.join(labels) + (f', +{len(shown) - n} more' if len(shown) > n else '')
 
 
+def _levene_pvalues(B: np.ndarray, # second group, features as rows and samples as columns; NaN where unmeasured
+                    A: np.ndarray # first group, same layout
+                    ) -> np.ndarray: # p-value per feature
+    "Levene's test with the default median center: a one-way ANOVA on absolute deviations from the group medians, per row"
+    U, V = np.abs(B - np.nanmedian(B, axis = 1, keepdims = True)), np.abs(A - np.nanmedian(A, axis = 1, keepdims = True))
+    nu, nv = np.isfinite(U).sum(axis = 1), np.isfinite(V).sum(axis = 1)
+    hiU, loU = np.where(np.isfinite(U), U, -np.inf).max(axis = 1), np.where(np.isfinite(U), U, np.inf).min(axis = 1)
+    hiV, loV = np.where(np.isfinite(V), V, -np.inf).max(axis = 1), np.where(np.isfinite(V), V, np.inf).min(axis = 1)
+    tol = 1e-9 * np.maximum(np.maximum(np.where(np.isfinite(B), np.abs(B), 0.0).max(axis = 1), np.where(np.isfinite(A), np.abs(A), 0.0).max(axis = 1)), 1.0)
+    # deviations that are flat, or differ only by floating-point noise, make F infinite and p exactly 0: a spurious variance difference
+    vary = ~(((hiU - loU) <= tol) & ((hiV - loV) <= tol)) & (nu > 1) & (nv > 1)
+    pvals = np.ones(len(A))
+    if vary.any() and A.shape[1] > 2 and B.shape[1] > 2:
+        U, V, nu, nv = U[vary], V[vary], nu[vary], nv[vary]
+        mu, mv, dfw = np.nanmean(U, axis = 1), np.nanmean(V, axis = 1), nu + nv - 2
+        ssw = np.nansum((U - mu[:, None]) ** 2, axis = 1) + np.nansum((V - mv[:, None]) ** 2, axis = 1)
+        with np.errstate(divide = 'ignore', invalid = 'ignore'):
+            pvals[vary] = fdtrc(1, dfw, nu * nv / (nu + nv) * (mu - mv) ** 2 / (ssw / dfw))
+    return pvals
+
+
 def _parent_parts(parent: np.ndarray, # The parent's abundance per sample
                   children: np.ndarray, # Its children's abundances, children x samples
                   atoms: tuple | None # The parent's atoms (labels, atoms x samples), where structures were available to split it
@@ -330,7 +350,7 @@ def _decomposition_columns(rows: dict[str, tuple], # parent motif to (explained 
         pvals = np.ones(len(table))  # a context that cannot be tested holds its weight: a change a parent's measurements cannot show is no evidence
         if tested.any():
             s2, dfp = moderated_variance(table[tested, 1] / table[tested, 2], df_resid = table[tested, 2])
-            pvals[tested] = f.sf(table[tested, 0] / s2, table[tested, 3], dfp)
+            pvals[tested] = fdtrc(table[tested, 3], dfp, table[tested, 0] / s2)
         by_parent = np.split(pvals, np.cumsum([len(t) for t in terms.values()])[:-1])
         for (m, t), p in zip(terms.items(), by_parent):
             order = np.argsort(p)
@@ -404,9 +424,9 @@ def get_pvals_motifs(
         s2, dfp = moderated_variance(resid, df_resid = na + nb - 2,
                                      neighbors = dag_neighbors([m for m, k in zip(motif_names, live) if k], dag))
         se = np.maximum(np.sqrt(s2 * (1 / na + 1 / nb)), 1e-300)
-        ttests[live] = 2 * t_dist.sf(np.abs((Bl.mean(axis = 1) - Al.mean(axis = 1)) / se), dfp)
+        ttests[live] = 2 * stdtr(dfp, -np.abs((Bl.mean(axis = 1) - Al.mean(axis = 1)) / se))
     elif len(Al):
-        ttests[live] = ttest_ind(Bl, Al, axis = 1, equal_var = False)[1]
+        ttests[live] = _ttest_pvalue(Bl, Al)
     ttests = [1.0 if not np.isfinite(p) else float(p) for p in ttests]
     if len(Al):
         effect_sizes[live] = cohen_d(Bl, Al, paired = False)[0]
@@ -596,6 +616,7 @@ def get_heatmap(
     # Cluster the abundances
     if dist_func is not None:
         from scipy.cluster.hierarchy import linkage
+        from scipy.spatial.distance import pdist
         method = kwargs.pop('method', 'average')
         kwargs = {'row_linkage': linkage(pdist(df.values, metric = dist_func), method = method),
                   'col_linkage': linkage(pdist(df.values.T, metric = dist_func), method = method), **kwargs}
@@ -1086,8 +1107,7 @@ def get_differential_expression(
                             gp2.mean(axis = 1) - gp1.mean(axis = 1)).mean())
                 # Hotelling's T^2 test for multivariate comparisons
                 pvals.append(hotellings_t2(gp1.T.values, gp2.T.values, paired = paired)[1])
-                levene_pvals.append(
-                    np.mean([levene(gp1.loc[variable, :], gp2.loc[variable, :])[1] for variable in cluster]))
+                levene_pvals.append(np.mean(_levene_pvalues(gp2.to_numpy(), gp1.to_numpy())))
                 # Calculate Mahalanobis distance as measure of effect size for multivariate comparisons
                 effect_sizes.append(mahalanobis_distance(gp1, gp2, paired = paired))
                 equivalence_pvals.append(np.nan)
@@ -1143,21 +1163,17 @@ def get_differential_expression(
                 s2 = s2 + (2 if paired else 1) * scale_var
                 se = np.sqrt(s2 / nd) if paired else np.sqrt(s2 * factor)
                 delta = np.nanmean(D, axis = 1) if paired else (np.nanmean(B, axis = 1) - np.nanmean(A, axis = 1))
-                pvals = list(2 * t_dist.sf(np.abs(delta / se), dfp))
-            elif scale_var:
-                if paired:
-                    D, nd = B - A, np.isfinite(B - A).sum(axis = 1)
-                    stat, dfw = np.nanmean(D, axis = 1) / np.sqrt((np.nanvar(D, axis = 1, ddof = 1) + 2 * scale_var) / nd), nd - 1
-                else:
-                    na, nb = np.isfinite(A).sum(axis = 1), np.isfinite(B).sum(axis = 1)
-                    va, vb = (np.nanvar(A, axis = 1, ddof = 1) + scale_var) / na, (np.nanvar(B, axis = 1, ddof = 1) + scale_var) / nb
-                    stat, dfw = (np.nanmean(B, axis = 1) - np.nanmean(A, axis = 1)) / np.sqrt(va + vb), (va + vb) ** 2 / (va ** 2 / (na - 1) + vb ** 2 / (nb - 1))
-                pvals = list(2 * t_dist.sf(np.abs(stat), dfw))
+                pvals = list(2 * stdtr(dfp, -np.abs(delta / se)))
             else:
-                pvals = list((ttest_rel(B, A, axis = 1, nan_policy = 'omit') if paired else ttest_ind(B, A, axis = 1,
-                                                                                                      equal_var = False,
-                                                                                                      nan_policy = 'omit'))[
-                                 1])
+                with np.errstate(divide = 'ignore', invalid = 'ignore'):
+                    if paired:
+                        D, nd = B - A, np.isfinite(B - A).sum(axis = 1)
+                        stat, dfw = np.nanmean(D, axis = 1) / np.sqrt((np.nanvar(D, axis = 1, ddof = 1) + 2 * scale_var) / nd), nd - 1
+                    else:
+                        na, nb = np.isfinite(A).sum(axis = 1), np.isfinite(B).sum(axis = 1)
+                        va, vb = (np.nanvar(A, axis = 1, ddof = 1) + scale_var) / na, (np.nanvar(B, axis = 1, ddof = 1) + scale_var) / nb
+                        stat, dfw = (np.nanmean(B, axis = 1) - np.nanmean(A, axis = 1)) / np.sqrt(va + vb), (va + vb) ** 2 / (va ** 2 / (na - 1) + vb ** 2 / (nb - 1))
+                pvals = list(2 * stdtr(np.where(np.isnan(dfw), 1., dfw), -np.abs(stat)))  # constant groups that differ have no spread left to compare: p = 0
             # A floor has no spread and no log-ratio to compare, so an absent feature is tested on its detection, with no equivalence or variance test
             absent = np.isin(glycans, absent_rows.index) if absent_rows is not None else np.zeros(len(glycans), bool)
             if absent.any():
@@ -1175,21 +1191,7 @@ def get_differential_expression(
             valid = ~np.isnan(equivalence_pvals)
             equivalence_pvals[valid] = correct_multiple_testing(equivalence_pvals[valid], alpha)[0] if valid.any() else []
             equivalence_pvals[np.isnan(equivalence_pvals)] = 1.0
-            # Levene with the default median center is a one-way ANOVA on absolute deviations from the group medians, which reduces along the sample axis in one call
-            U, V = np.abs(B - np.nanmedian(B, axis = 1, keepdims = True)), np.abs(
-                A - np.nanmedian(A, axis = 1, keepdims = True))
-            hiU, loU = np.where(np.isfinite(U), U, -np.inf).max(axis = 1), np.where(np.isfinite(U), U, np.inf).min(
-                axis = 1)
-            hiV, loV = np.where(np.isfinite(V), V, -np.inf).max(axis = 1), np.where(np.isfinite(V), V, np.inf).min(
-                axis = 1)
-            tol = 1e-9 * np.maximum(np.maximum(np.where(np.isfinite(B), np.abs(B), 0.0).max(axis = 1),
-                                               np.where(np.isfinite(A), np.abs(A), 0.0).max(axis = 1)), 1.0)
-            vary = ~(((hiU - loU) <= tol) & ((hiV - loV) <= tol)) & (np.isfinite(U).sum(axis = 1) > 1) & (
-                        np.isfinite(V).sum(
-                            axis = 1) > 1)  # deviations that are flat, or differ only by floating-point noise, make F infinite and p exactly 0: a spurious variance difference, and what scipy warns about
-            levene_pvals = np.ones(len(df_a))
-            if vary.any() and df_a.shape[1] > 2 and df_b.shape[1] > 2:
-                levene_pvals[vary] = f_oneway(U[vary], V[vary], axis = 1, nan_policy = 'omit')[1]
+            levene_pvals = _levene_pvalues(B, A)
             levene_pvals[absent | const] = 1.0
             effect_sizes, variances = cohen_d(B, A, paired = paired) if len(A) else ([0] * len(glycans),
                                                                                      [0] * len(glycans))
@@ -1272,6 +1274,7 @@ def get_differential_expression(
                     norms = ((flips @ diffs.T) ** 2).sum(axis = 1)
                     bal_p = (np.sum(norms[1:] >= norms[0]) + 1) / len(flips)
                 else:
+                    from scipy.spatial.distance import pdist, squareform
                     bal_p = permanova_with_permutation(squareform(pdist(lr.T, metric = 'euclidean')), group_labels = [0 if k in b1 else 1 for k in range(len(cols_b))], permutations = 999, random_state = random_state)[1]
             if covariates is not None:  # the group coefficient of the multivariate linear model, which is Hotelling's T2 without covariate columns
                 bal_p = manova_wilks(bal, [0 if k in b1 else 1 for k in range(len(cols_b))], covariates = covariates, samples = full.columns[cols_b].tolist())[1] if len(bal) else np.nan
@@ -1289,7 +1292,7 @@ def get_differential_expression(
                 ar, ssr_r, dfr_r, _, c_r, _ = _covariate_fit(np.where(usable, r, np.nan)[None, g1i + g2i], [0] * len(g1i) + [1] * len(g2i), covariates, group1 + group2)
                 if np.isfinite(ssr_r[0]):
                     r_a, r_b = ar[0, :len(g1i)][ok1], ar[0, len(g1i):][ok2]
-                    rows[p] = (explained, 2 * t_dist.sf(abs(r_b.mean() - r_a.mean()) / np.sqrt((ssr_r[0] / dfr_r[0] + scale_var) * c_r[0]), dfr_r[0]), cohen_d(r_b, r_a)[0], bal_p, *stats)
+                    rows[p] = (explained, 2 * stdtr(dfr_r[0], -abs(r_b.mean() - r_a.mean()) / np.sqrt((ssr_r[0] / dfr_r[0] + scale_var) * c_r[0])), cohen_d(r_b, r_a)[0], bal_p, *stats)
                     continue
             rows[p] = (explained, _ttest_pvalue(r_b, r_a, paired = paired, scale_var = scale_var), cohen_d(r_b, r_a, paired = paired)[0], bal_p, *stats)  # r is NaN-free here, so this is the nan_policy = 'omit' test
         for k, v in _decomposition_columns(rows, df_out['Glycan'].tolist(), alpha).items():
@@ -1379,7 +1382,7 @@ def get_volcano(
     if x_metric == 'Log2FC' and 'Log2FC' not in df_res.columns and 'Effect size' in df_res.columns:
         x_metric = 'Effect size'  # get_differential_expression on glycoforms returns one row per glycosite, with a mean effect size but no fold change
     p = df_res['corr p-val'].to_numpy(dtype = float)
-    df_res['corr p-val'] = np.where(p == 0, p[p > 0].min() if (p > 0).any() else 1e-300, p)  # an underflowed 0 (Fisher's combination over a large glycosite) has an infinite -log10, which no axis can show and the SNFG scaling divides by
+    df_res['corr p-val'] = np.where(p == 0, p[p > 0].min() if (p > 0).any() else 1e-300, p)  # an underflowed 0 (from a site combined by an older release) has an infinite -log10, which no axis can show and the SNFG scaling divides by
     df_res['log_p'] = -np.log10(df_res['corr p-val'].values)
     x = df_res[x_metric].values
     y = df_res['log_p'].values
@@ -1442,7 +1445,6 @@ def get_glycanova(
         covariates: pd.DataFrame | pd.Series | dict | None = None  # per-sample nuisance variables indexed by sample name (e.g., secretor status, sex, age, batch); the groups are tested by ANCOVA, post-hoc tests on covariate-adjusted values
 ) -> tuple[GlycoDataFrame, dict[str, pd.DataFrame]]:  # (ANOVA results with F-stats and omega-squared effect sizes (Cramer's V for features absent from a whole group), post-hoc results)
     "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
-    from scipy.stats import studentized_range
     if groups is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         groups = list(df.groups)
         df = df[[df._glycan_col or df.columns[0]] + [c for c in df.columns if c in df._contrasts]]  # the labels only cover the contrast columns, and preprocess_data pairs them with columns by position
@@ -1490,20 +1492,9 @@ def get_glycanova(
         s2, dfp = moderated_variance(ssw / dfr, df_resid = dfr,
                                      neighbors = dag_neighbors(df.index.tolist(), df_org.attrs.get('motif_dag'))) if moderate_variance and len(X) > 1 else (ssw / dfr, dfr)
         f_values = (ssb / (len(ug) - 1)) / (s2 + scale_var)
-        p_values = f.sf(f_values, len(ug) - 1, dfp)
-    elif scale_var:
-        ug = np.unique(garr)
-        nj = np.stack([np.isfinite(X[:, garr == g]).sum(axis = 1) for g in ug], axis = 1)
-        mj = np.stack([np.nanmean(X[:, garr == g], axis = 1) for g in ug], axis = 1)
-        wj = nj / (np.stack([np.nanvar(X[:, garr == g], axis = 1, ddof = 1) for g in ug], axis = 1) + scale_var)
-        share = wj / wj.sum(axis = 1, keepdims = True)
-        tail = ((1 - share) ** 2 / (nj - 1)).sum(axis = 1)
-        k = len(ug)
-        f_values = (wj * (mj - (share * mj).sum(axis = 1, keepdims = True)) ** 2).sum(axis = 1) / (k - 1) / (1 + 2 * (k - 2) / (k ** 2 - 1) * tail)
-        p_values = f.sf(f_values, k - 1, (k ** 2 - 1) / (3 * tail))
-    else:  # computed only here, since the moderated F replaces it, and Welch's ANOVA warned on every singleton group the pooled test handles
-        # One-way ANOVA on a fixed design is the same F for every feature, so all features go through one vectorized call instead of one formula parse and OLS fit each
-        f_values, p_values = f_oneway(*[X[:, garr == g] for g in np.unique(garr)], axis = 1, nan_policy = 'omit', equal_var = False)
+        p_values = fdtrc(len(ug) - 1, dfp, f_values)
+    else:  # computed only here, since the moderated F replaces it
+        f_values, p_values = _welch_anova([X[:, garr == g] for g in np.unique(garr)], scale_var = scale_var)
     absent = np.isin(df.index, absent_rows.index) if absent_rows is not None else np.zeros(len(df), bool)
     if absent.any():
         p_values = np.array(p_values, dtype = float)
@@ -1555,7 +1546,7 @@ def get_glycanova(
                 md = (means_ph[None].T - means_ph)[iu]
                 pv = _studentized_range_sf(np.abs(md) / se_ph[iu], len(ug_ph), dof)
                 if dof not in srd:
-                    srd[dof] = studentized_range.ppf(1 - alpha, len(ug_ph), dof)
+                    srd[dof] = _studentized_range_isf(alpha, len(ug_ph), dof)
                 rad = srd[dof] * se_ph[iu]
                 posthoc_results[glycan] = pd.DataFrame(
                     [{'group1': ug_ph[a], 'group2': ug_ph[b], 'meandiff': -md[j], 'p-adj': pv[j], 'lower': -(md[j] + rad[j]),
@@ -1604,11 +1595,11 @@ def get_glycanova(
             if covariates is not None:  # ANCOVA of the residual part, as for the marginal values, where it can be fit
                 ar, ssr_r, dfr_r, ssb_r, _, _ = _covariate_fit(np.where(usable, r, np.nan)[None], groups, covariates, full.columns.tolist())
                 if np.isfinite(ssr_r[0]):
-                    rows[p] = (explained, f.sf(ssb_r[0] / (len(levels) - 1) / (ssr_r[0] / dfr_r[0] + scale_var), len(levels) - 1, dfr_r[0]), omega_squared(ar[0][usable], garr[usable].tolist()), bal_p, *stats)
+                    rows[p] = (explained, fdtrc(len(levels) - 1, dfr_r[0], ssb_r[0] / (len(levels) - 1) / (ssr_r[0] / dfr_r[0] + scale_var)), omega_squared(ar[0][usable], garr[usable].tolist()), bal_p, *stats)
                     continue
             parts_r = [x for x in (r[usable & (garr == g)] for g in levels) if len(x)]
             dfr_r = usable.sum() - len(parts_r)
-            rows[p] = (explained, f.sf(sum(len(x) * (x.mean() - r[usable].mean()) ** 2 for x in parts_r) / (len(parts_r) - 1) / (sum(((x - x.mean()) ** 2).sum() for x in parts_r) / dfr_r + scale_var), len(parts_r) - 1, dfr_r) if len(parts_r) > 1 and dfr_r > 0 else np.nan,
+            rows[p] = (explained, fdtrc(len(parts_r) - 1, dfr_r, sum(len(x) * (x.mean() - r[usable].mean()) ** 2 for x in parts_r) / (len(parts_r) - 1) / (sum(((x - x.mean()) ** 2).sum() for x in parts_r) / dfr_r + scale_var)) if len(parts_r) > 1 and dfr_r > 0 else np.nan,
                        omega_squared(r[usable], garr[usable].tolist()), bal_p, *stats)
         for k, v in _decomposition_columns(rows, df_out['Glycan'].tolist(), alpha).items():
             df_out[k] = v
@@ -1663,14 +1654,17 @@ def get_glycan_change_over_time(
         scale_var: float = 0  # Scale uncertainty of a sample's log-ratio, added to the residual variance
 ) -> tuple[float | np.ndarray, float]:  # (regression coefficients, t-test/F-test p-value)
     "Fits polynomial regression (default: linear) to glycan abundance time series data using OLS, testing significance of temporal changes"
-    from scipy.stats import linregress
     # Extract arrays for time and glycan abundance from the 2D input array
     time, glycan_abundance = data[:, 0], data[:, 1]
     if degree == 1:
-        results = linregress(time, glycan_abundance)
-        coefficients, p_value = results.slope, results.pvalue
-        if scale_var:
-            p_value = 2 * t_dist.sf(abs(results.slope) / np.sqrt(results.stderr ** 2 + scale_var / np.sum((time - time.mean()) ** 2)), len(time) - 2)
+        ssx, ssxy, _, ssy = np.cov(time, glycan_abundance, bias = 1).flat
+        coefficients, dfr = ssxy / ssx, len(time) - 2
+        r = np.clip(ssxy / np.sqrt(ssx * ssy), -1, 1) if ssx * ssy else 0.0
+        p_value = 1.0
+        if dfr > 0:
+            p_value = 2 * stdtr(dfr, -abs(r * np.sqrt(dfr / ((1 - r + 1e-20) * (1 + r + 1e-20)))))
+            if scale_var:
+                p_value = 2 * stdtr(dfr, -abs(coefficients) / np.sqrt((1 - r ** 2) * ssy / ssx / dfr + scale_var / np.sum((time - time.mean()) ** 2)))
     else:
         # Polynomial Regression
         coefficients = np.polyfit(time, glycan_abundance, degree)
@@ -1679,7 +1673,7 @@ def get_glycan_change_over_time(
         ss_res, ss_tot = float(np.sum(residuals ** 2)), float(np.sum((glycan_abundance - glycan_abundance.mean()) ** 2))
         df_resid = n - degree - 1
         p_value = 1.0 if (df_resid < 1 or ss_res <= 0 or ss_tot <= ss_res) else float(
-            f.sf(((ss_tot - ss_res) / degree) / (ss_res / df_resid + scale_var), degree, df_resid))
+            fdtrc(degree, df_resid, ((ss_tot - ss_res) / degree) / (ss_res / df_resid + scale_var)))
     return coefficients, p_value
 
 
@@ -2065,6 +2059,7 @@ def get_biodiversity(
             df = df.dropna()  # within-site log-ratios exist only where a site was measured, so the distance runs over the glycoforms of sites seen in every sample
             if df.empty:  # pdist would return all zeros, which a permutation test then calls significant
                 raise ValueError("No glycosite was measured in every sample, so there are no shared within-site log-ratios to compute beta diversity on; use metrics = ['alpha'] for per-glycosite microheterogeneity.")
+        from scipy.spatial.distance import pdist, squareform
         distance_matrix = pd.DataFrame(squareform(pdist(df.values.T, metric = dist_func or (
             'braycurtis' if transform == "Nothing" else 'euclidean'))), index = df.columns, columns = df.columns)
         if circadian:
@@ -2189,15 +2184,10 @@ def get_SparCC(
                 correlation_matrix[i, j] = corr
                 p_value_matrix[i, j] = p_val
     else:
-        corrs, pvals = spearmanr(df1.values, df2.values)
-        # spearmanr returns bare scalars, not matrices, whenever the stacked input holds only two variables; broadcasting keeps the slicing below well-defined
-        n = df1.shape[1] + df2.shape[1]
-        corrs, pvals = np.broadcast_to(corrs, (n, n)), np.broadcast_to(pvals, (n, n))
-        correlation_matrix, p_value_matrix = corrs[:df1.shape[1], df1.shape[1]:], pvals[
-            :df1.shape[1], df1.shape[1]:]
-    if df1.shape[0] <= 8:
-        # spearmanr's t approximation is badly anti-conservative at small n: at n = 5 it gives r = 1 a p-value below 1e-20, while 2 of the 120 rank orders reach |r| = 1
-        p_value_matrix = spearman_exact_pvals(correlation_matrix, df1.shape[0])
+        with np.errstate(divide = 'ignore', invalid = 'ignore'):
+            Z1, Z2 = [(R - R.mean(axis = 0)) / np.linalg.norm(R - R.mean(axis = 0), axis = 0) for R in (np.column_stack([_average_ranks(c) for c in d.values.T]) for d in (df1, df2))]
+        correlation_matrix = np.clip(Z1.T @ Z2, -1, 1)
+        p_value_matrix = _spearman_pvals(correlation_matrix, df1.shape[0])
     p_value_matrix = np.reshape(correct_multiple_testing(p_value_matrix.flatten(), alpha)[0], p_value_matrix.shape)
     correlation_df = pd.DataFrame(correlation_matrix, index = df1.columns, columns = df2.columns)
     p_value_df = pd.DataFrame(p_value_matrix, index = df1.columns, columns = df2.columns)

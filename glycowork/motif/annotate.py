@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import re
 from collections import Counter, deque, defaultdict
-from functools import partial
+from functools import partial, lru_cache
 from weakref import WeakKeyDictionary
 
 from glycowork.glycan_data import loader
@@ -590,25 +590,40 @@ def deduplicate_motifs(
     return df.iloc[keep]
 
 
+@lru_cache(maxsize = 200000)
+def _motif_occurrences(glycan: str, # glycan sequence
+                       motif: str # motif label, as in annotate_dataset
+                       ) -> tuple[frozenset, ...]: # the nodes of each occurrence of the motif in the glycan
+    "Where a motif occurs in a glycan, which only depends on the two of them and is asked again for every comparison of the same table"
+    s, sp = _motif_sequence(motif)
+    return () if s.startswith('r') else tuple(frozenset(k) for k in subgraph_isomorphism(_glycan_graph(glycan), s, termini_list = sp, return_matches = True)[1])
+
+
+@lru_cache(maxsize = 64)
+def _cached_annotation(glycans: tuple[str, ...], # glycan sequences or compositions
+                       feature_set: tuple[str, ...], # feature types, as in annotate_dataset
+                       custom_motifs: tuple[str, ...] # custom motifs, as in annotate_dataset
+                       ) -> pd.DataFrame: # condensed annotation of the glycans, not to be changed in place
+    "annotate_dataset for quantify_motifs, as a table's annotation does not change with its abundances or with which samples are compared"
+    return annotate_dataset(list(glycans), feature_set = list(feature_set), condense = True, custom_motifs = list(custom_motifs))
+
+
 def get_motif_atoms(
         dag: nx.DiGraph, # Containment DAG of the motifs in counts
         counts: pd.DataFrame # Glycans x motifs occurrence counts, as from annotate_dataset
 ) -> dict[str, tuple[list[tuple[str, ...]], np.ndarray]]: # Parent motif to (atoms named by the children covering them, () being the part outside every child; atoms x glycans counts)
     "Splits every occurrence of a parent motif by which children cover it, so that overlapping children, and children holding several occurrences of their parent, still partition the parent exactly: the atoms of a parent sum to its counts in every glycan"
     W, glycans, out = {m: counts[m].to_numpy(dtype = float) for m in counts.columns if m in dag}, counts.index.tolist(), {}
-    def occurrences(glycan, motif):
-        s, sp = _motif_sequence(motif)
-        return [] if s.startswith('r') else [frozenset(k) for k in subgraph_isomorphism(_glycan_graph(glycan), s, termini_list = sp, return_matches = True)[1]]
     for p in [m for m in dag if m in W and dag.out_degree(m)]:
         kids, bins = [c for c in dag.successors(p) if c in W], {}
         for gi in np.flatnonzero(W[p] > 0):
             carrying = tuple(c for c in kids if W[c][gi] > 0)
-            found = occurrences(glycans[gi], p) if carrying and W[p][gi] > 1 else []
+            found = _motif_occurrences(glycans[gi], p) if carrying and W[p][gi] > 1 else ()
             if not found:
                 # one occurrence sits inside every child the glycan carries; a composition has no child contexts and a glyco-regex child stands for the whole glycan
                 bins.setdefault(carrying, np.zeros(len(glycans)))[gi] += W[p][gi]
                 continue
-            covers = {c: occurrences(glycans[gi], c) for c in carrying}
+            covers = {c: _motif_occurrences(glycans[gi], c) for c in carrying}
             for occ in found:
                 key = tuple(c for c in carrying if not covers[c] or any(occ <= k for k in covers[c]))
                 bins.setdefault(key, np.zeros(len(glycans)))[gi] += W[p][gi] / len(found)
@@ -660,7 +675,7 @@ def quantify_motifs(
         warnings.warn("Compositions carry no structural motifs, so their monosaccharides (feature_set 'exhaustive') are quantified as well.")
         feature_set = [*feature_set, 'exhaustive']
     # Motif extraction
-    df_motif = annotate_dataset(names, feature_set = feature_set, condense = True, custom_motifs = custom_motifs)
+    df_motif = _cached_annotation(tuple(names), tuple(feature_set), (custom_motifs,) if isinstance(custom_motifs, str) else tuple(custom_motifs)).copy()
     collect_dic = {}
     df = df.T
     log2 = (df.select_dtypes(include = 'number') < 0).any().any()

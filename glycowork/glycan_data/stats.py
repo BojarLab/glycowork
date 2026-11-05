@@ -3,14 +3,11 @@ import numpy as np
 import warnings
 from functools import lru_cache
 from itertools import permutations as iter_permutations
-from math import factorial
+from math import comb, factorial
 from collections import Counter
-from scipy.stats import rankdata, norm, chi2, t, f, entropy, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind, gamma as gamma_dist, \
-    fisher_exact, binomtest, MonteCarloMethod, chi2_contingency
-from scipy.spatial import procrustes
-from scipy.special import digamma, polygamma, expit, log_expit, fdtrc, stdtr, erfc, gammaln
-import scipy.integrate as integrate
+from scipy.special import digamma, polygamma, expit, log_expit, fdtrc, stdtr, stdtrit, chdtr, chdtrc, entr, erf, erfc, gammaln, gammaincc, ndtr, ndtri, log_ndtr
 rng = np.random.default_rng(42)
+_log_sqrt_2pi = np.log(np.sqrt(2 * np.pi))  # what scipy's norm.logpdf subtracts, so log densities stay bit-identical
 np.random.seed(0)
 _leggauss = lru_cache(np.polynomial.legendre.leggauss)  # Gauss-Legendre nodes and weights per node count, for _studentized_range_sf
 
@@ -60,25 +57,34 @@ def cohen_d(x: np.ndarray | list[float], # comparison group containing numerical
     return (d, var_d) if np.ndim(x) > 1 else (d[0], var_d[0])
 
 
-def _ttest_pvalue(x: np.ndarray, # comparison group containing numerical data
-                  y: np.ndarray, # comparison group containing numerical data, same order as x if paired
+def _average_ranks(x: np.ndarray # 1-D values
+                   ) -> np.ndarray: # midranks from 1; all NaN if any value is NaN
+    "Midranks, scipy's rankdata(x), bit-identical"
+    if np.isnan(x).any():
+        return np.full(len(x), np.nan)
+    _, inverse, counts = np.unique(x, return_inverse = True, return_counts = True)
+    return (np.cumsum(counts) - (counts - 1) / 2)[inverse]
+
+
+def _ttest_pvalue(x: np.ndarray, # comparison group containing numerical data, one feature or features as rows
+                  y: np.ndarray, # comparison group containing numerical data, same layout, same order as x if paired
                   paired: bool = False, # whether samples are paired
                   scale_var: float = 0 # scale uncertainty of a sample's log-ratio, added to the variance; without it, the result is scipy's
-                  ) -> float: # two-sided p-value of x against y
-    "Welch's (or the paired) t-test p-value of one feature, computed step by step as scipy's ttest_ind(x, y, equal_var = False) or ttest_rel(x, y) compute it, so bit-identical (a NaN gives NaN, and NaN-free input gives what nan_policy = 'omit' does), without their ~0.5 ms of per-call overhead that dominated the per-parent loops"
+                  ) -> float | np.ndarray: # two-sided p-value(s) of x against y
+    "Welch's (or the paired) t-test p-value of one feature or each row, computed step by step as scipy's ttest_ind(x, y, equal_var = False, axis = -1) or ttest_rel(x, y, axis = -1) compute it, so bit-identical (a NaN gives NaN, and NaN-free input gives what nan_policy = 'omit' does), without their ~0.5 ms of per-call overhead that dominated the per-parent loops"
     x, y = np.asarray(x, dtype = float), np.asarray(y, dtype = float)
-    if min(len(x), len(y)) < 2:
-        return np.nan
+    if min(x.shape[-1], y.shape[-1]) < 2:
+        return np.full(x.shape[:-1], np.nan) if x.ndim > 1 else np.nan
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         if paired:
-            d, n = x - y, len(x)
-            t_stat = np.divide(np.mean(d) - 0.0, np.sqrt((np.mean((d - np.mean(d, keepdims = True)) ** 2) * np.divide(n, n - 1) + 2 * scale_var) / n))
+            d, n = x - y, x.shape[-1]
+            t_stat = np.divide(np.mean(d, axis = -1) - 0.0, np.sqrt((np.mean((d - np.mean(d, axis = -1, keepdims = True)) ** 2, axis = -1) * np.divide(n, n - 1) + 2 * scale_var) / n))
             return 2 * stdtr(np.asarray(n - 1, dtype = float), -np.abs(t_stat))
-        nx, ny = len(x), len(y)
-        vx = (np.mean((x - np.mean(x, keepdims = True)) ** 2) * np.divide(nx, nx - 1) + scale_var) / nx
-        vy = (np.mean((y - np.mean(y, keepdims = True)) ** 2) * np.divide(ny, ny - 1) + scale_var) / ny
+        nx, ny = x.shape[-1], y.shape[-1]
+        vx = (np.mean((x - np.mean(x, axis = -1, keepdims = True)) ** 2, axis = -1) * np.divide(nx, nx - 1) + scale_var) / nx
+        vy = (np.mean((y - np.mean(y, axis = -1, keepdims = True)) ** 2, axis = -1) * np.divide(ny, ny - 1) + scale_var) / ny
         dof = (vx + vy) ** 2 / (vx ** 2 / (nx - 1) + vy ** 2 / (ny - 1))
-        t_stat = np.divide(np.mean(x) - np.mean(y), np.sqrt(vx + vy))
+        t_stat = np.divide(np.mean(x, axis = -1) - np.mean(y, axis = -1), np.sqrt(vx + vy))
     return 2 * stdtr(np.where(np.isnan(dof), 1., dof), -np.abs(t_stat))
 
 
@@ -107,6 +113,28 @@ def _studentized_range_sf(q: np.ndarray, # studentized range statistics (absolut
         inner = np.exp(-z ** 2 / 2) * a ** (k - 1) * -np.expm1((k - 1) * np.log1p(-upper[..., ::-1] / a))
         sf = np.sum(wts * (8 * k / np.sqrt(2 * np.pi)) * (inner @ wz), axis = -1)
     return np.where(np.isposinf(q[..., 0]), 0.0, np.clip(sf, 0, 1))
+
+
+def _studentized_range_isf(alpha: float, # upper-tail probability
+                           k: int, # number of groups
+                           df: float # residual degrees of freedom
+                           ) -> float: # the q with _studentized_range_sf(q, k, df) = alpha, scipy's studentized_range.ppf(1 - alpha, k, df)
+    "Upper quantile of the studentized range, by the Illinois method on the log of its survival function"
+    a, b, fa, fb = 1e-3, 5.0, np.log(1 / alpha), np.log(_studentized_range_sf(np.array([5.0]), k, df)[0] / alpha)
+    while fb > 0:
+        a, b, fa = b, 2 * b, fb
+        fb = np.log(_studentized_range_sf(np.array([b]), k, df)[0] / alpha)
+    for _ in range(60):
+        c = b - fb * (b - a) / (fb - fa)
+        fc = np.log(_studentized_range_sf(np.array([c]), k, df)[0] / alpha)
+        if abs(fc) < 1e-11 or abs(b - a) < 1e-10:
+            return c
+        if fc * fb < 0:
+            a, fa = b, fb
+        else:
+            fa /= 2
+        b, fb = c, fc
+    return b
 
 
 def mahalanobis_distance(x: np.ndarray | pd.DataFrame, # comparison group containing numerical data
@@ -204,15 +232,15 @@ class MissForest:
         # Per-sample detection limit from robust column statistics, so a heavy left tail of sentinel values cannot drag it down
         med_c = logX.median(axis = 0)
         mad_c = ((logX - med_c).abs().median(axis = 0) * 1.4826).replace(0, np.nan).fillna(logX.std(axis = 0, ddof = 1)).fillna(1.0)
-        b = norm.cdf(-1.6)
+        b = ndtr(-1.6)
         mnar = pd.DataFrame(np.nan, index = X.index, columns = X.columns, dtype = float)
         for col in X.columns[X_nan.any().values]:  # a column without missing cells gets no censored draws, and on a wide cohort looking that up per column dominated this loop
             idx = X_nan.index[X_nan[col].values]
             if not len(idx):
                 continue
             # Spread the censored draws across the truncated left tail by feature intensity, so they keep rank order and variance instead of collapsing onto a single constant
-            r = rankdata(feat_mu.reindex(idx).fillna(-np.inf).values, method = 'ordinal')
-            mnar.loc[idx, col] = norm.ppf((r - 0.5) / len(idx) * b) * mad_c[col] + med_c[col]
+            r = np.argsort(np.argsort(feat_mu.reindex(idx).fillna(-np.inf).values, kind = 'stable'), kind = 'stable') + 1
+            mnar.loc[idx, col] = ndtri((r - 0.5) / len(idx) * b) * mad_c[col] + med_c[col]
         mnar, wv = np.exp2(mnar), w.values[:, None]
         if self.circadian and self.timepoints is None:
             raise ValueError(
@@ -288,10 +316,10 @@ def _factor_fit(L: np.ndarray, # log2 abundances, glycans as rows and samples as
     pen_sample, pen_glycan = np.diag([1e-6] + [beta] * k + [1.0] * r), np.diag([1e-6] + [1.0] * r)
     for _ in range(iters):
         D = np.column_stack([np.ones(n), F, U])
-        sol = np.linalg.solve(np.einsum('ij,ik,il->jkl', W, D, D) + pen_sample, np.einsum('ij,ik,ij->jk', W, D, Lz - mu[:, None])[..., None])[..., 0]
+        sol = np.linalg.solve((D.T * W.T[:, None]) @ D + pen_sample, (((Lz - mu[:, None]) * W).T @ D)[..., None])[..., 0]
         b, A, V = sol[:, 0], sol[:, 1:1 + k], sol[:, 1 + k:]
         S = np.column_stack([np.ones(m), V])
-        G, y = np.einsum('ij,jk,jl->ikl', W, S, S) + pen_glycan, np.einsum('ij,jk,ij->ik', W, S, Lz - b - F @ A.T)
+        G, y = (S.T * W[:, None]) @ S + pen_glycan, (W * (Lz - b - F @ A.T)) @ S
         if prior is not None:  # the prior enters as one more cell of its weight at its mean, on the intercept only
             G[:, 0, 0] += prior[1]
             y[:, 0] += prior[1] * prior[0]
@@ -311,11 +339,19 @@ def _detection_fit(L: np.ndarray, # log2 abundances, NaN where missing
     O = ~(M | np.isnan(L))
 
     def nll(p):
-        pi, sc = expit(p[0]), np.sqrt(sigma ** 2 + np.exp(2 * np.clip(p[2], -10, 10)))
-        q = np.clip(pi + (1 - pi) * norm.cdf((lmin + p[1] - R) / sc), 1e-9, 1 - 1e-9)
-        return -(np.log(q[M]).sum() + np.log1p(-q[O]).sum())
+        pi, s = expit(p[0]), np.exp(np.clip(p[2], -10, 10))
+        sc = np.sqrt(sigma ** 2 + s ** 2)
+        z = (lmin + p[1] - R) / sc
+        cdf = ndtr(z)
+        q = pi + (1 - pi) * cdf
+        free = (q > 1e-9) & (q < 1 - 1e-9)
+        q = np.clip(q, 1e-9, 1 - 1e-9)
+        # d log L / d q, zero where the clip holds q
+        score = free * (M / q - O / (1 - q))
+        density = (1 - pi) * np.exp(-z ** 2 / 2 - _log_sqrt_2pi) * score
+        return -(np.log(q[M]).sum() + np.log1p(-q[O]).sum()), -np.array([(pi * (1 - pi) * (1 - cdf) * score).sum(), density.sum() / sc, -(density * z).sum() * (s / sc) ** 2])
 
-    return min((minimize(nll, x0, method = 'Nelder-Mead', options = {'maxiter': 400}) for x0 in ([-2, 0, 0], [0, 1, -1], [-4, -1, 0.5])), key = lambda o: o.fun).x
+    return min((minimize(nll, x0, jac = True, method = 'L-BFGS-B', bounds = [(None, None), (None, None), (-10, 10)]) for x0 in ([-2, 0, 0], [0, 1, -1], [-4, -1, 0.5])), key = lambda o: o.fun).x
 
 
 def _censored_mean(R: np.ndarray, # predicted log2 abundance
@@ -327,7 +363,7 @@ def _censored_mean(R: np.ndarray, # predicted log2 abundance
     sc = np.sqrt(sigma ** 2 + np.exp(2 * np.clip(p[2], -10, 10)))
     z = (lmin + p[1] - R) / sc
     # in log space: far above the detection limit pdf(z) and cdf(z) underflow together, and pi can be 0, so the direct ratio is 0/0
-    return R - sigma ** 2 / sc * np.exp(log_expit(-p[0]) + norm.logpdf(z) - np.logaddexp(log_expit(p[0]), log_expit(-p[0]) + norm.logcdf(z)))
+    return R - sigma ** 2 / sc * np.exp(log_expit(-p[0]) - z ** 2 / 2 - _log_sqrt_2pi - np.logaddexp(log_expit(p[0]), log_expit(-p[0]) + log_ndtr(z)))
 
 
 def _censored_levels(L: np.ndarray, # log2 abundances, NaN where missing
@@ -350,25 +386,38 @@ def _censored_levels(L: np.ndarray, # log2 abundances, NaN where missing
     # the observed values are Gaussian in the level, so their log-likelihood on the grid is quadratic in it, from per-glycan sums
     gauss = -(S2[:, None] - 2 * S1[:, None] * grid + cnt[:, None] * grid ** 2) / (2 * sw ** 2) - cnt[:, None] * np.log(sw * np.sqrt(2 * np.pi))
     Mf, Y = M.astype(float), np.where(O, L, 0.0)
+    gr, Mr, Yr, Or, floor = gauss[rows], Mf[rows], Y[rows], O[rows], np.log1p(-np.exp(-1e-12))
 
-    def parts(t, idx):
-        "log P(missed | level) summed over each glycan's non-detections on the grid, and log P(detected | y) of its observed values"
-        lpi, l1pi, s = log_expit(t[2]), log_expit(-t[2]), np.exp(np.clip(t[4], -10, 10))
-        lq = np.logaddexp(lpi, l1pi + norm.logcdf((lmin + t[3] - b - grid[:, None]) / np.sqrt(sw ** 2 + s ** 2)))
-        qy = np.logaddexp(lpi, l1pi + norm.logcdf((lmin + t[3] - Y[idx]) / max(s, 1e-6)))
-        return Mf[idx] @ lq.T, np.where(O[idx], np.log1p(-np.exp(np.minimum(qy, -1e-12))), 0.0).sum(axis = 1)
+    def level_terms(t):
+        "log P(missed | level) of each sample on the grid, and the log prior of the levels, with what the gradient reuses"
+        lpi, l1pi, s, s0 = log_expit(t[2]), log_expit(-t[2]), np.exp(np.clip(t[4], -10, 10)), np.exp(np.clip(t[1], -5, 5))
+        sc = np.sqrt(sw ** 2 + s ** 2)
+        z, u = (lmin + t[3] - b - grid[:, None]) / sc, (grid - t[0]) / s0
+        return np.logaddexp(lpi, l1pi + log_ndtr(z)), -u ** 2 / 2 - _log_sqrt_2pi - np.log(s0), lpi, l1pi, s, s0, sc, z, u
 
     def nll(t):
-        miss, det = parts(t, rows)
-        a = gauss[rows] + miss + norm.logpdf(grid, t[0], np.exp(np.clip(t[1], -5, 5)))
+        lq, prior, lpi, l1pi, s, s0, sc, z, u = level_terms(t)
+        a = gr + Mr @ lq.T + prior
         mx = a.max(axis = 1, keepdims = True)
-        return -(mx[:, 0] + np.log(np.exp(a - mx).sum(axis = 1)) + det).sum()
+        w = np.exp(a - mx)
+        total = w.sum(axis = 1, keepdims = True)
+        # w: each glycan's posterior over the grid, which weighs the derivatives of its log-likelihood
+        w, cens = w / total, np.exp(l1pi - z ** 2 / 2 - _log_sqrt_2pi - lq)
+        wg, W = w.sum(axis = 0), w.T @ Mr
+        zy = (lmin + t[3] - Yr) / s
+        ldet = log_ndtr(-zy)
+        live = Or & (l1pi + ldet > floor)  # log P(detected | y), floored as far below a real observation as 1 - 1e-12 of missing
+        haz = np.where(live, np.exp(-zy ** 2 / 2 - _log_sqrt_2pi - ldet), 0.0)
+        grad = [(wg * u).sum() / s0, (wg * (u ** 2 - 1)).sum(), (W * np.exp(lpi + l1pi + log_ndtr(-z) - lq)).sum() - expit(t[2]) * live.sum(),
+                (W * cens).sum() / sc - haz.sum() / s, -(W * cens * z).sum() * (s / sc) ** 2 + (haz * zy).sum()]
+        return -(mx.sum() + np.log(total).sum() + np.where(Or, np.maximum(l1pi + ldet, floor), 0.0).sum()), -np.array(grad)
 
     lv = np.where(cnt > 0, S1 / np.maximum(cnt, 1), np.nan)
     start = rows[cnt[rows] > 0]  # the selection model of the observed-only levels as a starting point
     x0 = [np.nanmean(lv) - 1, np.log(np.nanstd(lv) + 0.5), *_detection_fit(L[start], M[start], lv[start, None] + b, sw, lmin)]
-    t = min((minimize(nll, x, method = 'Nelder-Mead', options = {'maxiter': 600, 'xatol': 1e-3, 'fatol': 1e-3}) for x in (x0, [x0[0] - 2, x0[1] + 0.5, -3, 0, 0])), key = lambda o: o.fun).x
-    missed = parts(t, np.arange(n))[0] + norm.logpdf(grid, t[0], np.exp(np.clip(t[1], -5, 5)))
+    t = min((minimize(nll, x, jac = True, method = 'L-BFGS-B', bounds = [(None, None), (-5, 5), (None, None), (None, None), (-10, 10)]) for x in (x0, [x0[0] - 2, x0[1] + 0.5, -3, 0, 0])), key = lambda o: o.fun).x
+    lq, prior = level_terms(t)[:2]
+    missed = Mf @ lq.T + prior
     return grid, t, gauss + missed, missed
 
 
@@ -602,7 +651,7 @@ class JTKTest:
         return waveforms
 
     def _generate_phase_waveform(self, theta: np.ndarray) -> np.ndarray:
-        cos_r = np.repeat(rankdata(np.cos(theta)), self.group_sizes[0])
+        cos_r = np.repeat(_average_ranks(np.cos(theta)), self.group_sizes[0])
         matrix = np.sign(np.subtract.outer(cos_r, cos_r))
         return matrix[np.tril_indices(len(cos_r), k = -1)]
 
@@ -612,7 +661,7 @@ class JTKTest:
         # Signs and waveforms are all -1, 0, or 1, so every S is an exact integer whatever the summation order, and scoring all candidates in one product and one cdf call gives the per-candidate values bit for bit
         S_all = self._candidate_waveforms @ signs
         scored = np.flatnonzero(S_all != 0)
-        p_all = 2 * norm.cdf(-((np.abs(S_all[scored]) + self.max_stat) / 2 - 0.5), -self.max_stat/2, np.sqrt(self.variance))
+        p_all = 2 * ndtr((-((np.abs(S_all[scored]) + self.max_stat) / 2 - 0.5) + self.max_stat/2) / np.sqrt(self.variance))
         if (p_all < best_stats[0]).any():
             # The first candidate reaching the minimum, as the strict < of a sequential scan keeps
             j = np.argmin(np.where(p_all < best_stats[0], p_all, np.inf))
@@ -630,7 +679,7 @@ def _bf_prior_b(n: int, # sample size
                 ) -> float: # fraction b of the sample that informs the prior of Jeffreys' approximate Bayes factor
     "Chooses b for get_BF and get_alphaN"
     if method == "balanced":
-        return max(2 / n, min(0.5, integrate.quad(lambda x: np.exp(-n * x ** 2 / 4), 0, upper)[0]))
+        return max(2 / n, min(0.5, np.sqrt(np.pi / n) * erf(upper * np.sqrt(n) / 2)))  # the integral of exp(-n * x^2 / 4) from 0 to upper
     method_dict = {"JAB": lambda n: 1 / n, "min": lambda n: 2 / n, "robust": lambda n: max(2 / n, 1 / np.sqrt(n))}
     if method not in method_dict:
         raise ValueError(f"'{method}' is not a valid method; choose from 'JAB', 'min', 'robust', or 'balanced'.")
@@ -645,7 +694,7 @@ def get_BF(n: int, # sample size
            ) -> float: # Bayes factor in favor of H1
     "Transforms a p-value into Jeffreys' approximate Bayes factor (BF)"
     b = _bf_prior_b(n, method, upper)
-    t_statistic = norm.ppf(1 - p/2) if z else t.ppf(1 - p/2, n - 2)
+    t_statistic = -ndtri(p / 2) if z else -stdtrit(n - 2, p / 2)
     return np.exp(0.5 * t_statistic ** 2) * np.sqrt(b)
 
 
@@ -656,7 +705,7 @@ def get_alphaN(n: int, # sample size
                verbose: bool = False # whether to print the adjusted alpha
                ) -> float: # alpha level required to achieve desired evidence
     "Set the alpha level based on sample size via Bayesian-Adaptive Alpha Adjustment"
-    alpha = 1 - chi2.cdf(2 * np.log(BF / np.sqrt(_bf_prior_b(n, method, upper))), 1)
+    alpha = 1 - chdtr(1, max(2 * np.log(BF / np.sqrt(_bf_prior_b(n, method, upper))), 0))
     if verbose:
         print(f"You're working with an alpha of {alpha} that has been adjusted for your sample size of {n}.")
     return alpha
@@ -829,7 +878,7 @@ def shannon_diversity_index(counts: np.ndarray # array of counts
     if total == 0:
         warnings.warn("A sample has no non-zero abundances at all; its Shannon diversity is undefined and is reported as 0.")
         return 0.0
-    return entropy(counts / total)
+    return entr(counts / total / np.sum(counts / total)).sum()
 
 
 def simpson_diversity_index(counts: np.ndarray # array of counts
@@ -867,28 +916,65 @@ def get_equivalence_test(row_a: np.ndarray, # array of control samples for one g
         mdiff, se, dof = amean(A, axis = 1) - bmean(B, axis = 1), np.sqrt((pooled_std ** 2 + scale_var) * (1 / na + 1 / nb)), na + nb - 2
     # TOST: the equivalence p-value is the larger of the two one-sided t-tests against the -delta and +delta bounds
     se = np.maximum(se, 1e-300)
-    p = np.maximum(t.sf((mdiff + delta) / se, dof), t.cdf((mdiff - delta) / se, dof))
+    p = np.maximum(stdtr(dof, -(mdiff + delta) / se), stdtr(dof, (mdiff - delta) / se))
     return p if np.ndim(row_a) > 1 else p[0]
+
+
+@lru_cache(maxsize = 4096)
+def _fisher_2xk(cells: tuple[tuple[int, int], ...] # (detected, group size) per group, sorted, so that equal tables share one entry
+                ) -> float: # two-sided p-value: the probability of all tables with these margins no likelier than this one
+    "Fisher's exact test of a 2 x k table (Freeman-Halton) in exact integer arithmetic. A table's probability is the product of its binomials over C(N, m), so tables are walked group by group and merged by partial product; where the largest and smallest possible rest of a partial table decide the outcome, Vandermonde's identity counts its completions at once (the bounds of the network algorithm)"
+    m, N, k, obs = sum(x for x, _ in cells), sum(n for _, n in cells), len(cells), 1
+    for x, n in cells:
+        obs *= comb(n, x)
+    # bounds[j][r]: largest and smallest product of the binomials of groups j onward with r detected among them
+    bounds, rest = [None] * k + [{0: (1, 1)}], [0] * (k + 1)
+    for j in range(k - 1, -1, -1):
+        n, rest[j], bounds[j] = cells[j][1], rest[j + 1] + cells[j][1], {}
+        for r, (hi, lo) in bounds[j + 1].items():
+            for x in range(min(n, m - r) + 1):
+                c, old = comb(n, x), bounds[j].get(r + x)
+                bounds[j][r + x] = (hi * c, lo * c) if old is None else (max(old[0], hi * c), min(old[1], lo * c))
+    states, total, visits = {(0, 1): 1}, 0, 0
+    for j, (_, n) in enumerate(cells):
+        following = {}
+        for (s, p), c in states.items():
+            for x in range(min(n, m - s) + 1):
+                bound = bounds[j + 1].get(m - s - x)
+                if bound is None:
+                    continue
+                q, visits = p * comb(n, x), visits + 1
+                if q * bound[0] <= obs:
+                    total += c * q * comb(rest[j + 1], m - s - x)
+                elif q * bound[1] <= obs:
+                    following[(s + x, q)] = following.get((s + x, q), 0) + c
+        states = following
+        if visits > 200000:  # large tables of many groups with mid-range margins: about 0.2 s of walking so far, and no end in sight
+            from scipy.stats import fisher_exact, MonteCarloMethod
+            return float(fisher_exact(np.array([[x for x, _ in cells], [n - x for x, n in cells]]), method = MonteCarloMethod(rng = np.random.default_rng(0))).pvalue)
+    return total / comb(N, m)
 
 
 def detection_test(detected: np.ndarray, # booleans, features as rows and samples as columns
                    groups: list[list[int]], # column positions of each group
                    paired: bool = False, # two groups whose columns are paired by position
-                   random_state: int | np.random.Generator | None = None # unused, since the Monte Carlo sample is fixed; kept so existing calls keep working
+                   random_state: int | np.random.Generator | None = None # unused, since the tests are exact; kept so existing calls keep working
                    ) -> tuple[np.ndarray, np.ndarray]: # (p-value, effect size) per feature
-    "Tests whether detection differs between groups: Fisher's exact test (2 x k tables beyond two groups by Monte Carlo), or for paired samples the exact McNemar test on the discordant pairs; the effect size is Cohen's h of the detection rates (second group minus first), or Cramer's V beyond two groups"
+    "Tests whether detection differs between groups: Fisher's exact test, or for paired samples the exact McNemar test on the discordant pairs; the effect size is Cohen's h of the detection rates (second group minus first), or Cramer's V beyond two groups"
     pvals, effects = [], []
+    sizes = np.array([len(g) for g in groups])
     for row in np.asarray(detected, dtype = bool):
-        table = np.array([[row[g].sum() for g in groups], [len(g) - row[g].sum() for g in groups]])
+        counts = np.array([row[g].sum() for g in groups])
         if paired:
             a, b = row[groups[0]], row[groups[1]]
             n = int((a ^ b).sum())
-            pvals.append(binomtest(int((a & ~b).sum()), n).pvalue if n else 1.0)
+            low = min(int((a & ~b).sum()), int((b & ~a).sum()))
+            pvals.append(min(1.0, 2 * sum(comb(n, i) for i in range(low + 1)) / 2 ** n))
         else:
-            pvals.append(fisher_exact(table).pvalue if len(groups) == 2 else fisher_exact(table, method = MonteCarloMethod(rng = np.random.default_rng(0))).pvalue)
-        rates = table[0] / table.sum(axis = 0)
+            pvals.append(_fisher_2xk(tuple(sorted(zip(counts.tolist(), sizes.tolist())))))
+        rates, pooled = counts / sizes, counts.sum() / sizes.sum()
         effects.append(2 * np.arcsin(np.sqrt(rates[1])) - 2 * np.arcsin(np.sqrt(rates[0])) if len(groups) == 2 else
-                       np.sqrt(chi2_contingency(table, correction = False)[0] / table.sum()))
+                       np.sqrt((sizes * (rates - pooled) ** 2).sum() / max(pooled * (1 - pooled), 1e-300) / sizes.sum()))
     return np.array(pvals, dtype = float), np.array(effects, dtype = float)
 
 
@@ -921,16 +1007,16 @@ def clr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
         geometric_mean = -np.log2(geometric_mean)
         vals = df.to_numpy()  # the groups are taken by position, since selecting them as frames cost more than the transform itself on the many small per-glycosite frames
         if group2:
-            clr_adjusted[:, group1i] = np.log2(vals[:, group1i]) + (geometric_mean[group1i] if not custom_scale else norm.rvs(loc = np.log2(1), scale = gamma, random_state = local_rng, size = (df.shape[0], len(group1))))
-            condition = norm.rvs(loc = geometric_mean[group2i], scale = gamma, random_state = local_rng, size = (df.shape[0], len(group2))) if not custom_scale else \
-                norm.rvs(loc = np.log2(custom_scale), scale = gamma, random_state = local_rng, size = (df.shape[0], len(group2)))
+            clr_adjusted[:, group1i] = np.log2(vals[:, group1i]) + (geometric_mean[group1i] if not custom_scale else local_rng.normal(np.log2(1), gamma, (df.shape[0], len(group1))))
+            condition = local_rng.normal(geometric_mean[group2i], gamma, (df.shape[0], len(group2))) if not custom_scale else \
+                local_rng.normal(np.log2(custom_scale), gamma, (df.shape[0], len(group2)))
             clr_adjusted[:, group2i] = np.log2(vals[:, group2i]) + condition
         else:
-            clr_adjusted[:, group1i] = np.log2(vals[:, group1i]) + norm.rvs(loc = geometric_mean[group1i], scale = gamma, random_state = local_rng, size = (df.shape[0], len(group1)))
+            clr_adjusted[:, group1i] = np.log2(vals[:, group1i]) + local_rng.normal(geometric_mean[group1i], gamma, (df.shape[0], len(group1)))
     elif not group2 and isinstance(custom_scale, dict):
         for idx, group_id in enumerate(group1):
             scale_factor = custom_scale.get(group_id, 1)
-            clr_adjusted[:, idx] = np.log2(df.iloc[:, idx]) + norm.rvs(loc = np.log2(scale_factor), scale = gamma, random_state = local_rng, size = df.shape[0])
+            clr_adjusted[:, idx] = np.log2(df.iloc[:, idx]) + local_rng.normal(np.log2(scale_factor), gamma, df.shape[0])
     else:
         clr_adjusted = np.log2(df) - np.log2(geometric_mean)
     return pd.DataFrame(clr_adjusted, index = df.index, columns = df.columns)
@@ -953,7 +1039,7 @@ def anosim(df: pd.DataFrame, # square distance matrix
             f"anosim needs at least two groups and at least one group with more than one sample, otherwise within- or between-group distances are empty; got {dict(Counter(group_labels))}.")
     tril = np.tril_indices(n, k = -1)
     condensed_dist = df.values[tril]
-    ranks = rankdata(condensed_dist, method = 'average')
+    ranks = _average_ranks(condensed_dist)
     # Boolean array for within and between group comparisons
     group_matrix = np.equal.outer(group_labels, group_labels)
     within_group_indices = group_matrix[tril]
@@ -979,6 +1065,22 @@ def anosim(df: pd.DataFrame, # square distance matrix
     return R, p_value
 
 
+def _welch_anova(groups: list[np.ndarray], # one array per group, features as rows and samples as columns; NaN where unmeasured
+                 scale_var: float = 0 # scale uncertainty of a sample's log-ratio, added to each group's variance
+                 ) -> tuple[np.ndarray, np.ndarray]: # (F, p-value) per feature
+    "Welch's ANOVA per row, with the variance of a log-ratio's scale in each group's weight"
+    k = len(groups)
+    with warnings.catch_warnings(), np.errstate(divide = 'ignore', invalid = 'ignore'):
+        warnings.simplefilter('ignore', RuntimeWarning)  # a group without two measurements of a feature leaves it untestable, which NaN says
+        nj = np.stack([np.isfinite(g).sum(axis = 1) for g in groups], axis = 1)
+        mj = np.stack([np.nanmean(g, axis = 1) for g in groups], axis = 1)
+        wj = nj / (np.stack([np.nanvar(g, axis = 1, ddof = 1) for g in groups], axis = 1) + scale_var)
+        share = wj / wj.sum(axis = 1, keepdims = True)
+        tail = ((1 - share) ** 2 / (nj - 1)).sum(axis = 1)
+        f_values = (wj * (mj - (share * mj).sum(axis = 1, keepdims = True)) ** 2).sum(axis = 1) / (k - 1) / (1 + 2 * (k - 2) / (k ** 2 - 1) * tail)
+    return f_values, fdtrc(k - 1, (k ** 2 - 1) / (3 * tail), f_values)
+
+
 def alpha_biodiversity_stats(df: pd.DataFrame, # square distance matrix
                              group_labels: list[str] # list of group membership for each sample
                              ) -> tuple[float, float] | None: # F statistic and p-value if groups have >1 sample, None otherwise
@@ -987,7 +1089,8 @@ def alpha_biodiversity_stats(df: pd.DataFrame, # square distance matrix
     if all(count > 1 for count in group_counts.values()):
         stat_outputs = pd.DataFrame({'group': group_labels, 'diversity': df.squeeze()})
         grouped_diversity = stat_outputs.groupby('group')['diversity'].apply(list).tolist()
-        return f_oneway(*grouped_diversity, equal_var = False)
+        f_stat, pval = _welch_anova([np.asarray(g, dtype = float)[None] for g in grouped_diversity])
+        return f_stat[0], pval[0]
 
 
 @lru_cache(maxsize = 16)
@@ -1047,16 +1150,16 @@ def alr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
     group2i = [df.columns.get_loc(c) for c in group2] if group2 else group1i
     if not isinstance(custom_scale, dict):
         if custom_scale:
-            alr_transformed[:, group1i] = X[:, group1i] - (reference_values[group1i] - norm.rvs(loc = np.log2(1), scale = gamma, random_state = local_rng, size = len(group1i)))
+            alr_transformed[:, group1i] = X[:, group1i] - (reference_values[group1i] - local_rng.normal(np.log2(1), gamma, len(group1i)))
         else:
             alr_transformed[:, group1i] = X[:, group1i] - reference_values[group1i]
         scale_adjustment = np.log2(custom_scale) if custom_scale else 0
-        alr_transformed[:, group2i] = X[:, group2i] - (reference_values[group2i] - norm.rvs(loc = scale_adjustment, scale = gamma, random_state = local_rng, size = len(group2i)))
+        alr_transformed[:, group2i] = X[:, group2i] - (reference_values[group2i] - local_rng.normal(scale_adjustment, gamma, len(group2i)))
     else:
         for idx in range(df.shape[1]):
             group_id = group1[idx] if isinstance(group1[0], int) else group1[idx].split('_')[1]
             scale_factor = custom_scale.get(group_id, 1)
-            reference_adjusted = reference_values[idx] - norm.rvs(loc = np.log2(scale_factor), scale = gamma, random_state = local_rng)
+            reference_adjusted = reference_values[idx] - local_rng.normal(np.log2(scale_factor), gamma)
             alr_transformed[:, idx] = X[:, idx] - reference_adjusted
     # Drops the reference row by label and resets the index, as .drop(index = ...).reset_index(drop = True) did, and column-major so the frame holds its block in the layout drop's take produced
     return pd.DataFrame(np.asfortranarray(alr_transformed[~df.index.isin([df.index[reference_component_index]])]), columns = df.columns)
@@ -1087,9 +1190,12 @@ def get_procrustes_scores(df: pd.DataFrame, # dataframe with features as rows an
     else:
         variances = abs(df[group1].var(axis = 1))
     ref_values = ref_matrix.to_numpy()
-    # Arrays instead of frames, column-major as the frames' values were, since procrustes' column reductions round by memory layout
-    procrustes_corr = [1 - procrustes(np.asfortranarray(ref_values[~ref_matrix.index.isin([ref_matrix.index[i]])]),
-                                      alr_transformation(df, i, group1, group2, gamma = 0, custom_scale = custom_scale, random_state = local_rng).to_numpy())[2] for i in range(df.shape[0])]
+    procrustes_corr = []
+    for i in range(df.shape[0]):
+        P, Q = ref_values[~ref_matrix.index.isin([ref_matrix.index[i]])], alr_transformation(df, i, group1, group2, gamma = 0, custom_scale = custom_scale, random_state = local_rng).to_numpy()
+        P, Q = P - P.mean(axis = 0), Q - Q.mean(axis = 0)
+        # the best rotation and scale leave a disparity of 1 - (sum of singular values)^2 between unit-norm matrices
+        procrustes_corr.append(np.linalg.svd((P / np.linalg.norm(P)).T @ (Q / np.linalg.norm(Q)), compute_uv = False).sum() ** 2)
     allowed = df.index.isin(df.index if reference is None else reference) & ~labels.duplicated(keep = False).to_numpy()
     return [a / max(b, 1e-8) if ok else -np.inf for a, b, ok in zip(procrustes_corr, variances, allowed)], procrustes_corr, variances
 
@@ -1326,8 +1432,8 @@ def meta_analysis(effect_sizes: np.ndarray | list[float], # per-study effect siz
     se = float(np.sqrt(1 / w.sum()))
     z = pooled / se if se > 0 else 0.0
     out = {'effect': pooled, 'se': se, 'ci_low': pooled - 1.96 * se, 'ci_high': pooled + 1.96 * se, 'z': float(z),
-           'p_val': float(2 * norm.sf(abs(z))), 'tau2': tau2, 'Q': q, 'Q_df': dfree,
-           'Q_p_val': float(chi2.sf(q, dfree)) if dfree > 0 else np.nan,
+           'p_val': float(2 * ndtr(-abs(z))), 'tau2': tau2, 'Q': q, 'Q_df': dfree,
+           'Q_p_val': float(chdtrc(dfree, q)) if dfree > 0 else np.nan,
            'I2': float(max(0.0, (q - dfree) / q) * 100) if q > 0 and dfree > 0 else 0.0,
            'weights': (w / w.sum()).tolist(), 'model': model, 'k': len(eff)}
     if leave_one_out:
@@ -1364,14 +1470,14 @@ def omega_squared(row: pd.Series | np.ndarray | pd.DataFrame, # values for one f
 def get_glycoform_diff(df_res: pd.DataFrame, # result from .motif.analysis.get_differential_expression
                        alpha: float = 0.05, # significance threshold for testing
                        level: str = 'peptide' # analyze at 'peptide' or 'protein' level
-                       ) -> pd.DataFrame: # df with differential expression results, p-vals (Fisher’s Combined Probability Test), significance, effect sizes (Cohen's d)
+                       ) -> pd.DataFrame: # df with differential expression results, p-vals (Cauchy combination), significance, effect sizes (Cohen's d)
     "Calculates differential expression of glycoforms from either a peptide or a whole protein"
     from glycowork.motif.processing import split_glycoform_id
     label_col = 'Glycosite' if 'Glycosite' in df_res.columns else 'Glycan'
     labels = [split_glycoform_id(k)[0] for k in df_res[label_col]]  # per-glycosite motifs keep the underscores of their names out of the site
     labels = [s.rpartition('_')[0] or s for s in labels] if level == 'protein' else labels  # the accession is everything in front of the site, which can hold underscores itself (A1AG1_HUMAN)
     # plain Series, since every group pandas hands the lambda deep-copies the attrs of df_res, once per glycosite
-    grouped = pd.Series(df_res['p-val'].to_numpy()).groupby(labels).agg(lambda p: combine_pvalues(p)[1])  # Fisher’s Combined Probability Test
+    grouped = pd.Series(1 / np.tan(np.pi * np.clip(df_res['p-val'].to_numpy(float), 1e-300, 0.99))).groupby(labels).mean().pipe(lambda c: np.arctan2(1, c) / np.pi)  # Cauchy combination, which holds whatever the dependence between a site's glycoforms
     mean_effect_size = pd.Series(df_res['Effect size'].to_numpy()).groupby(labels).mean()
     pvals, sig = correct_multiple_testing(grouped, alpha)
     df_out = type(df_res)(
@@ -1379,7 +1485,7 @@ def get_glycoform_diff(df_res: pd.DataFrame, # result from .motif.analysis.get_d
     for attr in ('_contrasts', '_paired', '_glyco_name', '_provenance'):
         if hasattr(df_res, attr):
             object.__setattr__(df_out, attr, getattr(df_res, attr))
-    df_out.attrs.update({**df_res.attrs, 'alpha': alpha, 'test': "Fisher's combined probability test", 'level': level})
+    df_out.attrs.update({**df_res.attrs, 'alpha': alpha, 'test': 'Cauchy combination test', 'level': level})
     return df_out.sort_values(by = 'corr p-val')
 
 
@@ -1406,7 +1512,7 @@ def get_glm(group: pd.DataFrame, # longform data of glycoform abundances for a g
             return ("GLM fitting failed: insufficient residual degrees of freedom", [])
         se = np.sqrt(np.diag(np.linalg.pinv(X.T @ X)) * (((y - X @ beta) ** 2).sum() / dof + scale_var))
         names = ['Intercept'] + terms
-        return (pd.Series(beta, index = names), pd.Series(2 * t.sf(np.abs(beta / se), dof), index = names)), retained_vars
+        return (pd.Series(beta, index = names), pd.Series(2 * stdtr(dof, -np.abs(beta / se)), index = names)), retained_vars
     except Exception as e:
         return (f"GLM fitting failed: {str(e)}", [])
 
@@ -1443,21 +1549,17 @@ def partial_corr(x: np.ndarray, # typically values from a column or row
                  y: np.ndarray, # typically values from a column or row
                  controls: np.ndarray, # variables correlated with x or y
                  motifs: bool = False # whether to analyze full sequences or motifs
-                 ) -> tuple[float, float]: # (regularized partial correlation coefficient, p-value from Spearman correlation of residuals)
+                 ) -> tuple[float, float]: # (regularized partial correlation coefficient, p-value from Spearman correlation of residuals, each control costing a degree of freedom)
     "Compute regularized partial correlation of x and y, controlling for multiple other variables in controls"
-    from sklearn.linear_model import Ridge
-    # Check if we have any controls
-    if controls.size == 0 or controls.shape[1] == 0:
-        return spearmanr(x, y)
-    # Fit regression models
-    alpha = 0.1 if motifs else 0.25
-    beta_x = Ridge(alpha = alpha).fit(controls, x).coef_
-    beta_y = Ridge(alpha = alpha).fit(controls, y).coef_
-    # Compute residuals
-    res_x = x - controls @ beta_x
-    res_y = y - controls @ beta_y
-    # Compute correlation of residuals
-    return spearmanr(res_x, res_y)
+    x, y, k = np.asarray(x, dtype = float), np.asarray(y, dtype = float), 0 if controls.size == 0 else controls.shape[1]
+    if k:
+        # Ridge regression on centered data, solved for both responses at once
+        C = controls - controls.mean(axis = 0)
+        beta = np.linalg.solve(C.T @ C + (0.1 if motifs else 0.25) * np.eye(k), C.T @ np.column_stack([x - x.mean(), y - y.mean()]))
+        x, y = x - controls @ beta[:, 0], y - controls @ beta[:, 1]
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        r = np.corrcoef(_average_ranks(x), _average_ranks(y))[0, 1]
+    return float(r), float(_spearman_pvals(r, len(x), controls = k))
 
 
 def estimate_technical_variance(df: pd.DataFrame, # dataframe with abundances in cols
@@ -1477,7 +1579,7 @@ def estimate_technical_variance(df: pd.DataFrame, # dataframe with abundances in
     transformed_data = np.zeros((features, samples, num_instances))
     for j in range(samples):
         # a component with a concentration far below 1 draws 0 or 1e-300, whose log is no measurement, so draws are floored at the share impute_and_normalize gives a feature absent from a group (1e-7 %)
-        dirichlet_samples = np.maximum(dirichlet.rvs(alpha = np.maximum(df.iloc[:, j].to_numpy(float), 1e-6), random_state = local_rng, size = num_instances).T, 1e-9)
+        dirichlet_samples = np.maximum(local_rng.dirichlet(np.maximum(df.iloc[:, j].to_numpy(float), 1e-6), num_instances).T, 1e-9)
         if isinstance(custom_scale, dict) or custom_scale:
             for n in range(num_instances):
                 sample_instance = pd.DataFrame(dirichlet_samples[:, n])
@@ -1488,9 +1590,7 @@ def estimate_technical_variance(df: pd.DataFrame, # dataframe with abundances in
             # CLR on a single column is just log2(x) minus the log2 geometric mean, plus the gamma uncertainty term
             log_samples = np.log2(np.where(dirichlet_samples > 0, dirichlet_samples, np.nan))
             log_gmean = np.nanmean(log_samples[ref], axis = 0)
-            transformed_data[:, j, :] = log_samples + norm.rvs(loc = -log_gmean, scale = gamma,
-                                                               random_state = local_rng,
-                                                               size = (features, num_instances))
+            transformed_data[:, j, :] = log_samples + local_rng.normal(-log_gmean, gamma, (features, num_instances))
     columns = [col for col in df.columns for _ in range(num_instances)]
     transformed_data_2d = transformed_data.reshape((features, samples * num_instances))
     transformed_df = pd.DataFrame(transformed_data_2d, columns = columns)
@@ -1512,9 +1612,7 @@ def perform_tests_monte_carlo(group_a: pd.DataFrame, # rows as features, columns
     arr_b = group_b.values.reshape(num_features, n_b, num_instances)
     for instance in range(num_instances):
         sample_a, sample_b = arr_a[:, :, instance], arr_b[:, :, instance]
-        instance_p_values = np.nan_to_num((
-            ttest_rel(sample_b, sample_a, axis = 1) if paired else ttest_ind(sample_b, sample_a, equal_var = False,
-                                                                             axis = 1))[1], nan = 1.0)
+        instance_p_values = np.nan_to_num(_ttest_pvalue(sample_b, sample_a, paired = paired), nan = 1.0)
         if fixed_pvals is not None:
             instance_p_values = np.where(np.isnan(fixed_pvals), instance_p_values, fixed_pvals)
         instance_effect_sizes = cohen_d(sample_b, sample_a, paired = paired)[0]
@@ -1529,13 +1627,40 @@ def perform_tests_monte_carlo(group_a: pd.DataFrame, # rows as features, columns
     return avg_uncorrected_p_values, avg_corrected_p_values, avg_effect_sizes
 
 
-def spearman_exact_pvals(r: np.ndarray | float, # Spearman correlation(s), all computed on the same n untied samples
-                         n: int # number of samples, at most 9, since the null enumerates all n! rank orders
-                         ) -> np.ndarray | float: # two-sided p-value(s)
-    "Exact two-sided p-values of Spearman correlations from their full permutation null, for small n where the t approximation used by spearmanr is badly anti-conservative"
+@lru_cache(maxsize = 8)
+def _spearman_null(n: int # number of samples, at most 9, since the null enumerates all n! rank orders
+                   ) -> np.ndarray: # sorted |r| of every rank order, read-only
+    "The full permutation null of Spearman's r on n untied samples"
     base = np.arange(n) - (n - 1) / 2
     null = np.sort(np.abs((np.array(list(iter_permutations(range(n)))) - (n - 1) / 2) @ base) / (base @ base))
-    return 1 - np.searchsorted(null, np.abs(r) - 1e-9) / len(null)  # the tolerance keeps a float-noisy r from dropping below its own null value
+    null.flags.writeable = False
+    return null
+
+
+def spearman_exact_pvals(r: np.ndarray | float, # Spearman correlation(s), all computed on the same n untied samples
+                         n: int # number of samples, at most 9, since the null enumerates all n! rank orders
+                         ) -> np.ndarray | float: # two-sided p-value(s); NaN where r is NaN
+    "Exact two-sided p-values of Spearman correlations from their full permutation null, for small n where the t approximation used by spearmanr is badly anti-conservative"
+    null = _spearman_null(n)
+    return np.where(np.isnan(r), np.nan, 1 - np.searchsorted(null, np.abs(r) - 1e-9) / len(null))  # the tolerance keeps a float-noisy r from dropping below its own null value
+
+
+def _spearman_pvals(r: np.ndarray | float, # Spearman correlation(s), all on the same n samples
+                    n: int, # number of samples
+                    controls: int = 0 # variables regressed out of both sides first, each costing a degree of freedom
+                    ) -> np.ndarray: # two-sided p-value(s); NaN where r is NaN
+    "Spearman p-values: the exact null up to 9 samples; from 10, the larger of the t approximation and the Edgeworth series of AS 89, since the t runs anti-conservative in the tails and the series falls to 0 beyond p ~ 1e-4; after controls, the t with n - 2 - controls degrees of freedom, which holds at every n"
+    if not controls and n <= 9:
+        return spearman_exact_pvals(r, n)
+    r, dof = np.asarray(r, dtype = float), n - 2 - controls
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        p = 2 * stdtr(dof, -np.abs(r * np.sqrt(dof / ((1 + r) * (1 - r)))))
+    if controls:
+        return p
+    b, x = 1 / n, -(np.abs(r) + 6 / (n * (n ** 2 - 1))) * np.sqrt(n - 1)
+    y = x ** 2
+    u = x * b * (0.2274 + b * (0.2531 + 0.1745 * b) + y * (-0.0758 + b * (0.1033 + 0.3932 * b) - y * b * (0.0879 + 0.0151 * b - y * (0.0072 - 0.0831 * b + y * b * (0.0131 - 0.00046 * y)))))
+    return np.clip(np.maximum(p, 2 * (ndtr(x) - u * np.exp(-y / 2))), np.exp(np.log(2) - gammaln(n + 1)), 1)  # no rank order is rarer than 2 / n!
 
 
 def hsic(x: np.ndarray, # first variable; 1-D or (n_samples, n_features)
@@ -1563,7 +1688,7 @@ def hsic(x: np.ndarray, # first variable; 1-D or (n_samples, n_features)
     w = np.outer(ev_K, ev_L).ravel()
     mean_T, var_T = w.sum(), 2 * (w ** 2).sum()
     return stat, (float(
-        gamma_dist.sf(stat * (n - 1) ** 2 / n, mean_T ** 2 / var_T, scale = var_T / mean_T)) if var_T > 0 else 1.0)
+        gammaincc(mean_T ** 2 / var_T, stat * (n - 1) ** 2 / n / (var_T / mean_T))) if var_T > 0 else 1.0)
 
 
 def pvca(data: pd.DataFrame | np.ndarray, # features as rows and samples as columns, log-ratio transformed (e.g., CLR)
@@ -1610,7 +1735,7 @@ def cosinor_fit(y: np.ndarray | list[float], # one feature's (log-ratio transfor
     df_res = len(unique_t) - 3
     f_stat = ((ss_tot - ss_res) / 2) / (ss_res / df_res + extra) if df_res > 0 and ss_res > 0 else 0.0
     return {'mesor': beta[0], 'amplitude': np.hypot(beta[1], beta[2]), 'acrophase': (np.arctan2(beta[2], beta[1]) * period / (2 * np.pi)) % period,
-            'r_squared': 1 - ss_res / ss_tot if ss_tot > 0 else 0.0, 'f_stat': f_stat, 'p_value': f.sf(f_stat, 2, df_res) if df_res > 0 and ss_res > 0 else 1.0, 'beta': beta, 'y_hat': y_hat}
+            'r_squared': 1 - ss_res / ss_tot if ss_tot > 0 else 0.0, 'f_stat': f_stat, 'p_value': fdtrc(2, df_res, max(f_stat, 0)) if df_res > 0 and ss_res > 0 else 1.0, 'beta': beta, 'y_hat': y_hat}
 
 
 def _bh(p_sorted, alpha):
