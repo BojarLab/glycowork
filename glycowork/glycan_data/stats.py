@@ -137,6 +137,78 @@ def _studentized_range_isf(alpha: float, # upper-tail probability
     return b
 
 
+def _logistic_fit(X: np.ndarray, # samples as rows, features as columns
+                  y: np.ndarray, # 0 or 1 per sample
+                  C: float = 1.0, # inverse strength of the penalty on the coefficients and the intercept
+                  l1: bool = False # L1 penalty instead of L2
+                  ) -> tuple[np.ndarray, float]: # (coefficients, intercept)
+    "Logistic regression minimizing penalty + C * log loss, by Newton steps: under L1 on the features that are nonzero or most violate optimality, within the orthant of their signs, which reaches the exact zeros of the optimum in a few dozen small solves"
+    s, Z = 2.0 * np.asarray(y) - 1, np.column_stack([X, np.ones(len(X))])
+
+    def objective(v):
+        return (np.abs(v).sum() if l1 else 0.5 * v @ v) - C * log_expit(s * (Z @ v)).sum()
+
+    w = np.zeros(Z.shape[1])
+    f = objective(w)
+    for _ in range(500):
+        q = expit(-s * (Z @ w))
+        g = -C * Z.T @ (s * q)
+        if l1:
+            # the smallest subgradient of each coordinate
+            violation = np.where(w != 0, np.abs(g + np.sign(w)), np.maximum(np.abs(g) - 1, 0))
+            if violation.max() <= 1e-6:
+                break
+            active = w != 0
+            if not (violation[active] > 1e-6).any() or violation[~active].max(initial = 0) > 10 * violation[active].max():
+                active[np.argmax(np.where(active, 0, violation))] = True
+            idx = np.flatnonzero(active)
+            signs = np.where(w[idx] != 0, np.sign(w[idx]), -np.sign(g[idx]))
+            grad = g[idx] + signs
+        else:
+            idx, signs, grad = np.arange(len(w)), 0, g + w
+            if np.abs(grad).max() <= 1e-8:
+                break
+        hessian = C * (Z[:, idx].T * (q * (1 - q))) @ Z[:, idx]
+        hessian[np.diag_indices_from(hessian)] += 1e-10 * (1 + np.trace(hessian) / len(idx)) if l1 else 1
+        step, direction = 1.0, np.linalg.solve(hessian, -grad)
+        while step >= 1e-10:
+            new = w.copy()
+            new[idx] = w[idx] + step * direction
+            if l1:
+                new[idx] = np.where(new[idx] * signs < 0, 0, new[idx])  # a coordinate that leaves its orthant stops at zero
+            fnew = objective(new)
+            if fnew <= f + 1e-4 * step * min(grad @ direction, 0):
+                break
+            step /= 2
+        if step < 1e-10:
+            break
+        w, f = new, fnew
+    return w[:-1], w[-1]
+
+
+class LogisticModel:
+    "A fitted binary logistic regression"
+    def __init__(self, coef: np.ndarray, intercept: float) -> None:
+        self.coef_, self.intercept_ = np.atleast_2d(coef), np.array([intercept])
+        self.classes_ = np.array([0, 1])
+
+    def decision_function(self, X: np.ndarray # samples as rows, features as columns
+                          ) -> np.ndarray: # log-odds of the second class per sample
+        "Log-odds of the second class"
+        return np.asarray(X) @ self.coef_[0] + self.intercept_[0]
+
+    def predict_proba(self, X: np.ndarray # samples as rows, features as columns
+                      ) -> np.ndarray: # probability of each class, samples as rows
+        "Class probabilities"
+        p = expit(self.decision_function(X))
+        return np.column_stack([1 - p, p])
+
+    def predict(self, X: np.ndarray # samples as rows, features as columns
+                ) -> np.ndarray: # 0 or 1 per sample
+        "Most likely class"
+        return (self.decision_function(X) > 0).astype(int)
+
+
 def mahalanobis_distance(x: np.ndarray | pd.DataFrame, # comparison group containing numerical data
                          y: np.ndarray | pd.DataFrame, # comparison group containing numerical data
                          paired: bool = False # whether samples are paired (e.g., tumor & tumor-adjacent tissue)
@@ -151,6 +223,30 @@ def mahalanobis_distance(x: np.ndarray | pd.DataFrame, # comparison group contai
     diff_means = (np.mean(y, axis = 1) - np.mean(x, axis = 1)).reshape(-1, 1)
     mahalanobis_d = np.sqrt(np.clip(diff_means.T @ pooled_cov_inv @ diff_means, 0, None))
     return mahalanobis_d[0][0]
+
+
+def _roc_curve(y: np.ndarray, # 0 or 1 per sample
+               scores: np.ndarray # higher means more likely 1
+               ) -> tuple[np.ndarray, np.ndarray]: # (false positive rates, true positive rates)
+    "ROC curve without its collinear points, scikit-learn's roc_curve(y, scores)[:2], bit-identical"
+    order = np.argsort(scores, kind = 'mergesort')[::-1]
+    y, scores = np.asarray(y)[order], np.asarray(scores)[order]
+    at = np.r_[np.flatnonzero(np.diff(scores)), y.size - 1]
+    tps = np.cumsum(y)[at]
+    fps = at + 1 - tps
+    if len(fps) > 2:
+        keep = np.flatnonzero(np.r_[True, np.logical_or(np.diff(fps, 2), np.diff(tps, 2)), True])
+        fps, tps = fps[keep], tps[keep]
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        return np.r_[0, fps] / fps[-1], np.r_[0, tps] / tps[-1]
+
+
+def _roc_auc(y: np.ndarray, # 0 or 1 per sample
+             scores: np.ndarray # higher means more likely 1
+             ) -> float: # area under the ROC curve, scikit-learn's roc_auc_score(y, scores)
+    "Area under the ROC curve, by the trapezoid rule over _roc_curve"
+    fpr, tpr = _roc_curve(y, scores)
+    return float((np.diff(fpr) * (tpr[1:] + tpr[:-1]) / 2).sum())
 
 
 def mahalanobis_variance(x: np.ndarray | pd.DataFrame, # comparison group containing numerical data
@@ -192,7 +288,10 @@ class MissForest:
                  random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
                  ) -> None:
         "A class to perform MissForest imputation adapted from https://github.com/yuenshingyan/MissForest"
-        from sklearn.ensemble import RandomForestRegressor
+        try:
+            from sklearn.ensemble import RandomForestRegressor
+        except ImportError as e:
+            raise ImportError("MissForest needs scikit-learn: pip install scikit-learn") from e
         seed = random_state if random_state is None or isinstance(random_state, (int, np.integer)) else int(np.random.default_rng(random_state).integers(2 ** 32))
         self.regressor = regressor if regressor is not None else RandomForestRegressor(random_state = seed)
         self._auto_n_jobs = regressor is None
@@ -1691,20 +1790,27 @@ def hsic(x: np.ndarray, # first variable; 1-D or (n_samples, n_features)
         gammaincc(mean_T ** 2 / var_T, stat * (n - 1) ** 2 / n / (var_T / mean_T))) if var_T > 0 else 1.0)
 
 
+def _pca(X: np.ndarray, # samples as rows, features as columns
+         n_components: int | None = None # components to keep; all by default
+         ) -> tuple[np.ndarray, np.ndarray]: # (scores, share of the total variance per component)
+    "Principal components by SVD, each signed so that its largest loading is positive, as scikit-learn signs them"
+    U, S, Vt = np.linalg.svd(X - X.mean(axis = 0), full_matrices = False)
+    signs = np.sign(Vt[np.arange(len(S)), np.argmax(np.abs(Vt), axis = 1)])
+    return (U * S * signs)[:, :n_components], (S ** 2 / (S ** 2).sum())[:n_components]
+
+
 def pvca(data: pd.DataFrame | np.ndarray, # features as rows and samples as columns, log-ratio transformed (e.g., CLR)
          factors: dict[str, list | np.ndarray], # factor name : label per sample in column order, e.g., {'batch': batch_labels, 'group': group_labels}
          n_components: int = 10 # number of leading principal components to decompose
          ) -> dict[str, float]: # percentage of variance explained per factor, plus 'residual'
     "Principal variance component analysis: the variance share of each factor (e.g., batch vs. biological group), from type II sums of squares on the leading principal components, weighted by the variance they explain"
-    from sklearn.decomposition import PCA
     X = np.asarray(data, dtype = float).T
     out = dict.fromkeys([*factors, 'residual'], 0.0)
     if not X.std(axis = 0).any():
         return out  # no variance to decompose, and PCA would divide by a zero total
-    pca = PCA(n_components = min(n_components, X.shape[0] - 1, X.shape[1]))
-    scores = pca.fit_transform(X)
+    scores, shares = _pca(X, n_components = min(n_components, X.shape[0] - 1, X.shape[1]))
     dummies = {k: pd.get_dummies(np.asarray(v)).to_numpy(dtype = float)[:, 1:] for k, v in factors.items()}
-    for y, w in zip(scores.T, pca.explained_variance_ratio_):
+    for y, w in zip(scores.T, shares):
         ss_total = np.sum((y - y.mean()) ** 2)
         if ss_total < 1e-10:
             continue

@@ -7191,6 +7191,66 @@ def test_get_roc():
     results = get_roc(df, groups, [])
 
 
+def test_roc_and_pca_match_sklearn():
+    from sklearn.decomposition import PCA
+    from sklearn.metrics import roc_auc_score, roc_curve
+    from glycowork.glycan_data.stats import _roc_auc, _roc_curve, _pca
+    rng = np.random.default_rng(0)
+    for _ in range(300):
+        n = int(rng.integers(2, 40))
+        y = np.r_[0, 1, rng.integers(0, 2, n)]
+        s = rng.integers(0, 6, n + 2).astype(float) if rng.random() < 0.5 else rng.normal(size = n + 2)
+        fpr, tpr = _roc_curve(y, s)
+        ref = roc_curve(y, s)
+        assert np.array_equal(fpr, ref[0]) and np.array_equal(tpr, ref[1])
+        assert _roc_auc(y, s) == roc_auc_score(y, s)
+    for shape in [(12, 40), (40, 12), (200, 6)]:
+        X = rng.normal(size = shape)
+        pca = PCA()
+        ref = pca.fit_transform(X)
+        scores, shares = _pca(X)
+        k = min(shape) - 1
+        assert np.allclose(scores[:, :k], ref[:, :k], atol = 1e-8)
+        assert np.allclose(shares[:k], pca.explained_variance_ratio_[:k])
+
+
+def test_logistic_fit_and_held_out_auc():
+    from sklearn.linear_model import LogisticRegression
+    from glycowork.glycan_data.stats import _logistic_fit, LogisticModel
+    rng = np.random.default_rng(1)
+    X, y = rng.normal(size = (30, 80)), np.r_[np.zeros(15), np.ones(15)]
+    X[y == 1, :3] += 1.5
+    s, Z = 2 * y - 1, np.column_stack([X, np.ones(30)])
+    objective = lambda w, b: np.abs(w).sum() + abs(b) + np.logaddexp(0, -s * (X @ w + b)).sum()
+    coef, intercept = _logistic_fit(X, y, l1 = True)
+    ref = LogisticRegression(l1_ratio = 1, solver = 'liblinear', tol = 1e-8, max_iter = 100000).fit(X, y)
+    assert objective(coef, intercept) <= objective(ref.coef_[0], ref.intercept_[0]) + 1e-5
+    coef, intercept = _logistic_fit(X[:, :3], y)
+    ref = LogisticRegression(l1_ratio = 0, solver = 'liblinear', tol = 1e-10, max_iter = 100000).fit(X[:, :3], y)
+    assert np.allclose(coef, ref.coef_[0], atol = 1e-4)
+    model = LogisticModel(coef, intercept)
+    assert model.predict_proba(X[:, :3]).shape == (30, 2) and set(model.predict(X[:, :3])) <= {0, 1}
+    # noise has no held-out signal, whatever the training fit can do; a real difference keeps it
+    glycans = [f'Gal(b1-{k})GlcNAc' for k in (3, 4)] + [f'Man(a1-{k})Man' for k in (2, 3, 6)] + [f'Fuc(a1-{k})GlcNAc' for k in (3, 4, 6)]
+    noise = pd.DataFrame(rng.normal(size = (len(glycans), 20)), index = glycans, columns = [f's{k}' for k in range(20)])
+    a, b = noise.columns[:10].tolist(), noise.columns[10:].tolist()
+    assert multi_feature_scoring(noise, a, b, random_state = 0)[1] < 0.85
+    signal = noise.copy()
+    signal.loc[glycans[:3], b] += 3
+    model, auc, selected = multi_feature_scoring(signal, a, b, random_state = 0)
+    assert auc > 0.9 and set(selected) & set(glycans[:3])
+    assert multi_feature_scoring(signal, a, b, random_state = 0)[1] == auc
+    with pytest.raises(ValueError, match = "compares two groups"):
+        multi_feature_scoring(noise, [1, 2, 3] * 6 + [1, 2], [])
+
+
+def test_get_roc_two_labels_and_unmeasured_cells():
+    df = pd.DataFrame({'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man', 'Fuc(a1-3)GlcNAc'], **{f's{k}': [10.0 + k * (k > 4) * 8, 20.0 - k % 2, 30.0 + k % 3] for k in range(10)}})
+    res = get_roc(df, [0] * 5 + [1] * 5, [], impute = False, random_state = 0, transform = 'CLR')
+    assert all(0 <= auc <= 1 for _, auc in res.values())
+    assert all(auc >= 0.5 for _, auc in res.values())  # the best feature of a class ranks it above chance
+
+
 def test_get_representative_substructures():
     # Create test data with both monosaccharides and disaccharides
     enrichment_df = pd.DataFrame({
@@ -7234,6 +7294,14 @@ def test_get_lectin_array():
     group1 = ['sample1', 'sample2', 'sample3']
     group2 = ['sample4', 'sample5', 'sample6']
     results = get_lectin_array(df, group1, group2)
+    # each tier is a run of the sorted scores, and no other split into three runs has a smaller within-tier sum of squares
+    tiers = {'low significance': 0, 'moderately significant': 1, 'highly significant': 2}
+    ranked = results.sort_values('score')
+    v, t = ranked['score'].to_numpy(dtype = float), ranked['significance'].map(tiers).to_numpy()
+    assert (np.diff(t) >= 0).all()
+    ss = lambda part: ((part - part.mean()) ** 2).sum() if len(part) else 0.0
+    i, j = np.searchsorted(t, 1), np.searchsorted(t, 2)
+    assert all(ss(v[:i]) + ss(v[i:j]) + ss(v[j:]) <= ss(v[:a]) + ss(v[a:b]) + ss(v[b:]) + 1e-9 for a in range(1, len(v)) for b in range(a + 1, len(v)))
     assert isinstance(results, pd.DataFrame)
     assert 'score' in results.columns
     results = get_lectin_array(df, [1, 2, 3], [4, 5, 6])

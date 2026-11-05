@@ -27,7 +27,6 @@ classifiers = [
 requires-python = ">=3.11"
 dependencies = [
     "numpy",
-    "scikit-learn",
     "networkx>=3.4",
     "scipy>=1.16",
     "pandas>=2.2.2",
@@ -44,7 +43,7 @@ Changelog = "https://github.com/BojarLab/glycowork/blob/master/CHANGELOG.md"
 Issues = "https://github.com/BojarLab/glycowork/issues"
 
 [project.optional-dependencies]
-ml = ["torch_geometric", "torch", "xgboost", "huggingface_hub>=0.16.0"]
+ml = ["torch_geometric", "torch", "xgboost", "huggingface_hub>=0.16.0", "scikit-learn"]
 chem = ["rdkit>=2021.9.2", "py3Dmol"]
 all = ["glycowork[ml,chem]"]
 dev = ["glycowork[all]", "nbdev", "pytest"]

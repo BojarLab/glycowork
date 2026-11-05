@@ -13,7 +13,7 @@ from scipy.special import fdtrc, stdtr
 
 from glycowork.glycan_data import loader
 from glycowork.glycan_data.loader import strip_suffixes, download_model, GlycoDataFrame, nx
-from glycowork.glycan_data.stats import (cohen_d, _ttest_pvalue, _studentized_range_sf, _studentized_range_isf, _welch_anova, _average_ranks, _spearman_pvals, mahalanobis_distance, mahalanobis_variance,
+from glycowork.glycan_data.stats import (LogisticModel, _logistic_fit, _roc_curve, _roc_auc, _pca, cohen_d, _ttest_pvalue, _studentized_range_sf, _studentized_range_isf, _welch_anova, _average_ranks, _spearman_pvals, mahalanobis_distance, mahalanobis_variance,
                                          impute_and_normalize, JTKTest,
                                          impute_biosynthetic, get_alphaN, TST_grouped_benjamini_hochberg,
                                          compare_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
@@ -678,7 +678,10 @@ def plot_embeddings(
         **kwargs: Any  # Keyword args passed to viscose's scatter: s, size, sizes, marker, edge
 ) -> None:
     "Visualizes learned glycan embeddings using t-SNE dimensionality reduction with optional group coloring"
-    from sklearn.manifold import TSNE
+    try:
+        from sklearn.manifold import TSNE
+    except ImportError as e:
+        raise ImportError("plot_embeddings needs scikit-learn for its t-SNE: pip install scikit-learn") from e
     check_kwargs(kwargs, 'plot_embeddings', ('s', 'size', 'sizes', 'marker', 'edge'))
     idx = [i for i, g in enumerate(glycans) if '{' not in g]
     glycans = [glycans[i] for i in idx]
@@ -832,8 +835,6 @@ def get_pca(
         title: str | None = None  # Plot title; None for none, as before
 ) -> None:
     "Performs PCA on glycan/motif abundance data with group-based visualization"
-    from sklearn.decomposition import PCA
-    from sklearn.preprocessing import StandardScaler
     df = df.fillna(0)
     if groups is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         groups = list(df.groups)
@@ -859,11 +860,9 @@ def get_pca(
             raw = alr.select_dtypes(include = 'number').set_axis(alr.iloc[:, 0].values)
         df = raw.reset_index()
     X = np.array(df.iloc[:, 1:len(groups) + 1].T) if isinstance(groups, list) and groups else np.array(df.iloc[:, 1:].T)
-    scaler = StandardScaler()
-    X_std = scaler.fit_transform(X)
-    pca = PCA()
-    X_pca = pca.fit_transform(X_std)
-    percent_var = np.round(pca.explained_variance_ratio_ * 100)
+    spread = X.std(axis = 0)
+    X_pca, shares = _pca((X - X.mean(axis = 0)) / np.where(spread > 1e-12 * np.maximum(np.abs(X).max(axis = 0), 1), spread, 1))
+    percent_var = np.round(shares * 100)
     percent_var_labels = [f'PC{x}' for x in range(1, len(percent_var) + 1)]
     df_pca = pd.DataFrame(X_pca)
     # merge with metadata
@@ -2216,45 +2215,57 @@ def multi_feature_scoring(
         group1: list[str | int],  # First group indices/names
         group2: list[str | int],  # Second group indices/names
         filepath: str = '',  # Path to save ROC plot
-        random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
+        random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility; None means seed 0
         dag: nx.DiGraph | None = None,  # Motif containment DAG; collapses collinear parent/child motifs before selection
         title: str | None = None  # Plot title; None keeps the default, '' removes it
-) -> tuple['LogisticRegression', float, list[str]]:  # (L1-regularized logistic regression model, ROC AUC score, selected features)
-    "Identifies minimal glycan feature set for group classification using L1-regularized logistic regression"
-    from sklearn.feature_selection import SelectFromModel
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.metrics import roc_auc_score, roc_curve
-    from sklearn import __version__ as _sklearn_version
-    # sklearn 1.8 deprecated LogisticRegression's 'penalty' in favor of 'l1_ratio'; pick the right kwarg once
-    _LR_L1 = {'l1_ratio': 1} if tuple(map(int, _sklearn_version.split('.')[:2])) >= (1, 8) else {'penalty': 'l1'}
-    _LR_L2 = {'l1_ratio': 0} if 'l1_ratio' in _LR_L1 else {'penalty': 'l2'}
+) -> tuple[LogisticModel, float, list[str]]:  # (logistic model of the selected features on all samples, ROC AUC of held-out samples, selected features)
+    "Identifies minimal glycan feature set for group classification using L1-regularized logistic regression; the AUC and ROC curve come from samples held out of the feature selection and the fit, in five repeats of stratified 5-fold cross-validation (fewer folds when a group has fewer samples)"
     if group2:
-        y = [0] * len(group1) + [1] * len(group2)
+        y = np.array([0] * len(group1) + [1] * len(group2))
     else:
-        y = group1
-    X = df.T
+        classes, y = np.unique(group1, return_inverse = True)
+        if len(classes) != 2:
+            raise ValueError(f"multi_score compares two groups, but {len(classes)} were given.")
+    X = df.T.dropna(axis = 1)
     if dag is not None:
         # A parent motif and a child it always travels with are one signal; L1 would break that tie arbitrarily, so the more specific form is kept
         redundant = {p for p, c in dag.edges() if p in X.columns and c in X.columns
                      and abs(np.corrcoef(X[p].values, X[c].values)[0, 1]) > 0.99}
         X = X.drop(columns = list(redundant))
-    for C in (1, 10, 100, 1000):  # on few samples the default penalty can zero every coefficient, which left nothing to fit below; it is relaxed until a feature survives
-        model = SelectFromModel(LogisticRegression(**_LR_L1, C = C, solver = 'liblinear', random_state = random_state).fit(X.values, y), prefit = True)
-        if model.get_support().any():
-            break
-    selected_features = X.columns[model.get_support()].tolist()
-    if dag is not None:
-        # A parent is present wherever a selected child is, so keeping both puts one signal in the model twice
-        picked = set(selected_features)
-        selected_features = [m for m in selected_features if not (m in dag and nx.descendants(dag, m) & picked)]
-    X_selected = X[selected_features].values
-    model = LogisticRegression(**_LR_L2, solver = 'liblinear', random_state = random_state)
-    model.fit(X_selected, y)
-    # Evaluate ROC AUC on the selected features
-    y_scores = model.predict_proba(X_selected)[:, 1]
-    roc_auc = roc_auc_score(y, y_scores)
+    columns, values = X.columns.tolist(), X.to_numpy(dtype = float)
+
+    def select_and_fit(rows):
+        for C in (1, 10, 100, 1000):  # on few samples the default penalty can zero every coefficient, which left nothing to fit below; it is relaxed until a feature survives
+            kept = np.flatnonzero(np.abs(_logistic_fit(values[rows], y[rows], C = C, l1 = True)[0]) > 1e-5)
+            if len(kept):
+                break
+        if dag is not None:
+            # A parent is present wherever a selected child is, so keeping both puts one signal in the model twice
+            picked = {columns[i] for i in kept}
+            kept = np.array([i for i in kept if not (columns[i] in dag and nx.descendants(dag, columns[i]) & picked)], dtype = int)
+        return kept, *_logistic_fit(values[rows][:, kept], y[rows])
+
+    kept, coef, intercept = select_and_fit(np.ones(len(y), bool))
+    model, selected_features = LogisticModel(coef, intercept), [columns[i] for i in kept]
+    folds = min(5, np.bincount(y).min())
+    if folds < 2:
+        warnings.warn("A group of one sample leaves nothing to hold out, so there is no ROC AUC to report.")
+        return model, np.nan, selected_features
+    rng, labels, scores = np.random.default_rng(0 if random_state is None else random_state), [], []
+    for _ in range(5):
+        fold = np.empty(len(y), dtype = int)
+        for c in (0, 1):
+            members = rng.permutation(np.flatnonzero(y == c))
+            fold[members] = rng.permutation(np.arange(len(members)) % folds)
+        held_out = np.empty(len(y))
+        for f in range(folds):
+            kept, coef, intercept = select_and_fit(fold != f)
+            held_out[fold == f] = values[fold == f][:, kept] @ coef + intercept
+        labels.append(y)
+        scores.append(held_out)
+    roc_auc = float(np.mean([_roc_auc(a, b) for a, b in zip(labels, scores)]))
     # Plot ROC curve
-    fpr, tpr, _ = roc_curve(y, y_scores)
+    fpr, tpr = _roc_curve(np.concatenate(labels), np.concatenate(scores))
     finish(_plot_roc(fpr, tpr, roc_auc, 'ROC Curve with Optimal Features' if title is None else title), filepath = filepath)
     return model, roc_auc, selected_features
 
@@ -2276,13 +2287,8 @@ def get_roc(
         multi_score: bool = False,  # Find best multi-glycan score
         random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
         title: str | None = None  # Plot title; None keeps the default, '' removes it
-) -> list[tuple[str, float]] | dict[Any, tuple[str, float]] | tuple['LogisticRegression', float, list[str]]:  # (feature, ROC AUC) pairs sorted by AUC; with more than two groups, class: (best feature, AUC); with multi_score, (model, ROC AUC, selected features)
+) -> list[tuple[str, float]] | dict[Any, tuple[str, float]] | tuple[LogisticModel, float, list[str]]:  # (feature, ROC AUC) pairs sorted by AUC; with more than two groups, class: (best feature, AUC); with multi_score, (model, ROC AUC of held-out samples, selected features)
     "Calculates ROC curves and AUC scores for glycans/motifs or multi-glycan classifiers"
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.metrics import auc, roc_auc_score, roc_curve
-    from sklearn.model_selection import train_test_split
-    from sklearn.multiclass import OneVsRestClassifier
-    from sklearn.preprocessing import label_binarize
     if isinstance(df, (str, Path)):
         df = read_abundances(df)
     if group1 is None and isinstance(df, GlycoDataFrame) and df._contrasts:
@@ -2298,43 +2304,37 @@ def get_roc(
                                      dag = df_org.attrs.get('motif_dag'))
     auc_scores = {}
     if group2:  # binary comparison
-        for feature, values in df.iterrows():
-            values_group1 = values[group1]
-            values_group2 = values[group2]
-            y_true = [0] * len(values_group1) + [1] * len(values_group2)
-            y_scores = np.concatenate([values_group1, values_group2])
-            auc_scores[feature] = roc_auc_score(y_true, y_scores)
+        for feature, a, b in zip(df.index, df[group1].to_numpy(dtype = float), df[group2].to_numpy(dtype = float)):
+            a, b = a[np.isfinite(a)], b[np.isfinite(b)]
+            if len(a) and len(b):
+                auc_scores[feature] = _roc_auc(np.r_[np.zeros(len(a)), np.ones(len(b))], np.r_[a, b])
         sorted_auc_scores = sorted(auc_scores.items(), key = lambda item: abs(item[1] - 0.5), reverse = True)  # an AUC near 0 separates the groups as well as one near 1, by a glycan that falls in group2
         best, res = sorted_auc_scores[0]
-        values = df.loc[best, :]
-        values_group1 = values[group1]
-        values_group2 = values[group2]
-        y_true = [0] * len(values_group1) + [1] * len(values_group2)
-        y_scores = np.concatenate([values_group1, values_group2])
-        fpr, tpr, _ = roc_curve(y_true, y_scores)
+        a, b = df.loc[best, group1].to_numpy(dtype = float), df.loc[best, group2].to_numpy(dtype = float)
+        a, b = a[np.isfinite(a)], b[np.isfinite(b)]
+        fpr, tpr = _roc_curve(np.r_[np.zeros(len(a)), np.ones(len(b))], np.r_[a, b])
         finish(_plot_roc(fpr, tpr, res, f'ROC Curve for {best}' if title is None else title), filepath = filepath)
     else:  # multi-group comparison
         classes = list(dict.fromkeys(group1))  # first-appearance order; a set's order changes with PYTHONHASHSEED
         df = df.groupby(df.index).mean()
         df = df.T  # Ensure features are columns
         df['group'] = group1
-        y = label_binarize(df['group'], classes = classes)
+        y = np.array([[label == c for c in classes] for label in group1], dtype = float)
         n_classes = y.shape[1]
         sorted_auc_scores, best_fpr, best_tpr = {}, {}, {}
-        # sklearn takes a seed rather than a Generator, so one is drawn from it
+        # sklearn's train_test_split drew from this generator, so a seed keeps its splits
         seed = 42 if random_state is None else random_state if isinstance(random_state, (int, np.integer)) else int(
             np.random.default_rng(random_state).integers(2 ** 32))
+        order, n_test = np.random.RandomState(seed).permutation(len(y)), int(np.ceil(0.3 * len(y)))
+        test, train = order[:n_test], order[n_test:]
         for feature in df.columns[:-1]:  # exclude the 'group' label column
-            X = df[feature].values.reshape(-1, 1)  # Feature matrix needs to be column-wise
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.3, random_state = seed)
-            classifier = OneVsRestClassifier(LogisticRegression(solver = 'lbfgs'))
-            classifier.fit(X_train, y_train)
+            x = df[feature].to_numpy(dtype = float)
             for i in range(n_classes):
-                if len(np.unique(y_test[:, i])) < 2:  # Check if the test set is not degenerate
+                if len(np.unique(y[test, i])) < 2:  # Check if the test set is not degenerate
                     continue
-                y_score = classifier.predict_proba(X_test)[:, i]
-                fpr, tpr, _ = roc_curve(y_test[:, i], y_score)
-                roc_auc = auc(fpr, tpr)
+                # A logistic fit on one feature orders samples by the sign of its slope, and that sign is the sign of the feature's covariance with the class
+                y_score = np.sign((x[train] - x[train].mean()) @ (y[train, i] - y[train, i].mean())) * x[test]
+                fpr, tpr, roc_auc = *_roc_curve(y[test, i], y_score), _roc_auc(y[test, i], y_score)
                 # Store the best feature for each class based on AUC
                 if classes[i] not in sorted_auc_scores or roc_auc > sorted_auc_scores[classes[i]][1]:
                     sorted_auc_scores[classes[i]] = (feature, roc_auc)
@@ -2356,7 +2356,6 @@ def get_lectin_array(
         transform: str = ''  # Optional log2 transformation
 ) -> pd.DataFrame:  # DataFrame with altered glycan motifs, supporting lectins, and effect sizes
     "Analyzes lectin microarray data by mapping lectin binding patterns to glycan motifs, calculating Cohen's d effect sizes between groups and clustering results by significance"
-    from sklearn.cluster import KMeans
     if isinstance(df, (str, Path)):
         df = read_abundances(df)
     in_name, in_prov, contrasts = getattr(df, '_glyco_name', ''), getattr(df, '_provenance', {}), getattr(df,
@@ -2420,15 +2419,20 @@ def get_lectin_array(
     useable_lectin_mapping, motif_mapping = create_lectin_and_motif_mappings([lec for lec in lectin_list if lec not in untestable], lectin_lib)
     df_out = lectin_motif_scoring(useable_lectin_mapping, motif_mapping, lectin_score_dict, lectin_lib, idf)
     df_out = df_out.sort_values(by = "score", ascending = False)
-    scores = df_out['score'].values.reshape(-1, 1)
-    kmeans = KMeans(n_clusters = 3, random_state = 0, n_init = 'auto').fit(scores)
-    df_out['significance'] = kmeans.labels_
-    centroids = kmeans.cluster_centers_.flatten()
-    sorted_centroid_indices = centroids.argsort()
-    significance_mapping = {sorted_centroid_indices[0]: 'low significance',
-                            sorted_centroid_indices[1]: 'moderately significant',
-                            sorted_centroid_indices[2]: 'highly significant'}
-    df_out['significance'] = df_out['significance'].apply(lambda x: significance_mapping[x])
+    # Three tiers by exact k-means on one dimension: the best partition of the sorted distinct scores into runs, from running sums; fewer distinct scores than tiers take the lowest ones, as tiers need the spread to tell them apart
+    distinct, inverse, counts = np.unique(df_out['score'].to_numpy(dtype = float), return_inverse = True, return_counts = True)
+    tiers = np.arange(len(distinct)) if len(distinct) < 3 else np.zeros(len(distinct), dtype = int)
+    if len(distinct) >= 3:
+        n, s1, s2 = (np.concatenate([[0], np.cumsum(v)]) for v in (counts, counts * distinct, counts * distinct ** 2))
+        best, cuts = np.concatenate([[np.inf], s2[1:] - s1[1:] ** 2 / n[1:]]), []
+        for _ in range(2):
+            within = [best[:j] + s2[j] - s2[:j] - (s1[j] - s1[:j]) ** 2 / (n[j] - n[:j]) for j in range(1, len(n))]
+            cuts.append([0] + [int(np.argmin(c)) for c in within])
+            best = np.concatenate([[np.inf], [c.min() for c in within]])
+        second = cuts[1][len(distinct)]
+        first = cuts[0][second]
+        tiers[first:second], tiers[second:] = 1, 2
+    df_out['significance'] = np.array(['low significance', 'moderately significant', 'highly significant'], dtype = object)[tiers[inverse]]
     temp = annotate_dataset(df_out.iloc[:, 0], condense = True)
     occurring_motifs = [temp.columns[temp.iloc[idx].astype(bool)].tolist() for idx in range(len(temp))]
     df_out.insert(1, "named_motifs", occurring_motifs)
