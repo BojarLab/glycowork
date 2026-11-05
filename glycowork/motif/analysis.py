@@ -9,7 +9,7 @@ import numpy as np
 from collections import Counter
 from math import comb
 from typing import Any, Callable
-from scipy.special import fdtrc, stdtr
+from scipy.special import fdtrc, ncfdtr, stdtr
 
 from glycowork.glycan_data import loader
 from glycowork.glycan_data.loader import strip_suffixes, download_model, GlycoDataFrame, nx
@@ -209,6 +209,13 @@ def preprocess_data(
                                     [] if paired else group2,
                                     gamma = 0, custom_scale = 0 if paired else custom_scale,
                                     random_state = random_state, reference = reference)
+            if motif_dag:
+                # Motifs that contain one another are measured on the same glycans, so a mean over all motifs counts such a cluster as often as it has members. Each motif enters the
+                # per-sample reference at 1 / sqrt(1 + its parents and children) instead, and a tenth of the median pulls the reference toward the bulk; motifs on their detection test stay out
+                dag, ok = df_org.attrs['motif_dag'], ~absent if absent.any() else np.ones(len(df), bool)
+                w = np.array([1 / np.sqrt(1 + dag.in_degree(m) + dag.out_degree(m)) if m in dag else 1.0 for m in df.index]) * ok
+                df = df - w @ df.to_numpy() / w.sum()
+                df = df - 0.1 * np.median(df.to_numpy()[ok], axis = 0)
         elif transform == "ALR":
             rows = len(df)
             df = get_additive_logratio_transformation(df.reset_index(), group1 if experiment == "diff" else df.columns.tolist(), group2, paired = paired, gamma = 0,
@@ -1045,6 +1052,7 @@ def get_differential_expression(
         custom_scale: float | dict = 0,  # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
         moderate_variance: bool = True,  # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
         glycoproteomics: bool | None = None,  # Whether data is from glycoproteomics (rows protein_site_glycan); default: whenever every row label is protein_site_glycan
+        min_change: float = 0.03,  # log2 change a motif's test is held against (TREAT, McCarthy and Smyth 2009) when the two largest groups have 6 samples or more; 0 tests against no change
         level: str = 'peptide',  # Analysis level for glycoproteomics
         monte_carlo: bool = False,  # Use Monte Carlo for technical variation
         random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
@@ -1162,7 +1170,8 @@ def get_differential_expression(
                 s2 = s2 + (2 if paired else 1) * scale_var
                 se = np.sqrt(s2 / nd) if paired else np.sqrt(s2 * factor)
                 delta = np.nanmean(D, axis = 1) if paired else (np.nanmean(B, axis = 1) - np.nanmean(A, axis = 1))
-                pvals = list(2 * stdtr(dfp, -np.abs(delta / se)))
+                pvals = list(stdtr(dfp, -(np.abs(delta) - min_change) / se) + stdtr(dfp, -(np.abs(delta) + min_change) / se) if motifs and not glycoproteomics and min_change and min(len(group1), len(group2)) >= 6
+                             else 2 * stdtr(dfp, -np.abs(delta / se)))
             else:
                 with np.errstate(divide = 'ignore', invalid = 'ignore'):
                     if paired:
@@ -1439,6 +1448,7 @@ def get_glycanova(
         custom_scale: float | dict = 0,  # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
         moderate_variance: bool = True,  # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
         glycoproteomics: bool | None = None,  # Whether rows are glycoforms from glycoproteomics instead of glycans; default: whenever every row label is protein_site_glycan
+        min_change: float = 0.03,  # log2 change a motif's test is held against (TREAT, McCarthy and Smyth 2009) when the two largest groups have 6 samples or more; 0 tests against no change
         random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
         top_explained: int | None = 5,  # How many child motifs to name in 'Explained by'; None names all of them
         covariates: pd.DataFrame | pd.Series | dict | None = None  # per-sample nuisance variables indexed by sample name (e.g., secretor status, sex, age, batch); the groups are tested by ANCOVA, post-hoc tests on covariate-adjusted values
@@ -1491,7 +1501,10 @@ def get_glycanova(
         s2, dfp = moderated_variance(ssw / dfr, df_resid = dfr,
                                      neighbors = dag_neighbors(df.index.tolist(), df_org.attrs.get('motif_dag'))) if moderate_variance and len(X) > 1 else (ssw / dfr, dfr)
         f_values = (ssb / (len(ug) - 1)) / (s2 + scale_var)
-        p_values = fdtrc(len(ug) - 1, dfp, f_values)
+        sizes = sorted(int((garr == g).sum()) for g in ug)
+        # TREAT for several groups: the two smallest groups min_change apart and the rest midway, which for two groups is the two-sided test
+        p_values = (1 - ncfdtr(len(ug) - 1, dfp, (sizes[0] + sizes[1]) * (min_change / 2) ** 2 / (s2 + scale_var), f_values) if motifs and not glycoproteomics and min_change and sizes[-2] >= 6
+                    else fdtrc(len(ug) - 1, dfp, f_values))
     else:  # computed only here, since the moderated F replaces it
         f_values, p_values = _welch_anova([X[:, garr == g] for g in np.unique(garr)], scale_var = scale_var)
     absent = np.isin(df.index, absent_rows.index) if absent_rows is not None else np.zeros(len(df), bool)

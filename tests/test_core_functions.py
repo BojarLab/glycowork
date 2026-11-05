@@ -6730,6 +6730,27 @@ def test_redistribution_hybrid():
     assert adjusted['Redistribution p-val'].notna().any()
 
 
+def test_motif_frame_and_min_change():
+    from glycowork.motif.analysis import preprocess_data
+    df = glycomics_data_loader.human_ovarian_O_PMC4468167
+    g1, g2 = list(df.group1), list(df.group2)
+    tf, org = preprocess_data(df, g1, g2, motifs = True, feature_set = ['exhaustive', 'known'])[:2]
+    # the reference counts a motif at 1 / sqrt(1 + its relatives), then moves a tenth of the way to the median: its weighted mean is -1/9 of the new median
+    dag, ok = org.attrs['motif_dag'], ~tf.index.isin(org.attrs['absent'].index if 'absent' in org.attrs else [])
+    w = np.array([1 / np.sqrt(1 + dag.in_degree(m) + dag.out_degree(m)) for m in tf.index]) * ok
+    assert np.allclose(w @ tf.to_numpy() / w.sum(), -np.median(tf.to_numpy()[ok], axis = 0) / 9)
+    # with 6 or more per group a motif is tested against a change of min_change, which only raises p-values; under 6 per group, and on glycans, nothing changes
+    held, plain = [get_differential_expression(df, group1 = g1, group2 = g2, motifs = True, feature_set = ['exhaustive', 'known'], min_change = m).set_index('Glycan')['p-val'] for m in (0.03, 0)]
+    assert len(g1) >= 6 and len(g2) >= 6 and (held >= plain - 1e-12).all() and (held > plain).any()
+    small = [get_differential_expression(df, group1 = g1[:5], group2 = g2[:5], motifs = True, feature_set = ['exhaustive', 'known'], min_change = m)['p-val'].to_numpy() for m in (0.03, 0)]
+    assert np.allclose(small[0], small[1], equal_nan = True)
+    df = glycomics_data_loader.human_prostate_O_PMC8010466
+    cols = [c for g in df.groups.mapping.values() for c in g]
+    lab = [k for k, g in df.groups.mapping.items() for _ in g]
+    held, plain = [get_glycanova(df[[df.columns[0]] + cols], groups = lab, motifs = True, posthoc = False, feature_set = ['exhaustive', 'known'], min_change = m)[0].set_index('Glycan')['p-val'] for m in (0.03, 0)]
+    assert (held >= plain - 1e-12).all() and (held > plain).any()
+
+
 def test_power_defaults():
     from scipy.stats import ttest_ind, ttest_rel
     from glycowork.glycan_data.stats import moderated_variance, _ttest_pvalue

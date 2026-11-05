@@ -5,7 +5,7 @@
 - `**kwargs` of `get_heatmap`, `get_volcano`, and `plot_embeddings` go to `viscose`, and anything it does not know raises a `TypeError` listing what it takes; `plot_embeddings(palette = ...)` names a viscose palette; `get_heatmap(return_plot = True)` returns a `viscose` figure first (73bca70)
 - Glycan graphs now run on a lightweight graph class of their own: `import glycowork` and drawing a glycan no longer load networkx (import plus first `GlycoDraw` 0.37 to 0.19 s, 43 to 33 MB), the graph cache takes 89% less memory (382 to 41 MB for 30,000 glycans), building glycan graphs is 3.2x faster, `compare_glycans` 2.5-2.8x, `subgraph_isomorphism` 1.6-1.9x, `graph_to_string` on strings 1.7x, and `annotate_dataset` 1.6-1.7x. `glycan_to_nxGraph`, `ensure_graph`, and `get_possible_topologies(return_graphs = True)` still return networkx graphs, and every function still takes them (ad36d33)
 - Statistics now run on `scipy.special` alone: `glycowork.motif.analysis` imports 35-40% faster and with 24 MB less, imputation fits its censoring model with an analytic gradient (`get_differential_expression` 2.5x faster, and a better optimum on sparse tables), `get_SparCC` with `partial_correlations = True` is 12x faster and counts the controls in its degrees of freedom, `get_SparCC` p-values are exact up to 9 samples and calibrated into the tails beyond, detection tests of absent features are exact at any number of groups, and glycosite p-values use the Cauchy combination, which holds whatever the dependence between a site's glycoforms (54728d1)
-- scikit-learn is no longer a core dependency (`glycowork[ml]`, `plot_embeddings`, and `MissForest` still use it) ()
+- scikit-learn is no longer a core dependency (`glycowork[ml]`, `plot_embeddings`, and `MissForest` still use it) (790a9b8)
 
 ### motif
 #### graph
@@ -47,6 +47,8 @@
 #### analysis
 ##### Added ✨
 - `get_differential_expression`, `get_glycanova`, and `get_pvals_motifs` now also report `Own share`, `Shared share`, and `Share shift` for parent motifs (bfa9757)
+- Motif tables now center each sample on a reference that counts a motif at 1 / sqrt(1 + its parents and children), moved a tenth of the way to the median ()
+- With 6 or more samples in the two largest groups a motif is tested against a change of `min_change` (0.03 log2, TREAT) in `get_differential_expression` and `get_glycanova` ()
 
 ##### Changed 🔄
 - Residuals and redistributions come from an exact partition of each parent, so overlapping children no longer overshoot it; glycoform containment uses the cumulative abundance at or above a composition (bfa9757)
