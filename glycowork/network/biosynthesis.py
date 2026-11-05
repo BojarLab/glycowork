@@ -1132,6 +1132,23 @@ def get_edge_weight_by_abundance(network_in: nx.DiGraph, # Biosynthetic network
     return network
 
 
+def _maximum_flow(network: nx.DiGraph, # network with a capacity on its edges
+                  source: str, # source node
+                  sink: str # sink node
+                  ) -> tuple[float, dict[str, dict[str, float]]]: # (flow value, flow per edge)
+    "A maximum flow that stays the same between interpreters, which string node names in the solver's sets do not allow"
+    nodes = sorted(network.nodes(), key = str)
+    ids = {n: i for i, n in enumerate(nodes)}
+    labeled = nx.DiGraph()
+    labeled.add_nodes_from(range(len(nodes)))
+    labeled.add_edges_from(sorted(((ids[u], ids[v], d) for u, v, d in network.edges(data = True)), key = lambda e: e[:2]))
+    try:
+        flow_value, flow_dict = nx.maximum_flow(labeled, ids[source], ids[sink])
+    except Exception:
+        flow_value, flow_dict = nx.maximum_flow(labeled, ids[source], ids[sink], flow_func = nx.algorithms.flow.edmonds_karp)
+    return flow_value, {nodes[u]: {nodes[v]: x for v, x in out.items()} for u, out in flow_dict.items()}
+
+
 def get_maximum_flow(network: nx.DiGraph, # Biosynthetic network
                      source: str | None = None,  # Source node; default: inferred from the network's glycan class
                      sinks: str | list[str] | None = None  # Target node(s); default:all terminal nodes
@@ -1152,11 +1169,7 @@ def get_maximum_flow(network: nx.DiGraph, # Biosynthetic network
         try:
             if sink not in path_lengths:
                 raise nx.NetworkXNoPath(f"No path between {source} and {sink}.")
-            try:
-                flow_value, flow_dict = nx.maximum_flow(network, source, sink)
-            except Exception:
-                flow_value, flow_dict = nx.maximum_flow(network, source, sink,
-                                                        flow_func = nx.algorithms.flow.edmonds_karp)
+            flow_value, flow_dict = _maximum_flow(network, source, sink)
             flow_results[sink] = {
                 'flow_value': flow_value,
                 'flow_dict': flow_dict
@@ -1290,11 +1303,7 @@ def get_differential_biosynthesis(df: pd.DataFrame | str | Path, # Glycan abunda
         for col, net in nets.items():
             aug = net.copy()
             aug.add_edges_from([(t, '__sink__') for t, d in net.out_degree() if d == 0])
-            try:
-                flow_value, flow_dict = nx.maximum_flow(aug, root, '__sink__')
-            except Exception:
-                flow_value, flow_dict = nx.maximum_flow(aug, root, '__sink__',
-                                                        flow_func = nx.algorithms.flow.edmonds_karp)
+            flow_value, flow_dict = _maximum_flow(aug, root, '__sink__')
             res[col] = {'__sink__': {'flow_value': flow_value, 'flow_dict': flow_dict}}
     # Perform reaction or flow analysis
     shadow_set = set()

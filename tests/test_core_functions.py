@@ -3893,6 +3893,28 @@ def test_hsic():
     assert hsic(x, x**2 + rng.normal(size=200, scale=0.1))[1] < 0.05  # nonlinear dependence: significant
 
 
+def test_no_fresh_draws(sample_time_series_data, sample_jtk_df, sample_glycoshift_df):
+    from scipy.stats import linregress
+    from glycowork.motif.analysis import get_glycan_change_over_time
+    df1, df2 = sample_comp_glycomics_data(), sample_comp_glycomics_data_corr()
+    group1, group2 = ['sample1', 'sample2'], ['sample3', 'sample4']
+    # the same call twice gives the same result, whatever the shared generator did in between
+    for run in [lambda: get_time_series(sample_time_series_data, impute = False), lambda: get_time_series(sample_time_series_data, impute = False, motifs = True),
+                lambda: get_jtk(sample_jtk_df, timepoints = 8, interval = 3), lambda: get_cosinor(sample_jtk_df, timepoints = 8, interval = 3),
+                lambda: get_SparCC(df1, df2)[0], lambda: get_glycoshift_per_site(sample_glycoshift_df, group1, group2)]:
+        pd.testing.assert_frame_equal(run(), run())
+    # scale uncertainty only widens a test, and without it the tests are the plain ones
+    x = np.column_stack([np.arange(8.0), 0.1 * np.arange(8.0) + np.array([0.1, -0.2, 0.05, 0.1, -0.1, 0.2, -0.05, -0.1])])
+    assert get_glycan_change_over_time(x)[1] == linregress(x[:, 0], x[:, 1]).pvalue
+    assert get_glycan_change_over_time(x)[1] < get_glycan_change_over_time(x, scale_var = 0.07 ** 2)[1]
+    assert get_glycan_change_over_time(x, degree = 2)[1] < get_glycan_change_over_time(x, degree = 2, scale_var = 0.07 ** 2)[1]
+    t = np.repeat(np.arange(0, 24, 3.0), 3)
+    y = np.cos(2 * np.pi * t / 24) + np.random.default_rng(0).normal(scale = 0.2, size = len(t))
+    assert cosinor_fit(y, t)['p_value'] < cosinor_fit(y, t, scale_var = 0.07 ** 2)['p_value']
+    y = np.cos(2 * np.pi * np.arange(0, 24, 3.0) / 24) + np.random.default_rng(0).normal(scale = 0.2, size = 8)
+    assert cosinor_fit(y, np.arange(0, 24, 3.0))['p_value'] < cosinor_fit(y, np.arange(0, 24, 3.0), scale_var = 0.07 ** 2)['p_value']
+
+
 def test_cosinor_fit():
     t = np.repeat(np.arange(0, 48, 6.0), 3)
     rng = np.random.default_rng(0)
@@ -6550,6 +6572,88 @@ def test_absent_in_a_group_stays_out_of_the_reference():
     assert np.allclose(p, [0.1, 1.0]) and np.allclose(h, [-np.pi, 0])
     three = detection_test(np.array([[1, 1, 1, 0, 0, 0, 0, 0, 0]], bool), [[0, 1, 2], [3, 4, 5], [6, 7, 8]], random_state = 1)[0]
     assert np.allclose(three, 3 / 84, atol = 0.003) and three == detection_test(np.array([[1, 1, 1, 0, 0, 0, 0, 0, 0]], bool), [[0, 1, 2], [3, 4, 5], [6, 7, 8]], random_state = 2)[0]
+
+
+def test_implied_by_containment():
+    import networkx as nx
+    from glycowork.glycan_data.stats import implied_by_containment, get_alphaN
+    motifs = ['root', 'mid', 'leaf', 'other', 'far']
+    dag = nx.DiGraph([('root', 'mid'), ('mid', 'leaf'), ('far', 'other')])
+    p = np.array([0.2, 0.3, 0.001, 0.002, 0.2])
+    up = np.array([[1.0], [1.0], [1.0], [1.0], [-1.0]])
+    one, two = np.array([False, False, True, False, False]), np.array([False, False, True, True, False])
+    # what a called motif contains is called with it: root is, mid is above open_p, and far changed the other way
+    assert implied_by_containment(p, two, motifs, dag, up).tolist() == [True, False, True, True, False]
+    # one call cannot start it, and without a graph nothing is implied
+    assert implied_by_containment(p, one, motifs, dag, up).tolist() == one.tolist()
+    assert implied_by_containment(p, two, motifs, nx.DiGraph(), up).tolist() == two.tolist()
+    # the correction's own corrected p-values stay, so an implied row is significant with a corrected p-value above alpha, for any number of groups
+    df = glycomics_data_loader.human_ovarian_O_PMC4468167
+    res = get_differential_expression(df, group1 = list(df.group1), group2 = list(df.group2), motifs = True, feature_set = ['exhaustive', 'known'])
+    hit = res['significant'] & (res['corr p-val'] >= get_alphaN(len(df.group1) + len(df.group2)))
+    assert hit.any() and (res.loc[hit, 'p-val'] <= 0.25).all() and 'Implied by' not in res
+    df = glycomics_data_loader.HIV_gagtransfection_N_PMID35112714
+    cols = [c for g in df.groups.mapping.values() for c in g]
+    res = get_glycanova(df[[df.columns[0]] + cols], groups = [k for k, g in df.groups.mapping.items() for _ in g], motifs = True, posthoc = False, feature_set = ['exhaustive', 'known'])[0]
+    hit = res['significant'] & (res['corr p-val'] >= get_alphaN(len(cols)))
+    assert hit.any() and (res.loc[hit, 'p-val'] <= 0.25).all()
+
+
+def test_redistribution_hybrid():
+    from scipy.stats import ttest_ind, ttest_rel, f
+    from glycowork.glycan_data.stats import context_terms, manova_wilks, _covariate_fit
+    from glycowork.motif.analysis import _decomposition_columns
+    rng = np.random.default_rng(0)
+    parts = np.exp(rng.normal(size = (4, 16)))
+    groups = np.array([0] * 8 + [1] * 8)
+    samples = [f's{i}' for i in range(16)]
+    bal = np.log2(parts[1:] / parts[0])
+    # on two groups MANOVA is Hotelling's T2, with covariates too, and balances that do not fit in the smallest group have no test
+    assert np.isclose(manova_wilks(bal, groups)[1], hotellings_t2(bal[:, groups == 0].T, bal[:, groups == 1].T)[1])
+    cov = pd.Series(rng.normal(size = 16), index = samples)
+    adj, _, dfe, _, cc, _ = _covariate_fit(bal, groups, cov, samples)
+    res = np.hstack([adj[:, groups == g] - adj[:, groups == g].mean(axis = 1, keepdims = True) for g in (0, 1)])
+    dlt = adj[:, groups == 1].mean(axis = 1) - adj[:, groups == 0].mean(axis = 1)
+    t2 = dlt @ np.linalg.pinv(cc[0] * ((res @ res.T) / dfe[0] + np.eye(3) * 1e-6)) @ dlt
+    assert np.isclose(manova_wilks(bal, groups, covariates = cov, samples = samples)[1], f.sf((dfe[0] - 2) / (3 * dfe[0]) * t2, 3, dfe[0] - 2))
+    assert np.isnan(manova_wilks(bal[:, [0, 1, 2, 8, 9, 10]], groups[[0, 1, 2, 8, 9, 10]])[1])
+    three = np.array([0] * 6 + [1] * 5 + [2] * 5)
+    assert 0 <= manova_wilks(bal, three)[1] <= 1
+    # one context per part, free of each sample's scale; two parts are one context, whose F is the t-test on their log-ratio; one part has none
+    terms = context_terms(parts, groups)
+    assert terms.shape == (4, 5) and np.allclose(terms[:, :4], context_terms(parts * rng.random(16), groups)[:, :4])
+    one = context_terms(parts[:2], groups)
+    assert len(one) == 1 and len(context_terms(parts[:1], groups)) == 0
+    lr = np.log2(parts[0] / parts[1])
+    assert np.isclose(f.sf(one[0, 0] / (one[0, 1] / one[0, 2]), one[0, 3], one[0, 2]), ttest_ind(lr[groups == 1], lr[groups == 0]).pvalue)
+    pair = context_terms(parts[:2], groups, paired = True)[0]
+    assert np.isclose(f.sf(pair[0] / (pair[1] / pair[2]), pair[3], pair[2]), ttest_rel(lr[groups == 1], lr[groups == 0]).pvalue)
+    # a context measured in too few samples keeps its weight without a test, and a rare part weighs little
+    gaps = parts.copy()
+    gaps[3, 1:8] = np.nan
+    assert np.isnan(context_terms(gaps, groups)[:, :4]).all(axis = 1).tolist() == [False, False, False, True] and np.isfinite(context_terms(gaps, groups)[:, 4]).all()
+    rare = parts.copy()
+    rare[3] *= 1e-3
+    assert context_terms(rare, groups)[3, 4] < 0.01 < context_terms(rare, groups)[0, 4]
+    # without context terms a parent keeps its test, with only contexts it takes their Simes, with both a strong test or context is not lost, and T2 resting on floored cells with no testable context does not carry a parent
+    base = ('', 1.0, 0.0)
+    shares = (0.0, 0.0, 0.0)
+    strong = np.array([[100.0, 1.0, 10.0, 1.0, 0.5], [0.0, 1.0, 10.0, 1.0, 0.5]])
+    blank = np.array([[np.nan, np.nan, np.nan, np.nan, 1.0]])
+    rows = {'a': (*base, 0.0001, *shares), 'b': (*base, np.nan, *shares, strong), 'c': (*base, 0.5, *shares, strong), 'd': (*base, np.nan, *shares), 'f': (*base, 0.0001, *shares, blank)}
+    calls = _decomposition_columns(rows, ['a', 'b', 'c', 'd', 'e', 'f'], 0.05)['Redistribution p-val']
+    assert 0 < calls[0] < 0.05 and 0 < calls[1] < 0.05 and 0 < calls[2] < 0.05 and np.isnan(calls[3]) and np.isnan(calls[4]) and calls[5] > 0.5
+    # through the entry points, the same call gives the same column, on every path
+    df = glycomics_data_loader.human_ovarian_O_PMC4468167
+    res = get_differential_expression(df, group1 = list(df.group1), group2 = list(df.group2), motifs = True, feature_set = ['exhaustive', 'known'])
+    assert res['Redistribution p-val'].notna().any() and res['Redistribution p-val'].dropna().between(0, 1).all()
+    df = glycomics_data_loader.HIV_gagtransfection_N_PMID35112714
+    cols = [c for g in df.groups.mapping.values() for c in g]
+    labels = [k for k, g in df.groups.mapping.items() for _ in g]
+    res = [get_glycanova(df[[df.columns[0]] + cols], groups = labels, motifs = True, posthoc = False, feature_set = ['exhaustive', 'known'], random_state = s)[0].set_index('Glycan')['Redistribution p-val'] for s in (0, 1)]
+    assert res[0].notna().any() and res[0].equals(res[1].loc[res[0].index])
+    adjusted = get_glycanova(df[[df.columns[0]] + cols], groups = labels, motifs = True, posthoc = False, feature_set = ['exhaustive', 'known'], covariates = pd.Series(rng.normal(size = len(cols)), index = cols))[0]
+    assert adjusted['Redistribution p-val'].notna().any()
 
 
 def test_power_defaults():

@@ -791,6 +791,31 @@ def hotellings_t2(group1: np.ndarray, # comparison group containing numerical da
     return F, p_value
 
 
+def manova_wilks(balances: np.ndarray, # log-ratios x samples, without NaN
+                 groups: np.ndarray | list, # group label of each sample, in column order
+                 covariates: pd.DataFrame | pd.Series | dict | None = None, # per-sample nuisance variables indexed by sample name, as in _covariate_fit
+                 samples: list | None = None # sample names in column order, needed with covariates
+                 ) -> tuple[float, float]: # (F statistic, p-value); NaN where the log-ratios do not fit in the smallest group or the residual df
+    "One-way MANOVA by Wilks' lambda with Rao's F, given covariates if any, which on two groups is Hotelling's T^2 test"
+    garr = np.asarray(groups)
+    levels = np.unique(garr)
+    p, h, dfe, within, whole = len(balances), len(levels) - 1, balances.shape[1] - len(levels), balances, balances
+    if p and h and covariates is not None:
+        # the groups given the covariates: the residuals of the covariates alone, against those of groups and covariates
+        within, _, dfs, _, _, _ = _covariate_fit(balances, garr, covariates, samples)
+        whole, dfe = _covariate_fit(balances, np.zeros(len(garr)), covariates, samples)[0], dfs[0]
+    if not h or not np.isfinite(dfe) or not 0 < p < min(dfe, *[(garr == g).sum() for g in levels]):
+        return np.nan, np.nan
+    res = np.hstack([within[:, garr == g] - within[:, garr == g].mean(axis = 1, keepdims = True) for g in levels])
+    tot = whole - whole.mean(axis = 1, keepdims = True)
+    ridge = np.eye(p) * 1e-6 * dfe  # the ridge of hotellings_t2, for nearly collinear balances
+    lam = np.exp(np.linalg.slogdet(res @ res.T + ridge)[1] - np.linalg.slogdet(tot @ tot.T + ridge)[1])
+    s = np.sqrt((p ** 2 * h ** 2 - 4) / (p ** 2 + h ** 2 - 5)) if p ** 2 + h ** 2 > 5 else 1.0
+    df1, df2 = p * h, s * (dfe - (p - h + 1) / 2) - (p * h - 2) / 2
+    F = (lam ** (-1 / s) - 1) * df2 / df1
+    return F, fdtrc(df1, df2, F)
+
+
 def sequence_richness(counts: np.ndarray # array of counts per feature
                       ) -> int: # number of non-zero features
     "counts number of features with non-zero abundance"
@@ -1119,6 +1144,31 @@ def correct_multiple_testing(pvals: list[float] | np.ndarray, # list of raw p-va
     return corrpvals, significance
 
 
+def implied_by_containment(pvals: np.ndarray, # p-values of the tested motifs
+                           significance: np.ndarray, # what the multiple-testing correction called
+                           motifs: list[str], # tested motifs, in the order of pvals
+                           dag, # containment DAG
+                           directions: np.ndarray, # motifs x contrasts, which way each motif changed: two motifs changed alike when the dot product of their rows is positive
+                           open_p: float = 0.25 # p-value up to which a motif can be called with a motif that contains it
+                           ) -> np.ndarray: # significance with the implied calls, whose corrected p-values stay above alpha
+    "A glycan carrying a motif carries everything contained in that motif, so a called motif's change is also a change among the carriers of what it contains. Such a motif is called with it if its total changed the same way and has p <= open_p. It takes two called motifs to start this, so that one false call cannot"
+    p, called, pos = np.nan_to_num(np.asarray(pvals, dtype = float), nan = 1.0), np.array(significance, dtype = bool), {m: i for i, m in enumerate(motifs)}
+    implied = called.copy()
+    if called.sum() < 2:
+        return implied
+    for s in np.flatnonzero(called):
+        seen, stack = set(), list(dag.predecessors(motifs[s])) if motifs[s] in dag else []
+        while stack:
+            x = stack.pop()
+            if x not in seen:
+                seen.add(x)
+                stack.extend(dag.predecessors(x))
+        for a in [pos[x] for x in seen if x in pos]:
+            if not called[a] and p[a] <= open_p and directions[a] @ directions[s] > 0:
+                implied[a] = True
+    return implied
+
+
 def moderated_variance(residual_var: np.ndarray, # per-feature within-group variance
                        df_resid: float | np.ndarray,  # residual degrees of freedom of the design; per-feature when missingness makes it vary
                        neighbors: list[list[int]] | None = None  # per-feature indices of containment neighbors, for a local prior
@@ -1159,6 +1209,44 @@ def dag_neighbors(index: list[str], # feature labels in the order they are teste
     pos = {g: i for i, g in enumerate(index)}
     return [sorted({pos[x] for x in list(dag.predecessors(g)) + list(dag.successors(g)) if x in pos}) if g in dag else []
             for g in index]
+
+
+def context_terms(parts: np.ndarray, # a parent's parts x samples, NaN where a part has no measurement
+                  groups: np.ndarray | list, # group label of each sample, in column order
+                  paired: bool = False, # whether the two groups are pairs, in the same order
+                  covariates: pd.DataFrame | pd.Series | dict | None = None, # per-sample nuisance variables indexed by sample name, as in _covariate_fit
+                  samples: list | None = None # sample names in column order, needed with covariates
+                  ) -> np.ndarray: # one row per context: group mean square, residual sum of squares, residual df, group df, weight
+    "The terms of an F test per context of a parent, each part against the rest of the parent. A sample's closure and scale cancel in log2(part / rest), so these tests need no reference frame and no scale uncertainty; two parts are one context. The weight is the part's label-blind share of the parent, or the rest's if smaller, so a rare part counts for little. A context without two measured samples in two groups keeps its weight, with NaN terms"
+    m = np.nan_to_num(parts)
+    if len(m) < 2:
+        return np.zeros((0, 5))
+    total, m = m.sum(axis = 0), m if len(m) > 2 else m[:1]
+    rest = total - m
+    L = np.log2(np.where(m > 1e-6, m, np.nan)) - np.log2(np.where(rest > 1e-6, rest, np.nan))
+    out = np.full((len(L), 5), np.nan)
+    out[:, 4] = np.maximum(np.minimum(m.mean(axis = 1), rest.mean(axis = 1)) / total.mean(), 1e-3)
+    if paired:
+        D = L[:, L.shape[1] // 2:] - L[:, :L.shape[1] // 2]
+        keep = np.isfinite(D).sum(axis = 1) >= 2
+        D, n = D[keep], np.isfinite(D[keep]).sum(axis = 1)
+        out[keep, :4] = np.column_stack([n * np.nanmean(D, axis = 1) ** 2, np.nanvar(D, axis = 1, ddof = 1) * (n - 1), n - 1, np.ones(len(n))])
+        return out
+    garr = np.asarray(groups)
+    levels = np.unique(garr)
+    ng = np.stack([np.isfinite(L[:, garr == g]).sum(axis = 1) for g in levels], axis = 1)
+    keep = (ng >= 2).sum(axis = 1) >= 2
+    L, ng = L[keep], ng[keep]
+    means = np.stack([np.nansum(L[:, garr == g], axis = 1) for g in levels], axis = 1) / np.maximum(ng, 1)
+    grand = (means * ng).sum(axis = 1, keepdims = True) / ng.sum(axis = 1, keepdims = True)
+    ssb, k = (ng * (means - grand) ** 2).sum(axis = 1), (ng > 0).sum(axis = 1)
+    ssw, dfr = sum(np.nansum((L[:, garr == g] - means[:, [i]]) ** 2, axis = 1) for i, g in enumerate(levels)), ng.sum(axis = 1) - k
+    if covariates is not None:  # the groups given the covariates, as the marginal values; a context the model cannot fit keeps the one-way terms
+        _, ssr, dfc, ssbc, _, _ = _covariate_fit(L, garr, covariates, samples)
+        fit = np.isfinite(ssr)
+        ssb, ssw, dfr = np.where(fit, ssbc, ssb), np.where(fit, ssr, ssw), np.where(fit, dfc, dfr)
+    out[keep, :4] = np.column_stack([ssb / (k - 1), ssw, dfr, k - 1])
+    return out
 
 
 def _covariate_fit(X: np.ndarray, # features x samples, NaN where a cell was never measured
@@ -1296,7 +1384,8 @@ def get_glycoform_diff(df_res: pd.DataFrame, # result from .motif.analysis.get_d
 
 
 def get_glm(group: pd.DataFrame, # longform data of glycoform abundances for a glycosite
-            glycan_features: list[str] = ['H', 'N', 'A', 'F', 'G'] # extracted glycan features to consider as variables
+            glycan_features: list[str] = ['H', 'N', 'A', 'F', 'G'], # extracted glycan features to consider as variables
+            scale_var: float = 0 # scale uncertainty of a sample's log-ratio, added to the residual variance
             ) -> tuple[tuple[pd.Series, pd.Series] | str, list[str]]: # ((coefficients, p-values) per term, or a failure message; retained variables)
     "given glycoform data from a glycosite, constructs & fits a GLM formula for main+interaction effects"
     retained_vars = [c for c in glycan_features if c in group.columns and max(group[c]) > 0]
@@ -1315,7 +1404,7 @@ def get_glm(group: pd.DataFrame, # longform data of glycoform abundances for a g
         dof = X.shape[0] - np.linalg.matrix_rank(X)
         if dof < 1:
             return ("GLM fitting failed: insufficient residual degrees of freedom", [])
-        se = np.sqrt(np.diag(np.linalg.pinv(X.T @ X)) * (((y - X @ beta) ** 2).sum() / dof))
+        se = np.sqrt(np.diag(np.linalg.pinv(X.T @ X)) * (((y - X @ beta) ** 2).sum() / dof + scale_var))
         names = ['Intercept'] + terms
         return (pd.Series(beta, index = names), pd.Series(2 * t.sf(np.abs(beta / se), dof), index = names)), retained_vars
     except Exception as e:
@@ -1324,10 +1413,11 @@ def get_glm(group: pd.DataFrame, # longform data of glycoform abundances for a g
 
 def process_glm_results(df: pd.DataFrame, # CLR-transformed glycoproteomics data, rows glycoforms, columns samples
                         alpha: float, # significance threshold
-                        glycan_features: list[str] # extracted glycan features to consider as variables
+                        glycan_features: list[str], # extracted glycan features to consider as variables
+                        scale_var: float = 0 # scale uncertainty of a sample's log-ratio, added to the residual variance
                         ) -> pd.DataFrame: # regression coefficients, p-values, and significance for each condition/interaction
     "tests for interaction effects of glycan features and the condition on glycoform abundance via a GLM"
-    results = df.groupby('Glycosite', group_keys = False)[df.columns].apply(lambda x: get_glm(x.reset_index(drop = True), glycan_features = glycan_features))
+    results = df.groupby('Glycosite', group_keys = False)[df.columns].apply(lambda x: get_glm(x.reset_index(drop = True), glycan_features = glycan_features, scale_var = scale_var))
     all_retained_vars = set()
     for _, retained_vars in results:
         all_retained_vars.update(retained_vars)
@@ -1504,20 +1594,21 @@ def pvca(data: pd.DataFrame | np.ndarray, # features as rows and samples as colu
 
 def cosinor_fit(y: np.ndarray | list[float], # one feature's (log-ratio transformed) values across samples
                 t: np.ndarray | list[float], # time of each sample (e.g., hours); repeated values are replicates of one timepoint
-                period: float = 24 # rhythm period, in the units of t
+                period: float = 24, # rhythm period, in the units of t
+                scale_var: float = 0 # scale uncertainty of a sample's log-ratio, added to its variance
                 ) -> dict[str, float | np.ndarray]: # mesor, amplitude, acrophase (peak time, in units of t), r_squared, f_stat, p_value, beta (mesor, cosine and sine coefficients), y_hat (fit at each unique timepoint)
     "Single-harmonic cosinor, fitted by weighted least squares to the timepoint means (weights: inverse squared standard errors) and F-tested against the intercept-only model"
     y, t = np.asarray(y, dtype = float), np.asarray(t, dtype = float)
     unique_t = np.unique(t)
     y_means = np.array([y[t == u].mean() for u in unique_t])
-    sems = np.array([y[t == u].std(ddof = 1) / np.sqrt(k) if (k := (t == u).sum()) > 1 else np.nan for u in unique_t])
-    w = 1.0 / (sems ** 2 + 1e-10) if np.isfinite(sems).all() else np.ones(len(unique_t))  # without replicates there are no standard errors, so every timepoint counts the same
+    sems = np.array([np.sqrt((y[t == u].var(ddof = 1) + scale_var) / k) if (k := (t == u).sum()) > 1 else np.nan for u in unique_t])
+    w, extra = (1.0 / (sems ** 2 + 1e-10), 0.0) if np.isfinite(sems).all() else (np.ones(len(unique_t)), scale_var)  # without replicates there are no standard errors, so every timepoint counts the same
     X = np.column_stack([np.ones(len(unique_t)), np.cos(2 * np.pi * unique_t / period), np.sin(2 * np.pi * unique_t / period)])
     beta = np.linalg.solve(X.T @ (w[:, None] * X) + np.eye(3) * 1e-12, X.T @ (w * y_means))
     y_hat = X @ beta
     ss_res, ss_tot = np.sum(w * (y_means - y_hat) ** 2), np.sum(w * (y_means - np.average(y_means, weights = w)) ** 2)
     df_res = len(unique_t) - 3
-    f_stat = ((ss_tot - ss_res) / 2) / (ss_res / df_res) if df_res > 0 and ss_res > 0 else 0.0
+    f_stat = ((ss_tot - ss_res) / 2) / (ss_res / df_res + extra) if df_res > 0 and ss_res > 0 else 0.0
     return {'mesor': beta[0], 'amplitude': np.hypot(beta[1], beta[2]), 'acrophase': (np.arctan2(beta[2], beta[1]) * period / (2 * np.pi)) % period,
             'r_squared': 1 - ss_res / ss_tot if ss_tot > 0 else 0.0, 'f_stat': f_stat, 'p_value': f.sf(f_stat, 2, df_res) if df_res > 0 and ss_res > 0 else 1.0, 'beta': beta, 'y_hat': y_hat}
 

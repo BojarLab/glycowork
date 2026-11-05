@@ -52,7 +52,8 @@
 - `get_equivalence_test` takes `scale_var`, and `get_differential_expression` passes the scale uncertainty to it (ad36d33)
 - The scale uncertainty `gamma` now enters `get_differential_expression` and `get_glycanova` as a variance on every sample's log-ratio instead of a random draw per run; results no longer depend on the seed (469cd62)
 - Motifs on every glycan in the same number, whose abundance is the total signal by construction, no longer get a test of their own in `get_differential_expression`, `get_glycanova`, `get_time_series`, `get_jtk`, and `get_cosinor`, per glycosite for glycoform motifs. They stay in the log-ratio reference and in the decomposition (469cd62)
-- Redistribution in `get_differential_expression` falls back to a permutation test where Hotelling's T2 is undefined, and in `get_glycanova` it runs on Aitchison distances, which do not depend on part order (bfa9757)
+- Redistribution in `get_differential_expression` falls back to a permutation test where Hotelling's T2 is undefined (bfa9757)
+- `Redistribution p-val` in `get_differential_expression` and `get_glycanova` now also tests each context of a parent, with a share-weighted Simes over moderated F tests on log2(part / rest), joined with the test of all parts by a Cauchy combination, and `get_glycanova` tests all parts by a one-way MANOVA, which is Hotelling's T2 on two groups, instead of PERMANOVA ()
 
 ##### Fixed 🐛
 - Glycoforms without detection in a whole group get a detection test and stay out of their site's log-ratio reference; the floor shifted every other glycoform of the site otherwise (2a509fe)
@@ -61,3 +62,8 @@
 #### frame
 ##### Fixed 🐛
 - `GlycoDataFrame.abundance` keeps one row per copy of a duplicated glycan column in the transposed layout, in line with `.glycans` (2a509fe)
+
+### network
+#### biosynthesis
+##### Fixed 🐛
+- `get_maximum_flow` and `get_differential_biosynthesis` no longer change with the interpreter's hash seed ()
