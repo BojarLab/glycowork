@@ -620,8 +620,11 @@ def get_motif_atoms(
             carrying = tuple(c for c in kids if W[c][gi] > 0)
             found = _motif_occurrences(glycans[gi], p) if carrying and W[p][gi] > 1 else ()
             if not found:
-                # one occurrence sits inside every child the glycan carries; a composition has no child contexts and a glyco-regex child stands for the whole glycan
-                bins.setdefault(carrying, np.zeros(len(glycans)))[gi] += W[p][gi]
+                # one occurrence sits inside every child the glycan carries; a composition has no child contexts and a glyco-regex child stands for the whole glycan. Children carried only in part (a floating substituent gives counts below 1) cover no more of the parent than their counts add up to, and the rest is the parent's own context
+                covered = W[p][gi] if any(W[c][gi] >= 1 for c in carrying) else min(W[p][gi], sum(W[c][gi] for c in carrying))
+                bins.setdefault(carrying, np.zeros(len(glycans)))[gi] += covered
+                if covered < W[p][gi]:
+                    bins.setdefault((), np.zeros(len(glycans)))[gi] += W[p][gi] - covered
                 continue
             covers = {c: _motif_occurrences(glycans[gi], c) for c in carrying}
             for occ in found:

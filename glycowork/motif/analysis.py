@@ -348,7 +348,8 @@ def _decomposition_columns(rows: dict[str, tuple], # parent motif to (explained 
                            alpha: float # significance threshold of the corrections
                            ) -> dict[str, list]: # the decomposition columns of a results table
     "Corrects residual and redistribution p-values, each as its own, much smaller family, since they answer different questions than the marginals. A parent's test of all its parts at once and its contexts go in as one p-value: the variances of the contexts share one prior over the table, each parent gets one weighted Simes over them, and a Cauchy combination, which holds whatever their dependence, joins it with the test of all parts"
-    cp = dict(zip(rows, correct_multiple_testing([v[1] for v in rows.values()], alpha)[0])) if rows else {}
+    tested = [m for m, v in rows.items() if not np.isnan(v[1])]  # a parent whose own context is too rare to test has no residual p-value, and stays out of the family
+    cp = dict(zip(tested, correct_multiple_testing([rows[m][1] for m in tested], alpha)[0])) if tested else {}
     raw = {m: v[3] for m, v in rows.items()}
     terms = {m: v[7] for m, v in rows.items() if len(v) > 7 and len(v[7])}
     if terms:
@@ -482,8 +483,7 @@ def get_pvals_motifs(
             explained = _explained_by(p, kids, eff, top = top_explained)
             okp, okn = usable[pos_i], usable[neg_i]
             if okp.sum() < 2 or okn.sum() < 2:
-                rows[p] = (explained, 1.0, 0.0,
-                           bal_p, *stats)  # parent occurs only inside its children: no context of its own left to test
+                rows[p] = (explained, np.nan, np.nan, bal_p, *stats) if usable.any() else (explained, 1.0, 0.0, bal_p, *stats)  # a parent that occurs only inside its children has no context of its own left (residual p 1, effect 0); one whose own context is too rare in a group to test is untested, not inherited
                 continue
             r = np.log2(np.maximum(resid, 0.0000001))
             rows[p] = (explained, _ttest_pvalue(r[pos_i][okp], r[neg_i][okn]),
@@ -1292,8 +1292,7 @@ def get_differential_expression(
             ok1, ok2 = usable[g1i], usable[g2i]
             pair_ok = ok1 & ok2 if paired else None
             if (pair_ok.sum() if paired else min(ok1.sum(), ok2.sum())) < 2:
-                rows[p] = (explained, 1.0, 0.0,
-                           bal_p, *stats)  # parent occurs only inside its children: no context of its own left to test
+                rows[p] = (explained, np.nan, np.nan, bal_p, *stats) if usable[g1i + g2i].any() else (explained, 1.0, 0.0, bal_p, *stats)  # a parent that occurs only inside its children has no context of its own left (residual p 1, effect 0); one whose own context is too rare in a group to test is untested, not inherited
                 continue
             r = np.log2(np.maximum(resid, 0.0000001)) - ref
             r_a, r_b = (r[g1i][pair_ok], r[g2i][pair_ok]) if paired else (r[g1i][ok1], r[g2i][ok2])
@@ -1601,8 +1600,7 @@ def get_glycanova(
             stats = (*stats, context_terms(parts, garr, covariates = covariates, samples = full.columns.tolist()))
             explained = _explained_by(p, kids, eff, top = top_explained)
             if min((usable & (garr == g)).sum() for g in levels) < 2:
-                rows[p] = (explained, 1.0, 0.0,
-                           bal_p, *stats)  # parent occurs only inside its children: no context of its own left to test
+                rows[p] = (explained, np.nan, np.nan, bal_p, *stats) if usable.any() else (explained, 1.0, 0.0, bal_p, *stats)  # a parent that occurs only inside its children has no context of its own left (residual p 1, effect 0); one whose own context is too rare in a group to test is untested, not inherited
                 continue
             r = np.log2(np.maximum(resid, 0.0000001)) - ref
             if covariates is not None:  # ANCOVA of the residual part, as for the marginal values, where it can be fit

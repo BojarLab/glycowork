@@ -72,7 +72,7 @@ from glycowork.motif.graph import (
     graph_to_string, largest_subgraph, get_possible_topologies,
     deduplicate_glycans, try_string_conversion, resolve_anchor,
     subgraph_isomorphism_with_negation, categorical_node_match_wildcard,
-    expand_termini_list, ensure_graph, possible_topology_check, _glycan_graph, _slim, glycan_to_glycangraph
+    expand_termini_list, ensure_graph, possible_topology_check, _glycan_graph, _slim, glycan_to_glycangraph, GlycanGraph
 )
 from glycowork.motif.annotate import (
     annotate_glycan, annotate_dataset, get_molecular_properties, get_motif_dag, get_composition_dag, get_motif_atoms, get_composition_atoms,
@@ -8270,9 +8270,11 @@ def test_safe_index():
     glycan = "Gal(b1-4)Glc-ol"
     graph_dic = {}
     result = safe_index(glycan, graph_dic)
-    assert isinstance(result, nx.Graph)
+    assert isinstance(result, GlycanGraph)
     assert glycan in graph_dic
     assert graph_dic[glycan] == result
+    # a networkx graph a caller put into the dictionary is read as the same glycan
+    assert safe_index(glycan, {glycan: glycan_to_nxGraph(glycan)}).nodes == result.nodes
 
 
 def test_create_neighbors():
@@ -8280,8 +8282,9 @@ def test_create_neighbors():
     ggraph = glycan_to_nxGraph(glycan)
     neighbors = create_neighbors(ggraph)
     assert len(neighbors) > 0
-    assert all(isinstance(n, nx.Graph) for n in neighbors)
-    assert len(neighbors[0].nodes()) < len(ggraph.nodes())
+    assert all(isinstance(n, GlycanGraph) for n in neighbors)
+    assert len(neighbors[0]) < len(ggraph)
+    assert [graph_to_string(n) for n in neighbors] == [graph_to_string(n) for n in create_neighbors(_glycan_graph(glycan))]
     neighbors = create_neighbors(glycan_to_nxGraph("Glc-ol"))
     assert neighbors == ()
     # A floating bit is deferred until the backbone is minimal, so only backbone pairs are cleaved first
@@ -8564,6 +8567,12 @@ def test_get_maximum_flow(sample_network):
     sink = "Neu5Ac(a2-3)[Neu5Ac(a2-6)]Gal(b1-4)Glc-ol"
     single = get_maximum_flow(uncapped, source = "Gal(b1-4)Glc-ol", sinks = sink)
     assert list(single) == [sink] and single[sink]["flow_value"] == pytest.approx(flow_results[sink]["flow_value"])
+    # the value is the exact maximum, rounded once: adding 1 + 1 onto 1e16 in floats in any order gives 1e16
+    exact = nx.DiGraph()
+    for mid, cap in (('a', 1e16), ('b', 1.0), ('c', 1.0)):
+        exact.add_edge('r', mid, capacity = cap)
+        exact.add_edge(mid, 't', capacity = cap)
+    assert get_maximum_flow(exact, source = 'r')['t']['flow_value'] == 1e16 + 2
 
 
 def test_get_reaction_flow(sample_network):
@@ -11570,6 +11579,26 @@ def test_get_motif_atoms_composition_rows_are_own_context():
     counts = pd.DataFrame([[2.0, 2.0], [2.0, 0.0]], index = ['Gal(b1-3)Gal', 'H2N2'], columns = motifs)
     labels, m = get_motif_atoms(get_motif_dag(motifs, carriers = counts), counts)['Hex']
     assert dict(zip(labels, m.tolist()))[()] == [0.0, 2.0]
+
+
+def test_get_motif_atoms_fractional_children_leave_the_rest_own():
+    motifs = ['Gal', 'Neu5Ac(a2-3)Gal']
+    glycans = ['Neu5Ac(a2-3)Gal(b1-4)Glc', '{Neu5Ac(a2-3/6)}Gal(b1-4)Glc']
+    counts = pd.DataFrame([[1.0, 1.0], [1.0, 0.5]], index = glycans, columns = motifs)
+    labels, m = get_motif_atoms(get_motif_dag(motifs, carriers = counts), counts)['Gal']
+    atoms = dict(zip(labels, m.tolist()))
+    assert np.allclose(m.sum(axis = 0), counts['Gal'].values)
+    assert atoms[('Neu5Ac(a2-3)Gal',)] == [1.0, 0.5]  # a floating sialic acid sits on the alpha2-3 position half the time
+    assert atoms[()] == [0.0, 0.5]  # and leaves the galactose in its own context otherwise
+
+
+def test_decomposition_untested_own_context_is_not_inherited():
+    res = get_differential_expression(glycomics_data_loader.human_ovarian_O_PMC4468167, motifs = True, random_state = 42).set_index('Glycan')
+    assert res.loc['GlcNAc(b1-3)Gal', 'Own share'] > 0.5 and res.loc['GlcNAc(b1-3)Gal', ['Residual p-val', 'Residual effect size']].isna().all()  # an own context too rare in one group to test is untested, not purely inherited
+    inherited = res[(res['Residual p-val'] >= 0.999) & (res['Residual effect size'].abs() < 1e-9)]
+    assert len(inherited) and (inherited['Own share'].fillna(0) == 0).all()  # purely inherited means no own context in any sample
+    tested = res['Residual p-val'].notna()
+    assert res.loc[tested, 'Residual p-val'].between(0, 1).all() and res.loc[tested, 'Residual effect size'].notna().all()
 
 
 def test_get_composition_atoms_partition_the_cumulative_abundance():

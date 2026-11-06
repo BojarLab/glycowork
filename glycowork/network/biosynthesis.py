@@ -1,8 +1,10 @@
 import re
+import math
 import warnings
 from pathlib import Path
 from copy import deepcopy
 from itertools import chain
+from fractions import Fraction
 from functools import lru_cache
 from importlib import resources
 from collections import defaultdict, Counter
@@ -11,11 +13,12 @@ import numpy as np
 import pandas as pd
 from glycowork.glycan_data.loader import unwrap, linkages, lib, GlycoList, GlycoDataFrame
 from glycowork.glycan_data.stats import cohen_d, get_alphaN, correct_multiple_testing, moderated_variance, dag_neighbors, TST_grouped_benjamini_hochberg, _covariate_fit
-from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, graph_to_string_int, subgraph_isomorphism, get_possible_topologies
+from glycowork.motif.graph import GlycanGraph, compare_glycans, graph_to_string, graph_to_string_int, subgraph_isomorphism, get_possible_topologies, _as_graph, _components, _glycan_graph, _graph
 from glycowork.motif.processing import get_lib, rescue_glycans, in_lib, get_class, canonicalize_iupac, canonicalize_composition, is_composition
 from glycowork.motif.tokenization import get_stem_lib, get_core, glycan_to_composition, map_to_basic
 from glycowork.motif.annotate import get_k_saccharides
 from glycowork.motif.draw import subplots, vc
+
 
 def __getattr__(name):
     if name == "net_dic":
@@ -25,6 +28,7 @@ def __getattr__(name):
         return net_dic
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
+
 permitted_roots = frozenset({"Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"})
 allowed_ptms = frozenset({'OS', '3S', '6S', 'OP', '1P', '3P', '6P', 'OAc', '4Ac', '9Ac'})
 # Sialic acid modifications (e.g., CASD1 9-O-acetylation) are installed on CMP-Sia before transfer, so any sialic acid token is an atomic donor unit, never a PTM site
@@ -32,8 +36,8 @@ sia_re = re.compile(r'(?:Neu|Kdn)\w*')
 
 
 @lru_cache(maxsize = 1024)
-def safe_compare(g1: nx.DiGraph, # First glycan graph
-                 g2: nx.DiGraph # Second glycan graph
+def safe_compare(g1: GlycanGraph | nx.DiGraph, # First glycan graph
+                 g2: GlycanGraph | nx.DiGraph # Second glycan graph
                  ) -> bool: # True if glycans are same
     "Compare glycans with error catch, returning False on exception"
     try:
@@ -43,24 +47,24 @@ def safe_compare(g1: nx.DiGraph, # First glycan graph
 
 
 def safe_index(glycan: str, # Glycan in IUPAC-condensed format
-               graph_dic: dict[str, nx.DiGraph] # Dictionary of glycan:graph mappings
-               ) -> nx.Graph: # Glycan graph
+               graph_dic: dict[str, GlycanGraph | nx.DiGraph] # Dictionary of glycan:graph mappings
+               ) -> GlycanGraph: # Glycan graph; cached and shared, so never edit it
     "Retrieve glycan graph from dictionary or calculate if not present"
     if glycan not in graph_dic:
-        graph_dic[glycan] = glycan_to_nxGraph(glycan)
-    return graph_dic[glycan]
+        graph_dic[glycan] = _glycan_graph(glycan)
+    return _as_graph(graph_dic[glycan])
 
 
-def terminal_pairs_for_precursors(ggraph: nx.DiGraph, # Glycan graph
+def terminal_pairs_for_precursors(ggraph: GlycanGraph | nx.DiGraph, # Glycan graph
                                   min_size: int = 1 # Minimum root size; default:1
                                   ) -> list[tuple[int, int]]: # (terminal monosaccharide, linkage) node pairs
     "Node pairs whose removal yields a biosynthetic precursor, in the order create_neighbors returns those precursors"
+    ggraph = _as_graph(ggraph)
     # Check whether glycan large enough to allow for precursors
     if len(ggraph) <= min_size:
         return []
-    pairs = [(k, next(ggraph.predecessors(k))) for k in ggraph.nodes() if
-             ggraph.out_degree(k) == 0 and ggraph.in_degree(k) > 0]
-    comps = sorted(nx.weakly_connected_components(ggraph), key = min)
+    pairs = [(k, ggraph.pred[k][0]) for k in ggraph if not ggraph.succ[k] and ggraph.pred[k]]
+    comps = sorted(_components(ggraph), key = min)
     if len(comps) > 1:
         # a floating bit has no fixed attachment point, so it cannot be ordered against a backbone addition; deferring it until the backbone is minimal stops the node count growing as 2^floaters x backbone precursors
         backbone = [p for p in pairs if set(p) <= comps[0]]
@@ -69,20 +73,17 @@ def terminal_pairs_for_precursors(ggraph: nx.DiGraph, # Glycan graph
 
 
 @lru_cache(maxsize = 1024)
-def create_neighbors(ggraph: nx.DiGraph,  # Glycan graph
+def create_neighbors(ggraph: GlycanGraph | nx.DiGraph,  # Glycan graph
                      min_size: int = 1  # Minimum root size; default:1
-                     ) -> tuple[nx.Graph, ...]:  # Precursor graphs
+                     ) -> tuple[GlycanGraph, ...]:  # Precursor graphs; cached and shared, so never edit them
     "Create biosynthetic precursor glycans"
+    ggraph = _as_graph(ggraph)
     # Generate all precursors by iteratively cleaving off the non-reducing-end monosaccharides
     out = []
     for pair in terminal_pairs_for_precursors(ggraph, min_size = min_size):
-        # Cleaving off messes with the node labeling, so they have to be re-labeled; built in the node and edge order nx.relabel_nodes gives a subgraph view, without the view
+        # Cleaving off messes with the node labeling, so the kept nodes are renumbered in order, keeping the node and edge order of the glycan
         keep = {m: i for i, m in enumerate(sorted(n for n in ggraph if n not in pair))}
-        g = nx.DiGraph()
-        g.add_nodes_from((keep[n], d.copy()) for n, d in ggraph.nodes(data = True) if n in keep)
-        g.add_edges_from((keep[u], keep[v], d.copy()) for u, v, d in ggraph.edges(data = True) if u in keep and v in keep)
-        g.graph.update(ggraph.graph)
-        out.append(g)
+        out.append(_graph({keep[n]: d for n, d in ggraph.nodes.items() if n in keep}, [(keep[u], keep[v]) for u, vs in ggraph.succ.items() if u in keep for v in vs if v in keep]))
     return tuple(out)  # a tuple, since the result is lru-cached and a caller editing a list would change it for every later call on that graph
 
 
@@ -97,14 +98,12 @@ def find_diff(glycan_a: str, # First glycan
         return ""
     # Convert to graphs and get difference
     larger, smaller = max(glycan_a, glycan_b, key = len), min(glycan_a, glycan_b, key = len)
-    graph_larger, graph_smaller = glycan_to_nxGraph(larger), glycan_to_nxGraph(smaller)
+    graph_larger, graph_smaller = _glycan_graph(larger), _glycan_graph(smaller)
     if len(graph_larger) - len(graph_smaller) == 2:
         smaller_canonical = graph_to_string(graph_smaller)
-        for term_node in (n for n in graph_larger.nodes() if
-                          graph_larger.out_degree(n) == 0 and graph_larger.in_degree(n) > 0):
-            link_node = next(graph_larger.predecessors(term_node))
-            remaining = set(graph_larger.nodes()) - {term_node, link_node}
-            if graph_to_string(graph_larger.subgraph(remaining)) == smaller_canonical:
+        for term_node in (n for n in graph_larger if not graph_larger.succ[n] and graph_larger.pred[n]):
+            link_node = graph_larger.pred[term_node][0]
+            if graph_to_string(graph_larger.subgraph(set(graph_larger) - {term_node, link_node})) == smaller_canonical:
                 diff_string = graph_to_string_int(graph_larger.subgraph({term_node, link_node}))
                 return 'disregard' if any(ptm in sia_re.sub('', diff_string) for ptm in allowed_ptms) else diff_string
         # String comparison missed (wildcards/ambiguity), fall back to VF2
@@ -127,21 +126,21 @@ def filter_disregard(network: nx.DiGraph, # Biosynthetic network
     return network
 
 
-def stemify_glycan_fast(ggraph_in: nx.DiGraph, # Input glycan graph
+def stemify_glycan_fast(ggraph_in: GlycanGraph | nx.DiGraph, # Input glycan graph
                         stem_lib: dict[str, str] # Modified-to-core monosaccharide mapping
-                        ) -> tuple[str, nx.DiGraph]: # (Stemified glycan, Stemified graph)
+                        ) -> tuple[str, GlycanGraph]: # (Stemified glycan, Stemified graph)
     "Stemify glycan graph quickly using precomputed mapping"
-    ggraph = ggraph_in.copy()  # copy() already makes independent node attribute dicts, and the only write below replaces a string wholesale
-    nx.set_node_attributes(ggraph, {k: {"string_labels": stem_lib[v]} for k, v in ggraph.nodes(data = "string_labels")})
+    ggraph = _as_graph(ggraph_in)
+    ggraph = ggraph.with_attr('string_labels', {k: stem_lib[d['string_labels']] for k, d in ggraph.nodes.items()})
     return graph_to_string(ggraph), ggraph
 
 
 def find_ptm(glycan: str, # Glycan with PTM
              glycans: list[str], # List of glycans
-             graph_dic: dict[str, nx.DiGraph], # Dictionary of glycan:graph mappings
+             graph_dic: dict[str, GlycanGraph | nx.DiGraph], # Dictionary of glycan:graph mappings
              stem_lib: dict[str, str], # Modified-to-core monosaccharide mapping
              allowed_ptms: frozenset[str] = allowed_ptms, # Set of allowed PTMs
-             ggraphs: list[nx.DiGraph] | None = None, # Precomputed glycan graphs
+             ggraphs: list[GlycanGraph | nx.DiGraph] | None = None, # Precomputed glycan graphs
              suffix: str = '-ol' # Glycan suffix
              ) -> tuple[tuple[str, str], str] | int: # Edge tuple (glycan, precursor) and PTM or 0
     "Identify precursor glycans for glycan with PTM"
@@ -154,7 +153,7 @@ def find_ptm(glycan: str, # Glycan with PTM
     glycan_stem += suffix
     if suffix == '-ol':
         last_node = max(g_stem)
-        g_stem.nodes[last_node]['string_labels'] += suffix
+        g_stem = g_stem.with_attr('string_labels', {last_node: g_stem.nodes[last_node]['string_labels'] + suffix})
     if ggraphs is None:
         ggraphs = [safe_index(k, graph_dic) for k in glycans]
     idx = next((i for i, k in enumerate(ggraphs) if safe_compare(k, g_stem)), None)
@@ -168,7 +167,7 @@ def find_ptm(glycan: str, # Glycan with PTM
 
 
 def process_ptm(glycans: list[str], # List of glycans
-                graph_dic: dict[str, nx.DiGraph], # Dictionary of glycan:graph mappings
+                graph_dic: dict[str, GlycanGraph | nx.DiGraph], # Dictionary of glycan:graph mappings
                 stem_lib: dict[str, str], # Modified-to-core monosaccharide mapping
                 allowed_ptms: frozenset[str] = allowed_ptms, # Set of allowed PTMs
                 suffix: str = '-ol' # Glycan suffix
@@ -211,7 +210,7 @@ def prune_directed_edges(network: nx.DiGraph # Directed network
 
 
 def deorphanize_edge_labels(network: nx.DiGraph, # Biosynthetic network
-                            graph_dic: dict[str, nx.DiGraph], # Dictionary of glycan:graph mappings
+                            graph_dic: dict[str, GlycanGraph | nx.DiGraph], # Dictionary of glycan:graph mappings
                             allowed_ptms: frozenset[str] = allowed_ptms # Set of allowed PTMs
                             ) -> nx.Graph: # Network with complete labels
     "Complete edge labels in newly added edges"
@@ -262,25 +261,25 @@ def add_high_man_removal(network: nx.DiGraph # Biosynthetic network
     return network
 
 
-def _graph_fp(g: nx.DiGraph) -> tuple:
+def _graph_fp(g: GlycanGraph) -> tuple:
     "Wildcard-safe structural fingerprint for bucketing"
     leaves = branching = 0
-    for _, d in g.out_degree():
-        leaves += d == 0
-        branching += d > 1
+    for s in g.succ.values():
+        leaves += not s
+        branching += len(s) > 1
     memo = {}
 
     def enc(n):
         r = memo.get(n)
         if r is None:
-            r = memo[n] = '(' + ''.join(sorted(enc(c) for c in g.successors(n))) + ')'
+            r = memo[n] = '(' + ''.join(sorted(enc(c) for c in g.succ[n])) + ')'
         return r
 
-    return (len(g), leaves, branching, ''.join(sorted(enc(n) for n in g if g.in_degree(n) == 0)))
+    return (len(g), leaves, branching, ''.join(sorted(enc(n) for n in g if not g.pred[n])))
 
 
 def build_network_from_glycans(glycans: list[str], # Observed glycans
-                               graph_dic: dict[str, nx.DiGraph], # Dictionary of glycan:graph mappings
+                               graph_dic: dict[str, GlycanGraph], # Dictionary of glycan:graph mappings
                                min_size: int = 1, # Minimum root size; default:1
                                allowed_ptms: frozenset[str] = allowed_ptms # Set of allowed PTMs
                                ) -> tuple[nx.Graph, list[str], dict]: # (Network, Virtual nodes, Edge diffs)
@@ -362,7 +361,7 @@ def construct_network(glycans: str | list[str] | pd.DataFrame, # Glycan(s), or a
     add_to_virtuals = [r for r in sorted(permitted_roots) if r not in glycans and any(g.endswith(r) for g in glycans)]  # sorted, since Fuc and Man (O-glycan roots) tie on length and set order would decide which the queue expands first
     glycans.extend(add_to_virtuals)
     glycans.sort(key = len, reverse = True)
-    graph_dic = {k: glycan_to_nxGraph(k) for k in glycans}
+    graph_dic = {k: _glycan_graph(k) for k in glycans}
     network, virtual_nodes, edge_diffs = build_network_from_glycans(glycans, graph_dic, min_size = min_size, allowed_ptms = allowed_ptms)
     # Create edge and node labels
     nx.set_edge_attributes(network, edge_diffs, 'diffs')
@@ -410,9 +409,9 @@ def construct_network(glycans: str | list[str] | pd.DataFrame, # Glycan(s), or a
             # Lazily compute removal strings only when candidates exist; node names are canonical so direct string match suffices; fallback: graph isomorphism for wildcard cases
             g = safe_index(n_big, graph_dic)
             rs = {}
-            for term_node in (nd for nd in g.nodes() if g.out_degree(nd) == 0 and g.in_degree(nd) > 0):
-                link_node = next(g.predecessors(term_node))
-                sub = g.subgraph(set(g.nodes()) - {term_node, link_node}).copy()
+            for term_node in (nd for nd in g if not g.succ[nd] and g.pred[nd]):
+                link_node = g.pred[term_node][0]
+                sub = g.subgraph(set(g) - {term_node, link_node})
                 rs[graph_to_string(sub)] = _graph_fp(sub)
             for n_small in candidates:
                 hit = n_small in rs
@@ -912,43 +911,27 @@ def find_diamonds(network: nx.DiGraph, # Biosynthetic network
     "Find diamond-like motifs (A->B,A->C,B->D,C->D) in biosynthetic network"
     if nb_intermediates % 2 > 0:
         raise ValueError("nb_intermediates has to be a multiple of 2; please re-try.")
-    # Generate matching motif
     path_length = nb_intermediates // 2 + 2 # The length of one of the two paths is half of the number of intermediates + 1 source node + 1 target node
-    first_path = list(range(1, path_length + 1))
-    second_path = [first_path[0]] + [x + path_length - 1 for x in first_path[1:-1]] + [first_path[-1]]
-    g1 = nx.DiGraph()
-    nx.add_path(g1, first_path)
-    nx.add_path(g1, second_path)
-    # Find networks containing the matching motif
-    graph_pair = nx.algorithms.isomorphism.DiGraphMatcher(network, g1)
-    # Find diamonds within those networks
-    matchings_list = list(graph_pair.subgraph_isomorphisms_iter())
-    # Map found diamonds to the same format
-    seen_keys = {}
-    for d in matchings_list:
-        seen_keys.setdefault(tuple(sorted(d.keys())), {v: k for k, v in d.items()})
-    matchings_list = list(seen_keys.values())
-    final_matchings = []
-    # For each diamond, only keep the diamond if at least one of the intermediate structures is virtual
-    virtual_attr = nx.get_node_attributes(network, 'virtual')
-    desc_cache = {}
-    for d in matchings_list:
-        substrate_node, product_node = d[1], d[path_length]
-        middle_nodes = [d[k] for k in list(range(2, path_length)) + list(range(path_length + 1, 2 * path_length - 1))]
-        # For each middle node, test whether they are part of the same path as substrate node and product node (remove false positives)
-        for node in [substrate_node] + middle_nodes:
-            if node not in desc_cache:
-                desc_cache[node] = nx.descendants(network, node)
-        if all(mn in desc_cache[substrate_node] and product_node in desc_cache[mn] for mn in middle_nodes):
-            # 'presence' keeps only diamonds with an unobserved intermediate (network completion); 'abundance' keeps all (reaction order)
-            if mode == 'abundance' or any(virtual_attr.get(mn, 0) == 1 for mn in middle_nodes):
-                # Filter out non-diamond shapes with any cross-connections
-                if nb_intermediates > 2:
-                    sub = network.subgraph(d.values()).to_undirected()
-                    if all(deg == 2 for _, deg in sub.degree()):
-                        final_matchings.append(d)
-                else:
-                    final_matchings.append(d)
+    succ, virtual_attr, final_matchings = {u: list(nbrs) for u, nbrs in network.adjacency()}, nx.get_node_attributes(network, 'virtual'), []
+    # A diamond is two routes of path_length - 1 steps from one source to one product whose nodes share no further edge, in either direction (the induced match VF2 made, so no cross-connections);
+    # walked from each source in network order, as VF2 iterated a set of node names and so returned diamonds, their path labels, and every mean over them in an order that changed with the hash seed
+    for source in network:
+        routes, stack = defaultdict(list), [(source,)]
+        while stack:
+            path = stack.pop()
+            if len(path) == path_length:
+                routes[path[-1]].append(path)
+            else:
+                stack.extend(path + (v,) for v in reversed(succ[path[-1]]) if v not in path)
+        for product, paths in routes.items():
+            for i, first in enumerate(paths):
+                for second in paths[i + 1:]:
+                    nodes = set(first) | set(second)
+                    if len(nodes) != 2 * path_length - 2 or sum(v in nodes for u in nodes for v in succ[u]) != 2 * path_length - 2:
+                        continue
+                    # 'presence' keeps only diamonds with an unobserved intermediate (network completion); 'abundance' keeps all (reaction order)
+                    if mode == 'abundance' or any(virtual_attr.get(mn, 0) == 1 for mn in first[1:-1] + second[1:-1]):
+                        final_matchings.append(dict(enumerate(first, 1)) | {path_length + j: mn for j, mn in enumerate(second[1:-1], 1)})
     return final_matchings
 
 
@@ -1074,7 +1057,7 @@ def highlight_network(network: nx.DiGraph, # Biosynthetic network
         def fp(g):
             if g not in fps:
                 try:
-                    fps[g] = _graph_fp(glycan_to_nxGraph(g))
+                    fps[g] = _graph_fp(_glycan_graph(g))
                 except Exception:
                     fps[g] = None
             return fps[g]
@@ -1112,23 +1095,29 @@ def get_edge_weight_by_abundance(network_in: nx.DiGraph, # Biosynthetic network
     detected = [a for a in abundance_dict.values() if a > 0.0]
     floor = min(detected) if detected else 0.1
     missing = sorted({n for n, v in network.nodes(data = 'virtual') if v == 1 or abundance_dict.get(n, 0.0) <= 0.0} - {root})
+    nbrs = {n: list(chain(network.predecessors(n), network.successors(n))) for n in missing}
+    # an estimate only changes once a neighbor's has, so a node whose neighbors all stayed put since its last estimate is skipped; a pass still updates exactly what a full sweep would, in the same order
+    stale = dict.fromkeys(missing, True)
     for _ in range(len(missing)):
         updated = False
         for n in missing:  # a fixed list, since each estimate reads the neighbours updated before it and set order is not stable across processes
-            known = [a for a in
-                     (abundance_dict.get(m, 0.0) for m in chain(network.predecessors(n), network.successors(n))) if
-                     a > 0.0]
+            if not stale[n]:
+                continue
+            stale[n] = False
+            known = [a for a in (abundance_dict.get(m, 0.0) for m in nbrs[n]) if a > 0.0]
             # Abundances are log-normal, so pool geometrically; a virtual node was not detected, so it cannot exceed the detection limit, and each further hop into unobserved territory decays
             if known:
                 est = min(float(np.exp(np.mean(np.log(known)))) * virtual_damping, floor)
                 if est > abundance_dict.get(n, 0.0):
                     abundance_dict[n] = est
                     updated = True
+                    for m in nbrs[n]:
+                        if m in stale:
+                            stale[m] = True
         if not updated:
             break
-    for u, v in network.edges():
-        network[u][v]['capacity'] = float(
-            np.sqrt(max(abundance_dict.get(u, 0.1), 1e-6) * max(abundance_dict.get(v, 0.1), 1e-6)))
+    for u, v, d in network.edges(data = True):
+        d['capacity'] = math.sqrt(max(abundance_dict.get(u, 0.1), 1e-6) * max(abundance_dict.get(v, 0.1), 1e-6))
     return network
 
 
@@ -1149,6 +1138,98 @@ def _maximum_flow(network: nx.DiGraph, # network with a capacity on its edges
     return flow_value, {nodes[u]: {nodes[v]: x for v, x in out.items()} for u, out in flow_dict.items()}
 
 
+def _flow_values(network: nx.DiGraph, # network with a capacity on its edges
+                 source: str, # source node
+                 sinks: str | list[str] | None = None  # Target node(s); default:all terminal nodes reachable from source
+                 ) -> dict[str, float]: # sink: maximum flow value, for the sinks the source reaches
+    "Maximum flow values computed exactly: on the largest power of two dividing every capacity, the solve runs in integers and each value is rounded once, so it is the correctly rounded maximum flow whatever order a solver adds flow in"
+    succ = {u: list(nbrs) for u, nbrs in network.adjacency()}
+    reach, stack = {source}, [source]
+    while stack:
+        for v in succ[stack.pop()]:
+            if v not in reach:
+                reach.add(v)
+                stack.append(v)
+    if sinks is None:
+        sinks = [n for n in network if not succ[n] and n in reach]
+    elif isinstance(sinks, str):
+        sinks = [sinks]
+    caps = list(network.edges(data = 'capacity'))
+    exact = all(isinstance(c, (int, float, np.integer, np.floating)) and math.isfinite(c) and c >= 0 for *_, c in caps)
+    if exact:
+        fracs = [Fraction(c) for *_, c in caps]
+        unit = math.lcm(*(f.denominator for f in fracs)) if fracs else 1
+        arcs = defaultdict(list)
+        for (u, v, _), f in zip(caps, fracs):
+            if u in reach and v in reach and u != v and f:
+                arcs[v].append((u, f.numerator * (unit // f.denominator)))
+    values, unreachable = {}, []
+    for sink in sinks:
+        if sink not in reach or sink == source:
+            unreachable.append(sink)
+            continue
+        if not exact:  # a missing or infinite capacity is unbounded to networkx, which raises for an unbounded flow as it did before
+            values[sink] = _maximum_flow(network, source, sink)[0]
+            continue
+        # only nodes between source and sink can carry its flow
+        keep, stack = {sink: 0}, [sink]
+        while stack:
+            for u, _ in arcs[stack.pop()]:
+                if u not in keep:
+                    keep[u] = len(keep)
+                    stack.append(u)
+        if source not in keep:  # reached only through edges of capacity zero
+            values[sink] = 0.0
+            continue
+        head, to, cap = [[] for _ in keep], [], []
+        for v, i in keep.items():
+            for u, c in arcs[v]:
+                head[keep[u]].append(len(to))
+                to.append(i)
+                cap.append(c)
+                head[i].append(len(to))
+                to.append(keep[u])
+                cap.append(0)
+        # Dinic on the integer capacities; arc a ^ 1 is the reverse of arc a
+        s, t, flow = keep[source], 0, 0
+        while True:
+            level = [-1] * len(head)
+            level[s], queue = 0, [s]
+            for u in queue:
+                for a in head[u]:
+                    if cap[a] and level[to[a]] < 0:
+                        level[to[a]] = level[u] + 1
+                        queue.append(to[a])
+            if level[t] < 0:
+                break
+            ptr = [0] * len(head)
+            while True:
+                path, u = [], s
+                while u != t:
+                    hu = head[u]
+                    while ptr[u] < len(hu) and not (cap[hu[ptr[u]]] and level[to[hu[ptr[u]]]] == level[u] + 1):
+                        ptr[u] += 1
+                    if ptr[u] < len(hu):
+                        path.append(hu[ptr[u]])
+                        u = to[path[-1]]
+                    elif path:
+                        u = to[path.pop() ^ 1]
+                        ptr[u] += 1
+                    else:
+                        break
+                if u != t:
+                    break
+                push = min(cap[a] for a in path)
+                for a in path:
+                    cap[a] -= push
+                    cap[a ^ 1] += push
+                flow += push
+        values[sink] = flow / unit  # integer true division rounds correctly
+    if unreachable:
+        warnings.warn(f"{len(unreachable)} of {len(sinks)} sinks could not be reached from {source}, e.g., {unreachable[0]}", stacklevel = 3)
+    return values
+
+
 def get_maximum_flow(network: nx.DiGraph, # Biosynthetic network
                      source: str | None = None,  # Source node; default: inferred from the network's glycan class
                      sinks: str | list[str] | None = None  # Target node(s); default:all terminal nodes
@@ -1158,27 +1239,8 @@ def get_maximum_flow(network: nx.DiGraph, # Biosynthetic network
     if not nx.get_edge_attributes(network, 'capacity'):
         network = get_edge_weight_by_abundance(network,
                                                root = source)  # an edge without a capacity attribute is infinite to networkx, so a raw construct_network output would make every flow unbounded
-    path_lengths = nx.single_source_shortest_path_length(network, source)
-    if sinks is None:
-        sinks = [node for node, out_degree in network.out_degree() if out_degree == 0 and node in path_lengths]
-    elif isinstance(sinks, str):
-        sinks = [sinks]
-    # Dictionary to store flow values and paths for each sink
-    flow_results, unreachable = {}, []
-    for sink in sinks:
-        try:
-            if sink not in path_lengths:
-                raise nx.NetworkXNoPath(f"No path between {source} and {sink}.")
-            flow_value, flow_dict = _maximum_flow(network, source, sink)
-            flow_results[sink] = {
-                'flow_value': flow_value,
-                'flow_dict': flow_dict
-            }
-        except (nx.NetworkXError, nx.NetworkXNoPath):
-            unreachable.append(sink)
-    if unreachable:
-        warnings.warn(f"{len(unreachable)} of {len(sinks)} sinks could not be reached from {source}, e.g., {unreachable[0]}", stacklevel = 2)
-    return flow_results
+    # the value is unique and computed exactly; which of the equally maximal flows the flow dictionary shows is networkx's choice
+    return {sink: {'flow_value': v, 'flow_dict': _maximum_flow(network, source, sink)[1]} for sink, v in _flow_values(network, source, sinks = sinks).items()}
 
 
 def get_max_flow_path(network: nx.DiGraph, # Biosynthetic network
@@ -1291,12 +1353,12 @@ def get_differential_biosynthesis(df: pd.DataFrame | str | Path, # Glycan abunda
     root = infer_network_root(core_net) if analysis != "steps" else None
     nets, features = {}, []
     for col in (df_analysis.columns if analysis != "steps" else []):
-        temp = deepcopy(core_net)
+        temp = core_net.copy()  # node and edge attributes are numbers and strings, so copy() is a deep copy here
         abundance_mapping = dict(zip(df_analysis.index.tolist(), df_analysis[col].values.tolist()))
         nx.set_node_attributes(temp, {g: {'abundance': abundance_mapping.get(g, 0.0)} for g in temp.nodes()})
         nets[col] = get_edge_weight_by_abundance(temp, root = root, virtual_damping = virtual_damping)
     if analysis == "flow":
-        res = {col: get_maximum_flow(nets[col], source = root) for col in nets}
+        res = {col: {sink: {'flow_value': v} for sink, v in _flow_values(nets[col], root).items()} for col in nets}
     else:
         # One solve to a shared super-sink: adding up per-sink solutions counts a trunk edge once per downstream sink, and how many sinks stay reachable differs between samples, so that multiplicity leaks into every trunk feature
         res = {}
@@ -1495,7 +1557,7 @@ def extend_glycans(glycans: str | list[str] | set[str], # Glycan(s) to extend
 
 def edges_for_extension(leaf_glycans: set[str], # Terminal glycans in a network
                         new_glycans: set[str], # Extended glycans
-                        graphs: dict[str, nx.DiGraph] # Glycan:graph mapping
+                        graphs: dict[str, GlycanGraph | nx.DiGraph] # Glycan:graph mapping
                         ) -> tuple[list[tuple[str, str]], list[str]]: # (New edges, Labels)
     "Create edges connecting leaf and extended glycans"
     new_edges, new_edge_labels = [], []
@@ -1612,12 +1674,11 @@ def extend_network(network: nx.DiGraph, # Biosynthetic network
             caps = nx.get_edge_attributes(weighted, 'capacity')
             # a candidate reached through a single edge can carry no more than that edge or the flow arriving at its parent, so the solve is per parent, not per candidate
             simple = {g: next(iter(weighted.predecessors(g))) for g in new_glycans if weighted.in_degree(g) == 1}
-            parent_flows = get_maximum_flow(weighted, source = root, sinks = sorted(set(simple.values())))
-            flows = {g: {'flow_value': min(parent_flows[p]['flow_value'], caps.get((p, g), 0.0))} for g, p in simple.items()
-                     if p in parent_flows}
-            flows.update(get_maximum_flow(weighted, source = root, sinks = sorted(set(new_glycans) - set(simple))))
+            parent_flows = _flow_values(weighted, root, sinks = sorted(set(simple.values())))
+            flows = {g: min(parent_flows[p], caps.get((p, g), 0.0)) for g, p in simple.items() if p in parent_flows}
+            flows.update(_flow_values(weighted, root, sinks = sorted(set(new_glycans) - set(simple))))
             for g, v in flows.items():
-                scores[g] = max(scores[g], v['flow_value'])
+                scores[g] = max(scores[g], v)
         new_glycans = dict(sorted(scores.items(), key = lambda kv: (-kv[1], kv[0])))  # ties broken by name, as scores inherits the set order of new_glycans
     return (network, new_glycans) if not auto_steps else (network, new_glycans, steps)
 
