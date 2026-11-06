@@ -4268,6 +4268,18 @@ def test_get_coordinates_and_labels_ring_and_amine_labels():
     assert main[0] == ['GlcN'] * 3 and main[3] == ['A', '3S', 'NS6S']
 
 
+@pytest.mark.parametrize("fragment", ["Man(b1-4)GlcNAc(b1-4)[Z(a1-6)]GlcNAc", "Gal(b1-4)[Y(a1-3/4)]GlcNAc(b1-2)Man", "Z(a1-2)Gal(b1-4)GlcNAc",
+                                      "Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)[Y(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Z(a1-6)]GlcNAc"])
+def test_get_coordinates_and_labels_lost_fuc(fragment):
+    # A Y/Z marker that replaced a Fuc sits where the Fuc sat, upright on its parent instead of splitting the chain, and keeps its own label
+    intact = get_coordinates_and_labels(re.sub(r'[YZ]\(', 'Fuc(', fragment), None)
+    lost = get_coordinates_and_labels(fragment, None)
+    assert [d[1:3] for d in lost[:-1]] == [d[1:3] for d in intact[:-1]]
+    labels = lost[0][0] + [s for d in lost[1:-1] for branch in d[0] for s in branch]
+    assert sorted(s for s in labels if s in {'Y', 'Z'}) == sorted(re.findall(r'[YZ](?=\()', fragment))
+    assert re.search(r'rotate\(-?90 ', GlycoDraw(fragment, suppress = True).as_svg())
+
+
 def test_deduplicate_glycans():
     glycans = [
         "Gal(b1-4)[Fuc(a1-3)]GlcNAc",

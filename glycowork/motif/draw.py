@@ -353,7 +353,7 @@ def draw_shape(
         drawing.append(p)
     elif shape == 'dHex':
         # Deoxyhexose - triangle
-        drawing.append(draw.Lines(x_base- half_dim, y_base+inside_hex_dim,  # -(dim*1/3)
+        drawing.append(draw.Lines(x_base - half_dim, y_base+inside_hex_dim,  # -(dim*1/3)
                                   x_base, y_base-inside_hex_dim,
                                   x_base+half_dim, y_base+inside_hex_dim,
                                   close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = stroke_w))
@@ -786,6 +786,14 @@ def get_coordinates_and_labels(
                 modification_text if ('Subst' in modification_text or normalized_label != 'Unknown') else '')
         parsed_sugars[idx] = (normalized_label, ('!' + modification_text) if negated else modification_text)
     root = max(graph.nodes)
+    # A Y/Z marker stands where its lost residue sat, so one that replaced a Fuc (as good as the only residue on GlcNAc a1-3, a1-4 or a1-6, alternatives such as a1-3/4 included, and on Gal a1-2) is laid out as that Fuc and gets its own label back at the end
+    lost_fuc = {}
+    for n, (label, mod) in list(parsed_sugars.items()):
+        if label in {'Y', 'Z'} and n != root:
+            bond = next(iter(graph.pred[n]))
+            parent = parsed_sugars[next(iter(graph.pred[bond]))][0]
+            if (parent == 'GlcNAc' and re.fullmatch(r'a1-[346](?:/[346])*', node_values[bond])) or (parent == 'Gal' and node_values[bond] == 'a1-2'):
+                lost_fuc[n], parsed_sugars[n] = label, ('Fuc', mod)
     leaves = [n for n in graph if not graph.succ[n] and n != root] if len(graph) > 1 else [0]
     main_chain = leaves[:1]
     while main_chain and main_chain[-1] != root:
@@ -1079,6 +1087,9 @@ def get_coordinates_and_labels(
     for lane, branches in enumerate(branch_levels, start = 1):
         for b, branch in enumerate(branches):
             node_positions.update({n: (lane, b, i) for i, n in enumerate(branch['sugar_nodes'])})
+    for n, label in lost_fuc.items():
+        lane, b, i = node_positions[n]
+        (main_sugar if not lane else lv_sugar[lane - 1][b])[i] = label
     data_combined = [[main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf,
                       main_sugar_highlight, main_bond_highlight]] + [
                         [lv_sugar[i], lv_x_pos[i], lv_y_pos[i], lv_sugar_modification[i], lv_bond[i], lv_connection[i],
@@ -1906,7 +1917,7 @@ def GlycoDraw(
                      anchored_bits]
         floaty_bits += [(bit, off) for (bit, _, off), ok in zip(anchored_bits, placeable) if not ok]
         anchored_bits = [entry for entry, ok in zip(anchored_bits, placeable) if ok]
-    if restrict_vocab and not _drawable(draw_this, libr):
+    if restrict_vocab and not _drawable(draw_this, libr = libr):
         if "!" in draw_this:
             draw_this = re.sub(r'\[!.*?\)\]|!.*?\)', '', draw_this)
         else:
@@ -1938,7 +1949,8 @@ def GlycoDraw(
 
     # Calculate angles for main chain Y, Z fragments
     def calculate_degree(y1, y2, x1, x2):
-        return degrees(atan((y1-y2) / (2*(x2-x1))))
+        # A marker tucked into its parent's column, as for a lost Fuc, hangs on a vertical bond
+        return (90 if y1 < y2 else -90) if x1 == x2 else degrees(atan((y1-y2) / (2*(x2-x1))))
 
     main_deg = [calculate_degree(main_sugar_y_pos[k], main_sugar_y_pos[k - 1], main_sugar_x_pos[k], main_sugar_x_pos[k - 1])
         if sugar in {'Z', 'Y'} and k > 0 else 0 for k, sugar in enumerate(main_sugar)]
