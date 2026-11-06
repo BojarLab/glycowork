@@ -239,6 +239,7 @@ def preprocess_data(
         df = df.groupby(df.index).sum() if glycoproteomics else df.groupby(
             df.index).mean()  # duplicate glycoproteomics rows are charge states/repeat identifications of one part, so they amalgamate by summation before closure
         df_org = df_org.set_index(df_org.columns[0])
+        seen = detected.set_axis(df_org.index).groupby(level = 0).any() if glycoproteomics and not motifs else None  # which glycoforms were measured in which sample, before imputation; per-glycosite motifs have rows of their own
         df_org = df_org.groupby(df_org.index).sum() if glycoproteomics else df_org.groupby(df_org.index).mean()
         if glycoproteomics:
             # A glycoform's abundance does not include the glycoforms above it, so what admits the balances of motifs is the cumulative abundance at or above a composition: containment is then a set relation, and a parent's own part is its measured abundance
@@ -277,9 +278,11 @@ def preprocess_data(
             if motif_dag:
                 df_org.attrs['motif_dag'] = get_motif_dag(df_org.index.tolist()) if motifs else get_composition_dag(df_org.index.tolist())
                 if not motifs:
-                    values = df_org.to_numpy()
+                    # A part counts only the glycoforms measured in a sample: an imputed glycoform is a prediction without the spread of a measurement, and where whole groups were imputed (sites a knockout empties) the parts sat tight at a level of their own, which made most parents above a sparse glycoform redistribute under shuffled labels; a part with nothing measured in a sample is missing there
+                    unmeasured = df_org.isna().to_numpy()
+                    values = np.where(seen.reindex(index = df_org.index, columns = df_org.columns, fill_value = False).to_numpy(dtype = bool) | unmeasured, df_org.to_numpy(), 0)
                     place = {g: i for i, g in enumerate(df_org.index)}
-                    df_org.attrs['motif_parts'] = {p: (labels, np.vstack([np.nansum(values[[place[q] for q in qs]], axis = 0) for qs in members]) * np.where(np.isnan(values[place[p]]), np.nan, 1)) for p, (labels, members) in get_composition_atoms(df_org.attrs['motif_dag']).items()}
+                    df_org.attrs['motif_parts'] = {p: (labels, np.where(unmeasured[place[p]], np.nan, 1) * np.vstack([(lambda x: np.where(x > 0, x, np.nan))(np.nansum(values[[place[q] for q in qs]], axis = 0)) for qs in members])) for p, (labels, members) in get_composition_atoms(df_org.attrs['motif_dag']).items()}
     df_org.attrs['constant'] = constant  # motifs that get no test of their own
     df_org.attrs['scale_var'] = gamma ** 2 if transform != "Nothing" else 0  # the scale uncertainty of every sample's log-ratio, which the tests add to their variance instead of a random draw
     if absent_rows is not None:

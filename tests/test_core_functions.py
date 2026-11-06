@@ -11620,6 +11620,16 @@ def test_motif_parts_sum_to_the_parent():
         assert len(labels) == len(m) and np.allclose(m.sum(axis = 0), org.loc[p].values)
 
 
+def test_glycoform_decomposition_holds_under_shuffled_labels():
+    df = glycoproteomics_data_loader.human_hek293_stt3_N_PMID36139350
+    labels = [g for g, v in df.groups.mapping.items() for _ in v]
+    alpha = get_alphaN(len(labels))
+    true = get_glycanova(df, groups = labels, posthoc = False, random_state = 0)[0]
+    shuffled = get_glycanova(df, groups = list(np.random.default_rng(2000).permutation(labels)), posthoc = False, random_state = 0)[0]
+    assert (true['Redistribution p-val'] < alpha).sum() > 10 and (true['Residual p-val'] < alpha).sum() > 10  # the knockouts move glycoforms between their contexts
+    assert (shuffled['Redistribution p-val'] < alpha).sum() == 0 and (shuffled['Residual p-val'] < alpha).sum() == 0  # parts of imputed glycoforms gave 1,138 and 300 here
+
+
 def test_decomposition_reports_absolute_shares(bcc_result):
     parents = bcc_result[bcc_result['Explained by'] != '']
     assert parents['Own share'].between(0, 1).all() and parents['Shared share'].between(0, 1).all()
@@ -11631,12 +11641,14 @@ def test_glycoproteomics_own_part_is_the_measured_glycoform():
     df = glycoproteomics_data_loader.human_milk_N_PMID34087070
     org = preprocess_data(df, ['Colostrum1', 'Colostrum2', 'Colostrum3'], ['Mature1', 'Mature2', 'Mature3'], experiment = 'diff', glycoproteomics = True, random_state = 42)[1]
     parts, dag = org.attrs['motif_parts'], org.attrs['motif_dag']
+    seen = df.set_index(df.columns[0])[org.columns].fillna(0).gt(0).groupby(level = 0).any().reindex(org.index)
+    values = org.where(seen)  # an imputed glycoform is no measurement, so it is in no part
     assert len(parts) > 0
     for p in list(parts)[:50]:
         labels, m = parts[p]
-        measured = ~np.isnan(org.loc[p].values)
-        assert np.allclose(m[labels.index(())][measured], org.loc[p].values[measured])
-        assert np.allclose(m.sum(axis = 0)[measured], np.nansum(org.loc[[p, *nx.descendants(dag, p)]].values, axis = 0)[measured])
+        assert np.allclose(m[labels.index(())], values.loc[p].values, equal_nan = True)
+        site = ~np.isnan(org.loc[p].values)
+        assert np.allclose(np.nansum(m, axis = 0)[site], np.nansum(values.loc[[p, *nx.descendants(dag, p)]].values, axis = 0)[site])
 
 
 def test_redistribution_answers_with_more_parts_than_samples():
