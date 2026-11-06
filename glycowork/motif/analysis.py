@@ -620,13 +620,14 @@ def get_heatmap(
     if not signed:
         df /= df.sum()
         df *= 100
-    # Cluster the abundances
+    # Cluster the abundances: viscose builds scipy's trees and orders their leaves optimally, and calls a scipy metric it lacks pair by pair
     if dist_func is not None:
-        from scipy.cluster.hierarchy import linkage
-        from scipy.spatial.distance import pdist
-        method = kwargs.pop('method', 'average')
-        kwargs = {'row_linkage': linkage(pdist(df.values, metric = dist_func), method = method),
-                  'col_linkage': linkage(pdist(df.values.T, metric = dist_func), method = method), **kwargs}
+        if isinstance(dist_func, str) and dist_func not in vc.figure.METRICS:
+            from scipy.spatial import distance
+            if not callable(getattr(distance, dist_func, None)):
+                raise ValueError(f"dist_func = '{dist_func}' is not a scipy.spatial.distance metric.")
+            dist_func = getattr(distance, dist_func)
+        kwargs = {**kwargs, 'metric': dist_func}
     # Signed values (CLR, ALR) diverge from 0; everything else is a magnitude
     kwargs = {'figsize': (10, 10), 'cmap': 'diverging' if signed else 'sequential', **kwargs}
     fig, _ = vc.clustermap(df, show_all = show_all, xlabel = 'Samples', ylabel = 'Glycans' if not motifs else 'Motifs',

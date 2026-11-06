@@ -47,8 +47,8 @@
 #### analysis
 ##### Added ✨
 - `get_differential_expression`, `get_glycanova`, and `get_pvals_motifs` now also report `Own share`, `Shared share`, and `Share shift` for parent motifs (bfa9757)
-- Motif tables now center each sample on a reference that counts a motif at 1 / sqrt(1 + its parents and children), moved a tenth of the way to the median ()
-- With 6 or more samples in the two largest groups a motif is tested against a change of `min_change` (0.03 log2, TREAT) in `get_differential_expression` and `get_glycanova` ()
+- Motif tables now center each sample on a reference that counts a motif at 1 / sqrt(1 + its parents and children), moved a tenth of the way to the median (9afd96d)
+- With 6 or more samples in the two largest groups a motif is tested against a change of `min_change` (0.03 log2, TREAT) in `get_differential_expression` and `get_glycanova` (9afd96d)
 
 ##### Changed 🔄
 - Residuals and redistributions come from an exact partition of each parent, so overlapping children no longer overshoot it; glycoform containment uses the cumulative abundance at or above a composition (bfa9757)

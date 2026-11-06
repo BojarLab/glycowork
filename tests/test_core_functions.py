@@ -7832,6 +7832,18 @@ def test_get_heatmap_dist_func(sample_df):
     # Signed values diverge from 0, symmetrically
     assert g.axes[0]._scale['cmap'] == 'diverging' and np.isclose(g.axes[0]._scale['lo'], -g.axes[0]._scale['hi'])
     get_heatmap(sample_df, dist_func = lambda x, y: np.abs(x - y).sum(), method = 'complete', return_plot = True)
+    # Neighbors sit closer than in scipy's unordered tree; a scipy metric viscose lacks still works, and an unknown name raises
+    from scipy.cluster.hierarchy import leaves_list, linkage
+    from scipy.spatial.distance import pdist, squareform
+    many = pd.DataFrame(np.random.default_rng(3).gamma(1.0, 1.0, (12, 6)), columns = [f'sample{k}' for k in range(6)])
+    many.insert(0, 'glycan', [f'Gal(b1-{k})GlcNAc' for k in range(3, 15)])
+    g, _, d = get_heatmap(many, dist_func = 'braycurtis', return_plot = True)
+    dist = squareform(pdist(d.values, 'braycurtis'))
+    cost = lambda order: dist[order[:-1], order[1:]].sum()
+    assert cost(g.row_order) < cost(list(leaves_list(linkage(pdist(d.values, 'braycurtis'), 'average'))))
+    get_heatmap(many, dist_func = 'jaccard', return_plot = True)
+    with pytest.raises(ValueError):
+        get_heatmap(sample_df, dist_func = 'not_a_metric')
 
 
 def test_get_pcoa(sample_df):
