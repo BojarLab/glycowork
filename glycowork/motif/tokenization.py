@@ -266,7 +266,7 @@ def get_ion_mzs(mass: float | np.ndarray, # Neutral mass(es), including any redu
 def mz_to_composition(mz_value: float, # m/z value from mass spec
                       max_charge: int = -2, # Signed charge ceiling: sign sets ion mode (negative/positive), magnitude the highest charge state z considered
                       mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
-                      modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl
+                      modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl/glycolate/lactate
                       sample_prep: str = 'underivatized', # Sample preparation method: underivatized/permethylated/deuteropermethylated/peracetylated
                       mass_tolerance: float = 0.5, # Mass tolerance for matching
                       tolerance_unit: str = "Da",  # Unit of mass_tolerance: "Da" (absolute) or "ppm"
@@ -434,7 +434,7 @@ def mz_to_structures(mz_list: float | list[float], # Precursor mass(es)
                      sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/deuteropermethylated/peracetylated
                      mass_tolerance: float = 0.5, # Mass tolerance for matching
                      tolerance_unit: str = "Da",  # Unit of mass_tolerance: "Da" (absolute) or "ppm"
-                     modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl
+                     modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl/glycolate/lactate
                      df_use: pd.DataFrame | None = None, # Custom glycan database
                      filter_out: str | set[str] | None = None,  # Monosaccharide(s) to ignore
                      deprioritized: str | set[str] | None = {"Me", "HexA", "PCho"},  # Monosaccharide(s) to use only as fallback if no other composition matches
@@ -660,7 +660,7 @@ def composition_to_mass(dict_comp_in: dict[str, int] | str, # Composition dictio
                         mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
                         sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/deuteropermethylated/peracetylated
                         adduct: str | float | None = None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
-                        modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl
+                        modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl/glycolate/lactate
                         peptide: str | None = None, # Peptide carrying the glycan(s), in one-letter code with optional signed mass or formula deltas, or named modifications (PEPTIDE_MODIFICATIONS), after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK' or 'NC[Carbamidomethyl]SK' for carbamidomethylation, 'M[+15.9949]NGTK'), to get the glycopeptide mass; several glycans on one peptide are passed as their total composition
                         sialic_derivatization: str | tuple[str, str] | None = None # Sialic acid derivatization of an underivatized or (before it) permethylated sample, a key of SIALIC_DERIVATIZATIONS ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5') or a pair of SIALIC_PRODUCTS (a2-6, a2-3/8/9); unless both are the same product, every sialic acid then needs its linkage ('H5N4E1L1', {'Neu5Ac_a2-6': 1, 'Neu5Ac_a2-3': 1}), and uronic acids take the a2-6 product; peptide carboxyls are left to peptide's deltas
                         ) -> float: # Theoretical mass
@@ -770,7 +770,7 @@ def glycan_to_mass(glycan: str | dict[str, int], # Glycan in IUPAC-condensed for
                    sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/deuteropermethylated/peracetylated
                    stem_libr: dict[str, str] | None = None, # Modified to core monosaccharide mapping
                    adduct: str | float | None = None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
-                   modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl; a glycan ending in an alditol (-ol) is reduced already and takes no label, and one without a free reducing end (-onic, Ins, an anomeric aglycone such as 1Ser, a residue linked through its anomeric carbon such as Glc(a1-2)Fru) takes neither
+                   modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl/glycolate/lactate; a glycan ending in an alditol (-ol) is reduced already and takes no label, and one without a free reducing end (-onic, Ins, an anomeric aglycone such as 1Ser, a residue linked through its anomeric carbon such as Glc(a1-2)Fru) takes neither
                    peptide: str | None = None, # Peptide carrying the glycan, in one-letter code with optional signed mass or formula deltas, or named modifications (PEPTIDE_MODIFICATIONS), after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK', 'NC[Carbamidomethyl]SK'), to get the glycopeptide mass
                    sialic_derivatization: str | tuple[str, str] | None = None # Sialic acid derivatization of an underivatized or (before it) permethylated sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); unless both are the same product, each sialic acid then needs a known linkage class, a2-3/6 or a2-? raises
                    ) -> float: # Theoretical mass
@@ -809,7 +809,7 @@ def glycan_to_mass(glycan: str | dict[str, int], # Glycan in IUPAC-condensed for
             return mass
     # residues no composition expresses (Kdo, heptoses, furanoses, QuiNAc, ...) are weighed atom by atom from the glycan's molecule
     try:
-        formula, caps = _molecule_formula(glycan, sample_prep)
+        formula, caps = _molecule_formula(glycan, sample_prep = sample_prep)
     except ValueError:
         if comp:
             return mass
@@ -828,7 +828,7 @@ def get_formula(glycan: str | dict[str, int], # Glycan in any nomenclature canon
                 sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/deuteropermethylated/peracetylated
                 stem_libr: dict[str, str] | None = None, # Modified to core monosaccharide mapping
                 adduct: str | None = None, # Chemical formula of a neutral adduct (e.g., "C2H4O2"); a signed formula ("-H2O") removes atoms
-                modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl; a glycan ending in an alditol (-ol) is reduced already and takes no label, and one without a free reducing end (-onic, Ins, an anomeric aglycone such as 1Ser, a residue linked through its anomeric carbon such as Glc(a1-2)Fru) takes neither
+                modification: str | None = None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl/glycolate/lactate; a glycan ending in an alditol (-ol) is reduced already and takes no label, and one without a free reducing end (-onic, Ins, an anomeric aglycone such as 1Ser, a residue linked through its anomeric carbon such as Glc(a1-2)Fru) takes neither
                 peptide: str | None = None, # Peptide carrying the glycan(s), in one-letter code with optional signed formula deltas, or named modifications (PEPTIDE_MODIFICATIONS) other than isotope-coded tags, after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK', 'NC[Carbamidomethyl]SK'); several glycans on one peptide are passed as their total composition
                 sialic_derivatization: str | tuple[str, str] | None = None # Sialic acid derivatization of an underivatized or (before it) permethylated sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); unless both are the same product, every sialic acid then needs its linkage ('H5N4E1L1', 'Neu5Ac(a2-6)...')
                 ) -> str: # Elemental formula in Hill order (C, H, then alphabetical), e.g., 'C62H104N4O46' for H5N4
@@ -912,7 +912,7 @@ def get_formula(glycan: str | dict[str, int], # Glycan in any nomenclature canon
                 add(elements, cap, len(re.findall(r'(?:^|(?<=[\[\])]))Ins', glycan)))
         if not comp or (sample_prep == 'peracetylated' and not {'P', 'Me'}.isdisjoint(comp)):
             try:
-                atoms, caps = _molecule_formula(glycan, sample_prep)
+                atoms, caps = _molecule_formula(glycan, sample_prep = sample_prep)
             except ValueError:
                 if not comp:
                     raise unmapped or ValueError(f"No valid composition could be derived from '{glycan}' (it contains components outside {sorted(_VALID_COMPONENTS)}), and it has no defined structure to read its atoms from.") from None

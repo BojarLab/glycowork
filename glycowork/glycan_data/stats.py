@@ -569,7 +569,7 @@ def impute_biosynthetic(df: pd.DataFrame, # glycans as rows, samples as columns;
                         glycans: list[str] | None = None, # glycan of each row (IUPAC-condensed or composition), to give every sample its own activity per biosynthetic step
                         mnar: bool = True, # treat non-detections as censored where the data say missingness is intensity-dependent: they inform each glycan's level, and imputations are pulled towards the detection limit
                         draw: bool = False, # add a random draw of the held-out prediction error to every imputed value, so imputed replicates keep the spread of measured ones (for rhythm tests that weigh each timepoint by its standard error)
-                        random_state: int | np.random.Generator | None = None, # optional random state for reproducibility
+                        random_state: int | np.random.Generator | None = None, # seeds the noise of draw (None: seed 0); the model fit itself is always seeded with 0
                         unmeasured: np.ndarray | None = None # boolean mask in the shape of df of cells that were never measured (e.g., a glycosite not covered in a sample): imputed, but not read as non-detections
                         ) -> pd.DataFrame: # dataframe with every missing value imputed
     "Imputes missing glycomics values with a low-rank model whose glycan loadings include each glycan's count of every biosynthetic step, stacked with stable-ratio partner glycans; non-detections are censored observations of a fitted selection model, which sets each glycan's level together with its measured values and gives glycans detected at most once their posterior mean"
@@ -960,7 +960,7 @@ def manova_wilks(balances: np.ndarray, # log-ratios x samples, without NaN
     lam = np.exp(np.linalg.slogdet(res @ res.T + ridge)[1] - np.linalg.slogdet(tot @ tot.T + ridge)[1])
     s = np.sqrt((p ** 2 * h ** 2 - 4) / (p ** 2 + h ** 2 - 5)) if p ** 2 + h ** 2 > 5 else 1.0
     df1, df2 = p * h, s * (dfe - (p - h + 1) / 2) - (p * h - 2) / 2
-    F = (lam ** (-1 / s) - 1) * df2 / df1
+    F = max((lam ** (-1 / s) - 1) * df2 / df1, 0.0)  # lambda rounds a hair above 1 when the group means coincide
     return F, fdtrc(df1, df2, F)
 
 
@@ -1741,7 +1741,7 @@ def spearman_exact_pvals(r: np.ndarray | float, # Spearman correlation(s), all c
                          ) -> np.ndarray | float: # two-sided p-value(s); NaN where r is NaN
     "Exact two-sided p-values of Spearman correlations from their full permutation null, for small n where the t approximation used by spearmanr is badly anti-conservative"
     null = _spearman_null(n)
-    return np.where(np.isnan(r), np.nan, 1 - np.searchsorted(null, np.abs(r) - 1e-9) / len(null))  # the tolerance keeps a float-noisy r from dropping below its own null value
+    return np.where(np.isnan(r), np.nan, 1 - np.searchsorted(null, np.abs(r) - 1e-9) / len(null))[()]  # [()] gives a float for a scalar r; the tolerance keeps a float-noisy r from dropping below its own null value
 
 
 def _spearman_pvals(r: np.ndarray | float, # Spearman correlation(s), all on the same n samples
@@ -1756,7 +1756,7 @@ def _spearman_pvals(r: np.ndarray | float, # Spearman correlation(s), all on the
         p = 2 * stdtr(dof, -np.abs(r * np.sqrt(dof / ((1 + r) * (1 - r)))))
     if controls:
         return p
-    b, x = 1 / n, -(np.abs(r) + 6 / (n * (n ** 2 - 1))) * np.sqrt(n - 1)
+    b, x = 1 / n, -(np.abs(r) - 6 / (n * (n ** 2 - 1))) * np.sqrt(n - 1)  # P(R >= r): AS 89 counts the observed rank order into the tail
     y = x ** 2
     u = x * b * (0.2274 + b * (0.2531 + 0.1745 * b) + y * (-0.0758 + b * (0.1033 + 0.3932 * b) - y * b * (0.0879 + 0.0151 * b - y * (0.0072 - 0.0831 * b + y * b * (0.0131 - 0.00046 * y)))))
     return np.clip(np.maximum(p, 2 * (ndtr(x) - u * np.exp(-y / 2))), np.exp(np.log(2) - gammaln(n + 1)), 1)  # no rank order is rarer than 2 / n!
@@ -1787,7 +1787,7 @@ def hsic(x: np.ndarray, # first variable; 1-D or (n_samples, n_features)
     w = np.outer(ev_K, ev_L).ravel()
     mean_T, var_T = w.sum(), 2 * (w ** 2).sum()
     return stat, (float(
-        gammaincc(mean_T ** 2 / var_T, stat * (n - 1) ** 2 / n / (var_T / mean_T))) if var_T > 0 else 1.0)
+        gammaincc(mean_T ** 2 / var_T, max(stat, 0) * (n - 1) ** 2 / n / (var_T / mean_T))) if var_T > 0 else 1.0)  # rounding can push an independent statistic below 0, where the gamma tail is 1
 
 
 def _pca(X: np.ndarray, # samples as rows, features as columns

@@ -13,6 +13,9 @@
 ##### Added ✨
 - Added `glycan_to_glycangraph`, which returns the cached, read-only `GlycanGraph` glycowork's motif code runs on (the nodes, attributes, and neighbor order of `glycan_to_nxGraph`, without networkx), for code that only reads glycan graphs (0f3af98)
 
+##### Fixed 🐛
+- `possible_topology_check` takes a single glycan to check against as a string or graph, which it read character by character and matched nothing ()
+
 #### processing
 ##### Added ✨
 - Added `glycan_to_kcf`, which writes KCF as KEGG GLYCAN does, for KEGG's KCaM search or the RINGS tools (bfa9757)
@@ -20,7 +23,7 @@
 ##### Fixed 🐛
 - `kcf_to_iupac` reads KEGG's bare `Fuc`, `Ara`, and `AllNAc` as D, as KEGG means them; both anomers of a sucrose linkage, unknown anomers (`2:1`), phosphoethanolamines, carriers such as `PP-Dol` and `protein`, inositol, and KEGG's spellings (`Cym`, `2,6daraHex`, `L4-en-thrHexA`, `Formyl`) are read as well, so all 1,000 KEGG entries tested now read (bfa9757)
 - `kcf_to_iupac` keeps `dHex` as it is, which it turned into `D-Hex` (bfa9757)
-- `PDB_TO_IUPAC` now maps `NDG3SO3` to `GlcNAc3S` instead of `GlcNAc3S6S` and adds `BGC6SO3`, `NGA3SO3`, `NGA6SO3`, `NGA4SO36SO3`, and `GAL3SO34SO3` (2a509fe)
+- `PDB_TO_IUPAC` now maps `NDG3SO3` to `GlcNAc3S` instead of `GlcNAc3S6S` and adds `BGC6SO3`, `NGA3SO3`, `NGA6SO3`, `NGA4SO36SO3`, and `GAL3SO34SO3` (2a509fe), and `GLC4SO3` to `Glc4S` instead of `GalNAc4S` ()
 
 #### tokenization
 ##### Added ✨
@@ -37,6 +40,9 @@
 ##### Changed 🔄
 - Up and down in volcano and MA plots, heatmap and coverage scales, and network nodes and fold-change edges take the palette's colors; the `origin` values of `highlight_network` and `network_alignment` are palette names now (73bca70)
 
+##### Fixed 🐛
+- `GlycoDraw` draws a Y or Z fragment that replaced a Fuc where the Fuc sat, with its bond at the Fuc's angle, so lost core and antenna Fuc fragments read as such (c7678b7)
+
 #### annotate
 ##### Added ✨
 - Added `get_motif_atoms` and `get_composition_atoms`, which split a parent motif or glycoform by the children covering it, into parts that sum to the parent (bfa9757)
@@ -47,8 +53,8 @@
 
 #### analysis
 ##### Added ✨
-- `get_differential_expression`, `get_glycanova`, and `get_pvals_motifs` now also report `Own share`, `Shared share`, and `Share shift` for parent motifs (bfa9757)
-- Motif tables now center each sample on a reference that counts a motif at 1 / sqrt(1 + its parents and children), moved a tenth of the way to the median (9afd96d)
+- `get_differential_expression`, `get_glycanova`, and `get_pvals_motifs` now also report `Own share` (the mean share of a parent motif that no child covers; 0 means purely inherited) and `Share shift` (the largest change in share of any of its contexts, in percentage points) for parent motifs (bfa9757)
+- Motif tables in `get_differential_expression`, `get_glycanova`, and `get_roc` now center each sample on a reference that counts a motif at 1 / sqrt(1 + its parents and children), moved a tenth of the way to the median (9afd96d)
 - With 6 or more samples in the two largest groups a motif is tested against a change of `min_change` (0.03 log2, TREAT) in `get_differential_expression` and `get_glycanova` (9afd96d)
 
 ##### Changed 🔄

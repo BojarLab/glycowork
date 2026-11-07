@@ -13,7 +13,7 @@ datas = collect_data_files('glycowork') + collect_data_files('glycorender') + [(
 for package in ('glycowork', 'glycorender'):
     datas += copy_metadata(package)
 icon = os.path.join(SPECPATH, 'glycowork.icns' if sys.platform == 'darwin' else 'glycowork.ico')
-# PyInstaller only collects the matplotlib backends named in a matplotlib.use() call (the worker's Agg), and savefig looks up the backend of each format by name
+# glycowork reaches networkx through loader.LazyModule (import_module), which PyInstaller cannot trace
 a = Analysis([os.path.join(SPECPATH, 'glycowork_app.py')], datas = datas,
              hiddenimports = ['openpyxl.cell._writer', 'scipy._cyutility', 'networkx'],
              # The optional ml and chem dependencies, which the app never imports, the other Qt bindings, and test and notebook tooling

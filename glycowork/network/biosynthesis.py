@@ -753,7 +753,7 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
 def network_alignment(network_a: nx.DiGraph, # First network
                       network_b: nx.DiGraph # Second network
                       ) -> nx.DiGraph: # Combined network
-    "Combine two networks into one with color coding in the palette (a neutral: shared, main hue: only in a, second hue: only in b)"""
+    "Combine two networks into one with color coding in the palette (a neutral: shared, main hue: only in a, second hue: only in b)"
     U = nx.Graph()
     network_a_nodes = set(network_a.nodes)
     network_b_nodes = set(network_b.nodes)
@@ -1071,7 +1071,7 @@ def highlight_network(network: nx.DiGraph, # Biosynthetic network
             i = next((i for i in idx if abundance_keys._compare(abundance_keys[i], node)), None)
             node_abundance[node] = abundance_dict[abundance_keys[i]] if i is not None else 50
         nx.set_node_attributes(network_out, node_abundance, name = 'abundance')
-    # Add the degree of evolutionary conervation as 'abundance' node attribute used for node size scaling
+    # Add the degree of evolutionary conservation as 'abundance' node attribute used for node size scaling
     elif highlight == 'conservation':
         species_list = conservation_df['Species'].unique().tolist()
         spec_nodes = {k: set(network_dic[k].nodes()) for k in species_list if k in network_dic}
@@ -1143,6 +1143,8 @@ def _flow_values(network: nx.DiGraph, # network with a capacity on its edges
                  sinks: str | list[str] | None = None  # Target node(s); default:all terminal nodes reachable from source
                  ) -> dict[str, float]: # sink: maximum flow value, for the sinks the source reaches
     "Maximum flow values computed exactly: on the largest power of two dividing every capacity, the solve runs in integers and each value is rounded once, so it is the correctly rounded maximum flow whatever order a solver adds flow in"
+    if source not in network:
+        raise ValueError(f"The source {source} is not a node of the network.")
     succ = {u: list(nbrs) for u, nbrs in network.adjacency()}
     reach, stack = {source}, [source]
     while stack:
@@ -1157,7 +1159,7 @@ def _flow_values(network: nx.DiGraph, # network with a capacity on its edges
     caps = list(network.edges(data = 'capacity'))
     exact = all(isinstance(c, (int, float, np.integer, np.floating)) and math.isfinite(c) and c >= 0 for *_, c in caps)
     if exact:
-        fracs = [Fraction(c) for *_, c in caps]
+        fracs = [Fraction(c) if isinstance(c, (int, float, np.integer)) else Fraction(*c.as_integer_ratio()) for *_, c in caps]
         unit = math.lcm(*(f.denominator for f in fracs)) if fracs else 1
         arcs = defaultdict(list)
         for (u, v, _), f in zip(caps, fracs):

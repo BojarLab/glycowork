@@ -82,7 +82,7 @@ def preprocess_data(
         monte_carlo: bool = False,  # Use Monte Carlo simulation to control for technical variation (will take longer to run)
         random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
         circadian: bool = False,  # data for a rhythm test: every imputed value gets a draw of the prediction error, so imputed replicates keep the spread of measured ones
-        motif_dag: bool = True # Build the containment DAG; only worth its n^2 isomorphism sweep for callers that read it
+        motif_dag: bool = True # Build the containment DAG, which with CLR also weights each motif in the per-sample reference at 1 / sqrt(1 + its parents and children); without it motifs are centered on their plain geometric mean (the Aitchison geometry)
 ) -> tuple[pd.DataFrame, pd.DataFrame, list[str | int], list[str | int]]:  # (transformed df, untransformed df, group1 labels, group2 labels)
     "Preprocesses glycomics data by imputing missing values with impute_biosynthetic, applying CLR/ALR transformations to escape compositional bias, and optionally quantifying glycan motifs"
     if group1 is None and isinstance(df, GlycoDataFrame) and df._contrasts:
@@ -298,18 +298,16 @@ def _constant_motifs(counts: pd.DataFrame # Glycans x motifs occurrence counts, 
     return counts.columns[(counts.nunique() == 1) & (counts.iloc[0] > 0)].tolist()
 
 
-def _explained_by(parent: str,  # Parent motif whose signal is being decomposed
-                  kids: list[str],  # Its children in the containment DAG
-                  eff: dict[str, float],  # Motif to effect size
-                  top: int | None = 5  # How many children to name, ordered by how far they move the effect size; None names every child
-                  ) -> str:  # Comma-separated children with their effect-size shift, plus a count of any not named
-    "Names the children that move the parent's effect size furthest, since an exhaustive feature set gives broad parents hundreds of them"
-    shown = [c for c in kids if c in eff]
-    if parent in eff:
-        shown = sorted(shown, key = lambda c: -abs(eff[c] - eff[parent]))
+def _explained_by(names: list[str],  # The parent's contexts: the children covering each part of it, joined by ' & ', and 'own' for the part no child covers
+                  shift: np.ndarray,  # Each context's change in share of the parent, in percentage points
+                  top: int | None = 5,  # How many contexts to name, ordered by how far their share moved; None names every context
+                  signed: bool = True  # Whether shift has a direction (second group minus first) or is the spread of the group means
+                  ) -> str:  # Comma-separated contexts with their share change, plus a count of any not named
+    "Names the contexts whose share of the parent moved furthest, since an exhaustive feature set gives broad parents hundreds of them; with two groups, the shifts of all contexts sum to zero where atoms split the parent"
+    shown = np.argsort(-np.abs(np.nan_to_num(shift)), kind = 'stable')
     n = len(shown) if top is None else top
-    labels = [f'{c} ({eff[c] - eff[parent]:+.2f})' for c in shown[:n]] if parent in eff else shown[:n]
-    return ', '.join(labels) + (f', +{len(shown) - n} more' if len(shown) > n else '')
+    labels = [names[i] if not np.isfinite(shift[i]) else f'{names[i]} ({shift[i]:+.1f} pp)' if signed else f'{names[i]} ({shift[i]:.1f} pp)' for i in shown[:n]]
+    return ', '.join(labels + ([f'+{len(shown) - n} more'] if len(shown) > n else []))
 
 
 def _levene_pvalues(B: np.ndarray, # second group, features as rows and samples as columns; NaN where unmeasured
@@ -335,26 +333,26 @@ def _levene_pvalues(B: np.ndarray, # second group, features as rows and samples 
 
 def _parent_parts(parent: np.ndarray, # The parent's abundance per sample
                   children: np.ndarray, # Its children's abundances, children x samples
-                  atoms: tuple | None # The parent's atoms (labels, atoms x samples), where structures were available to split it
-                  ) -> tuple[np.ndarray, np.ndarray, np.ndarray]: # (parts outside the parent's own context, own context, share of the parent in contexts several children cover)
+                  atoms: tuple | None, # The parent's atoms (labels, atoms x samples), where structures were available to split it
+                  kids: list[str] # Its children's names, in the order of children
+                  ) -> tuple[np.ndarray, np.ndarray, list[str]]: # (parts outside the parent's own context, own context, names of those parts: the children covering each, joined by ' & ', without the glycosite children of one site share)
     "The parts of a parent: its occurrences split by the children covering them, which sum to the parent; without structures (per-glycosite motifs), parent minus children, which overlapping children can overshoot"
+    short = {k: split_glycoform_id(k)[1] for k in kids} if all(GLYCOFORM_ID.fullmatch(k) for k in kids) and len({split_glycoform_id(k)[0] for k in kids}) == 1 else {}
     if atoms is None:
-        return children, parent - children.sum(axis = 0), np.zeros_like(parent)
+        return children, parent - children.sum(axis = 0), [short.get(k, k) for k in kids]
     labels, m = atoms
-    with np.errstate(invalid = 'ignore', divide = 'ignore'):
-        shared = m[[i for i, k in enumerate(labels) if len(k) > 1]].sum(axis = 0) / m.sum(axis = 0)
-    return m[[i for i, k in enumerate(labels) if k]], m[labels.index(())] if () in labels else np.zeros(m.shape[1]), shared
+    return m[[i for i, k in enumerate(labels) if k]], m[labels.index(())] if () in labels else np.zeros(m.shape[1]), [' & '.join(short.get(c, c) for c in k) for k in labels if k]
 
 
-def _decomposition_columns(rows: dict[str, tuple], # parent motif to (explained by, residual p-value, residual effect size, redistribution p-value, own share, shared share, share shift, and context_terms where the contexts are tested too)
+def _decomposition_columns(rows: dict[str, tuple], # parent motif to (explained by, residual p-value, residual effect size, redistribution p-value, own share, share shift, and context_terms where the contexts are tested too)
                            motifs: list[str], # motifs in the row order of the results table
                            alpha: float # significance threshold of the corrections
                            ) -> dict[str, list]: # the decomposition columns of a results table
     "Corrects residual and redistribution p-values, each as its own, much smaller family, since they answer different questions than the marginals. A parent's test of all its parts at once and its contexts go in as one p-value: the variances of the contexts share one prior over the table, each parent gets one weighted Simes over them, and a Cauchy combination, which holds whatever their dependence, joins it with the test of all parts"
-    tested = [m for m, v in rows.items() if not np.isnan(v[1])]  # a parent whose own context is too rare to test has no residual p-value, and stays out of the family
+    tested = [m for m, v in rows.items() if not np.isnan(v[1])]  # a purely inherited parent has no own context to test, and one whose own context is too rare in a group is untested: neither has a residual p-value, and neither enters the family
     cp = dict(zip(tested, correct_multiple_testing([rows[m][1] for m in tested], alpha)[0])) if tested else {}
     raw = {m: v[3] for m, v in rows.items()}
-    terms = {m: v[7] for m, v in rows.items() if len(v) > 7 and len(v[7])}
+    terms = {m: v[6] for m, v in rows.items() if len(v) > 6 and len(v[6])}
     if terms:
         table = np.vstack(list(terms.values()))
         tested = np.isfinite(table[:, 0])
@@ -371,8 +369,7 @@ def _decomposition_columns(rows: dict[str, tuple], # parent motif to (explained 
     bp = dict(zip(bk, correct_multiple_testing([raw[m] for m in bk], alpha)[0])) if bk else {}
     return {'Explained by': [rows[m][0] if m in rows else '' for m in motifs], 'Redistribution p-val': [bp.get(m, np.nan) for m in motifs],
             'Residual p-val': [cp.get(m, np.nan) for m in motifs], 'Residual effect size': [rows[m][2] if m in rows else np.nan for m in motifs],
-            'Own share': [rows[m][4] if m in rows else np.nan for m in motifs], 'Shared share': [rows[m][5] if m in rows else np.nan for m in motifs],
-            'Share shift': [rows[m][6] if m in rows else np.nan for m in motifs]}
+            'Own share': [rows[m][4] if m in rows else np.nan for m in motifs], 'Share shift': [rows[m][5] if m in rows else np.nan for m in motifs]}
 
 
 @_abundance_input('df')
@@ -388,9 +385,9 @@ def get_pvals_motifs(
         custom_motifs: str | list[str] = [],  # Custom motifs if using 'custom' feature set
         grouped_BH: bool = False,  # Two-stage adaptive Benjamini-Hochberg within groups instead of over all features: DAG-grouped families for motifs and glycoforms; at equal false positives this does worse than a flat correction, so it is only on request
         moderate_variance: bool = True,  # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
-        top_explained: int | None = 5  # How many child motifs to name in 'Explained by'; None names all of them
-) -> GlycoDataFrame:  # DataFrame with p-values, FDR-corrected p-values, significance, Cohen's d effect sizes, and equivalence p-values for glycan motifs
-    "Identifies significantly enriched glycan motifs using a moderated t-test with DAG-grouped FDR correction and Cohen's d effect size calculation, comparing samples above/below threshold"
+        top_explained: int | None = 5  # How many contexts to name in 'Explained by', those whose share of the parent moved most; None names all of them
+) -> GlycoDataFrame:  # DataFrame with p-values, FDR-corrected p-values, significance, Cohen's d effect sizes, and equivalence p-values for glycan motifs, and the decomposition of every parent motif, as in get_differential_expression
+    "Identifies significantly enriched glycan motifs using a moderated t-test with FDR correction (DAG-grouped with grouped_BH) and Cohen's d effect size calculation, comparing samples above/below threshold, and decomposes every parent motif into its contexts"
     in_name = getattr(df, '_glyco_name', '')
     glycan_col_name = GlycoDataFrame(df)._glycan_col or df.columns[0]
     if not multiple_samples and label_col_name not in df.columns:
@@ -424,7 +421,7 @@ def get_pvals_motifs(
     na, nb = A.shape[1], B.shape[1]
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(na + nb)
-    dag = get_motif_dag(motif_names, carriers = df_motif) if grouped_BH or moderate_variance else None
+    dag = get_motif_dag(motif_names, carriers = df_motif)  # the decomposition reads it too, whatever the correction and the moderation
     # Test statistical enrichment for motifs in above vs below
     live = (A.var(axis = 1, ddof = 1) > 1e-12) | (B.var(axis = 1, ddof = 1) > 1e-12)
     Al, Bl = A[live], B[live]
@@ -461,11 +458,11 @@ def get_pvals_motifs(
     if dag is not None:
         # A parent's count in a glycan is its children's counts plus whatever sits in a context no child covers, so the decomposition the differential functions report is available here too
         F, pos_i, neg_i = X.T, np.where(pos)[0], np.where(neg)[0]
-        idx, eff = {m: i for i, m in enumerate(motif_names)}, dict(zip(motif_names, effect_sizes))
+        idx = {m: i for i, m in enumerate(motif_names)}
         for p in [m for m in motif_names if m in dag and dag.out_degree(m)]:
             kids = [c for c in dag.successors(p) if c in idx]
             kv = F[[idx[c] for c in kids]].astype(np.float64)  # promotes resid, parts, and bal below back to double, since F only stores counts
-            others, resid, shared = _parent_parts(F[idx[p]].astype(np.float64), kv, atoms.get(p))
+            others, resid, names = _parent_parts(F[idx[p]].astype(np.float64), kv, atoms.get(p), kids)
             usable = resid > 1e-6
             parts = np.vstack([others, np.where(usable, resid, np.nan)])
             parts = parts[(parts > 1e-6).any(
@@ -473,7 +470,8 @@ def get_pvals_motifs(
             with np.errstate(invalid = 'ignore', divide = 'ignore'), warnings.catch_warnings():
                 warnings.simplefilter('ignore', RuntimeWarning)
                 shares = np.vstack([others, resid]) / (others.sum(axis = 0) + resid)
-                stats = (np.nanmedian(resid / (others.sum(axis = 0) + resid)), np.nanmean(shared), np.nanmax(np.abs(np.nanmean(shares[:, pos_i], axis = 1) - np.nanmean(shares[:, neg_i], axis = 1))) * 100)
+                shift = ((np.nanmean(shares[:, pos_i], axis = 1) - np.nanmean(shares[:, neg_i], axis = 1)) * 100)[:len(names) + int(usable.any())]  # a parent without an own context in any sample has no own share to move
+                stats = (np.nanmean(np.where(usable, resid, 0.0) / (others.sum(axis = 0) + resid)), np.nanmax(np.abs(shift)))
             # The parts sum to the parent, so subtracting one part gives the additive logratio of a genuine sub-composition
             # A balance is only defined in a glycan where every part was measured; leaving the NaN in makes that row's std NaN, so the residual direction silently drops out of the very test it belongs to
             obs = ~np.isnan(parts).any(axis = 0)
@@ -483,10 +481,10 @@ def get_pvals_motifs(
             bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9] if len(bal) and len(cols_b) > 1 else bal[:0]
             bp_i, bn_i = np.where(pos[cols_b])[0], np.where(neg[cols_b])[0]
             bal_p = hotellings_t2(bal[:, bn_i].T, bal[:, bp_i].T)[1] if 0 < len(bal) < min(len(bp_i), len(bn_i)) else np.nan
-            explained = _explained_by(p, kids, eff, top = top_explained)
+            explained = _explained_by((names + ['own'])[:len(shift)], shift, top = top_explained)
             okp, okn = usable[pos_i], usable[neg_i]
             if okp.sum() < 2 or okn.sum() < 2:
-                rows[p] = (explained, np.nan, np.nan, bal_p, *stats) if usable.any() else (explained, 1.0, 0.0, bal_p, *stats)  # a parent that occurs only inside its children has no context of its own left (residual p 1, effect 0); one whose own context is too rare in a group to test is untested, not inherited
+                rows[p] = (explained, np.nan, np.nan, bal_p, *stats)  # a parent that occurs only inside its children is purely inherited (Own share 0), and one whose own context is too rare in a group is untested: neither has a residual test
                 continue
             r = np.log2(np.maximum(resid, 0.0000001))
             rows[p] = (explained, _ttest_pvalue(r[pos_i][okp], r[neg_i][okn]),
@@ -619,6 +617,7 @@ def get_heatmap(
         df = get_additive_logratio_transformation(df.reset_index(), df.columns.tolist(), [], paired = False, gamma = 0)
         df = df.set_index(df.columns[0])
     df = df.dropna(axis = 1)
+    df = df.loc[df.ne(0).any(axis = 1)]  # a glycan measured in no sample has no profile, and cosine, correlation, Bray-Curtis, and Jensen-Shannon are undefined on it
     signed = (df < 0).any().any()
     if not signed:
         df /= df.sum()
@@ -1056,14 +1055,14 @@ def get_differential_expression(
         custom_scale: float | dict = 0,  # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
         moderate_variance: bool = True,  # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
         glycoproteomics: bool | None = None,  # Whether data is from glycoproteomics (rows protein_site_glycan); default: whenever every row label is protein_site_glycan
-        min_change: float = 0.03,  # log2 change a motif's test is held against (TREAT, McCarthy and Smyth 2009) when the two largest groups have 6 samples or more; 0 tests against no change
+        min_change: float = 0.03,  # log2 change a motif's moderated (or covariate-adjusted) test is held against (TREAT, McCarthy and Smyth 2009) when the two largest groups have 6 samples or more; Welch's test (moderate_variance = False) takes none; 0 tests against no change
         level: str = 'peptide',  # Analysis level for glycoproteomics
         monte_carlo: bool = False,  # Use Monte Carlo for technical variation
         random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
-        top_explained: int | None = 5,  # How many child motifs to name in 'Explained by'; None names all of them
+        top_explained: int | None = 5,  # How many contexts to name in 'Explained by', those whose share of the parent moved most; None names all of them
         covariates: pd.DataFrame | pd.Series | dict | None = None  # per-sample nuisance variables indexed by sample name (e.g., secretor status, sex, age, batch; a dict maps samples to one covariate); each feature is fit as group plus covariates and the group effect is tested within them
-) -> GlycoDataFrame:  # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes (Cohen's h of the detection rates for features absent from a whole group)
-    "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets, or a linear model with covariates) with multiple testing correction on glycomics abundance data"
+) -> GlycoDataFrame:  # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes (Cohen's h of the detection rates for features absent from a whole group); with motifs or glycoproteomics, every parent also gets its decomposition: 'Explained by' (its contexts, i.e., the children covering each part of it and 'own' for the part none covers, with their change in share of the parent in percentage points), 'Redistribution p-val' and 'Residual p-val' (FDR-corrected), 'Residual effect size', 'Own share' (the mean share of the parent that no child covers; 0 means purely inherited, with no residual test), and 'Share shift' (the largest change in share of any context, in percentage points)
+    "Performs differential expression analysis using a moderated t-test (Welch's or the paired t-test with moderate_variance = False, Hotelling's T2 for sets, or a linear model with covariates) with multiple testing correction on glycomics abundance data"
     random_state = 0 if random_state is None else random_state
     if glycoproteomics and monte_carlo:
         raise ValueError(
@@ -1247,14 +1246,14 @@ def get_differential_expression(
         full = df_org
         # Recover the per-sample logratio offset from the transform itself, so residual features land in the frame everything else was tested in
         ref = np.nanmedian(np.log2(df_org.values + 0.0000001) - df.values, axis = 0)
-        fc, rows = dict(zip(df_out['Glycan'], df_out['Log2FC'])), {}
+        rows = {}
         pos, F = {m: i for i, m in enumerate(full.index)}, full.values
         g1i = [full.columns.get_loc(c) for c in group1]
         g2i = [full.columns.get_loc(c) for c in group2]
         for p in [m for m in full.index if m in dag and dag.out_degree(m)]:
             kids = [c for c in dag.successors(p) if c in pos]
             kv = F[[pos[c] for c in kids]]
-            others, resid, shared = _parent_parts(F[pos[p]], kv, motif_parts.get(p))
+            others, resid, names = _parent_parts(F[pos[p]], kv, motif_parts.get(p), kids)
             # A sample without an own context has no residual part at all, and a clipped zero is a fabricated -23 in log space rather than a measurement
             usable = resid > 1e-6
             # A per-sample scalar cancels from a logratio of parts, so these balances carry no reference frame and no scale model; alone among the outputs they are pure data
@@ -1264,7 +1263,8 @@ def get_differential_expression(
             with np.errstate(invalid = 'ignore', divide = 'ignore'), warnings.catch_warnings():
                 warnings.simplefilter('ignore', RuntimeWarning)
                 shares = np.vstack([others, resid]) / (others.sum(axis = 0) + resid)
-                stats = (np.nanmedian(resid / (others.sum(axis = 0) + resid)), np.nanmean(shared), np.nanmax(np.abs(np.nanmean(shares[:, g2i], axis = 1) - np.nanmean(shares[:, g1i], axis = 1))) * 100)
+                shift = ((np.nanmean(shares[:, g2i], axis = 1) - np.nanmean(shares[:, g1i], axis = 1)) * 100)[:len(names) + int(usable.any())]  # a parent without an own context in any sample has no own share to move
+                stats = (np.nanmean(np.where(usable, resid, 0.0) / (others.sum(axis = 0) + resid)), np.nanmax(np.abs(shift)))
             # A balance is only defined in a sample where every part was measured; a structurally missing cell is not a zero, and leaving it in makes the whole row's std NaN, fails the variance filter, and empties bal
             obs = ~np.isnan(parts).any(axis = 0)
             cols_b = [c for k in range(len(g1i)) if obs[g1i[k]] and obs[g2i[k]] for c in
@@ -1291,11 +1291,11 @@ def get_differential_expression(
             if covariates is not None:  # the group coefficient of the multivariate linear model, which is Hotelling's T2 without covariate columns
                 bal_p = manova_wilks(bal, [0 if k in b1 else 1 for k in range(len(cols_b))], covariates = covariates, samples = full.columns[cols_b].tolist())[1] if len(bal) else np.nan
             stats = (*stats, context_terms(parts[:, g1i + g2i], [0] * len(g1i) + [1] * len(g2i), paired = paired, covariates = covariates, samples = group1 + group2))
-            explained = _explained_by(p, kids, fc, top = top_explained)
+            explained = _explained_by((names + ['own'])[:len(shift)], shift, top = top_explained)
             ok1, ok2 = usable[g1i], usable[g2i]
             pair_ok = ok1 & ok2 if paired else None
             if (pair_ok.sum() if paired else min(ok1.sum(), ok2.sum())) < 2:
-                rows[p] = (explained, np.nan, np.nan, bal_p, *stats) if usable[g1i + g2i].any() else (explained, 1.0, 0.0, bal_p, *stats)  # a parent that occurs only inside its children has no context of its own left (residual p 1, effect 0); one whose own context is too rare in a group to test is untested, not inherited
+                rows[p] = (explained, np.nan, np.nan, bal_p, *stats)  # a parent that occurs only inside its children is purely inherited (Own share 0), and one whose own context is too rare in a group is untested: neither has a residual test
                 continue
             r = np.log2(np.maximum(resid, 0.0000001)) - ref
             r_a, r_b = (r[g1i][pair_ok], r[g2i][pair_ok]) if paired else (r[g1i][ok1], r[g2i][ok2])
@@ -1451,11 +1451,11 @@ def get_glycanova(
         custom_scale: float | dict = 0,  # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
         moderate_variance: bool = True,  # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
         glycoproteomics: bool | None = None,  # Whether rows are glycoforms from glycoproteomics instead of glycans; default: whenever every row label is protein_site_glycan
-        min_change: float = 0.03,  # log2 change a motif's test is held against (TREAT, McCarthy and Smyth 2009) when the two largest groups have 6 samples or more; 0 tests against no change
+        min_change: float = 0.03,  # log2 change a motif's moderated F test (or ANCOVA) is held against (TREAT, McCarthy and Smyth 2009) when the two largest groups have 6 samples or more; Welch's ANOVA (moderate_variance = False) takes none; 0 tests against no change
         random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
-        top_explained: int | None = 5,  # How many child motifs to name in 'Explained by'; None names all of them
+        top_explained: int | None = 5,  # How many contexts to name in 'Explained by', those whose share of the parent moved most; None names all of them
         covariates: pd.DataFrame | pd.Series | dict | None = None  # per-sample nuisance variables indexed by sample name (e.g., secretor status, sex, age, batch); the groups are tested by ANCOVA, post-hoc tests on covariate-adjusted values
-) -> tuple[GlycoDataFrame, dict[str, pd.DataFrame]]:  # (ANOVA results with F-stats and omega-squared effect sizes (Cramer's V for features absent from a whole group), post-hoc results)
+) -> tuple[GlycoDataFrame, dict[str, pd.DataFrame]]:  # (ANOVA results with F-stats and omega-squared effect sizes (Cramer's V for features absent from a whole group), and the decomposition of every parent as in get_differential_expression, with each context's share change as the spread of its group means; post-hoc results)
     "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
     if groups is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         groups = list(df.groups)
@@ -1577,12 +1577,12 @@ def get_glycanova(
         # Recover the per-sample logratio offset from the transform itself, so residual features land in the frame everything else was tested in
         ref = np.nanmedian(np.log2(full.loc[df.index].values + 0.0000001) - df_raw.loc[df.index].values, axis = 0)
         levels, garr = sorted(set(groups)), np.asarray(groups)
-        eff, rows = dict(zip(df_out['Glycan'], df_out['Effect size'])), {}
+        rows = {}
         pos, F = {m: i for i, m in enumerate(full.index)}, full.values
         for p in [m for m in full.index if m in dag and dag.out_degree(m)]:
             kids = [c for c in dag.successors(p) if c in pos]
             kv = F[[pos[c] for c in kids]]
-            others, resid, shared = _parent_parts(F[pos[p]], kv, df_org.attrs.get('motif_parts', {}).get(p))
+            others, resid, names = _parent_parts(F[pos[p]], kv, df_org.attrs.get('motif_parts', {}).get(p), kids)
             # A sample without an own context has no residual part at all, and a clipped zero is a fabricated -23 in log space rather than a measurement
             usable = resid > 1e-6
             # The parts sum to the parent, so they are a genuine sub-composition; a one-way MANOVA on their additive logratios, which is Hotelling's T2 on two groups, asks whether the parent redistributes across contexts, free of any reference frame, scale model, or choice of reference part
@@ -1593,7 +1593,8 @@ def get_glycanova(
                 warnings.simplefilter('ignore', RuntimeWarning)
                 shares = np.vstack([others, resid]) / (others.sum(axis = 0) + resid)
                 by_group = np.vstack([np.nanmean(shares[:, garr == g], axis = 1) for g in levels])
-                stats = (np.nanmedian(resid / (others.sum(axis = 0) + resid)), np.nanmean(shared), np.nanmax(np.nanmax(by_group, axis = 0) - np.nanmin(by_group, axis = 0)) * 100)
+                shift = ((np.nanmax(by_group, axis = 0) - np.nanmin(by_group, axis = 0)) * 100)[:len(names) + int(usable.any())]  # a parent without an own context in any sample has no own share to move
+                stats = (np.nanmean(np.where(usable, resid, 0.0) / (others.sum(axis = 0) + resid)), np.nanmax(shift))
             # A balance is only defined in a sample where every part was measured; a structurally missing cell is not a zero, and leaving it in makes the whole row's std NaN, fails the variance filter, and empties bal
             obs = ~np.isnan(parts).any(axis = 0)
             bal = np.log2(parts[:, obs] + 0.0000001)
@@ -1601,9 +1602,9 @@ def get_glycanova(
             bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9] if len(bal) and obs.sum() > 1 else bal[:0]
             bal_p = manova_wilks(bal, garr[obs], covariates = covariates, samples = full.columns[obs].tolist())[1] if len(bal) else np.nan
             stats = (*stats, context_terms(parts, garr, covariates = covariates, samples = full.columns.tolist()))
-            explained = _explained_by(p, kids, eff, top = top_explained)
+            explained = _explained_by((names + ['own'])[:len(shift)], shift, top = top_explained, signed = False)
             if min((usable & (garr == g)).sum() for g in levels) < 2:
-                rows[p] = (explained, np.nan, np.nan, bal_p, *stats) if usable.any() else (explained, 1.0, 0.0, bal_p, *stats)  # a parent that occurs only inside its children has no context of its own left (residual p 1, effect 0); one whose own context is too rare in a group to test is untested, not inherited
+                rows[p] = (explained, np.nan, np.nan, bal_p, *stats)  # a parent that occurs only inside its children is purely inherited (Own share 0), and one whose own context is too rare in a group is untested: neither has a residual test
                 continue
             r = np.log2(np.maximum(resid, 0.0000001)) - ref
             if covariates is not None:  # ANCOVA of the residual part, as for the marginal values, where it can be fit

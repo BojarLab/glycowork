@@ -3634,6 +3634,8 @@ def test_spearman_pvals_of_constant_features_and_tails():
     # never below the t, which runs anti-conservative in the tails
     p, t_p = _spearman_pvals(np.array([0.7576]), 10)[0], 2 * stdtr(8, -0.7576 * np.sqrt(8 / (1 - 0.7576 ** 2)))
     assert p >= t_p
+    # the series counts the observed rank order into the tail: at n = 10 the exact null gives 0.0490 for r = 1 - 6 * 58 / 990
+    assert 0.0485 < _spearman_pvals(np.array([1 - 6 * 58 / 990]), 10)[0] < 0.0500
 
 
 def test_detection_test_is_exact():
@@ -3940,6 +3942,7 @@ def test_spearman_exact_pvals():
     rng = np.random.default_rng(0)
     r = np.array([np.corrcoef(rng.permutation(6), np.arange(6))[0, 1] for _ in range(4000)])  # without ties, a Spearman r under the null is the correlation of a random rank order with the identity
     assert (spearman_exact_pvals(r, 6) < 0.05).mean() <= 0.055  # calibrated under the null
+    assert isinstance(spearman_exact_pvals(0.5, 5), float)
 
 
 def test_hsic():
@@ -3947,6 +3950,7 @@ def test_hsic():
     x = rng.normal(size=200)
     assert hsic(x, rng.normal(size=200))[1] > 0.05  # independent: non-significant
     assert hsic(x, x**2 + rng.normal(size=200, scale=0.1))[1] < 0.05  # nonlinear dependence: significant
+    assert hsic([0, 0, 1, 1], [0, 1, 0, 1])[1] == 1.0  # rounding put the statistic below 0, which gave NaN
 
 
 def test_structure_cache():
@@ -3975,7 +3979,7 @@ def test_no_fresh_draws(sample_time_series_data, sample_jtk_df, sample_glycoshif
     # the same call twice gives the same result, whatever the shared generator did in between
     for run in [lambda: get_time_series(sample_time_series_data, impute = False), lambda: get_time_series(sample_time_series_data, impute = False, motifs = True),
                 lambda: get_jtk(sample_jtk_df, timepoints = 8, interval = 3), lambda: get_cosinor(sample_jtk_df, timepoints = 8, interval = 3),
-                lambda: get_SparCC(df1, df2)[0], lambda: get_glycoshift_per_site(sample_glycoshift_df, group1, group2)]:
+                lambda: get_SparCC(df1, df2)[0], lambda: get_glycoshift_per_site(sample_glycoshift_df, group1 = group1, group2 = group2)]:
         pd.testing.assert_frame_equal(run(), run())
     # scale uncertainty only widens a test, and without it the tests are the plain ones
     x = np.column_stack([np.arange(8.0), 0.1 * np.arange(8.0) + np.array([0.1, -0.2, 0.05, 0.1, -0.1, 0.2, -0.05, -0.1])])
@@ -4370,6 +4374,11 @@ def test_ensure_graph():
     G.add_node(0, string_labels = "Gal")
     result = ensure_graph(G)
     assert result is G
+    from glycowork.motif.graph import glycan_to_glycangraph, ptm_wildcard_for_graph
+    assert isinstance(ensure_graph(glycan_to_glycangraph(glycan)), nx.DiGraph)
+    assert generate_graph_features(glycan_to_glycangraph(glycan)).values.tolist() == generate_graph_features(glycan).values.tolist()
+    assert graph_to_string(ptm_wildcard_for_graph(glycan_to_glycangraph('Gal3S(b1-4)GlcNAc'))) == 'GalOS(b1-4)GlcNAc'
+    assert graph_to_string(glycan_to_glycangraph('Gal3S(b1-3)GalNAc')) == 'Gal3S(b1-3)GalNAc'  # the shared attribute dicts stay as they were
     # Anything else (a composition dict, a list of glycans, None) gets an actionable TypeError instead of "'dict' object has no attribute 'nodes'" deep inside
     for bad in ({'Hex': 5, 'HexNAc': 4}, ['Gal(b1-4)GlcNAc'], None):
         for call in (lambda: ensure_graph(bad), lambda: compare_glycans(bad, glycan), lambda: subgraph_isomorphism(bad, glycan),
@@ -4414,6 +4423,7 @@ def test_possible_topology_check():
     matches = possible_topology_check(float_glycan, glycans)
     assert len(matches) == 2  # Should match first two glycans
     assert "Gal(b1-4)GlcNAc" not in matches
+    assert possible_topology_check(float_glycan, glycans[0]) == [glycans[0]]
 
 
 def test_annotate_glycan():
@@ -6705,6 +6715,8 @@ def test_redistribution_hybrid():
     assert np.isnan(manova_wilks(bal[:, [0, 1, 2, 8, 9, 10]], groups[[0, 1, 2, 8, 9, 10]])[1])
     three = np.array([0] * 6 + [1] * 5 + [2] * 5)
     assert 0 <= manova_wilks(bal, three)[1] <= 1
+    rng = np.random.default_rng(1)
+    assert all(np.isclose(manova_wilks(np.hstack([a, a[:, ::-1]]), [0] * 8 + [1] * 8)[1], 1) for a in (rng.normal(size = (2, 8)) for _ in range(200)))  # equal means: lambda rounded above 1 and gave NaN
     # one context per part, free of each sample's scale; two parts are one context, whose F is the t-test on their log-ratio; one part has none
     terms = context_terms(parts, groups)
     assert terms.shape == (4, 5) and np.allclose(terms[:, :4], context_terms(parts * rng.random(16), groups)[:, :4])
@@ -6723,7 +6735,7 @@ def test_redistribution_hybrid():
     assert context_terms(rare, groups)[3, 4] < 0.01 < context_terms(rare, groups)[0, 4]
     # without context terms a parent keeps its test, with only contexts it takes their Simes, with both a strong test or context is not lost, and T2 resting on floored cells with no testable context does not carry a parent
     base = ('', 1.0, 0.0)
-    shares = (0.0, 0.0, 0.0)
+    shares = (0.0, 0.0)
     strong = np.array([[100.0, 1.0, 10.0, 1.0, 0.5], [0.0, 1.0, 10.0, 1.0, 0.5]])
     blank = np.array([[np.nan, np.nan, np.nan, np.nan, 1.0]])
     rows = {'a': (*base, 0.0001, *shares), 'b': (*base, np.nan, *shares, strong), 'c': (*base, 0.5, *shares, strong), 'd': (*base, np.nan, *shares), 'f': (*base, 0.0001, *shares, blank)}
@@ -6746,7 +6758,7 @@ def test_motif_frame_and_min_change():
     from glycowork.motif.analysis import preprocess_data
     df = glycomics_data_loader.human_ovarian_O_PMC4468167
     g1, g2 = list(df.group1), list(df.group2)
-    tf, org = preprocess_data(df, g1, g2, motifs = True, feature_set = ['exhaustive', 'known'])[:2]
+    tf, org = preprocess_data(df, group1 = g1, group2 = g2, motifs = True, feature_set = ['exhaustive', 'known'])[:2]
     # the reference counts a motif at 1 / sqrt(1 + its relatives), then moves a tenth of the way to the median: its weighted mean is -1/9 of the new median
     dag, ok = org.attrs['motif_dag'], ~tf.index.isin(org.attrs['absent'].index if 'absent' in org.attrs else [])
     w = np.array([1 / np.sqrt(1 + dag.in_degree(m) + dag.out_degree(m)) for m in tf.index]) * ok
@@ -7279,7 +7291,7 @@ def test_logistic_fit_and_held_out_auc():
 
 def test_get_roc_two_labels_and_unmeasured_cells():
     df = pd.DataFrame({'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man', 'Fuc(a1-3)GlcNAc'], **{f's{k}': [10.0 + k * (k > 4) * 8, 20.0 - k % 2, 30.0 + k % 3] for k in range(10)}})
-    res = get_roc(df, [0] * 5 + [1] * 5, [], impute = False, random_state = 0, transform = 'CLR')
+    res = get_roc(df, group1 = [0] * 5 + [1] * 5, group2 = [], impute = False, random_state = 0, transform = 'CLR')
     assert all(0 <= auc <= 1 for _, auc in res.values())
     assert all(auc >= 0.5 for _, auc in res.values())  # the best feature of a class ranks it above chance
 
@@ -7854,6 +7866,9 @@ def test_get_heatmap_dist_func(sample_df):
     cost = lambda order: dist[order[:-1], order[1:]].sum()
     assert cost(g.row_order) < cost(list(leaves_list(linkage(pdist(d.values, 'braycurtis'), 'average'))))
     get_heatmap(many, dist_func = 'jaccard', return_plot = True)
+    empty = pd.concat([many, pd.DataFrame({'glycan': ['Neu5Ac(a2-3)Gal'], **{f'sample{k}': [0.0] for k in range(6)}})], ignore_index = True)
+    for metric in ('cosine', 'jensenshannon'):
+        assert 'Neu5Ac(a2-3)Gal' not in get_heatmap(empty, dist_func = metric, return_plot = True)[2].index
     with pytest.raises(ValueError):
         get_heatmap(sample_df, dist_func = 'not_a_metric')
 
@@ -8156,7 +8171,7 @@ def test_multi_feature_scoring_with_filepath(sample_df):
     group1 = [0, 1, 2, 3, 4]
     group2 = [5, 6, 7, 8, 9]
     with patch('viscose.Figure.save') as mock_savefig:
-        multi_feature_scoring(df_transformed, group1, group2, filepath='test.png')
+        multi_feature_scoring(df_transformed, group1, group2, filepath = 'test.png')
         mock_savefig.assert_called_once()
 
 
@@ -8708,6 +8723,10 @@ def test_get_maximum_flow_with_no_path(sample_network):
                                         sinks=["IsolatedGlycan"])
     assert isinstance(flow_results, dict)
     assert len(flow_results) == 0  # Should return empty dict for unreachable sink
+    with pytest.raises(ValueError, match = 'not a node'):
+        get_maximum_flow(sample_network, source = 'NotAGlycan')
+    tiny = nx.DiGraph([('a', 'b', {'capacity': np.float32(0.5)}), ('b', 'c', {'capacity': np.float32(0.35)})])
+    assert np.isclose(get_maximum_flow(tiny, source = 'a')['c']['flow_value'], 0.35)
 
 
 @pytest.fixture
@@ -11332,10 +11351,11 @@ def test_decomposition_columns_are_returned(bcc_result):
 
 
 def test_purely_inherited_parents_have_a_null_residual(bcc_result):
-    inherited = bcc_result[(bcc_result['Residual p-val'] >= 0.999) & (bcc_result['Residual effect size'].abs() < 1e-9)]
+    inherited = bcc_result[bcc_result['Own share'] == 0]
     assert len(inherited) > 0
-    assert (inherited[
-                'Explained by'].str.len() > 0).all()  # a parent with no residual is fully explained by its children
+    assert inherited[['Residual p-val', 'Residual effect size']].isna().all().all()  # no own context, so nothing to test and no place in the residual family
+    assert (inherited['Explained by'].str.len() > 0).all()  # a parent with no residual is fully explained by its children
+    assert not inherited['Explained by'].str.contains(r'\bown \(').any()
 
 
 def test_leaf_motifs_get_no_decomposition(bcc_result):
@@ -11550,6 +11570,8 @@ def test_get_motif_dag_carriers_refute_label_containment():
     assert not nx.has_path(dag, 'Neu5Ac', 'Sia(a2-3)Gal')
     assert not nx.has_path(dag, 'Neu5Ac', 'Neu5Gc(a2-3)Gal')
     assert dag.has_edge('Sia(a2-3)Gal', 'Neu5Ac(a2-3)Gal') and dag.has_edge('Neu5Ac', 'Neu5Ac(a2-3)Gal')
+    site = get_motif_dag([f'P12345_100_{m}' for m in motifs], carriers = carriers)  # per glycosite, the same carriers refute the same edges
+    assert not nx.has_path(site, 'P12345_100_Neu5Ac', 'P12345_100_Sia(a2-3)Gal')
 
 
 def test_get_motif_dag_carriers_keep_what_counts_would_lose():
@@ -11559,6 +11581,9 @@ def test_get_motif_dag_carriers_keep_what_counts_would_lose():
     assert get_motif_dag(motifs, carriers = carriers).has_edge('Man', 'GlcNAc(b1-2/4/6)Man')
     unresolved = pd.DataFrame([[0, 1]], index = ['{GlcNAc(b1-2)}Man(a1-3)Man'], columns = motifs)
     assert get_motif_dag(motifs, carriers = pd.concat([carriers, unresolved])).has_edge('Man', 'GlcNAc(b1-2/4/6)Man')  # a floating residue cannot testify against an edge
+    sulfated = ['GlcNAc6S', 'GlcNAc6S(b1-6)GalNAc']
+    carriers = pd.DataFrame([[1, 1], [0, 1]], index = ['Gal(b1-3)GlcNAc6S(b1-6)GalNAc', 'Gal(b1-3)GlcNAcOS(b1-6)GalNAc'], columns = sulfated)
+    assert get_motif_dag(sulfated, carriers = carriers).has_edge('GlcNAc6S', 'GlcNAc6S(b1-6)GalNAc')  # nor can a position wildcard, whose O matches the child but not the exact label
 
 
 def test_get_motif_atoms_partition_overlapping_children():
@@ -11572,6 +11597,8 @@ def test_get_motif_atoms_partition_overlapping_children():
     assert atoms[('Neu5Ac(a2-8)Neu5Ac',)].tolist() == [1, 0, 0]  # the outer one only in the alpha2-8 child
     assert atoms[('Neu5Ac(a2-3)Gal',)].tolist() == [0, 1, 0]
     assert atoms[()].tolist() == [0, 0, 1]  # outside every child
+    from glycowork.motif.annotate import _motif_occurrences
+    assert len(_motif_occurrences('Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc-ol', 'LacNAc_type2')) == 2  # a reducing-end alditol is located as annotate_dataset counts it
 
 
 def test_get_motif_atoms_composition_rows_are_own_context():
@@ -11595,8 +11622,8 @@ def test_get_motif_atoms_fractional_children_leave_the_rest_own():
 def test_decomposition_untested_own_context_is_not_inherited():
     res = get_differential_expression(glycomics_data_loader.human_ovarian_O_PMC4468167, motifs = True, random_state = 42).set_index('Glycan')
     assert res.loc['GlcNAc(b1-3)Gal', 'Own share'] > 0.5 and res.loc['GlcNAc(b1-3)Gal', ['Residual p-val', 'Residual effect size']].isna().all()  # an own context too rare in one group to test is untested, not purely inherited
-    inherited = res[(res['Residual p-val'] >= 0.999) & (res['Residual effect size'].abs() < 1e-9)]
-    assert len(inherited) and (inherited['Own share'].fillna(0) == 0).all()  # purely inherited means no own context in any sample
+    inherited = res[res['Own share'] == 0]
+    assert len(inherited) and inherited[['Residual p-val', 'Residual effect size']].isna().all().all()  # purely inherited means no own context in any sample, and no residual test
     tested = res['Residual p-val'].notna()
     assert res.loc[tested, 'Residual p-val'].between(0, 1).all() and res.loc[tested, 'Residual effect size'].notna().all()
 
@@ -11613,7 +11640,7 @@ def test_get_composition_atoms_partition_the_cumulative_abundance():
 
 def test_motif_parts_sum_to_the_parent():
     df = glycomics_data_loader.human_skin_O_PMC5871710_BCC
-    org = preprocess_data(df, list(df.group1), list(df.group2), experiment = 'diff', motifs = True, paired = df.paired, random_state = 42)[1]
+    org = preprocess_data(df, group1 = list(df.group1), group2 = list(df.group2), experiment = 'diff', motifs = True, paired = df.paired, random_state = 42)[1]
     parts = org.attrs['motif_parts']
     assert len(parts) > 0
     for p, (labels, m) in parts.items():
@@ -11632,14 +11659,22 @@ def test_glycoform_decomposition_holds_under_shuffled_labels():
 
 def test_decomposition_reports_absolute_shares(bcc_result):
     parents = bcc_result[bcc_result['Explained by'] != '']
-    assert parents['Own share'].between(0, 1).all() and parents['Shared share'].between(0, 1).all()
+    assert parents['Own share'].between(0, 1).all()
     assert (parents['Share shift'] >= 0).all()
-    assert parents.set_index('Glycan').loc['Gal', 'Shared share'] > 0.05  # galactoses sit in several children at once
+    first = parents['Explained by'].str.extract(r'^[^,]*\(([+-][\d.]+) pp\)')[0].astype(float)
+    assert np.allclose(first.abs(), parents['Share shift'], atol = 0.051, equal_nan = True)  # the first context named is the one whose share moved most
+    assert ' & ' in parents.set_index('Glycan').loc['Gal', 'Explained by']  # galactoses sit in several children at once, a context of its own
+    from glycowork.motif.analysis import _explained_by
+    assert _explained_by(['A', 'A & B', 'own'], np.array([-3.0, 5.0, -2.0]), top = 2) == 'A & B (+5.0 pp), A (-3.0 pp), +1 more'  # with two groups the shifts sum to zero
+    assert _explained_by(['A', 'own'], np.array([1.0, 4.0]), signed = False) == 'own (4.0 pp), A (1.0 pp)'
+    assert _explained_by(['A', 'own'], np.array([1.0, -1.0]), top = 0) == '+2 more'
+    from glycowork.motif.analysis import _parent_parts
+    assert _parent_parts(np.ones(2), np.ones((2, 2)) / 4, None, ['P1_100_H4N2', 'P1_100_H3N3'])[2] == ['H4N2', 'H3N3']  # glycoforms of one site are named by their composition alone
 
 
 def test_glycoproteomics_own_part_is_the_measured_glycoform():
     df = glycoproteomics_data_loader.human_milk_N_PMID34087070
-    org = preprocess_data(df, ['Colostrum1', 'Colostrum2', 'Colostrum3'], ['Mature1', 'Mature2', 'Mature3'], experiment = 'diff', glycoproteomics = True, random_state = 42)[1]
+    org = preprocess_data(df, group1 = ['Colostrum1', 'Colostrum2', 'Colostrum3'], group2 = ['Mature1', 'Mature2', 'Mature3'], experiment = 'diff', glycoproteomics = True, random_state = 42)[1]
     parts, dag = org.attrs['motif_parts'], org.attrs['motif_dag']
     seen = df.set_index(df.columns[0])[org.columns].fillna(0).gt(0).groupby(level = 0).any().reindex(org.index)
     values = org.where(seen)  # an imputed glycoform is no measurement, so it is in no part

@@ -172,9 +172,9 @@ PDB_TO_IUPAC = {'NDG':'GlcNAc(a','NAG':'GlcNAc(b','MAN':'Man(a', 'BMA':'Man(b', 
                 'XYZ':'Xylf(b', '1CU': 'Fru(b',  '0CU': 'Fru(b', '4CD': 'Fru(a', '1CD': 'Fru(a', 'LXC':'L-Xyl(b', 'HSY':'L-Xyl(a', 'SIA':'Neu5Ac(a', 'SLB':'Neu5Ac(b', 'FRU': 'Fru(b', 'AHR':'Araf(a', '2GS':'Gal2Me(a',
                 'NGC':'Neu5Gc(a', 'NGE':'Neu5Gc(b', 'BDP':'GlcA(b', 'GCU':'GlcA(a','VYS':'GlcNS(a', '0YS':'GlcNS(a', '4YS':'GlcNS(a', '6YS':'GlcNS(a', 'UYS':'GlcNS(a', 'QYS':'GlcNS(a', 'GCS':'GlcN(b',
                 'PA1':'GlcN(a', 'ROH':' ', 'BGC':'Glc(b', '0OA':'GalA(a', '4OA':'GalA(a', 'BCA':'2-4-diacetimido-2-4-6-trideoxyhexose(a', 'ASO':'1,5-Anhydro-Glc-ol(?', 'L6N':'Glc6Me(?', 'BM3':'ManNAc(a',
-                "NAG6SO3":"GlcNAc6S(b", "NDG6SO3":"GlcNAc6S(a", "GLC4SO3":"GalNAc4S(b", "NGA4SO3":"GalNAc4S(b", 'A2G4SO3':'GalNAc4S(a', "IDR2SO3":"IdoA2S(a", '289':'DDManHep(a',
+                "NAG6SO3": "GlcNAc6S(b", "NDG6SO3": "GlcNAc6S(a", "GLC4SO3": "Glc4S(a", "NGA4SO3": "GalNAc4S(b", 'A2G4SO3': 'GalNAc4S(a', "IDR2SO3": "IdoA2S(a", '289': 'DDManHep(a',
                 "BDP3SO3":"GlcA3S(b", "BDP2SO3":"GlcA2S(b", "GCU2SO3":"GlcA2S(a", "SIA9ACX":"Neu5Ac9Ac(a", "MAN2MEX":"Man2Me(a", "MAN3MEX":"Man3Me(a", '5N6':'Neu5Ac9Ac(a', 'PKM':'Neu4Ac5Ac(a', 'GMH':'LDManHep(a',
-                "SIA9MEX":"Neu5Ac9Me(a", "NGC9MEX":"Neu5Gc9Me(a", "BDP4MEX":"GlcA4Me(b", "GAL6SO3":"Gal6S(b", "NDG3SO3":"GlcNAc3S(a", "TOA2SO3": "GalA2S(a", 'GN1':'GlcNAc1P(a',
+                "SIA9MEX": "Neu5Ac9Me(a", "NGC9MEX": "Neu5Gc9Me(a", "BDP4MEX": "GlcA4Me(b", "GAL6SO3": "Gal6S(b", "NDG3SO3": "GlcNAc3S(a", "TOA2SO3": "GalA2S(a", 'GN1': 'GlcNAc1P(a',
                 "NAG6PCX":"GlcNAc6PCho(b", "UYS6SO3":"GlcNS6S(a", 'VYS3SO3':'GlcNS3S6S(a',  'VYS6SO3':'GlcNS3S6S(a', "QYS3SO3":"GlcNS3S6S(a", "QYS6SO3":"GlcNS3S6S(a", "4YS6SO3":"GlcNS6S(a", "6YS6SO3":"GlcNS6S(a",
                 "FUC2MEX3MEX4MEX": "Fuc2Me3Me4Me(a", "QYS3SO36SO3": "GlcNS3S6S(a", "VYS3SO36SO3": "GlcNS3S6S(a", "NDG3SO36SO3": "GlcNAc3S6S(a", "RAM2MEX3MEX": "Rha2Me3Me(a", "RAM2ACX": "Rha2Ac(a",
                 "SIO":"Neu4Ac5Ac9Ac(a", "1GN":"GalN(b", "KD5":"4,7-Anhydro-Kdof(a", "BDR":"Ribf(b", "G1P":"Glc1P(a", "3LJ":"GlcN6S(a", "SGN":"GlcNS6S(a", "95Z":"ManN(a", "ADA":"GalA(a",
@@ -1692,6 +1692,7 @@ def nglycan_stub_to_iupac(nglycan_stub: str # Glycan in a N-glycan stub format
     return f"{parts}{nglycan_stub}"
 
 
+@lru_cache(maxsize = 4096)
 def _kcf_default_l(name: str # Residue name without D-/L-
                    ) -> bool: # Whether glycowork reads this name as L
     "KEGG states every L (LFuc) and means D by a bare name, so its Fuc is D-Fuc; heptoses such as DLGlcHep carry their configuration in the name"
@@ -1767,11 +1768,11 @@ def glycan_to_kcf(glycan: str, # Glycan in IUPAC-condensed format
                   entry: str = 'glycowork' # Name on the ENTRY line, which has to differ between the glycans of one file
                   ) -> str: # Glycan in KCF as KEGG GLYCAN writes it, with node 1 at the reducing end
     "Convert glycan from IUPAC-condensed to KCF (KEGG Chemical Function format), e.g., for KEGG's KCaM search or the RINGS tools"
-    from glycowork.motif.graph import glycan_to_nxGraph
+    from glycowork.motif.graph import _glycan_graph
     if '{' in glycan or glycan.startswith('['):
         raise ValueError(f"'{glycan}' has floating parts or is a repeating unit, which KCF cannot write.")
-    graph = glycan_to_nxGraph(glycan)
-    labels = dict(graph.nodes(data = 'string_labels'))
+    graph = _glycan_graph(glycan)
+    labels = {n: d['string_labels'] for n, d in graph.nodes.items()}
     nodes = []  # (name, parent, donor, acceptor), in the order KEGG numbers them: breadth-first from the reducing end, substituents first, higher positions first
     queue = [(max(graph.nodes), None, '', '?')]  # the reducing end is the highest node, and edges run from parent via linkage to child
 
@@ -1786,10 +1787,10 @@ def glycan_to_kcf(glycan: str, # Glycan in IUPAC-condensed format
             nodes.append((aglycone.group(1), None, '', '?'))
             parent, donor, acceptor = 0, '1', '1' if aglycone.group(1) == 'Cer' else '?'  # KEGG's Cer has a position, its amino acids none
         links = []
-        for linkage in graph.successors(node):
+        for linkage in graph.succ[node]:
             if not (link := re.fullmatch(r'([ab]?)\??([\d?]*)-([\d?/]+)', labels[linkage])):
                 raise ValueError(f"'{labels[linkage]}' in '{glycan}' is not a linkage KCF can write.")
-            links.append((link.group(3), link.group(1) + link.group(2).replace('?', ''), next(graph.successors(linkage))))
+            links.append((link.group(3), link.group(1) + link.group(2).replace('?', ''), graph.succ[linkage][0]))
         linked = {donor.lstrip('ab')} | {p for acc, _, _ in links for p in acc.split('/')}
         subs = [m for m in re.finditer(r'([\dO])(PEtN|S|P)(?![A-Za-z])', label) if m.group(1) not in linked]  # KEGG's own nodes, except on a linked position: a phosphodiester stays with its residue (GlcNAc1P(a1-6)Man)
         name = ''.join(label[start:end] for start, end in zip([0] + [m.end() for m in subs], [m.start() for m in subs] + [len(label)]))

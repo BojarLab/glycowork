@@ -99,7 +99,7 @@ def annotate_glycan(
         glycan: str | nx.DiGraph, # IUPAC-condensed glycan sequence or NetworkX graph
         motifs: pd.DataFrame | str | list[str] | None = None, # Motif dataframe (motif_name + motif columns), or motif sequence(s); defaults to motif_list
         termini_list: list = [], # Monosaccharide positions: 'terminal', 'internal', or 'flexible'
-        gmotifs: list[nx.DiGraph] | None = None, # Precalculated motif graphs for speed
+        gmotifs: list[GlycanGraph | nx.DiGraph | list] | None = None, # Precalculated motif graphs (or compiled glyco-regexes) for speed
         condense: bool = False # Remove columns with only zeros
 ) -> pd.DataFrame: # DataFrame with motif counts for the glycan
     "Counts occurrences of known motifs in a glycan structure using subgraph isomorphism"
@@ -133,7 +133,7 @@ def annotate_glycan_topology_uncertainty(
         feasibles: set[str] | None = None, # Set of potential full topology glycans; defaults to mammalian glycans
         motifs: pd.DataFrame | str | list[str] | None = None, # Motif dataframe (motif_name + motif columns), or motif sequence(s); defaults to motif_list
         termini_list: list = [], # Monosaccharide positions: 'terminal', 'internal', or 'flexible'
-        gmotifs: list[nx.DiGraph] | None = None # Precalculated motif graphs for speed
+        gmotifs: list[GlycanGraph | nx.DiGraph | list] | None = None # Precalculated motif graphs (or compiled glyco-regexes) for speed
 ) -> pd.DataFrame: # DataFrame with motif counts considering topology uncertainty
     "Annotates glycan motifs while handling uncertain topologies by comparing against physiological structures"
     if motifs is None:
@@ -461,7 +461,7 @@ def get_motif_dag(
     if any(GLYCOFORM_ID.fullmatch(str(m)) for m in motifs):
         # Containment is decided once between the distinct motifs and holds at every glycosite carrying both; the closure keeps a relation whose intermediate motif is missing at a site
         split = [split_glycoform_id(m) if GLYCOFORM_ID.fullmatch(str(m)) else ('', m) for m in motifs]
-        closure = nx.transitive_closure_dag(get_motif_dag(list(dict.fromkeys(b for _, b in split))))
+        closure = nx.transitive_closure_dag(get_motif_dag(list(dict.fromkeys(b for _, b in split)), carriers = carriers))
         by_site = {}
         for m, (site, b) in zip(motifs, split):
             if b in closure:
@@ -499,7 +499,7 @@ def get_motif_dag(
     dag.add_nodes_from(cols)
     A = abundances.loc[cols].values if abundances is not None else None
     # Node matching is symmetric for wildcards, so Neu5Ac 'contains' Sia(a2-3)Gal as labels; only structures can refute that, and only fully resolved ones can testify (a HexNAc counts toward GlcNAc(b1-3)Gal but not toward GlcNAc)
-    resolved = [] if carriers is None else [g for g in dict.fromkeys(carriers.index) if '{' not in str(g) and not is_composition(str(g)) and not _WILDCARD_RE.search(str(g))]
+    resolved = [] if carriers is None else [g for g in dict.fromkeys(carriers.index) if '{' not in str(g) and not is_composition(str(g)) and not _WILDCARD_RE.search(str(g)) and not re.search(r'[A-Za-z\d]O[A-Z]', str(g))]
     C = carriers.loc[resolved].groupby(level = 0).first().reindex(columns = cols, fill_value = 0).values.T > 0 if resolved else None
     for i, p in enumerate(cols):
         if p in regexy:
@@ -596,6 +596,7 @@ def _motif_occurrences(glycan: str, # glycan sequence
                        ) -> tuple[frozenset, ...]: # the nodes of each occurrence of the motif in the glycan
     "Where a motif occurs in a glycan, which only depends on the two of them and is asked again for every comparison of the same table"
     s, sp = _motif_sequence(motif)
+    glycan = glycan[:-3] if glycan.endswith('-ol') and not _STRUCTURAL_ALDITOL.search(glycan) else glycan  # counted as annotate_dataset counts it: a reducing-end alditol is its sugar
     return () if s.startswith('r') else tuple(frozenset(k) for k in subgraph_isomorphism(_glycan_graph(glycan), s, termini_list = sp, return_matches = True)[1])
 
 
