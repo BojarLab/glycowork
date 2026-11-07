@@ -14,7 +14,7 @@
 - Added `glycan_to_glycangraph`, which returns the cached, read-only `GlycanGraph` glycowork's motif code runs on (the nodes, attributes, and neighbor order of `glycan_to_nxGraph`, without networkx), for code that only reads glycan graphs (0f3af98)
 
 ##### Fixed 🐛
-- `possible_topology_check` takes a single glycan to check against as a string or graph, which it read character by character and matched nothing ()
+- `possible_topology_check` takes a single glycan to check against as a string or graph, which it read character by character and matched nothing (9f987b0)
 
 #### processing
 ##### Added ✨
@@ -23,7 +23,7 @@
 ##### Fixed 🐛
 - `kcf_to_iupac` reads KEGG's bare `Fuc`, `Ara`, and `AllNAc` as D, as KEGG means them; both anomers of a sucrose linkage, unknown anomers (`2:1`), phosphoethanolamines, carriers such as `PP-Dol` and `protein`, inositol, and KEGG's spellings (`Cym`, `2,6daraHex`, `L4-en-thrHexA`, `Formyl`) are read as well, so all 1,000 KEGG entries tested now read (bfa9757)
 - `kcf_to_iupac` keeps `dHex` as it is, which it turned into `D-Hex` (bfa9757)
-- `PDB_TO_IUPAC` now maps `NDG3SO3` to `GlcNAc3S` instead of `GlcNAc3S6S` and adds `BGC6SO3`, `NGA3SO3`, `NGA6SO3`, `NGA4SO36SO3`, and `GAL3SO34SO3` (2a509fe), and `GLC4SO3` to `Glc4S` instead of `GalNAc4S` ()
+- `PDB_TO_IUPAC` now maps `NDG3SO3` to `GlcNAc3S` instead of `GlcNAc3S6S` and adds `BGC6SO3`, `NGA3SO3`, `NGA6SO3`, `NGA4SO36SO3`, and `GAL3SO34SO3` (2a509fe), and `GLC4SO3` to `Glc4S` instead of `GalNAc4S` (9f987b0)
 
 #### tokenization
 ##### Added ✨
