@@ -961,3 +961,18 @@ def get_random_glycan(n: int = 1, # How many random glycans to sample
     else:
         df_use = loader.df_glycan[(loader.df_glycan.glycan_type == glycan_class) & (loader.df_glycan.Kingdom.apply(lambda x: kingdom in x))].glycan.values.tolist()
     return sample(df_use, n)[0] if n == 1 else sample(df_use, n)
+
+
+def composition_database(taxonomy: dict[str, str] | None = None, # Taxon as {rank: name}, with a df_glycan rank column above species, e.g., {'Class': 'Mammalia'}; default: all taxa
+                         glycan_type: str = 'N', # Glycan type in df_glycan
+                         residues: tuple[str, ...] = ('Hex', 'HexNAc', 'dHex', 'Neu5Ac', 'Neu5Gc'), # Monosaccharides a composition may hold
+                         extra: list[dict[str, int]] | None = None # Compositions to add, e.g., what glycan databases of released glycans rarely hold
+                         ) -> tuple[list[dict[str, int]], np.ndarray]: # Compositions as dicts, and their residue masses (glycan mass - H2O, the mass a glycan adds to what carries it)
+    "The distinct compositions of the glycans in df_glycan of a type and taxon, as a search space for mass spectra; N-glycans keep their two core HexNAc, which leaves out free oligosaccharides with one"
+    d = loader.df_glycan[loader.df_glycan.glycan_type == glycan_type]
+    for rank, name in (taxonomy or {}).items():
+        d = d[d[rank].map(lambda s: isinstance(s, list) and name in s)]
+    comps = {tuple(c.get(r, 0) for r in residues) for c in d.Composition if isinstance(c, dict) and c and set(c) <= set(residues) and (glycan_type != 'N' or c.get('HexNAc', 0) >= 2)}
+    comps |= {tuple(c.get(r, 0) for r in residues) for c in extra or ()}
+    out = [{r: n for r, n in zip(residues, c) if n} for c in sorted(comps)]
+    return out, np.array([composition_to_mass(c) - calculate_adduct_mass('H2O') for c in out])

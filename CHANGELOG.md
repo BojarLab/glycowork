@@ -28,6 +28,7 @@
 #### tokenization
 ##### Added ✨
 - Added mass support for `glycolate` and `lactate` reducing end modifications, from hypochlorite O-glycan release (bbadeb4)
+- Added `composition_database` to build glycoproteomics search base, taxonomically gated and drawn from `df_glycan` ()
 
 ##### Changed 🔄
 - `glycan_to_mass` and `get_formula` now raise a `ValueError` when modification is set but the glycan has no free reducing end (alditols other than reduction, aldonic acids, inositol, aglycones, sucrose/trehalose-type linkages) (6e0e4d9)
@@ -38,11 +39,11 @@
 
 #### draw
 ##### Added ✨
-- Annotated volcano plots + networks in dark mode settings now automatically carry sticker-mode glycan drawings ()
+- Annotated volcano plots + networks in dark mode settings now automatically carry sticker-mode glycan drawings (b8fa046)
 
 ##### Changed 🔄
 - Up and down in volcano and MA plots, heatmap and coverage scales, and network nodes and fold-change edges take the palette's colors; the `origin` values of `highlight_network` and `network_alignment` are palette names now (73bca70)
-- The overlap of glycans in annotated volcano plots and networks has been much reduced ()
+- The overlap of glycans in annotated volcano plots and networks has been much reduced (b8fa046)
 
 ##### Fixed 🐛
 - `GlycoDraw` draws a Y or Z fragment that replaced a Fuc where the Fuc sat, with its bond at the Fuc's angle, so lost core and antenna Fuc fragments read as such (c7678b7)

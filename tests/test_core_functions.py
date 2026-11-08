@@ -26,7 +26,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from glycowork.glycan_data.data_entry import check_presence, read_glycoproteomics, read_glycomics, read_abundances
 from glycowork.motif.query import get_insight
-from glycowork.motif.tokenization import (
+from glycowork.motif.tokenization import (composition_database,
     constrain_prot, prot_to_coded, string_to_labels, pad_sequence, mz_to_composition,
     get_core, get_modification, get_stem_lib, stemify_glycan, mask_rare_glycoletters,
     glycan_to_composition, calculate_adduct_mass, structure_to_basic, map_to_basic,
@@ -2309,6 +2309,17 @@ def test_get_lib():
     assert 'a2-3' in lib
     assert 'b1-4' in lib
     assert "6S" in get_lib(["{6S}{Neu5Ac(a2-3)}Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc"])
+
+
+def test_composition_database():
+    comps, masses = composition_database({'Class': 'Mammalia'})
+    assert len(comps) == len(masses) > 100 and {'Hex': 5, 'HexNAc': 4} in comps
+    assert all(c.get('HexNAc', 0) >= 2 for c in comps) and all(set(c) <= {'Hex', 'HexNAc', 'dHex', 'Neu5Ac', 'Neu5Gc'} for c in comps)
+    assert np.isclose(masses[comps.index({'Hex': 5, 'HexNAc': 4})], 1622.5816, atol = 0.001)
+    # What a search adds, once, as the core remnants that a glycopeptide search looks for
+    more, _ = composition_database({'Class': 'Mammalia'}, extra = [{'HexNAc': 1}, {'Hex': 5, 'HexNAc': 4}])
+    assert {'HexNAc': 1} in more and len(more) == len(comps) + 1 and more.count({'Hex': 5, 'HexNAc': 4}) == 1
+    assert len(composition_database()[0]) >= len(comps)
 
 
 def test_expand_lib():
