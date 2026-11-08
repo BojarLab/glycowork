@@ -92,7 +92,7 @@ from glycowork.motif.draw import (process_bonds, draw_hex, process_per_residue, 
                  add_colors_to_map, is_jupyter, draw_bracket,
                  display_svg_with_matplotlib, get_coordinates_and_labels, get_highlight_attribute, add_sugar, add_bond, draw_shape,
                  draw_chem2d, draw_chem3d, GlycoDraw, plot_glycans_excel, annotate_figure, resolve_motif_name,
-                 _spread_glycans, plot_glycans_grid, _drawn_extent
+                 _spread_glycans, _figure_ink, subplots, plot_glycans_grid, _drawn_extent
 )
 from glycowork.motif.analysis import (preprocess_data, get_pvals_motifs, select_grouping, get_glycanova,
                                       get_differential_expression,
@@ -5726,6 +5726,13 @@ def test_annotate_figure(mock_svg_file):
     # A lone glycan stays on the page, as several do
     assert annotate_figure(viscose_svg.replace('LABEL', glycan).replace('X', '890').replace('data-width-unlabeled="400.00"',
                                                                                             'data-width-unlabeled="900.00"')).count('translate(890') == 0
+    # On a dark page, such as viscose draws in dark mode, a glycan is a die-cut sticker, its symbols where a plain drawing's would be
+    cut = r'<g fill="[^"]*" stroke="[^"]*" stroke-linecap="round" stroke-linejoin="round">'
+    spot = lambda svg: [float(v) for v in re.search(r'<g transform="translate\(([\d.]+) ([\d.]+)\) scale', svg).groups()]
+    light = annotate_figure(viscose_svg.replace('LABEL', glycan).replace('X', '100'))
+    dark = annotate_figure(viscose_svg.replace('LABEL', glycan).replace('X', '100').replace('#FFFFFF', '#1A1113'))
+    assert not re.search(cut, light) and re.search(cut, dark)
+    assert np.allclose(np.array(spot(dark)) + (0.45 - 0.2) * 50 * 0.2, spot(light))
 
 
 def test_process_per_residue():
@@ -12080,11 +12087,77 @@ def test_GlycanDrawing_save_and_png(tmp_path):
 
 
 def test_spread_glycans_single_and_overlapping():
-    assert _spread_glycans([(0., 0., 10., 10., 0., 0.)], (100., 100.)) == [[0.0, 0.0]]
-    out = _spread_glycans([(0., 0., 10., 10., 0., 0.), (2., 2., 10., 10., 2., 2.)], (100., 100.), iterations = 3)
-    assert abs(out[0][1] - out[1][1]) > 2  # overlap deeper in y: pushed apart vertically
-    out = _spread_glycans([(0., 0., 10., 40., 0., 0.), (5., 0., 10., 40., 5., 0.)], (200., 200.), iterations = 2)
-    assert abs(out[0][0] - out[1][0]) > 5  # overlap deeper in x: pushed apart horizontally
+    # A glycan with room stays at its natural spot, without a leader, and one past the page's edge comes back
+    assert _spread_glycans([(20., 20., 10., 10., 20., 20.)], (100., 100.)) == ([[20., 20.]], [None], 0)
+    assert _spread_glycans([(95., 20., 10., 10., 95., 20.)], (100., 100.))[0][0][0] <= 88
+    clear = lambda a, b, gap: a[0] + a[2] + gap <= b[0] or b[0] + b[2] + gap <= a[0] or a[1] + a[3] + gap <= b[1] or b[1] + b[3] + gap <= a[1]
+    # Many glycans on one point: all stay clear of each other and on the page, and each is joined to it by a leader that crosses nothing
+    placements = [(100., 100., 40., 20., 100., 100.) for _ in range(6)]
+    spots, leaders, tangles = _spread_glycans(placements, (300., 300.))
+    boxes = [(x, y, 40., 20.) for x, y in spots]
+    assert all(clear(boxes[i], boxes[j], 4.) for i in range(6) for j in range(i))
+    assert all(0 <= x and x + 40 <= 300 and 0 <= y and y + 20 <= 300 for x, y, _w, _h in boxes)
+    assert sum(leader is not None for leader in leaders) >= 3 and all(leader[:2] == (100., 100.) for leader in leaders if leader)
+    assert tangles == 0
+    # Nothing touches a blocked box
+    wall = (90., 0., 200., 100.)
+    x, y = _spread_glycans([(100., 50., 40., 20., 100., 50.)], (300., 300.), blocked = [wall])[0][0]
+    assert x + 40 <= wall[0] or x >= wall[2] or y + 20 <= wall[1] or y >= wall[3]
+    # A glycan avoids a point it would hide if another spot is as near, and its leader ends on a symbol it was given
+    assert _spread_glycans([(100., 100., 40., 20., 100., 100.)], (300., 300.), marks = [(120., 110., 500.)])[0][0] != [100., 100.]
+    far = _spread_glycans([(100., 100., 40., 20., 300., 110.)], (500., 300.), ports = [[(5., 10., 5.)]])[1][0]
+    assert far is None or far[2:] != (140., 110.)
+    # With no room anywhere the page grows: the glycan goes to the right of everything, clear of all
+    spots = _spread_glycans([(0., 0., 80., 40., 10., 10.), (0., 0., 80., 40., 20., 20.)], (90., 50.))[0]
+    assert clear((*spots[0], 80., 40.), (*spots[1], 80., 40.), 4.)
+    assert _spread_glycans([], (100., 100.)) == ([], [], 0)
+
+
+def test_figure_ink():
+    svg = ('<svg width="400" height="300" viewBox="0 0 400 300">\n<metadata>viscose</metadata>\n'
+           '<defs><clipPath id="c0"><rect x="50" y="40" width="340" height="220" transform="matrix(1 0 0 1 0 0)" /></clipPath></defs>\n'
+           '<rect width="400" height="300" fill="#FFFFFF" />\n<g transform="matrix(1 0 0 -1 0 300)">\n'
+           '<path d="M0 0L60 0L60 10L0 10Z" transform="matrix(1 0 0 1 100 280)" fill="#000000" />\n'
+           '<g clip-path="url(#c0)"><path d="M198 148L202 148L202 152L198 152ZM218 148L222 148L222 152L218 152Z" fill="#FF0000" /></g>\n'
+           '<g clip-path="url(#c0)"><path d="M100 150L112 150" fill="none" stroke="#000000" stroke-width="1" /></g>\n'
+           '<g clip-path="url(#c0)"><path d="M100 60L112 60" fill="none" stroke="#000000" stroke-width="1" stroke-dasharray="1,3" /></g>\n'
+           '<path d="M300 150C300 160 310 160 310 150Z" fill="#00FF00" stroke="#000000" stroke-width="1" />\n</g>\n'
+           '<!-- a label -->\n<g transform="translate(20 30) matrix(1 0 0 1 0 0)" data-right="90.00"><path d="M0 0L1 1" fill="none" /></g>\n</svg>')
+    blocked, marks = _figure_ink(svg, (400., 300.))
+    # the plot area's outside, a title, a network's node, and a label left as text
+    assert blocked[:3] == [(-1e4, -1e4, 50., 1e5), (-1e4, -1e4, 1e5, 40.), (-1e4, 260., 1e5, 1e5)]
+    assert (100., 10., 160., 20.) in blocked and (20., 20., 90., 34.) in blocked
+    assert any(left == 300. and right == 310. for left, _top, right, _bottom in blocked)
+    # a point weighs more than a line, and a line more than a dotted guide
+    weight = {(round(x), round(y)): w for x, y, w in marks}
+    assert weight[(200, 150)] == 12. and weight[(220, 150)] == 12. and weight[(100, 150)] == 3. and weight[(100, 240)] == 0.5
+    assert _figure_ink(svg.replace('<metadata>viscose</metadata>', ''), (400., 300.)) == ([], [])
+
+
+def test_annotate_figure_keeps_glycans_clear():
+    # Hits packed on one spot under a title: every drawing stays off the others and off the title, and all leaders end on symbols
+    glycans = ['Neu5Ac(a2-3)Gal(b1-3)GalNAc', 'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc', 'Fuc(a1-2)Gal(b1-3)GalNAc', 'GlcNAc(b1-6)[Gal(b1-3)]GalNAc',
+              'Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc', 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc']
+    res = pd.DataFrame({'Glycan': glycans, 'Log2FC': [1.5] * 6, 'corr p-val': [0.04, 0.03, 0.02, 0.01, 0.005, 0.001], 'p-val': [0.01] * 6})
+    for palette in ('aura', 'aura-dark'):
+        fig, ax = subplots()
+        ax.scatter([1.5] * 6, [1, 1.05, 1.1, 1.15, 1.2, 1.25])
+        ax.scatter([-1, 3], [0, 2])
+        ax.set(xlabel = 'Log2FC', title = 'A title')
+        for i, g in enumerate(glycans):
+            ax.annotate(g, (1.5, 1 + 0.05 * i), svg_label = True)
+        svg = fig.in_palette(palette).to_svg()
+        blocked, _marks = _figure_ink(svg, (float(re.search(r'width="([\d.]+)"', svg).group(1)), float(re.search(r'height="([\d.]+)"', svg).group(1))))
+        result = annotate_figure(svg, scale_by_DE_res = res, x_thresh = 1)
+        boxes = [(float(x), float(y), float(s) * float(w), float(s) * float(h)) for x, y, s, w, h in re.findall(
+            r'<g transform="translate\(([-\d.]+) ([-\d.]+)\) scale\(([\d.]+) [\d.]+\)">\s*<svg[^>]*?width="([\d.]+)"[^>]*?height="([\d.]+)"', result)]
+        assert len(boxes) == 6 and '<!-- Fuc' not in result
+        # the canvases' margins may meet, their ink may not
+        inner = [(x + m, y + m, w - 2 * m, h - 2 * m) for x, y, w, h in boxes for m in [0.1 * min(w, h)]]
+        assert all(inner[i][0] + inner[i][2] <= inner[j][0] or inner[j][0] + inner[j][2] <= inner[i][0] or inner[i][1] + inner[i][3] <= inner[j][1]
+                   or inner[j][1] + inner[j][3] <= inner[i][1] for i in range(6) for j in range(i))
+        top = blocked[1][3]
+        assert all(y >= top for _x, y, _w, _h in inner)
 
 
 def test_get_time_series_motifs_transforms(sample_time_series_data):

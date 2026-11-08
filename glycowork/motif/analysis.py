@@ -1404,7 +1404,9 @@ def get_volcano(
         y_thresh = get_alphaN(n) if n else df_res.attrs.get('alpha', 0.05)
     # Make plot
     sig = (y > -np.log10(y_thresh)) & (np.abs(x) > x_thresh)  # the hits the threshold lines frame and label_changed labels
-    fig, ax = subplots()
+    # SNFGs have a fixed size on the page, so with many or long glycans the page grows, as plot_network's does
+    grow = max(1.0, (sum(map(len, labels[sig])) / 1200) ** 0.5) if annotate_volcano and label_changed else 1.0
+    fig, ax = subplots(figsize = (6.4 * grow, 4.8 * grow))
     ax.scatter(x[~sig], y[~sig], color = 'a3', names = labels[~sig], **kwargs)
     ax.scatter(x[sig & (x <= 0)], y[sig & (x <= 0)], color = 'b1', names = labels[sig & (x <= 0)], **kwargs)
     ax.scatter(x[sig & (x > 0)], y[sig & (x > 0)], color = 'a1', names = labels[sig & (x > 0)], **kwargs)
