@@ -530,7 +530,7 @@ def add_bond(
         length = ((x_stop - x_start) ** 2 + (y_stop - y_start) ** 2) ** 0.5
         segment = length / (2 * max(3, round(length / (0.4 * dim))))
     p = draw.Path(stroke_width = final_width, stroke = col_dict['snfg_red'] if color_highlight else col_dict['black'],
-                  class_ = 'snfg-linkage',
+                  class_ = 'snfg-linkage', stroke_linecap = 'round',
                   **({'stroke_dasharray': f"{segment},{segment}"} if dashed else {}))
     p.M(x_start, y_start).L(x_stop, y_stop)
     drawing.append(p)
@@ -1465,7 +1465,8 @@ class GlycanDrawing:
         self.dim = dim
 
     def as_svg(self):
-        data = self.drawing_obj.as_svg()
+        # glycorender joins every shape round, so a browser shows the same tips and corners as the PNG and the PDF
+        data = self.drawing_obj.as_svg().replace('<svg ', '<svg stroke-linejoin="round" ', 1)
         return data.replace('<svg ', f'<svg aria-label="{self.alt_text}" role="img" ', 1) if self.alt_text else data
 
     def as_standalone_svg(self):
@@ -2002,7 +2003,7 @@ def GlycoDraw(
         col_dict = col_dict_transparent if main_sugar_label[0] == 'hide' else col_dict_base
         x_base = -label_x * dim * (1.2 if compact else 2)
         y_base = label_y * dim * (0.6 if compact else 1) + 5
-        d.append(draw.Text(reducing_end_label, dim * 0.35, x_base, y_base, text_anchor = 'end', fill = col_dict['black'], dominant_baseline = 'middle'))
+        d.append(draw.Text(reducing_end_label, dim * 0.35, x_base, y_base, text_anchor = 'end', fill = col_dict['black']))
     # Bond main chain
     [add_bond(main_sugar_x_pos[k+1], main_sugar_x_pos[k], main_sugar_y_pos[k + 1], main_sugar_y_pos[k], d, label = main_bond[k], dim = dim, compact = compact, highlight = main_bond_label[k], color_highlight = per_linkage_by_node.get(node_at[(0, 0, k + 1)] + 1, False) if highlight_linkages else False) for k in range(len(main_sugar) - 1)]
     # Bond within each branch, at every branch level; level 1 also connects to the main chain

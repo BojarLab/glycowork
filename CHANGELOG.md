@@ -28,7 +28,7 @@
 #### tokenization
 ##### Added ✨
 - Added mass support for `glycolate` and `lactate` reducing end modifications, from hypochlorite O-glycan release (bbadeb4)
-- Added `composition_database` to build glycoproteomics search base, taxonomically gated and drawn from `df_glycan` ()
+- Added `composition_database` to build glycoproteomics search base, taxonomically gated and drawn from `df_glycan` (5febbfa)
 
 ##### Changed 🔄
 - `glycan_to_mass` and `get_formula` now raise a `ValueError` when modification is set but the glycan has no free reducing end (alditols other than reduction, aldonic acids, inositol, aglycones, sucrose/trehalose-type linkages) (6e0e4d9)
@@ -47,6 +47,7 @@
 
 ##### Fixed 🐛
 - `GlycoDraw` draws a Y or Z fragment that replaced a Fuc where the Fuc sat, with its bond at the Fuc's angle, so lost core and antenna Fuc fragments read as such (c7678b7)
+- Fixed minor visual discrepancies between `png` and `svg` outputs of `GlycoDraw` ()
 
 #### annotate
 ##### Added ✨
