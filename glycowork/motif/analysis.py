@@ -2469,7 +2469,7 @@ def get_glycoshift_per_site(
         group2: list[str | int] | None = None,  # Second group indices/names; default: from the frame's contrasts
         paired: bool | None = None,  # Whether samples are paired; default: from the frame
         impute: bool = True,  # Replace zeros with impute_biosynthetic predictions
-        min_samples: float = 0.2,  # Min fraction (0-1) of non-zero samples required
+        min_samples: float = 0.2,  # Min fraction (0-1) of samples in which a glycosite was measured
         gamma: float = 0.07,  # Scale uncertainty of a sample's log-ratio, added to the variance of the test
         custom_scale: float | dict = 0,  # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
         random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
@@ -2480,24 +2480,16 @@ def get_glycoshift_per_site(
     meta = (getattr(df, '_provenance', None) or {}).get('glycan_class')
     glycan_class = glycan_class or (meta if isinstance(meta, str) else 'N')  # shipped datasets know their class; the composition rules for N-glycan types would call an O-glycan N2F1 high_Man and H1N4 complex
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
-    df, _, group1, group2 = preprocess_data(df, group1 = group1, group2 = group2, experiment = "diff", motifs = False, impute = impute,
-                                            min_samples = min_samples, transform = "Nothing", paired = paired,
-                                            random_state = random_state)
+    # The per-site CLR that glycoproteomics get_differential_expression tests: closed within each site, missing where a sample never measured the site, and only sites measured in two samples per group
+    df, df_org, group1, group2 = preprocess_data(df, group1 = group1, group2 = group2, experiment = "diff", glycoproteomics = True, impute = impute, min_samples = min_samples,
+                                                 custom_scale = custom_scale, paired = paired, random_state = random_state, motif_dag = False)
+    if (absent := df_org.attrs.get('absent')) is not None:  # a glycoform missing from a whole group holds a floor there, a level without spread; get_differential_expression tests it on its detection
+        df = df.drop(index = absent.index.intersection(df.index))
+    df = df[df.max(axis = 1) > df.min(axis = 1)]  # the dominant glycoform that a site with two or three glycoforms is taken against is 0 in every sample, which only shrank the residuals
+    if df.empty:
+        raise ValueError("No glycosite has a glycoform measured in both groups besides its reference, so no site has a glycan shift to model; get_differential_expression(glycoproteomics = True) tests glycoforms missing from a whole group on their detection.")
     alpha = get_alphaN(len(group1 + group2))
     df, glycan_features = process_for_glycoshift(df, glycan_class = glycan_class)
-    necessary_columns = ['Glycoform'] + glycan_features
-    preserved_data = df[necessary_columns]
-    df = df.drop(necessary_columns, axis = 1)
-    df = df.set_index('Glycosite')
-    df = df.div(df.sum(axis = 0), axis = 1) * 100
-    df = df.reset_index()
-    results = [
-        clr_transformation(group_df[group1 + group2], group1, group2, gamma = 0, custom_scale = custom_scale, random_state = random_state)
-        .assign(Glycosite = glycosite) for glycosite, group_df in df.groupby('Glycosite')
-    ]
-    df = pd.concat(results).sort_index()
-    df = pd.concat([df, preserved_data.reset_index(drop = True)], axis = 1)
-    df_long = pd.melt(df, id_vars = ['Glycosite', 'Glycoform'] + glycan_features, var_name = 'Sample',
-                      value_name = 'Abundance')
+    df_long = pd.melt(df, id_vars = ['Glycosite', 'Glycoform'] + glycan_features, value_vars = group1 + group2, var_name = 'Sample', value_name = 'Abundance').dropna(subset = ['Abundance'])
     df_long['Condition'] = (~df_long['Sample'].isin(set(group1))).astype(int)
     return process_glm_results(df_long, alpha, glycan_features, scale_var = gamma ** 2)

@@ -1606,17 +1606,32 @@ def get_glm(group: pd.DataFrame, # longform data of glycoform abundances for a g
         X = np.column_stack([np.ones(len(group))] + [group[c].values.astype(float) for c in terms])
         y = group['Abundance'].values.astype(float)
         beta, *_ = np.linalg.lstsq(X, y, rcond = None)
-        dof = X.shape[0] - np.linalg.matrix_rank(X)
-        if dof < 1:
+        rank = np.linalg.matrix_rank(X)
+        if X.shape[0] - rank < 1:
             return ("GLM fitting failed: insufficient residual degrees of freedom", [])
-        se = np.sqrt(np.diag(np.linalg.pinv(X.T @ X)) * (((y - X @ beta) ** 2).sum() / dof + scale_var))
+        A, e = np.linalg.pinv(X.T @ X), y - X @ beta
+        if 'Sample' in group:
+            # The glycoforms of one sample share its deviations from its group, so the sample is the unit of replication: the variance is clustered by sample, with the degrees of freedom of a
+            # two-group comparison of samples; rows treated as independent called 35% of IgG glycosites between random halves of healthy donors
+            clusters = pd.factorize(group['Sample'])[0]
+            n_clusters = clusters.max() + 1
+            dof = n_clusters - 2
+            if dof < 1:
+                return ("GLM fitting failed: fewer than three samples", [])
+            U = np.zeros((n_clusters, X.shape[1]))
+            np.add.at(U, clusters, X * e[:, None])
+            var = np.diag(A @ U.T @ U @ A) * n_clusters / (n_clusters - 1) * (X.shape[0] - 1) / (X.shape[0] - rank)
+        else:
+            dof = X.shape[0] - rank
+            var = np.diag(A) * (e ** 2).sum() / dof
+        se = np.sqrt(var + np.diag(A) * scale_var)
         names = ['Intercept'] + terms
         return (pd.Series(beta, index = names), pd.Series(2 * stdtr(dof, -np.abs(beta / se)), index = names)), retained_vars
     except Exception as e:
         return (f"GLM fitting failed: {str(e)}", [])
 
 
-def process_glm_results(df: pd.DataFrame, # CLR-transformed glycoproteomics data, rows glycoforms, columns samples
+def process_glm_results(df: pd.DataFrame, # long-form per-site log-ratios: one row per glycoform and sample, with Glycosite, Sample, Condition, Abundance, and the glycan features
                         alpha: float, # significance threshold
                         glycan_features: list[str], # extracted glycan features to consider as variables
                         scale_var: float = 0 # scale uncertainty of a sample's log-ratio, added to the residual variance

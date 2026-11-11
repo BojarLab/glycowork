@@ -47,7 +47,7 @@
 
 ##### Fixed 🐛
 - `GlycoDraw` draws a Y or Z fragment that replaced a Fuc where the Fuc sat, with its bond at the Fuc's angle, so lost core and antenna Fuc fragments read as such (c7678b7)
-- Fixed minor visual discrepancies between `png` and `svg` outputs of `GlycoDraw` ()
+- Fixed minor visual discrepancies between `png` and `svg` outputs of `GlycoDraw` (e6d5083)
 
 #### annotate
 ##### Added ✨

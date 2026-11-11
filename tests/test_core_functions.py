@@ -3894,6 +3894,13 @@ def test_get_glm():
     data_saturated = pd.DataFrame({'Abundance': [1.0, 2.0], 'Condition': [0, 1], 'H': [0.0, 1.0], 'N': [1.0, 0.0]})
     result, vars_ = get_glm(data_saturated)
     assert "insufficient residual degrees of freedom" in result
+    # the sample is the unit of replication: when the glycoforms of each sample shift together, their rows are no independent replicates
+    rng = np.random.default_rng(0)
+    clustered = pd.DataFrame({'Sample': np.repeat([f's{i}' for i in range(6)], 5), 'Condition': np.repeat([0, 0, 0, 1, 1, 1], 5), 'H': np.tile(np.arange(5.0), 6)})
+    clustered['Abundance'] = clustered.H * (0.5 + np.repeat(rng.normal(0, 1, 6), 5)) + rng.normal(0, 0.1, 30)
+    p_clustered = get_glm(clustered, glycan_features = ['H'])[0][1]['H_Condition']
+    p_rows = get_glm(clustered.drop(columns = 'Sample'), glycan_features = ['H'])[0][1]['H_Condition']
+    assert p_rows < p_clustered
 
 
 def test_process_glm_results():
@@ -8274,6 +8281,24 @@ def test_get_glycoshift_per_site_no_imputation(sample_glycoshift_df):
     result = get_glycoshift_per_site(sample_glycoshift_df, group1, group2,
                                     impute=False)
     assert isinstance(result, pd.DataFrame)
+
+
+def test_get_glycoshift_per_site_measured_only():
+    # C1-INH digests (2026-11-11): sites quantified in one sample of eight were called at q 1e-17, as glycoforms a sample never identified were imputed
+    rng = np.random.default_rng(0)
+    g1, g2 = [f'ctrl_{i}' for i in range(4)], [f'sia_{i}' for i in range(4)]
+    comps = ['H5N4', 'H5N4A1', 'H5N4A2', 'H5N4F1', 'H5N4F1A2']
+    dense = pd.DataFrame(rng.lognormal(10, 0.3, (5, 8)), columns = g1 + g2, index = [f'P1_10_{c}' for c in comps])
+    sparse = pd.DataFrame(np.nan, columns = g1 + g2, index = ['P2_20_H1N2', 'P2_20_H1N2A1', 'P3_30_H2N2F2', 'P3_30_H3N3'])
+    sparse.loc['P2_20_H1N2', 'ctrl_0'], sparse.loc['P2_20_H1N2A1', 'ctrl_0'] = 5e6, 5e8
+    sparse.loc['P3_30_H2N2F2', 'sia_3'], sparse.loc['P3_30_H3N3', 'sia_1'] = 1e7, 1e7
+    out = get_glycoshift_per_site(pd.concat([dense, sparse]).rename_axis('glycoform_id').reset_index(), g1, g2, random_state = 0)
+    assert out.index.tolist() == ['P1_10']  # sites without two measured samples per group have no variance to test against
+    assert not out.filter(like = '_significant').any(axis = None)  # one noisy site with no change
+    # a site whose glycoforms each appear in one group only shares no measured log-ratio between the groups, only floors
+    split = pd.DataFrame({'P4_40_H5N4': [np.nan] * 4 + [2e7] * 4, 'P4_40_H5N4A2': [8e6] * 4 + [np.nan] * 4}, index = g1 + g2).T
+    with pytest.raises(ValueError, match = 'detection'):
+        get_glycoshift_per_site(split.rename_axis('glycoform_id').reset_index(), g1, g2)
 
 
 @pytest.fixture

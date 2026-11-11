@@ -46,7 +46,7 @@ human_serum_bacteremia_N_PMID33535571,PMID:33535571,10.3390/jcm10030516,GlycoPOS
 human_serum_gangliosidosis_GSL_PMID39190143,PMID:39190143,10.1007/s00216-024-05487-3,,,Homo sapiens,serum,body fluid,,lipid,negative,none,RP-LC
 human_serum_ovarian_N_PMID41366864,PMID:41366864,10.1021/acs.jproteome.5c00442,GlycoPOST,GPST000583,Homo sapiens,serum,body fluid,ovarian carcinoma,N,positive,permethylated,MALDI
 human_serum_parkinson_GSL_PMID40379659,PMID:40379659,10.1038/s41467-025-59755-6,MassIVE,MSV000097015,Homo sapiens,serum,body fluid,,lipid,negative,none,RP-LC
-human_skin_O_PMC5871710,PMC5871710,10.3389/fonc.2018.00070,,,Homo sapiens,skin,primary tissue,basal/squamous cell carcinoma,O,negative,reduced,PGC-LC
+human_skin_O_PMC5871710,PMC5871710,10.3389/fonc.2018.00070,,,Homo sapiens,skin,primary tissue,basal cell carcinoma,O,negative,reduced,PGC-LC
 human_skin_O_PMC5871710_BCC,PMC5871710,10.3389/fonc.2018.00070,,,Homo sapiens,skin,primary tissue,basal cell carcinoma,O,negative,reduced,PGC-LC
 human_skin_O_PMC5871710_SCC,PMC5871710,10.3389/fonc.2018.00070,,,Homo sapiens,skin,primary tissue,squamous cell carcinoma,O,negative,reduced,PGC-LC
 human_influenza_N_10_648982026_02_02_703422,,10.1038/s42003-026010759-y,,,Homo sapiens,lung,cell line,lung adenocarcinoma,N,negative,reduced,PGC-LC
