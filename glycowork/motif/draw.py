@@ -1162,12 +1162,30 @@ def subplots(*args: Any,  # nrows and ncols, as in viscose.subplots
 
 
 def finish(fig: vc.Figure,  # The finished figure
-           filepath: str | Path = ''  # Path to save it to (.png, .pdf, or .svg)
+           filepath: str | Path = '',  # Path to save it to (.png, .pdf, or .svg)
+           interactive: bool = False  # An SVG file, and the figure inline in a notebook, answer the mouse: hover text, and everything of the same name lit up across panels and figures
            ) -> None:
     "Saves a figure if given a path, and shows it inline wherever that works; only an unsaved figure may open the system's image viewer, or a script saving many figures opens a window for each"
     if filepath:
-        fig.save(filepath)
-    fig.show(viewer = not filepath)
+        fig.save(filepath, interactive = interactive and Path(filepath).suffix.lower() == '.svg')
+    if interactive and is_jupyter():
+        from IPython.display import HTML, display
+        display(HTML(fig.to_svg(interactive = True)))
+    else:
+        fig.show(viewer = not filepath)
+
+
+def _compact_glyph(label: str,  # A label in a figure
+                   vertical: bool  # Whether the drawing runs up the page
+                   ) -> Any:  # Its compact SNFG drawing, or None to keep the label as text
+    "viscose's glyphs = 'glycan_compact': as its built-in 'glycan', in GlycoDraw's compact style"
+    try:
+        return GlycoDraw(label, vertical = vertical, compact = True, suppress = True, restrict_vocab = True)
+    except Exception:
+        return None
+
+
+vc.register_glyphs('glycan_compact', _compact_glyph)
 
 
 def check_kwargs(kwargs: dict[str, Any],  # Extra keyword arguments a function received
@@ -1834,7 +1852,8 @@ def GlycoDraw(
             # a sialic acid of known linkage (Neu5Ac_a2-6, from a linkage-specific derivatization) is its symbol, with the linkage after the count
             base, link = next(((b, f' α2,{k[-1]}') for b, keys in SIALIC_KEYS.items() for k in keys if k == mono), (mono, ''))
             if base in sugar_dict:
-                shape, color, furanose = sugar_dict[base]
+                # a composition's dHex is Fuc in every realistic sample, so it gets Fuc's red triangle
+                shape, color, furanose = sugar_dict['Fuc' if base == 'dHex' else base]
                 draw_shape(shape, color, x_pos = -(cursor + 0.5), y_pos = row, col_dict = col_dict_base, drawing = d, furanose = furanose, dim = dim)
                 cursor += 1.2
             else:

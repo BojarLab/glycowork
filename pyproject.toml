@@ -31,8 +31,8 @@ dependencies = [
     "scipy>=1.16",
     "pandas>=2.2.2",
     "openpyxl",
-    "glycorender~=0.5.7",
-    "viscose~=0.2.2"
+    "glycorender~=0.5.8",
+    "viscose~=0.3.0"
 ]
 
 [project.urls]

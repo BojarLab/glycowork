@@ -587,11 +587,13 @@ def get_heatmap(
         show_all: bool = False,  # Show all tick labels
         title: str | None = None,  # Plot title; None for none, as before
         dist_func: str | Callable | None = None,  # scipy.spatial.distance metric name or callable on two vectors to cluster rows and columns with; None keeps the default euclidean
-        **kwargs: Any  # Keyword args passed to viscose.clustermap: figsize, palette, cmap, vmin, vmax, center, method, metric, row_cluster, col_cluster, row_linkage, col_linkage, xticklabels, yticklabels, colorbar, colorbar_label, subtitle
+        interactive: bool = False,  # An SVG file, and the heatmap inline in a notebook, answer the mouse: each cell's glycan, sample, and value, and a glycan's or sample's cells lit up from its label
+        **kwargs: Any  # Keyword args passed to viscose.clustermap: figsize, palette, cmap, vmin, vmax, center, method, metric, row_cluster, col_cluster, row_linkage, col_linkage, xticklabels, yticklabels, colorbar, colorbar_label, subtitle, glyphs (default 'glycan', rows drawn as SNFGs; False for text), highlight (glycans, motifs, or samples whose cells stay in full shade while the rest recede)
 ) -> tuple[Any, list[str], pd.DataFrame] | None:  # None or (viscose figure, column names, transformed dataframe) if return_plot=True
     "Creates hierarchically clustered heatmap visualization of glycan/motif abundances"
     check_kwargs(kwargs, 'get_heatmap', ('figsize', 'palette', 'cmap', 'vmin', 'vmax', 'center', 'method', 'metric', 'row_cluster', 'col_cluster',
-                                         'row_linkage', 'col_linkage', 'xticklabels', 'yticklabels', 'colorbar', 'colorbar_label', 'subtitle'))
+                                         'row_linkage', 'col_linkage', 'xticklabels', 'yticklabels', 'colorbar', 'colorbar_label', 'subtitle', 'glyphs',
+                                         'highlight'))
     df = _features_as_rows(df, index_col)
     if transform:
         df = df[(df > 0).sum(axis = 1) >= np.max([np.round(rarity_filter * df.shape[1]), 1])]
@@ -630,16 +632,13 @@ def get_heatmap(
                 raise ValueError(f"dist_func = '{dist_func}' is not a scipy.spatial.distance metric.")
             dist_func = getattr(distance, dist_func)
         kwargs = {**kwargs, 'metric': dist_func}
-    # Signed values (CLR, ALR) diverge from 0; everything else is a magnitude
-    kwargs = {'figsize': (10, 10), 'cmap': 'diverging' if signed else 'sequential', **kwargs}
+    # Signed values (CLR, ALR) diverge from 0; everything else is a magnitude; rows naming glycans or motifs are drawn as SNFGs
+    kwargs = {'figsize': (10, 10), 'cmap': 'diverging' if signed else 'sequential', 'glyphs': 'glycan', **kwargs}
     fig, _ = vc.clustermap(df, show_all = show_all, xlabel = 'Samples', ylabel = 'Glycans' if not motifs else 'Motifs',
                            title = '' if title is None else title, **kwargs)
-    if filepath and not return_plot:
-        fig.save(filepath)
-    elif return_plot:
+    if return_plot:
         return fig, df.columns.tolist(), df
-    else:
-        fig.show()
+    finish(fig, filepath = filepath, interactive = interactive)
 
 
 def get_distance_matrix(
@@ -685,6 +684,7 @@ def plot_embeddings(
         alpha: float = 0.8,  # Point transparency
         palette: str | None = None,  # viscose palette ('aura', 'lumen', 'couture', 'poster'); None for the current default
         title: str | None = None,  # Plot title; None for none, as before
+        interactive: bool = False,  # An SVG file, and the plot inline in a notebook, answer the mouse: each glycan by name, and the same glycan in every other interactive figure
         **kwargs: Any  # Keyword args passed to viscose's scatter: s, size, sizes, marker, edge
 ) -> None:
     "Visualizes learned glycan embeddings using t-SNE dimensionality reduction with optional group coloring"
@@ -715,9 +715,9 @@ def plot_embeddings(
         shape_feature = [shape_feature if shape_feature in _sl(_glycan_graph(g)) else 'Absent' for g in glycans]  # whole monosaccharides and linkages: 'Gal' is not in GalNAc
     fig, ax = subplots(palette = palette)
     ax.scatter(embs[:, 0], embs[:, 1], hue = label_list, style = shape_feature, markers = markers, alpha = alpha, hue_label = 'Label',
-               style_label = 'Feature', **kwargs)
+               style_label = 'Feature', names = glycans, **kwargs)
     ax.set(xlabel = 'Dim1', ylabel = 'Dim2', title = '' if title is None else title)
-    finish(fig, filepath = filepath)
+    finish(fig, filepath = filepath, interactive = interactive)
 
 
 def characterize_monosaccharide(
@@ -842,7 +842,8 @@ def get_pca(
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"
         rarity_filter: float = 0.05,  # Min proportion for non-zero values
         eigenvalues: bool = False, # Plot the explained variance as a separate subplot
-        title: str | None = None  # Plot title; None for none, as before
+        title: str | None = None,  # Plot title; None for none, as before
+        interactive: bool = False  # An SVG file, and the plot inline in a notebook, answer the mouse: each sample's name, group, and place, and the same sample in every other interactive figure
 ) -> None:
     "Performs PCA on glycan/motif abundance data with group-based visualization"
     df = df.fillna(0)
@@ -875,6 +876,8 @@ def get_pca(
     percent_var = np.round(shares * 100)
     percent_var_labels = [f'PC{x}' for x in range(1, len(percent_var) + 1)]
     df_pca = pd.DataFrame(X_pca)
+    # The samples X holds, by name, which each point carries
+    df_pca['sample'] = [str(c) for c in (df.columns[1:len(groups) + 1] if isinstance(groups, list) and groups else df.columns[1:])]
     # merge with metadata
     if isinstance(groups, pd.DataFrame):
         df_pca['id'] = groups.id.values.tolist()
@@ -888,7 +891,7 @@ def get_pca(
     # A metadata column by name, or one label per sample
     hue, style, sizes = (df_pca[v].values if isinstance(v, str) else v or None for v in (color, shape, size))
     ax.scatter(df_pca[pc_x - 1], df_pca[pc_y - 1], hue = hue, style = style, size = sizes, hue_label = color if isinstance(color, str) else 'Group',
-               style_label = shape, size_label = size)
+               style_label = shape, size_label = size, names = df_pca['sample'].values)
     ax.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance',
            ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
     if title is not None:
@@ -897,7 +900,7 @@ def get_pca(
         axes[1].bar(percent_var_labels, percent_var, color = 'a1')
         axes[1].set(ylabel = 'Explained Variance (%)', xlabel = 'Principal Component')
         axes[1].set_xticks(range(len(percent_var)), percent_var_labels, rotation = 45)
-    finish(fig, filepath = filepath)
+    finish(fig, filepath = filepath, interactive = interactive)
 
 
 def get_pcoa(
@@ -913,7 +916,8 @@ def get_pcoa(
         permutations: int = 999,  # Number of permutations for PERMANOVA
         random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
         filepath: str | Path = '',  # Path to save plot
-        title: str | None = None  # Plot title; None for none
+        title: str | None = None,  # Plot title; None for none
+        interactive: bool = False  # An SVG file, and the plot inline in a notebook, answer the mouse: each sample's name, group, and place, and the same sample in every other interactive figure
 ) -> pd.DataFrame:  # Sample coordinates on all principal coordinates, explained variance and PERMANOVA in .attrs
     "Performs principal coordinate analysis (PCoA) on any sample distance matrix with group-based visualization and PERMANOVA"
     random_state = 0 if random_state is None else random_state
@@ -946,7 +950,7 @@ def get_pcoa(
     coords.attrs['explained_variance'] = vals[keep] / vals[keep].sum()
     fig, ax = subplots()
     ax.scatter(coords.iloc[:, pco_x - 1].values, coords.iloc[:, pco_y - 1].values,
-               hue = [str(g) for g in groups] if groups is not None else None)
+               hue = [str(g) for g in groups] if groups is not None else None, names = [str(s) for s in coords.index])
     ax.set(xlabel = f'PCo{pco_x}: {coords.attrs["explained_variance"][pco_x - 1] * 100:.1f}% variance',
            ylabel = f'PCo{pco_y}: {coords.attrs["explained_variance"][pco_y - 1] * 100:.1f}% variance')
     if groups is not None:
@@ -963,7 +967,7 @@ def get_pcoa(
             ax.set_ylim(y_lo - 0.05 * (y_hi - y_lo), y_hi + 0.15 * (y_hi - y_lo))
     if title is not None:
         ax.set_title(title)
-    finish(fig, filepath = filepath)
+    finish(fig, filepath = filepath, interactive = interactive)
     return coords
 
 
@@ -1349,7 +1353,8 @@ def get_ma(
         log2fc_thresh: int = 1,  # Log2FC threshold for highlighting
         sig_thresh: float | None = None,  # Significance threshold for highlighting; defaults to the sample-size-adjusted alpha stored on the results
         filepath: str | Path = '',  # Path to save plot
-        title: str | None = None  # Plot title; default: the dataset name the analysis stamped on df_res, '' for none
+        title: str | None = None,  # Plot title; default: the dataset name the analysis stamped on df_res, '' for none
+        interactive: bool = False  # An SVG file, and the plot inline in a notebook, answer the mouse: each point's glycan and values, and the same glycan in every other interactive figure
 ) -> None:
     "Generates MA plot (mean abundance vs log2 fold change) from differential expression results"
     df_res = _read_results(df_res)
@@ -1361,14 +1366,15 @@ def get_ma(
     sig_mask = (abs(df_res['Log2FC']) > log2fc_thresh) & (df_res['corr p-val'] < sig_thresh)
     fig, ax = subplots()
     x, y = df_res['Mean abundance'].values, df_res['Log2FC'].values
-    ax.scatter(x[~sig_mask], y[~sig_mask], color = 'a3', s = 20)
-    ax.scatter(x[sig_mask & (y > 0)], y[sig_mask & (y > 0)], color = 'a1', alpha = 0.9, s = 30)
-    ax.scatter(x[sig_mask & (y <= 0)], y[sig_mask & (y <= 0)], color = 'b1', alpha = 0.9, s = 30)
+    labels = (df_res['Glycan'] if 'Glycan' in df_res.columns else df_res.index).astype(str).values
+    ax.scatter(x[~sig_mask], y[~sig_mask], color = 'a3', s = 20, names = labels[~sig_mask])
+    ax.scatter(x[sig_mask & (y > 0)], y[sig_mask & (y > 0)], color = 'a1', alpha = 0.9, s = 30, names = labels[sig_mask & (y > 0)])
+    ax.scatter(x[sig_mask & (y <= 0)], y[sig_mask & (y <= 0)], color = 'b1', alpha = 0.9, s = 30, names = labels[sig_mask & (y <= 0)])
     ax.axhline(0)
     ax.set(xlabel = 'Mean Abundance', ylabel = 'Log2FC',
            title = df_res.attrs.get('dataset', '') if title is None else title)
     # save to file
-    finish(fig, filepath = filepath)
+    finish(fig, filepath = filepath, interactive = interactive)
 
 
 def get_volcano(
@@ -1376,13 +1382,15 @@ def get_volcano(
         y_thresh: float | None = None,  # Corrected p threshold for labeling; default: alpha stamped by the analysis function, else 0.05
         x_thresh: float = 0,  # Absolute x metric threshold for labeling
         n: int | None = None,  # Sample size for Bayesian-Adaptive Alpha
-        label_changed: bool = True,  # Add text labels to significant points
+        label_changed: bool = True,  # Label significant points
         x_metric: str = 'Log2FC',  # x-axis metric: 'Log2FC' or 'Effect size'; glycosite-level results (glycoproteomics) have no Log2FC and use Effect size
-        annotate_volcano: bool = True,  # Annotate dots with SNFG images
+        annotate_volcano: bool = True,  # Label significant glycans with their SNFG drawings instead of text
         filepath: str | Path = '',  # Path to save plot
         title: str | None = None,  # Plot title; default: the dataset name the analysis stamped on df_res, '' for none
+        highlight: list[str] | None = None,  # Glycans (or glycosites) to keep in full shade, with their drawings, while everything else recedes toward the page in its own hue
+        interactive: bool = False,  # An SVG file, and the plot inline in a notebook, answer the mouse: each point's glycan and values, its drawing lit up with it, and the same glycan in every other interactive figure
         **kwargs: Any  # Keyword args passed to viscose's scatter: s, alpha, marker, edge
-) -> None:  # Displays volcano plot, or returns it as a Jupyter-renderable SVG when annotate_volcano
+) -> None:  # Displays or saves the volcano plot
     "Creates volcano plot showing -log10(FDR-corrected p-values) vs Log2FC or effect size"
     kwargs.pop('color', None)
     kwargs.pop('hue', None)
@@ -1404,7 +1412,7 @@ def get_volcano(
         y_thresh = get_alphaN(n) if n else df_res.attrs.get('alpha', 0.05)
     # Make plot
     sig = (y > -np.log10(y_thresh)) & (np.abs(x) > x_thresh)  # the hits the threshold lines frame and label_changed labels
-    # SNFGs have a fixed size on the page, so with many or long glycans the page grows, as plot_network's does
+    # SNFGs crowd sooner than text, so with many or long glycans the page grows, which spares viscose shrinking them
     grow = max(1.0, (sum(map(len, labels[sig])) / 1200) ** 0.5) if annotate_volcano and label_changed else 1.0
     fig, ax = subplots(figsize = (6.4 * grow, 4.8 * grow))
     ax.scatter(x[~sig], y[~sig], color = 'a3', names = labels[~sig], **kwargs)
@@ -1415,26 +1423,15 @@ def get_volcano(
     ax.axhline(-np.log10(y_thresh))
     ax.axvline(x_thresh)
     ax.axvline(-x_thresh)
-    # Text labels
+    # Labels: SNFG drawings wherever they name glycans, which viscose places around the points and the other drawings
+    # (glycosites stay text), or plain text
     if label_changed:
         for i in np.where(sig)[0]:
-            ax.annotate(labels[i], (x[i], y[i]), size = 8, va = 'baseline', svg_label = annotate_volcano)
-    # Save to file
-    if annotate_volcano:
-        from glycowork.motif.draw import annotate_figure, is_jupyter
-        svg = annotate_figure(fig.to_svg(), filepath = filepath, scale_by_DE_res = df_res, y_thresh = y_thresh,
-                              x_thresh = x_thresh, x_metric = x_metric)
-        # what fig.show() would show here is the unannotated figure, so hand back the annotated SVG instead
-        if svg is None and Path(filepath).suffix.lower() == '.svg':
-            svg = Path(filepath).read_text(encoding = 'utf-8')
-        if svg and is_jupyter():
-            from IPython.display import SVG
-            return SVG(svg)
-        if svg and not filepath:
-            from glycowork.motif.draw import display_svg_with_matplotlib
-            display_svg_with_matplotlib(svg)
-        return
-    finish(fig, filepath = filepath)
+            ax.annotate(labels[i], (x[i], y[i]), **({'glyph': 'glycan', 'spread': True} if annotate_volcano else
+                                                    {'size': 8, 'va': 'baseline'}))
+    if highlight is not None:
+        ax.highlight(highlight)
+    finish(fig, filepath = filepath, interactive = interactive)
 
 
 @_abundance_input('df')

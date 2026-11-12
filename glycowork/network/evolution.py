@@ -134,6 +134,7 @@ def dendrogram_from_distance(dm: pd.DataFrame, # Rank x rank distance matrix (e.
     )
     fig, ax = subplots(figsize = (10, 10))
     ax.dendrogram(tree['icoord'], tree['dcoord'], 'left', len(tree['ivl']), labels = tree['ivl'], scale = True)
+    ax.tick_params('y', glyphs = 'glycan')  # leaves naming glycans, as from get_distance_matrix(compare = 'features'), are drawn as SNFGs
     ax.set(title = 'Hierarchical Clustering Dendrogram', xlabel = 'Distance', ylabel = ylabel)
     finish(fig, filepath = filepath)
 

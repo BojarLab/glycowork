@@ -5338,6 +5338,8 @@ def test_glycodraw():
     assert result is not None
     result = GlycoDraw("H5N3F1", suppress = True)
     assert result is not None
+    # a composition's dHex, written F or Fuc, gets Fuc's red triangle
+    assert col_dict_base['snfg_red'] in result.as_svg() and col_dict_base['snfg_red'] in GlycoDraw("H5N3Fuc1", suppress = True).as_svg()
     # Test vertical orientation
     result = GlycoDraw("GlcNAc(b1-4)GlcA", vertical=True, suppress=True)
     assert result is not None
@@ -7560,16 +7562,12 @@ def test_get_volcano_basic(sample_diff_expr_results, mock_show):
     with patch('viscose.Figure.save') as mock_savefig:
         get_volcano(sample_diff_expr_results, n = 6, annotate_volcano = False)
         mock_savefig.assert_not_called()
-    # without a filepath the annotated figure is built in a temp dir and handed back for Jupyter to render
-    with patch('glycowork.motif.draw.is_jupyter', return_value = True):
-        out = get_volcano(sample_diff_expr_results)
-    assert out is not None and '<svg' in out.data
-    assert not list(Path('.').glob('*_temp.svg'))
-    # ...and outside Jupyter it is shown as a PNG instead of vanishing
-    with patch('glycowork.motif.draw.is_jupyter', return_value = False), patch(
-            'glycowork.motif.draw.display_svg_with_matplotlib') as mock_display:
-        get_volcano(sample_diff_expr_results)
-    mock_display.assert_called_once()
+    # significant glycans are labeled with their SNFG drawings, which viscose places itself, and the figure is shown as any other
+    mock_show.reset_mock()
+    get_volcano(sample_diff_expr_results)
+    mock_show.assert_called_once()
+    notes = [a for a in mock_show.call_args[0][0].axes[0].artists if a['kind'] == 'text']
+    assert notes and all(a['glyph'] == 'glycan' and a['spread'] for a in notes)
     # Up and down take the palette's two hues, and a threshold of 1 leaves the others pale
     get_volcano(sample_diff_expr_results, x_thresh = 1, annotate_volcano = False)
     fig = mock_show.call_args[0][0]
@@ -7606,8 +7604,10 @@ def test_get_volcano_with_effect_size(sample_diff_expr_results, mock_show):
     sites = get_differential_expression('human_milk_N_PMID34087070', random_state = 0)
     assert 'Log2FC' not in sites.columns
     get_volcano(sites, annotate_volcano = False)
-    with patch('glycowork.motif.draw.is_jupyter', return_value = True):
-        assert '<svg' in get_volcano(sites, x_thresh = 0.5).data
+    # a glycosite names no glycan, so its label stays text
+    get_volcano(sites, x_thresh = 0)
+    notes = [a for a in mock_show.call_args[0][0].axes[0].artists if a['kind'] == 'text']
+    assert notes and {a['s'] for a in notes} <= set(sites['Glycosite'])
     # An underflowed corrected p-value of 0 is drawn at the most significant finite height instead of at -log10(0) = inf
     zero_p = sample_diff_expr_results.copy()
     zero_p.loc[zero_p.index[0], 'corr p-val'] = 0.0
@@ -7817,6 +7817,10 @@ def test_get_heatmap_basic(sample_df):
     assert result_with_plot[0].axes[0]._scale['cmap'] == 'sequential'
     fig, _, _ = get_heatmap(sample_df, figsize = (5, 5), yticklabels = 1, xticklabels = False, metric = 'cityblock', method = 'complete', return_plot = True)
     assert fig._base == (360, 360) and fig.axes[0]._xtl is None and fig.axes[0].show_all == (False, True)
+    # rows naming glycans are drawn as SNFGs, unless glyphs = False
+    assert [ax._tick_opts['y'].get('glyphs') for ax in fig.axes if ax._tick_opts['y'].get('glyphs')] == ['glycan']
+    fig, _, _ = get_heatmap(sample_df, glyphs = False, return_plot = True)
+    assert not any(ax._tick_opts[axis].get('glyphs') for ax in fig.axes for axis in 'xy')
     with pytest.raises(TypeError, match = "'linewidths'.*takes figsize"):
         get_heatmap(sample_df, linewidths = 0.5)
     with pytest.raises(ValueError, match = "'vlag'"):
@@ -9216,27 +9220,37 @@ def test_plot_network_layouts(mock_jupyter, evo_test_networks):
         print("Graphviz not installed, skipping pydot2 layout test")
 
 
-def test_plot_network_static_figure(tmp_path, evo_test_networks):
+def test_plot_network_static_figure(tmp_path, evo_test_networks, mock_show):
     """Test the saved static figure, with and without SNFG node labels"""
     main_net, _ = evo_test_networks
     plot_network(main_net, plot_format = 'kamada_kawai', filepath = tmp_path / 'net.svg', draw_glycans = False)
     assert (tmp_path / 'net.svg').exists()
     plot_network(main_net, plot_format = 'kamada_kawai', filepath = tmp_path / 'net_snfg.svg')
     assert (tmp_path / 'net_snfg.svg').exists()
+    # node labels are viscose glyphs, drawn in the figure itself, in every format
+    for compact, maker in ((False, 'glycan'), (True, 'glycan_compact')):
+        with patch('viscose.Figure.save', autospec = True) as mock_save:
+            plot_network(main_net, plot_format = 'kamada_kawai', filepath = tmp_path / 'net_snfg.png', compact = compact)
+        notes = [a for a in mock_save.call_args[0][0].axes[0].artists if a['kind'] == 'text' and a['s'] in main_net]
+        assert len(notes) == len(main_net) and {a['glyph'] for a in notes} == {maker}
     plot_network(main_net, plot_format = 'kamada_kawai', filepath = tmp_path / 'net_titled.svg', draw_glycans = False, title = 'Milk')
     assert (tmp_path / 'net_titled.svg').exists()
     with pytest.raises(ValueError):
         plot_network(main_net, plot_format = 'kamada_kawai', filepath = tmp_path / 'x.svg', glycan_size = 'huge')
-    # without a filepath the SNFG figure is handed back for Jupyter to render, with its hover text on the tagged elements
+    # without a filepath the SNFG figure is handed back for Jupyter to render, as viscose's interactive SVG, whose
+    # hover table names every glycan and reaction
     with patch('glycowork.motif.draw.is_jupyter', return_value = True):
         out = plot_network(main_net, plot_format = 'kamada_kawai')
-    assert out is not None and '<svg' in out.data and 'Node: ' in out.data and 'Reaction: ' in out.data
-    assert re.search(r'id="\w*gwedge0"><title>Reaction: [^<]*</title><path d="[^"]*" style="fill:none;stroke:transparent', out.data)
-    # ...and outside Jupyter it is shown as a PNG instead of vanishing
-    with patch('glycowork.motif.draw.is_jupyter', return_value = False), patch(
-            'glycowork.motif.draw.display_svg_with_matplotlib') as mock_display:
+    assert out is not None and '<svg' in out.data and '<script>' in out.data and out._repr_svg_() == out.data
+    import json
+    texts = set(json.loads(re.search(r'var T = (.*?), word = ', out.data).group(1))[0])
+    assert {str(n) for n in main_net.nodes} <= texts
+    assert {d for d in nx.get_edge_attributes(main_net, 'diffs').values() if d} <= texts
+    # ...and outside Jupyter it is shown instead of vanishing
+    mock_show.reset_mock()
+    with patch('glycowork.motif.draw.is_jupyter', return_value = False):
         plot_network(main_net, plot_format = 'kamada_kawai')
-    mock_display.assert_called_once()
+    mock_show.assert_called_once()
     # a network pruned down to nothing still gets its (empty) figure
     plot_network(nx.DiGraph(), filepath = tmp_path / 'empty.svg')
     assert (tmp_path / 'empty.svg').exists()
@@ -9493,6 +9507,9 @@ def test_distance_from_metric(sample_taxonomy_data, sample_networks, tmp_path):
         # Test with file saving
         dendrogram_from_distance(dm, ylabel="Test", filepath="test.png")
         dendrogram_from_distance(dm, filepath = tmp_path / "dendrogram.svg")  # a Path, as from pathlib, has no len() and no split()
+        with patch('viscose.Figure.save', autospec = True) as mock_save:
+            dendrogram_from_distance(dm, filepath = tmp_path / "dendrogram.png")
+        assert mock_save.call_args[0][0].axes[0]._tick_opts['y']['glyphs'] == 'glycan'
         assert (tmp_path / "dendrogram.svg").read_text(encoding = "utf-8").lstrip().startswith("<?xml")
 
 
@@ -10705,6 +10722,7 @@ def test_analyze_ml_model(mock_show, mock_xgb_data):
     model = train_ml_model(X_train, X_test, y_train, y_test, mode='classification')
     analyze_ml_model(model)
     mock_show.assert_called_once()
+    assert mock_show.call_args[0][0].axes[0]._tick_opts['x']['glyphs'] == 'glycan'
 
 
 def test_get_mismatch(mock_xgb_data):

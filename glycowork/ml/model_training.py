@@ -510,6 +510,7 @@ def analyze_ml_model(model: xgb.XGBModel  # trained ML model from train_ml_model
     fig, ax = subplots()
     ax.bar(feat_imp.index.values.tolist(), feat_imp[feat_imp.columns.values.tolist()[0]].values, color = 'a1')
     ax.set_xticks(range(len(feat_imp)), feat_imp.index.values.tolist(), rotation = 90)
+    ax.tick_params('x', glyphs = 'glycan')  # features naming glycans or motifs are drawn as SNFGs
     ax.set(xlabel = 'Important Variables', ylabel = 'Relative Importance (Gain)', title = 'Feature Importance')
     finish(fig)
 
