@@ -78,6 +78,8 @@ mouse_macrophages_infection_N_PMC8416091,PMC8416091,10.3389/fimmu.2021.722293,Pr
 mouse_tissues_N_PMID39930009,PMID:39930009,10.1038/s41594-025-01485-w,ProteomeXchange,PXD052447,Mus musculus,liver; kidney; brain,primary tissue,,N,positive,TMT,RP-LC
 schistosoma_mansoni_sex_N_PMID41545360,PMID:41545360,10.1038/s41467-026-68400-9,MassIVE,MSV000097695,Schistosoma mansoni,whole worm,whole organism,,N,positive,none,RP-LC
 schistosoma_mansoni_sex_O_PMID41545360,PMID:41545360,10.1038/s41467-026-68400-9,MassIVE,MSV000097695,Schistosoma mansoni,whole worm,whole organism,,O,positive,none,RP-LC
+human_colorectal_N_PMID40285620,PMID:40285620,10.1002/advs.202415645,ProteomeXchange,PXD055935; PXD055957,Homo sapiens,colorectal,primary tissue,colorectal carcinoma,N,positive,none,RP-LC
+mouse_ovary_aging_N_PMID40073759,PMID:40073759,10.1016/j.redox.2025.103584,ProteomeXchange,PXD056126,Mus musculus,ovary,primary tissue,,N,positive,TMT,RP-LC
 A549_influenza_PMID33046650,PMID:33046650,10.1073/pnas.2008203117,Synapse,syn21975628,Homo sapiens,lung,cell line,lung adenocarcinoma,,,,
 HEK_XBP1_PMID30305426,PMID:30305426,10.1073/pnas.1805425115,,,Homo sapiens,kidney,cell line,,,,,
 bacteria_PMID20973590,PMID:20973590,10.1021/ac1022309,,,Escherichia coli; Enterobacter cloacae; Staphylococcus aureus; Bacillus subtilis,,bacteria,,,,,

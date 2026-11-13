@@ -223,3 +223,7 @@ glycoproteomics_schistosoma_mansoni_sex_N_PMID41545360,female,"Female_1,Female_2
 glycoproteomics_schistosoma_mansoni_sex_N_PMID41545360,male,"Male_1,Male_2,Male_3",FALSE
 glycoproteomics_schistosoma_mansoni_sex_O_PMID41545360,female,"Female_1,Female_2,Female_3",FALSE
 glycoproteomics_schistosoma_mansoni_sex_O_PMID41545360,male,"Male_1,Male_2,Male_3",FALSE
+glycoproteomics_human_colorectal_N_PMID40285620,tumor,"tumor_1,tumor_2,tumor_3,tumor_4,tumor_5,tumor_6,tumor_7,tumor_8,tumor_9,tumor_10,tumor_11,tumor_12,tumor_13,tumor_14,tumor_15,tumor_16,tumor_17,tumor_18,tumor_19,tumor_20,tumor_21,tumor_22,tumor_23,tumor_24,tumor_25,tumor_26,tumor_27,tumor_28,tumor_29,tumor_30,tumor_31,tumor_32,tumor_33,tumor_34,tumor_35,tumor_36,tumor_37,tumor_38,tumor_39,tumor_40,tumor_41,tumor_42,tumor_43,tumor_44,tumor_45",TRUE
+glycoproteomics_human_colorectal_N_PMID40285620,NAT,"NAT_1,NAT_2,NAT_3,NAT_4,NAT_5,NAT_6,NAT_7,NAT_8,NAT_9,NAT_10,NAT_11,NAT_12,NAT_13,NAT_14,NAT_15,NAT_16,NAT_17,NAT_18,NAT_19,NAT_20,NAT_21,NAT_22,NAT_23,NAT_24,NAT_25,NAT_26,NAT_27,NAT_28,NAT_29,NAT_30,NAT_31,NAT_32,NAT_33,NAT_34,NAT_35,NAT_36,NAT_37,NAT_38,NAT_39,NAT_40,NAT_41,NAT_42,NAT_43,NAT_44,NAT_45",TRUE
+glycoproteomics_mouse_ovary_aging_N_PMID40073759,2months,"2months_1,2months_2,2months_3,2months_4,2months_5",FALSE
+glycoproteomics_mouse_ovary_aging_N_PMID40073759,12months,"12months_1,12months_2,12months_3,12months_4,12months_5",FALSE

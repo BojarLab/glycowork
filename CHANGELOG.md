@@ -81,6 +81,10 @@
 ##### Fixed 🐛
 - `GlycoDataFrame.abundance` keeps one row per copy of a duplicated glycan column in the transposed layout, in line with `.glycans` (2a509fe)
 
+#### loader
+##### Added ✨
+- Added new curated N-glycoproteomics datasets: `human_colorectal_N_PMID40285620` and `mouse_ovary_aging_N_PMID40073759` ()
+
 ### network
 #### biosynthesis
 ##### Fixed 🐛
