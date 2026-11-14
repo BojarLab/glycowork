@@ -504,11 +504,14 @@ def compare_glycans(glycan_a: str | GlycanGraph | nx.DiGraph, # First glycan to 
         while frontier and not (same := any(_degs(g) == _degs(gb) and (iso if (iso := _forest_isomorphic(gb, g, covers)) is not None else nx.isomorphism.DiGraphMatcher(_for_vf2(gb), _for_vf2(g), covers).is_isomorphic()) for g in frontier if len(_components(g)) == n_parts)):
             placed = {}
             for t in frontier:
-                for s in (map(graph_to_string, _topologies(t, exhaustive = True)) if len(_components(t)) > n_parts else []):
+                # placing the first part everywhere reaches every full placement, whereas a layout that keeps floating parts may need any part placed first (a floating {Fuc(a1-3)} onto a floating {Gal(b1-4)GlcNAc(b1-2)} written before it)
+                bits = [None] if n_parts == 1 else range(len(_components(t)) - 1)
+                for s in (map(graph_to_string, chain.from_iterable(_topologies(t, exhaustive = True, bit = i) for i in bits)) if len(_components(t)) > n_parts else []):
                     if s not in placed:
                         g = _glycan_graph(s)
                         hits = _tree_embeddings(main_b, g.subgraph(_component(g, 0)), covers)
-                        placed[s] = g if hits is not None and any(e for v, e in zip(main_b, hits) if v == _roots(main_b)[0]) else None
+                        # a part placed on another floating part leaves the main part as it was, so the floating parts have to fit into glycan_b too, or such placements go unpruned
+                        placed[s] = g if hits is not None and any(e for v, e in zip(main_b, hits) if v == _roots(main_b)[0]) and all((h := _tree_embeddings(gb, g.subgraph(c), covers)) is None or any(h) for c in _components(g) if 0 not in c) else None
             frontier = [g for g in placed.values() if g is not None]
         return (same, None) if return_matches else same
 
@@ -1031,7 +1034,8 @@ def largest_subgraph(glycan_a: str | GlycanGraph | nx.DiGraph, # First glycan
 def _topologies(ggraph: GlycanGraph, # Glycan with floating substituent
                 exhaustive: bool = False, # Whether to allow additions at internal positions
                 allowed_disaccharides: set[str] | None = None, # Permitted disaccharides when creating possible glycans
-                modification_map: dict[str, set[str]] = modification_map # Maps modifications to valid attachments
+                modification_map: dict[str, set[str]] = modification_map, # Maps modifications to valid attachments
+                bit: int | None = None # Index of the floating part to place, in numbering order; by default an anchored one, else the first
                 ) -> list[GlycanGraph]: # List of possible topology graphs
     "get_possible_topologies for the motif code"
     parts = [ggraph.subgraph(c) for c in _components(ggraph)]
@@ -1039,32 +1043,39 @@ def _topologies(ggraph: GlycanGraph, # Glycan with floating substituent
         raise ValueError("This glycan already has a defined topology; please don't use this function.")
     # the main part holds node 0; an anchored bit goes first, as its alternatives are what compare_glycans has to resolve
     main_part, floating = next(p for p in parts if 0 in p), [p for p in parts if 0 not in p]
-    floating_part = next((p for p in floating if 'anchors' in ggraph.nodes[max(p)]), floating[0])
+    floating_part = floating[bit] if bit is not None else next((p for p in floating if 'anchors' in ggraph.nodes[max(p)]), floating[0])
     dangling_linkage = max(floating_part)
     is_modification = len(floating_part) == 1
     anchors = ggraph.nodes[dangling_linkage].get('anchors', {})
     if is_modification:
         modification = ggraph.nodes[dangling_linkage]['string_labels']
+        positions, kind = re.match(r'([\d/]*)(.*)', modification).groups()
     else:
         floating_monosaccharide = dangling_linkage - 1
     topologies = []
     if anchors:
-        candidates = [(n, link) for link, anchor in anchors.items() for n in resolve_anchor(main_part, anchor)]
+        candidates = [(n, link, main_part) for link, anchor in anchors.items() for n in resolve_anchor(main_part, anchor)]
     else:
-        candidates = [(k, ggraph.nodes[dangling_linkage]['string_labels']) for i, k in enumerate(main_part) if
-                      i % 2 == 0 and (exhaustive or is_modification or not main_part.succ[k])]
-    for k, link in candidates:
+        # every other floating part is an acceptor too, after the main part, so the placements never depend on the order the parts are written in ({Fuc(a1-3)}{Gal(b1-4)GlcNAc(b1-2)} gave no Lewis X)
+        candidates = [(k, ggraph.nodes[dangling_linkage]['string_labels'], part) for part in [main_part] + [p for p in floating if p is not floating_part and len(p) > 1]
+                      for i, k in enumerate(part) if i % 2 == 0 and (exhaustive or is_modification or not part.succ[k])]
+    for k, link, part in candidates:
+        if is_modification:
+            if not modification_map:
+                continue
+            mono = ggraph.nodes[k]['string_labels']
+            # an uncertain position ('3/6S') is the union of its positions, each kept where modification_map allows it on this residue
+            fits = [p for p in positions.split('/') if mono in modification_map.get(p + kind, set())] if modification not in modification_map and '/' in positions else [positions] * (mono in modification_map.get(modification, set()))
+            if not fits:
+                continue
         # the bit cannot go on k only if every position it may take is already stated as taken there; '?' and '3/6' leave a position open
-        options = set((modification[0] if is_modification else link.split('-')[-1]).split('/'))
+        options = set(('/'.join(fits) if is_modification else link.split('-')[-1]).split('/'))
         if all(o.isdigit() for o in options) and options <= {ggraph.nodes[n]['string_labels'].split('-')[-1] for n in ggraph.succ[k] if n < k}:
             continue
         nodes = dict(ggraph.nodes)
         nodes[dangling_linkage] = {a: v for a, v in nodes[dangling_linkage].items() if a != 'anchors'}
         if is_modification:
-            mono = nodes[k]['string_labels']
-            if not modification_map or mono not in modification_map.get(modification, set()):
-                continue
-            nodes[k] = {**nodes[k], 'string_labels': mono + modification}
+            nodes[k] = {**nodes[k], 'string_labels': mono + '/'.join(fits) + kind}
             del nodes[dangling_linkage]
         else:
             nodes[dangling_linkage] = {**nodes[dangling_linkage], 'string_labels': link}
@@ -1076,6 +1087,10 @@ def _topologies(ggraph: GlycanGraph, # Glycan with floating substituent
                     continue
         # renumbered into glycan_to_nxGraph's layout (main part first, the placed bit ahead of it so the root stays last; remaining floating parts numbered after, inserted before), so the output can be placed again
         main, rest = [n for n in nodes if n in main_part or n in floating_part], [n for n in nodes if n not in main_part and n not in floating_part]
+        if part is not main_part:
+            # placed on another floating part, the bit is numbered right before that part, whose dangling linkage stays its highest node
+            main, at = [n for n in main if n not in floating_part], rest.index(next(n for n in rest if n in part))
+            rest[at:at] = [n for n in nodes if n in floating_part]
         mapping = {n: i for i, n in enumerate(main + rest)}
         topologies.append(_graph({mapping[n]: nodes[n] for n in rest + main}, [(mapping[u], mapping[v]) for u in nodes for v in ggraph.succ[u] + ((dangling_linkage,) if u == k and not is_modification else ())]))
     return topologies
@@ -1088,8 +1103,11 @@ def get_possible_topologies(glycan: str | GlycanGraph | nx.DiGraph, # Glycan wit
                             return_graphs: bool = False # Whether to return glycan graphs (otherwise return converted strings)
                             ) -> list[str | nx.DiGraph]: # List of possible topology strings or graphs
     "Create possible glycan graphs given a floating substituent"
-    topologies = _topologies(_as_graph(glycan), exhaustive = exhaustive, allowed_disaccharides = allowed_disaccharides, modification_map = modification_map)
-    return [_to_nx(t) for t in topologies] if return_graphs else [graph_to_string(t) for t in topologies]
+    topologies = {}
+    # a placement reached on two acceptors of one kind (equal floating parts, symmetric branches) is listed once
+    for t in _topologies(_as_graph(glycan), exhaustive = exhaustive, allowed_disaccharides = allowed_disaccharides, modification_map = modification_map):
+        topologies.setdefault(graph_to_string(t), t)
+    return [_to_nx(t) for t in topologies.values()] if return_graphs else list(topologies)
 
 
 def possible_topology_check(glycan: str | nx.DiGraph, # Glycan with floating substituent

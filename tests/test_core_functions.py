@@ -4107,6 +4107,9 @@ def test_compare_glycans():
     assert compare_glycans("{Fuc(a1-?)}{Fuc(a1-?)}Gal(b1-4)GlcNAc", "{Fuc(a1-?)}Fuc(a1-2)Gal(b1-4)GlcNAc", subsumes = True)
     assert not compare_glycans("Fuc(a1-2)Gal(b1-4)GlcNAc", "{Fuc(a1-?)}Gal(b1-4)GlcNAc", subsumes = True)
     assert compare_glycans("{6S}Gal(b1-3)GalNAc", "Gal6S(b1-3)GalNAc", subsumes = True)
+    lex = "{Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert compare_glycans("{Fuc(a1-3)}{Gal(b1-4)GlcNAc(b1-2)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc", lex, subsumes = True)
+    assert compare_glycans("{Gal(b1-4)GlcNAc(b1-2)}{Fuc(a1-3)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc", lex, subsumes = True)
     assert compare_glycans(glycan_to_nxGraph("Gal3S(b1-4)[Fuc(a1-3)]GlcNAc"), glycan_to_nxGraph("GalOS(b1-4)[Fuc(a1-3)]GlcNAc"))  # an unknown sulfate position matches a known one
 
 
@@ -4173,6 +4176,21 @@ def test_get_possible_topologies():
     assert get_possible_topologies("{Fuc(a1-?)}Gal(b1-?)GlcNAc", exhaustive = True) == ['Fuc(a1-?)Gal(b1-?)GlcNAc', 'Fuc(a1-?)[Gal(b1-?)]GlcNAc']
     placed = get_possible_topologies("{Fuc(a1-2)}{Neu5Ac(a2-3)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man", return_graphs = True)[0]
     assert len(again := get_possible_topologies(placed)) == 2 and all('Neu5Ac' in t and 'Fuc' in t for t in again)
+    # Placements never depend on the order the floating parts are written in, as a part may also go on another floating part
+    core = "Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    placements = []
+    for glycan in ("{Fuc(a1-3)}{Gal(b1-4)GlcNAc(b1-2)}" + core, "{Gal(b1-4)GlcNAc(b1-2)}{Fuc(a1-3)}" + core):
+        placed = [glycan]
+        while any('{' in p for p in placed):
+            placed = list(dict.fromkeys(t for p in placed for t in (get_possible_topologies(p, exhaustive = True) if '{' in p else [p])))
+        placements.append(set(placed))
+    assert placements[0] == placements[1] and len(placements[0]) == 54
+    assert canonicalize_iupac("Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") in placements[0]
+    assert get_possible_topologies("{Fuc(a1-3)}{Gal(b1-4)GlcNAc(b1-2)}" + core)[-1] == "{Fuc(a1-3)Gal(b1-4)GlcNAc(b1-2)}" + core
+    assert len(set(topologies := get_possible_topologies("{Neu5Ac(a2-3)}{Gal(b1-4)GlcNAc(b1-?)}{Gal(b1-4)GlcNAc(b1-?)}" + core))) == len(topologies)
+    # A modification at uncertain positions takes each residue at the positions modification_map allows there, unless all of them are taken
+    assert get_possible_topologies("{3/6S}Gal(b1-4)GlcNAc") == ['Gal3/6S(b1-4)GlcNAc', 'Gal(b1-4)GlcNAc6S']
+    assert get_possible_topologies("{3/6S}Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-6)]GlcNAc") == ['Neu5Ac(a2-3)Gal3/6S(b1-4)[Fuc(a1-6)]GlcNAc']
     with pytest.raises(ValueError, match="This glycan already has a defined topology; please don't use this function."):
         get_possible_topologies("Gal(b1-4)GlcNAc")
 
