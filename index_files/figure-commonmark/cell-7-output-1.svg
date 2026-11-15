@@ -1,0 +1,219 @@
+<svg id="gwdraw" xmlns="http://www.w3.org/2000/svg" width="695.0" height="392.6506" viewBox="0 0 695.0 392.6506" style="max-width:100%;height:auto"><style>#gwdraw .d{display:none}@media (prefers-color-scheme:dark){#gwdraw .l{display:none}#gwdraw .d{display:inline}}</style><svg class="l" x="12.5" y="12.499982452694525" aria-label="SNFG diagram of Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Neu5Gc(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc drawn in horizontal standard style with linkage labels. The motif Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc is highlighted." role="img" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="670.0" height="367.65063509461095" viewBox="-635.0 -136.0 670.0 367.65063509461095">
+<defs>
+<path d="M-100.0,0.0 L0.0,0.0" stroke-width="4.0" stroke="#D9D9D9" class="snfg-linkage" stroke-linecap="round" id="gb540f9fd_0" />
+<path d="M-200.0,0.0 L-100.0,0.0" stroke-width="4.0" stroke="#D9D9D9" class="snfg-linkage" stroke-linecap="round" id="gb540f9fd_1" />
+<path d="M-300.0,100.0 L-200.0,0.0" stroke-width="4.0" stroke="#D9D9D9" class="snfg-linkage" stroke-linecap="round" id="gb540f9fd_2" />
+<path d="M-400.0,100.0 L-300.0,100.0" stroke-width="4.0" stroke="#D9D9D9" class="snfg-linkage" stroke-linecap="round" id="gb540f9fd_3" />
+<path d="M-500.0,100.0 L-400.0,100.0" stroke-width="4.0" stroke="#1C1917" class="snfg-linkage" stroke-linecap="round" id="gb540f9fd_4" />
+<path d="M-600.0,100.0 L-500.0,100.0" stroke-width="4.0" stroke="#1C1917" class="snfg-linkage" stroke-linecap="round" id="gb540f9fd_5" />
+<path d="M-400.0,-100.0 L-300.0,-100.0" stroke-width="4.0" stroke="#D9D9D9" class="snfg-linkage" stroke-linecap="round" id="gb540f9fd_6" />
+<path d="M-500.0,-100.0 L-400.0,-100.0" stroke-width="4.0" stroke="#D9D9D9" class="snfg-linkage" stroke-linecap="round" id="gb540f9fd_7" />
+<path d="M-600.0,-100.0 L-500.0,-100.0" stroke-width="4.0" stroke="#D9D9D9" class="snfg-linkage" stroke-linecap="round" id="gb540f9fd_8" />
+<path d="M-400.0,200.0 L-400.0,100.0" stroke-width="4.0" stroke="#1C1917" class="snfg-linkage" stroke-linecap="round" id="gb540f9fd_9" />
+<path d="M-300.0,-100.0 L-200.0,0.0" stroke-width="4.0" stroke="#D9D9D9" class="snfg-linkage" stroke-linecap="round" id="gb540f9fd_10" />
+<path d="M-300.0,0.0 L-200.0,0.0" stroke-width="4.0" stroke="#D9D9D9" class="snfg-linkage" stroke-linecap="round" id="gb540f9fd_11" />
+<path d="M0.0,0.0 L0.0,-100.0" stroke-width="4.0" stroke="#D9D9D9" class="snfg-linkage" stroke-linecap="round" id="gb540f9fd_12" />
+<path d="M-50,25.0 L50,25.0" stroke-width="0" id="gb540f9fd_13" />
+<path d="M-150,25.0 L-50,25.0" stroke-width="0" id="gb540f9fd_14" />
+<path d="M-250,25.0 L-150,25.0" stroke-width="0" id="gb540f9fd_15" />
+<path d="M-350,125.0 L-250,125.0" stroke-width="0" id="gb540f9fd_16" />
+<path d="M-450,125.0 L-350,125.0" stroke-width="0" id="gb540f9fd_17" />
+<path d="M-550,125.0 L-450,125.0" stroke-width="0" id="gb540f9fd_18" />
+<path d="M-650,125.0 L-550,125.0" stroke-width="0" id="gb540f9fd_19" />
+<path d="M-450,225.0 L-350,225.0" stroke-width="0" id="gb540f9fd_20" />
+<path d="M-350,-75.0 L-250,-75.0" stroke-width="0" id="gb540f9fd_21" />
+<path d="M-450,-75.0 L-350,-75.0" stroke-width="0" id="gb540f9fd_22" />
+<path d="M-550,-75.0 L-450,-75.0" stroke-width="0" id="gb540f9fd_23" />
+<path d="M-650,-75.0 L-550,-75.0" stroke-width="0" id="gb540f9fd_24" />
+<path d="M-350,25.0 L-250,25.0" stroke-width="0" id="gb540f9fd_25" />
+<path d="M-50,-75.0 L50,-75.0" stroke-width="0" id="gb540f9fd_26" />
+</defs>
+<g>
+<use xlink:href="#gb540f9fd_0" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle" transform="translate(-50.0000,0.0000) rotate(0.0000)" x="0" y="-10.0000">β4</text>
+<use xlink:href="#gb540f9fd_1" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle" transform="translate(-150.0000,0.0000) rotate(0.0000)" x="0" y="-10.0000">β4</text>
+<use xlink:href="#gb540f9fd_2" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle" transform="translate(-250.0000,50.0000) rotate(-45.0000)" x="0" y="-10.0000">α3</text>
+<use xlink:href="#gb540f9fd_3" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle" transform="translate(-350.0000,100.0000) rotate(0.0000)" x="0" y="-10.0000">β2</text>
+<use xlink:href="#gb540f9fd_4" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="20.0" text-anchor="middle" fill="#1C1917" valign="middle" transform="translate(-450.0000,100.0000) rotate(0.0000)" x="0" y="-10.0000">β4</text>
+<use xlink:href="#gb540f9fd_5" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="20.0" text-anchor="middle" fill="#1C1917" valign="middle" transform="translate(-550.0000,100.0000) rotate(0.0000)" x="0" y="-10.0000">α3</text>
+<use xlink:href="#gb540f9fd_6" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle" transform="translate(-350.0000,-100.0000) rotate(0.0000)" x="0" y="-10.0000">β2</text>
+<use xlink:href="#gb540f9fd_7" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle" transform="translate(-450.0000,-100.0000) rotate(0.0000)" x="0" y="-10.0000">β4</text>
+<use xlink:href="#gb540f9fd_8" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle" transform="translate(-550.0000,-100.0000) rotate(0.0000)" x="0" y="-10.0000">α6</text>
+<use xlink:href="#gb540f9fd_9" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="20.0" text-anchor="middle" fill="#1C1917" valign="middle" transform="translate(-400.0000,150.0000) rotate(-90.0000)" x="0" y="-10.0000">α3</text>
+<use xlink:href="#gb540f9fd_10" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle" transform="translate(-250.0000,-50.0000) rotate(45.0000)" x="0" y="-10.0000">α6</text>
+<use xlink:href="#gb540f9fd_11" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle" transform="translate(-250.0000,0.0000) rotate(0.0000)" x="0" y="-10.0000">β4</text>
+<use xlink:href="#gb540f9fd_12" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle" transform="translate(0.0000,-50.0000) rotate(-90.0000)" x="0" y="-10.0000">α6</text>
+<g class="snfg-symbol">
+<rect x="-25.0" y="-25.0" width="50" height="50" fill="#CDE7EF" stroke-width="2.0" stroke="#D9D9D9" />
+<use xlink:href="#gb540f9fd_13" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="17.5" fill="#D9D9D9" text-anchor="middle" transform="translate(0.0000,25.0000) rotate(0.0000)" x="0" y="0.0000"></text>
+</g>
+<g class="snfg-symbol">
+<rect x="-125.0" y="-25.0" width="50" height="50" fill="#CDE7EF" stroke-width="2.0" stroke="#D9D9D9" />
+<use xlink:href="#gb540f9fd_14" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="17.5" fill="#D9D9D9" text-anchor="middle" transform="translate(-100.0000,25.0000) rotate(0.0000)" x="0" y="0.0000"></text>
+</g>
+<g class="snfg-symbol">
+<circle cx="-200" cy="0" r="25.0" fill="#CDE9DF" stroke-width="2.0" stroke="#D9D9D9" />
+<use xlink:href="#gb540f9fd_15" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="17.5" fill="#D9D9D9" text-anchor="middle" transform="translate(-200.0000,25.0000) rotate(0.0000)" x="0" y="0.0000"></text>
+</g>
+<g class="snfg-symbol">
+<circle cx="-300" cy="100.0" r="25.0" fill="#CDE9DF" stroke-width="2.0" stroke="#D9D9D9" />
+<use xlink:href="#gb540f9fd_16" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="17.5" fill="#D9D9D9" text-anchor="middle" transform="translate(-300.0000,125.0000) rotate(0.0000)" x="0" y="0.0000"></text>
+</g>
+<g class="snfg-symbol">
+<rect x="-425.0" y="75.0" width="50" height="50" fill="#0385AE" stroke-width="2.0" stroke="#1C1917" />
+<use xlink:href="#gb540f9fd_17" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="17.5" fill="#1C1917" text-anchor="middle" transform="translate(-400.0000,125.0000) rotate(0.0000)" x="0" y="0.0000"></text>
+</g>
+<g class="snfg-symbol">
+<circle cx="-500" cy="100.0" r="25.0" fill="#FCC326" stroke-width="2.0" stroke="#1C1917" />
+<use xlink:href="#gb540f9fd_18" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="17.5" fill="#1C1917" text-anchor="middle" transform="translate(-500.0000,125.0000) rotate(0.0000)" x="0" y="0.0000"></text>
+</g>
+<g class="snfg-symbol">
+<path d="M-600,125.0 L-575.0,100.0 L-600,75.0 L-625.0,100.0 Z" fill="#A15989" stroke="#1C1917" stroke-width="2.0" />
+<use xlink:href="#gb540f9fd_19" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="17.5" fill="#1C1917" text-anchor="middle" transform="translate(-600.0000,125.0000) rotate(0.0000)" x="0" y="0.0000"></text>
+</g>
+<g class="snfg-symbol">
+<path d="M-425.0,221.65063509461098 L-400,178.34936490538902 L-375.0,221.65063509461098 Z" fill="#C23537" stroke="#1C1917" stroke-width="2.0" />
+<use xlink:href="#gb540f9fd_20" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="17.5" fill="#1C1917" text-anchor="middle" transform="translate(-400.0000,225.0000) rotate(0.0000)" x="0" y="0.0000"></text>
+</g>
+<g class="snfg-symbol">
+<circle cx="-300" cy="-100.0" r="25.0" fill="#CDE9DF" stroke-width="2.0" stroke="#D9D9D9" />
+<use xlink:href="#gb540f9fd_21" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="17.5" fill="#D9D9D9" text-anchor="middle" transform="translate(-300.0000,-75.0000) rotate(0.0000)" x="0" y="0.0000"></text>
+</g>
+<g class="snfg-symbol">
+<rect x="-425.0" y="-125.0" width="50" height="50" fill="#CDE7EF" stroke-width="2.0" stroke="#D9D9D9" />
+<use xlink:href="#gb540f9fd_22" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="17.5" fill="#D9D9D9" text-anchor="middle" transform="translate(-400.0000,-75.0000) rotate(0.0000)" x="0" y="0.0000"></text>
+</g>
+<g class="snfg-symbol">
+<circle cx="-500" cy="-100.0" r="25.0" fill="#FFF6DE" stroke-width="2.0" stroke="#D9D9D9" />
+<use xlink:href="#gb540f9fd_23" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="17.5" fill="#D9D9D9" text-anchor="middle" transform="translate(-500.0000,-75.0000) rotate(0.0000)" x="0" y="0.0000"></text>
+</g>
+<g class="snfg-symbol">
+<path d="M-600,-75.0 L-575.0,-100.0 L-600,-125.0 L-625.0,-100.0 Z" fill="#EEF8FB" stroke="#D9D9D9" stroke-width="2.0" />
+<use xlink:href="#gb540f9fd_24" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="17.5" fill="#D9D9D9" text-anchor="middle" transform="translate(-600.0000,-75.0000) rotate(0.0000)" x="0" y="0.0000"></text>
+</g>
+<g class="snfg-symbol">
+<rect x="-325.0" y="-25.0" width="50" height="50" fill="#CDE7EF" stroke-width="2.0" stroke="#D9D9D9" />
+<use xlink:href="#gb540f9fd_25" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="17.5" fill="#D9D9D9" text-anchor="middle" transform="translate(-300.0000,25.0000) rotate(0.0000)" x="0" y="0.0000"></text>
+</g>
+<g class="snfg-symbol">
+<path d="M-25.0,-78.34936490538904 L0,-121.65063509461096 L25.0,-78.34936490538904 Z" fill="#F7E0E0" stroke="#D9D9D9" stroke-width="2.0" />
+<use xlink:href="#gb540f9fd_26" />
+<text font-family="'Century Gothic', Comfortaa, sans-serif" font-size="17.5" fill="#D9D9D9" text-anchor="middle" transform="translate(0.0000,-75.0000) rotate(0.0000)" x="0" y="0.0000"></text>
+</g>
+</g>
+</svg><svg class="d" x="0" y="0" aria-label="SNFG diagram of Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Neu5Gc(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc drawn in horizontal standard style with linkage labels. The motif Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc is highlighted." role="img" xmlns="http://www.w3.org/2000/svg" width="695" height="392.6506" viewBox="0 0 695 392.6506" stroke-miterlimit="10">
+<defs><filter id="gradc4cf578f_shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="1.5" dy="2.5" stdDeviation="3.5" flood-color="#1C1917" flood-opacity="0.38" /></filter></defs>
+<g transform="matrix(1 0 0 1 647.5 148.5)">
+<g filter="url(#gradc4cf578f_shadow)">
+<g fill="#FFFFFF" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round">
+<path d="M-100 0L0 0L-100 0Z" fill="none" stroke-width="22" />
+<path d="M-200 0L-100 0L-200 0Z" fill="none" stroke-width="22" />
+<path d="M-300 -100L-200 0L-300 -100Z" fill="none" stroke-width="22" />
+<path d="M-300 0L-200 0L-300 0Z" fill="none" stroke-width="22" />
+<path d="M0 0L0 -100L0 0Z" fill="none" stroke-width="22" />
+<path d="M-300 100L-200 0L-300 100Z" fill="none" stroke-width="22" />
+<path d="M-400 100L-300 100L-400 100Z" fill="none" stroke-width="22" />
+<path d="M-500 100L-400 100L-500 100Z" fill="none" stroke-width="22" />
+<path d="M-600 100L-500 100L-600 100Z" fill="none" stroke-width="22" />
+<path d="M-400 -100L-300 -100L-400 -100Z" fill="none" stroke-width="22" />
+<path d="M-500 -100L-400 -100L-500 -100Z" fill="none" stroke-width="22" />
+<path d="M-600 -100L-500 -100L-600 -100Z" fill="none" stroke-width="22" />
+<path d="M-400 200L-400 100L-400 200Z" fill="none" stroke-width="22" />
+<path d="M-225 0C-225 13.81 -213.81 25 -200 25C-186.19 25 -175 13.81 -175 0C-175 -13.81 -186.19 -25 -200 -25C-213.81 -25 -225 -13.81 -225 0Z" stroke-width="20" />
+<path d="M-325 100C-325 113.81 -313.81 125 -300 125C-286.19 125 -275 113.81 -275 100C-275 86.19 -286.19 75 -300 75C-313.81 75 -325 86.19 -325 100Z" stroke-width="20" />
+<path d="M-525 100C-525 113.81 -513.81 125 -500 125C-486.19 125 -475 113.81 -475 100C-475 86.19 -486.19 75 -500 75C-513.81 75 -525 86.19 -525 100Z" stroke-width="20" />
+<path d="M-325 -100C-325 -86.19 -313.81 -75 -300 -75C-286.19 -75 -275 -86.19 -275 -100C-275 -113.81 -286.19 -125 -300 -125C-313.81 -125 -325 -113.81 -325 -100Z" stroke-width="20" />
+<path d="M-525 -100C-525 -86.19 -513.81 -75 -500 -75C-486.19 -75 -475 -86.19 -475 -100C-475 -113.81 -486.19 -125 -500 -125C-513.81 -125 -525 -113.81 -525 -100Z" stroke-width="20" />
+<path d="M-25 -25L25 -25L25 25L-25 25Z" stroke-width="20" />
+<path d="M-125 -25L-75 -25L-75 25L-125 25Z" stroke-width="20" />
+<path d="M-425 75L-375 75L-375 125L-425 125Z" stroke-width="20" />
+<path d="M-425 -125L-375 -125L-375 -75L-425 -75Z" stroke-width="20" />
+<path d="M-325 -25L-275 -25L-275 25L-325 25Z" stroke-width="20" />
+<path d="M-600 125L-575 100L-600 75L-625 100Z" stroke-width="20" />
+<path d="M-425 221.65L-400 178.35L-375 221.65L-425 221.65Z" stroke-width="20" />
+<path d="M-600 -75L-575 -100L-600 -125L-625 -100Z" stroke-width="20" />
+<path d="M-25 -78.35L0 -121.65L25 -78.35L-25 -78.35Z" stroke-width="20" />
+<path d="M2.9 1.6L2.9 -3.89L1.52 -3.89L1.52 10.81L2.69 14.03L5.43 15L8 14.14L8.96 11.83L6.82 8.79L9.8 7.45L10.92 4.51L9.56 1.1L6.2 -0.27L2.9 1.6ZM4.25 7.86L4.25 9L7.56 11.69L7.01 13.15L5.54 13.71L3.58 13.01L2.9 10.49L2.91 4.5L3.87 1.97L6.18 1.03L8.56 2.01L9.52 4.42L8.55 6.85L4.93 7.86L4.25 7.86ZM21.44 14.73L21.73 14.73L21.73 4.72L23.47 4.72L23.47 3.34L21.73 3.34L21.73 0L20.3 0L20.3 3.34L13.43 3.34L21.44 14.73ZM20.3 4.72L20.3 10.7L16.07 4.72L20.3 4.72Z" transform="matrix(1 0 0 -1 -62.0039 -10)" stroke-width="18" />
+<path d="M2.9 1.6L2.9 -3.89L1.52 -3.89L1.52 10.81L2.69 14.03L5.43 15L8 14.14L8.96 11.83L6.82 8.79L9.8 7.45L10.92 4.51L9.56 1.1L6.2 -0.27L2.9 1.6ZM4.25 7.86L4.25 9L7.56 11.69L7.01 13.15L5.54 13.71L3.58 13.01L2.9 10.49L2.91 4.5L3.87 1.97L6.18 1.03L8.56 2.01L9.52 4.42L8.55 6.85L4.93 7.86L4.25 7.86ZM21.44 14.73L21.73 14.73L21.73 4.72L23.47 4.72L23.47 3.34L21.73 3.34L21.73 0L20.3 0L20.3 3.34L13.43 3.34L21.44 14.73ZM20.3 4.72L20.3 10.7L16.07 4.72L20.3 4.72Z" transform="matrix(1 0 0 -1 -162.0039 -10)" stroke-width="18" />
+<path d="M12.11 10.62L12.11 0L10.76 0L10.76 1.83L8.83 0.25L6.49 -0.27L2.64 1.36L1.04 5.34L2.66 9.27L6.53 10.9L8.9 10.34L10.76 8.67L10.76 10.62L12.11 10.62ZM6.64 9.58L4.53 9.02L2.99 7.44L2.42 5.29L3 3.14L4.55 1.55L6.63 0.98L8.76 1.54L10.31 3.08L10.85 5.25L9.63 8.34L6.64 9.58ZM17.31 11.04L15.84 11.04L17.38 13.77L20.05 14.73L22.15 14.21L23.65 12.83L24.18 11.02L22.34 8.08L24.04 6.85L24.97 4.29L24.33 1.96L22.57 0.24L20.08 -0.36L16.99 0.71L15.37 3.85L16.77 3.85L17.84 1.83L20.1 1.04L22.61 1.97L23.56 4.17L23.08 5.74L21.82 6.85L19.35 7.3L19.35 8.62L21.15 8.97L22.32 9.85L22.69 11.03L21.94 12.65L20.05 13.33L18.45 12.81L17.31 11.04Z" transform="matrix(0.7071 -0.7071 -0.7071 -0.7071 -266.1737 52.0316)" stroke-width="18" />
+<path d="M2.9 1.6L2.9 -3.89L1.52 -3.89L1.52 10.81L2.69 14.03L5.43 15L8 14.14L8.96 11.83L6.82 8.79L9.8 7.45L10.92 4.51L9.56 1.1L6.2 -0.27L2.9 1.6ZM4.25 7.86L4.25 9L7.56 11.69L7.01 13.15L5.54 13.71L3.58 13.01L2.9 10.49L2.91 4.5L3.87 1.97L6.18 1.03L8.56 2.01L9.52 4.42L8.55 6.85L4.93 7.86L4.25 7.86ZM15.24 9.86L13.86 9.86L15.28 13.36L18.65 14.73L21.85 13.45L23.08 10.43L22.49 8.14L20.22 5.24L16.64 1.39L23.28 1.39L23.28 0L13.52 0L19.01 5.93L21.18 8.58L21.68 10.4L20.78 12.49L18.57 13.36L16.28 12.44L15.24 9.86Z" transform="matrix(1 0 0 -1 -362.0039 90)" stroke-width="18" />
+<path d="M2.9 1.6L2.9 -3.89L1.52 -3.89L1.52 10.81L2.69 14.03L5.43 15L8 14.14L8.96 11.83L6.82 8.79L9.8 7.45L10.92 4.51L9.56 1.1L6.2 -0.27L2.9 1.6ZM4.25 7.86L4.25 9L7.56 11.69L7.01 13.15L5.54 13.71L3.58 13.01L2.9 10.49L2.91 4.5L3.87 1.97L6.18 1.03L8.56 2.01L9.52 4.42L8.55 6.85L4.93 7.86L4.25 7.86ZM21.44 14.73L21.73 14.73L21.73 4.72L23.47 4.72L23.47 3.34L21.73 3.34L21.73 0L20.3 0L20.3 3.34L13.43 3.34L21.44 14.73ZM20.3 4.72L20.3 10.7L16.07 4.72L20.3 4.72Z" transform="matrix(1 0 0 -1 -462.0039 90)" stroke-width="18" />
+<path d="M12.11 10.62L12.11 0L10.76 0L10.76 1.83L8.83 0.25L6.49 -0.27L2.64 1.36L1.04 5.34L2.66 9.27L6.53 10.9L8.9 10.34L10.76 8.67L10.76 10.62L12.11 10.62ZM6.64 9.58L4.53 9.02L2.99 7.44L2.42 5.29L3 3.14L4.55 1.55L6.63 0.98L8.76 1.54L10.31 3.08L10.85 5.25L9.63 8.34L6.64 9.58ZM17.31 11.04L15.84 11.04L17.38 13.77L20.05 14.73L22.15 14.21L23.65 12.83L24.18 11.02L22.34 8.08L24.04 6.85L24.97 4.29L24.33 1.96L22.57 0.24L20.08 -0.36L16.99 0.71L15.37 3.85L16.77 3.85L17.84 1.83L20.1 1.04L22.61 1.97L23.56 4.17L23.08 5.74L21.82 6.85L19.35 7.3L19.35 8.62L21.15 8.97L22.32 9.85L22.69 11.03L21.94 12.65L20.05 13.33L18.45 12.81L17.31 11.04Z" transform="matrix(1 0 0 -1 -562.873 90)" stroke-width="18" />
+<path d="M2.9 1.6L2.9 -3.89L1.52 -3.89L1.52 10.81L2.69 14.03L5.43 15L8 14.14L8.96 11.83L6.82 8.79L9.8 7.45L10.92 4.51L9.56 1.1L6.2 -0.27L2.9 1.6ZM4.25 7.86L4.25 9L7.56 11.69L7.01 13.15L5.54 13.71L3.58 13.01L2.9 10.49L2.91 4.5L3.87 1.97L6.18 1.03L8.56 2.01L9.52 4.42L8.55 6.85L4.93 7.86L4.25 7.86ZM15.24 9.86L13.86 9.86L15.28 13.36L18.65 14.73L21.85 13.45L23.08 10.43L22.49 8.14L20.22 5.24L16.64 1.39L23.28 1.39L23.28 0L13.52 0L19.01 5.93L21.18 8.58L21.68 10.4L20.78 12.49L18.57 13.36L16.28 12.44L15.24 9.86Z" transform="matrix(1 0 0 -1 -362.0039 -110)" stroke-width="18" />
+<path d="M2.9 1.6L2.9 -3.89L1.52 -3.89L1.52 10.81L2.69 14.03L5.43 15L8 14.14L8.96 11.83L6.82 8.79L9.8 7.45L10.92 4.51L9.56 1.1L6.2 -0.27L2.9 1.6ZM4.25 7.86L4.25 9L7.56 11.69L7.01 13.15L5.54 13.71L3.58 13.01L2.9 10.49L2.91 4.5L3.87 1.97L6.18 1.03L8.56 2.01L9.52 4.42L8.55 6.85L4.93 7.86L4.25 7.86ZM21.44 14.73L21.73 14.73L21.73 4.72L23.47 4.72L23.47 3.34L21.73 3.34L21.73 0L20.3 0L20.3 3.34L13.43 3.34L21.44 14.73ZM20.3 4.72L20.3 10.7L16.07 4.72L20.3 4.72Z" transform="matrix(1 0 0 -1 -462.0039 -110)" stroke-width="18" />
+<path d="M12.11 10.62L12.11 0L10.76 0L10.76 1.83L8.83 0.25L6.49 -0.27L2.64 1.36L1.04 5.34L2.66 9.27L6.53 10.9L8.9 10.34L10.76 8.67L10.76 10.62L12.11 10.62ZM6.64 9.58L4.53 9.02L2.99 7.44L2.42 5.29L3 3.14L4.55 1.55L6.63 0.98L8.76 1.54L10.31 3.08L10.85 5.25L9.63 8.34L6.64 9.58ZM22 14.73L23.18 13.96L19.3 8.08L20.77 8.34L23.67 7.1L24.86 4.06L24.28 1.82L22.65 0.23L20.37 -0.36L18.17 0.21L16.59 1.82L16.01 4.03L16.37 5.88L17.64 8.22L22 14.73ZM20.42 7.08L18.29 6.2L17.41 4.05L18.29 1.92L20.42 1.04L22.56 1.92L23.44 4.05L22.56 6.2L20.42 7.08Z" transform="matrix(1 0 0 -1 -562.873 -110)" stroke-width="18" />
+<path d="M12.11 10.62L12.11 0L10.76 0L10.76 1.83L8.83 0.25L6.49 -0.27L2.64 1.36L1.04 5.34L2.66 9.27L6.53 10.9L8.9 10.34L10.76 8.67L10.76 10.62L12.11 10.62ZM6.64 9.58L4.53 9.02L2.99 7.44L2.42 5.29L3 3.14L4.55 1.55L6.63 0.98L8.76 1.54L10.31 3.08L10.85 5.25L9.63 8.34L6.64 9.58ZM17.31 11.04L15.84 11.04L17.38 13.77L20.05 14.73L22.15 14.21L23.65 12.83L24.18 11.02L22.34 8.08L24.04 6.85L24.97 4.29L24.33 1.96L22.57 0.24L20.08 -0.36L16.99 0.71L15.37 3.85L16.77 3.85L17.84 1.83L20.1 1.04L22.61 1.97L23.56 4.17L23.08 5.74L21.82 6.85L19.35 7.3L19.35 8.62L21.15 8.97L22.32 9.85L22.69 11.03L21.94 12.65L20.05 13.33L18.45 12.81L17.31 11.04Z" transform="matrix(0 -1 -1 0 -410 162.873)" stroke-width="18" />
+<path d="M12.11 10.62L12.11 0L10.76 0L10.76 1.83L8.83 0.25L6.49 -0.27L2.64 1.36L1.04 5.34L2.66 9.27L6.53 10.9L8.9 10.34L10.76 8.67L10.76 10.62L12.11 10.62ZM6.64 9.58L4.53 9.02L2.99 7.44L2.42 5.29L3 3.14L4.55 1.55L6.63 0.98L8.76 1.54L10.31 3.08L10.85 5.25L9.63 8.34L6.64 9.58ZM22 14.73L23.18 13.96L19.3 8.08L20.77 8.34L23.67 7.1L24.86 4.06L24.28 1.82L22.65 0.23L20.37 -0.36L18.17 0.21L16.59 1.82L16.01 4.03L16.37 5.88L17.64 8.22L22 14.73ZM20.42 7.08L18.29 6.2L17.41 4.05L18.29 1.92L20.42 1.04L22.56 1.92L23.44 4.05L22.56 6.2L20.42 7.08Z" transform="matrix(0.7071 0.7071 0.7071 -0.7071 -252.0316 -66.1737)" stroke-width="18" />
+<path d="M2.9 1.6L2.9 -3.89L1.52 -3.89L1.52 10.81L2.69 14.03L5.43 15L8 14.14L8.96 11.83L6.82 8.79L9.8 7.45L10.92 4.51L9.56 1.1L6.2 -0.27L2.9 1.6ZM4.25 7.86L4.25 9L7.56 11.69L7.01 13.15L5.54 13.71L3.58 13.01L2.9 10.49L2.91 4.5L3.87 1.97L6.18 1.03L8.56 2.01L9.52 4.42L8.55 6.85L4.93 7.86L4.25 7.86ZM21.44 14.73L21.73 14.73L21.73 4.72L23.47 4.72L23.47 3.34L21.73 3.34L21.73 0L20.3 0L20.3 3.34L13.43 3.34L21.44 14.73ZM20.3 4.72L20.3 10.7L16.07 4.72L20.3 4.72Z" transform="matrix(1 0 0 -1 -262.0039 -10)" stroke-width="18" />
+<path d="M12.11 10.62L12.11 0L10.76 0L10.76 1.83L8.83 0.25L6.49 -0.27L2.64 1.36L1.04 5.34L2.66 9.27L6.53 10.9L8.9 10.34L10.76 8.67L10.76 10.62L12.11 10.62ZM6.64 9.58L4.53 9.02L2.99 7.44L2.42 5.29L3 3.14L4.55 1.55L6.63 0.98L8.76 1.54L10.31 3.08L10.85 5.25L9.63 8.34L6.64 9.58ZM22 14.73L23.18 13.96L19.3 8.08L20.77 8.34L23.67 7.1L24.86 4.06L24.28 1.82L22.65 0.23L20.37 -0.36L18.17 0.21L16.59 1.82L16.01 4.03L16.37 5.88L17.64 8.22L22 14.73ZM20.42 7.08L18.29 6.2L17.41 4.05L18.29 1.92L20.42 1.04L22.56 1.92L23.44 4.05L22.56 6.2L20.42 7.08Z" transform="matrix(0 -1 -1 0 -10 -37.127)" stroke-width="18" />
+</g>
+</g>
+<path d="M-100 0L0 0L-100 0Z" fill="none" stroke="#D9D9D9" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M-200 0L-100 0L-200 0Z" fill="none" stroke="#D9D9D9" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M-300 -100L-200 0L-300 -100Z" fill="none" stroke="#D9D9D9" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M-300 0L-200 0L-300 0Z" fill="none" stroke="#D9D9D9" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M0 0L0 -100L0 0Z" fill="none" stroke="#D9D9D9" stroke-width="4" />
+<path d="M-300 100L-200 0L-300 100Z" fill="none" stroke="#D9D9D9" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M-400 100L-300 100L-400 100Z" fill="none" stroke="#D9D9D9" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M-500 100L-400 100L-500 100Z" fill="none" stroke="#1C1917" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M-600 100L-500 100L-600 100Z" fill="none" stroke="#1C1917" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M-400 -100L-300 -100L-400 -100Z" fill="none" stroke="#D9D9D9" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M-500 -100L-400 -100L-500 -100Z" fill="none" stroke="#D9D9D9" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M-600 -100L-500 -100L-600 -100Z" fill="none" stroke="#D9D9D9" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M-400 200L-400 100L-400 200Z" fill="none" stroke="#1C1917" stroke-width="4" />
+<path d="M-225 0C-225 13.81 -213.81 25 -200 25C-186.19 25 -175 13.81 -175 0C-175 -13.81 -186.19 -25 -200 -25C-213.81 -25 -225 -13.81 -225 0Z" fill="#CDE9DF" stroke="#D9D9D9" stroke-width="2" />
+<path d="M-325 100C-325 113.81 -313.81 125 -300 125C-286.19 125 -275 113.81 -275 100C-275 86.19 -286.19 75 -300 75C-313.81 75 -325 86.19 -325 100Z" fill="#CDE9DF" stroke="#D9D9D9" stroke-width="2" />
+<path d="M-525 100C-525 113.81 -513.81 125 -500 125C-486.19 125 -475 113.81 -475 100C-475 86.19 -486.19 75 -500 75C-513.81 75 -525 86.19 -525 100Z" fill="#FCC326" stroke="#1C1917" stroke-width="2" />
+<path d="M-325 -100C-325 -86.19 -313.81 -75 -300 -75C-286.19 -75 -275 -86.19 -275 -100C-275 -113.81 -286.19 -125 -300 -125C-313.81 -125 -325 -113.81 -325 -100Z" fill="#CDE9DF" stroke="#D9D9D9" stroke-width="2" />
+<path d="M-525 -100C-525 -86.19 -513.81 -75 -500 -75C-486.19 -75 -475 -86.19 -475 -100C-475 -113.81 -486.19 -125 -500 -125C-513.81 -125 -525 -113.81 -525 -100Z" fill="#FFF6DE" stroke="#D9D9D9" stroke-width="2" />
+<path d="M-25 -25L25 -25L25 25L-25 25Z" fill="#CDE7EF" stroke="#D9D9D9" stroke-width="2" stroke-linejoin="round" />
+<path d="M-125 -25L-75 -25L-75 25L-125 25Z" fill="#CDE7EF" stroke="#D9D9D9" stroke-width="2" stroke-linejoin="round" />
+<path d="M-425 75L-375 75L-375 125L-425 125Z" fill="#0385AE" stroke="#1C1917" stroke-width="2" stroke-linejoin="round" />
+<path d="M-425 -125L-375 -125L-375 -75L-425 -75Z" fill="#CDE7EF" stroke="#D9D9D9" stroke-width="2" stroke-linejoin="round" />
+<path d="M-325 -25L-275 -25L-275 25L-325 25Z" fill="#CDE7EF" stroke="#D9D9D9" stroke-width="2" stroke-linejoin="round" />
+<path d="M-600 125L-575 100L-600 75L-625 100Z" fill="#A15989" stroke="#1C1917" stroke-width="2" stroke-linejoin="round" />
+<path d="M-425 221.65L-400 178.35L-375 221.65L-425 221.65Z" fill="#C23537" stroke="#1C1917" stroke-width="2" stroke-linejoin="round" />
+<path d="M-600 -75L-575 -100L-600 -125L-625 -100Z" fill="#EEF8FB" stroke="#D9D9D9" stroke-width="2" stroke-linejoin="round" />
+<path d="M-25 -78.35L0 -121.65L25 -78.35L-25 -78.35Z" fill="#F7E0E0" stroke="#D9D9D9" stroke-width="2" stroke-linejoin="round" />
+<path d="M2.9 1.6L2.9 -3.89L1.52 -3.89L1.52 10.81Q1.52 13.06 2.69 14.03Q3.85 15 5.43 15Q7.05 15 8 14.14Q8.96 13.27 8.96 11.83Q8.96 9.57 6.82 8.79Q8.69 8.6 9.8 7.45Q10.92 6.3 10.92 4.51Q10.92 2.47 9.56 1.1Q8.2 -0.27 6.2 -0.27Q4.11 -0.27 2.9 1.6ZM4.25 7.86L4.25 9Q7.56 9.09 7.56 11.69Q7.56 12.59 7.01 13.15Q6.46 13.71 5.54 13.71Q4.26 13.71 3.58 13.01Q2.9 12.3 2.9 10.49L2.91 4.5Q2.91 2.92 3.87 1.97Q4.82 1.03 6.18 1.03Q7.6 1.03 8.56 2.01Q9.52 2.99 9.52 4.42Q9.52 5.84 8.55 6.85Q7.58 7.86 4.93 7.86L4.25 7.86ZM21.44 14.73L21.73 14.73L21.73 4.72L23.47 4.72L23.47 3.34L21.73 3.34L21.73 0L20.3 0L20.3 3.34L13.43 3.34L21.44 14.73ZM20.3 4.72L20.3 10.7L16.07 4.72L20.3 4.72Z" transform="matrix(1 0 0 -1 -62.0039 -10)" fill="#D9D9D9" />
+<path d="M2.9 1.6L2.9 -3.89L1.52 -3.89L1.52 10.81Q1.52 13.06 2.69 14.03Q3.85 15 5.43 15Q7.05 15 8 14.14Q8.96 13.27 8.96 11.83Q8.96 9.57 6.82 8.79Q8.69 8.6 9.8 7.45Q10.92 6.3 10.92 4.51Q10.92 2.47 9.56 1.1Q8.2 -0.27 6.2 -0.27Q4.11 -0.27 2.9 1.6ZM4.25 7.86L4.25 9Q7.56 9.09 7.56 11.69Q7.56 12.59 7.01 13.15Q6.46 13.71 5.54 13.71Q4.26 13.71 3.58 13.01Q2.9 12.3 2.9 10.49L2.91 4.5Q2.91 2.92 3.87 1.97Q4.82 1.03 6.18 1.03Q7.6 1.03 8.56 2.01Q9.52 2.99 9.52 4.42Q9.52 5.84 8.55 6.85Q7.58 7.86 4.93 7.86L4.25 7.86ZM21.44 14.73L21.73 14.73L21.73 4.72L23.47 4.72L23.47 3.34L21.73 3.34L21.73 0L20.3 0L20.3 3.34L13.43 3.34L21.44 14.73ZM20.3 4.72L20.3 10.7L16.07 4.72L20.3 4.72Z" transform="matrix(1 0 0 -1 -162.0039 -10)" fill="#D9D9D9" />
+<path d="M12.11 10.62L12.11 0L10.76 0L10.76 1.83Q9.9 0.78 8.83 0.25Q7.76 -0.27 6.49 -0.27Q4.24 -0.27 2.64 1.36Q1.04 3 1.04 5.34Q1.04 7.64 2.66 9.27Q4.27 10.9 6.53 10.9Q7.84 10.9 8.9 10.34Q9.96 9.79 10.76 8.67L10.76 10.62L12.11 10.62ZM6.64 9.58Q5.5 9.58 4.53 9.02Q3.56 8.46 2.99 7.44Q2.42 6.43 2.42 5.29Q2.42 4.17 3 3.14Q3.57 2.12 4.55 1.55Q5.52 0.98 6.63 0.98Q7.75 0.98 8.76 1.54Q9.77 2.11 10.31 3.08Q10.85 4.04 10.85 5.25Q10.85 7.1 9.63 8.34Q8.42 9.58 6.64 9.58ZM17.31 11.04L15.84 11.04Q16.24 12.81 17.38 13.77Q18.51 14.73 20.05 14.73Q21.18 14.73 22.15 14.21Q23.12 13.7 23.65 12.83Q24.18 11.96 24.18 11.02Q24.18 9.16 22.34 8.08Q23.37 7.66 24.04 6.85Q24.97 5.7 24.97 4.29Q24.97 3.07 24.33 1.96Q23.69 0.85 22.57 0.24Q21.46 -0.36 20.08 -0.36Q18.23 -0.36 16.99 0.71Q15.75 1.78 15.37 3.85L16.77 3.85Q17.14 2.45 17.84 1.83Q18.72 1.04 20.1 1.04Q21.66 1.04 22.61 1.97Q23.56 2.91 23.56 4.17Q23.56 5.01 23.08 5.74Q22.61 6.47 21.82 6.85Q21.02 7.22 19.35 7.3L19.35 8.62Q20.34 8.62 21.15 8.97Q21.96 9.32 22.32 9.85Q22.69 10.39 22.69 11.03Q22.69 11.96 21.94 12.65Q21.2 13.33 20.05 13.33Q19.12 13.33 18.45 12.81Q17.78 12.29 17.31 11.04Z" transform="matrix(0.7071 -0.7071 -0.7071 -0.7071 -266.1737 52.0316)" fill="#D9D9D9" />
+<path d="M2.9 1.6L2.9 -3.89L1.52 -3.89L1.52 10.81Q1.52 13.06 2.69 14.03Q3.85 15 5.43 15Q7.05 15 8 14.14Q8.96 13.27 8.96 11.83Q8.96 9.57 6.82 8.79Q8.69 8.6 9.8 7.45Q10.92 6.3 10.92 4.51Q10.92 2.47 9.56 1.1Q8.2 -0.27 6.2 -0.27Q4.11 -0.27 2.9 1.6ZM4.25 7.86L4.25 9Q7.56 9.09 7.56 11.69Q7.56 12.59 7.01 13.15Q6.46 13.71 5.54 13.71Q4.26 13.71 3.58 13.01Q2.9 12.3 2.9 10.49L2.91 4.5Q2.91 2.92 3.87 1.97Q4.82 1.03 6.18 1.03Q7.6 1.03 8.56 2.01Q9.52 2.99 9.52 4.42Q9.52 5.84 8.55 6.85Q7.58 7.86 4.93 7.86L4.25 7.86ZM15.24 9.86L13.86 9.86Q13.92 11.99 15.28 13.36Q16.64 14.73 18.65 14.73Q20.63 14.73 21.85 13.45Q23.08 12.17 23.08 10.43Q23.08 9.21 22.49 8.14Q21.91 7.07 20.22 5.24L16.64 1.39L23.28 1.39L23.28 0L13.52 0L19.01 5.93Q20.68 7.71 21.18 8.58Q21.68 9.44 21.68 10.4Q21.68 11.61 20.78 12.49Q19.88 13.36 18.57 13.36Q17.19 13.36 16.28 12.44Q15.37 11.52 15.24 9.86Z" transform="matrix(1 0 0 -1 -362.0039 90)" fill="#D9D9D9" />
+<path d="M2.9 1.6L2.9 -3.89L1.52 -3.89L1.52 10.81Q1.52 13.06 2.69 14.03Q3.85 15 5.43 15Q7.05 15 8 14.14Q8.96 13.27 8.96 11.83Q8.96 9.57 6.82 8.79Q8.69 8.6 9.8 7.45Q10.92 6.3 10.92 4.51Q10.92 2.47 9.56 1.1Q8.2 -0.27 6.2 -0.27Q4.11 -0.27 2.9 1.6ZM4.25 7.86L4.25 9Q7.56 9.09 7.56 11.69Q7.56 12.59 7.01 13.15Q6.46 13.71 5.54 13.71Q4.26 13.71 3.58 13.01Q2.9 12.3 2.9 10.49L2.91 4.5Q2.91 2.92 3.87 1.97Q4.82 1.03 6.18 1.03Q7.6 1.03 8.56 2.01Q9.52 2.99 9.52 4.42Q9.52 5.84 8.55 6.85Q7.58 7.86 4.93 7.86L4.25 7.86ZM21.44 14.73L21.73 14.73L21.73 4.72L23.47 4.72L23.47 3.34L21.73 3.34L21.73 0L20.3 0L20.3 3.34L13.43 3.34L21.44 14.73ZM20.3 4.72L20.3 10.7L16.07 4.72L20.3 4.72Z" transform="matrix(1 0 0 -1 -462.0039 90)" fill="#1C1917" />
+<path d="M12.11 10.62L12.11 0L10.76 0L10.76 1.83Q9.9 0.78 8.83 0.25Q7.76 -0.27 6.49 -0.27Q4.24 -0.27 2.64 1.36Q1.04 3 1.04 5.34Q1.04 7.64 2.66 9.27Q4.27 10.9 6.53 10.9Q7.84 10.9 8.9 10.34Q9.96 9.79 10.76 8.67L10.76 10.62L12.11 10.62ZM6.64 9.58Q5.5 9.58 4.53 9.02Q3.56 8.46 2.99 7.44Q2.42 6.43 2.42 5.29Q2.42 4.17 3 3.14Q3.57 2.12 4.55 1.55Q5.52 0.98 6.63 0.98Q7.75 0.98 8.76 1.54Q9.77 2.11 10.31 3.08Q10.85 4.04 10.85 5.25Q10.85 7.1 9.63 8.34Q8.42 9.58 6.64 9.58ZM17.31 11.04L15.84 11.04Q16.24 12.81 17.38 13.77Q18.51 14.73 20.05 14.73Q21.18 14.73 22.15 14.21Q23.12 13.7 23.65 12.83Q24.18 11.96 24.18 11.02Q24.18 9.16 22.34 8.08Q23.37 7.66 24.04 6.85Q24.97 5.7 24.97 4.29Q24.97 3.07 24.33 1.96Q23.69 0.85 22.57 0.24Q21.46 -0.36 20.08 -0.36Q18.23 -0.36 16.99 0.71Q15.75 1.78 15.37 3.85L16.77 3.85Q17.14 2.45 17.84 1.83Q18.72 1.04 20.1 1.04Q21.66 1.04 22.61 1.97Q23.56 2.91 23.56 4.17Q23.56 5.01 23.08 5.74Q22.61 6.47 21.82 6.85Q21.02 7.22 19.35 7.3L19.35 8.62Q20.34 8.62 21.15 8.97Q21.96 9.32 22.32 9.85Q22.69 10.39 22.69 11.03Q22.69 11.96 21.94 12.65Q21.2 13.33 20.05 13.33Q19.12 13.33 18.45 12.81Q17.78 12.29 17.31 11.04Z" transform="matrix(1 0 0 -1 -562.873 90)" fill="#1C1917" />
+<path d="M2.9 1.6L2.9 -3.89L1.52 -3.89L1.52 10.81Q1.52 13.06 2.69 14.03Q3.85 15 5.43 15Q7.05 15 8 14.14Q8.96 13.27 8.96 11.83Q8.96 9.57 6.82 8.79Q8.69 8.6 9.8 7.45Q10.92 6.3 10.92 4.51Q10.92 2.47 9.56 1.1Q8.2 -0.27 6.2 -0.27Q4.11 -0.27 2.9 1.6ZM4.25 7.86L4.25 9Q7.56 9.09 7.56 11.69Q7.56 12.59 7.01 13.15Q6.46 13.71 5.54 13.71Q4.26 13.71 3.58 13.01Q2.9 12.3 2.9 10.49L2.91 4.5Q2.91 2.92 3.87 1.97Q4.82 1.03 6.18 1.03Q7.6 1.03 8.56 2.01Q9.52 2.99 9.52 4.42Q9.52 5.84 8.55 6.85Q7.58 7.86 4.93 7.86L4.25 7.86ZM15.24 9.86L13.86 9.86Q13.92 11.99 15.28 13.36Q16.64 14.73 18.65 14.73Q20.63 14.73 21.85 13.45Q23.08 12.17 23.08 10.43Q23.08 9.21 22.49 8.14Q21.91 7.07 20.22 5.24L16.64 1.39L23.28 1.39L23.28 0L13.52 0L19.01 5.93Q20.68 7.71 21.18 8.58Q21.68 9.44 21.68 10.4Q21.68 11.61 20.78 12.49Q19.88 13.36 18.57 13.36Q17.19 13.36 16.28 12.44Q15.37 11.52 15.24 9.86Z" transform="matrix(1 0 0 -1 -362.0039 -110)" fill="#D9D9D9" />
+<path d="M2.9 1.6L2.9 -3.89L1.52 -3.89L1.52 10.81Q1.52 13.06 2.69 14.03Q3.85 15 5.43 15Q7.05 15 8 14.14Q8.96 13.27 8.96 11.83Q8.96 9.57 6.82 8.79Q8.69 8.6 9.8 7.45Q10.92 6.3 10.92 4.51Q10.92 2.47 9.56 1.1Q8.2 -0.27 6.2 -0.27Q4.11 -0.27 2.9 1.6ZM4.25 7.86L4.25 9Q7.56 9.09 7.56 11.69Q7.56 12.59 7.01 13.15Q6.46 13.71 5.54 13.71Q4.26 13.71 3.58 13.01Q2.9 12.3 2.9 10.49L2.91 4.5Q2.91 2.92 3.87 1.97Q4.82 1.03 6.18 1.03Q7.6 1.03 8.56 2.01Q9.52 2.99 9.52 4.42Q9.52 5.84 8.55 6.85Q7.58 7.86 4.93 7.86L4.25 7.86ZM21.44 14.73L21.73 14.73L21.73 4.72L23.47 4.72L23.47 3.34L21.73 3.34L21.73 0L20.3 0L20.3 3.34L13.43 3.34L21.44 14.73ZM20.3 4.72L20.3 10.7L16.07 4.72L20.3 4.72Z" transform="matrix(1 0 0 -1 -462.0039 -110)" fill="#D9D9D9" />
+<path d="M12.11 10.62L12.11 0L10.76 0L10.76 1.83Q9.9 0.78 8.83 0.25Q7.76 -0.27 6.49 -0.27Q4.24 -0.27 2.64 1.36Q1.04 3 1.04 5.34Q1.04 7.64 2.66 9.27Q4.27 10.9 6.53 10.9Q7.84 10.9 8.9 10.34Q9.96 9.79 10.76 8.67L10.76 10.62L12.11 10.62ZM6.64 9.58Q5.5 9.58 4.53 9.02Q3.56 8.46 2.99 7.44Q2.42 6.43 2.42 5.29Q2.42 4.17 3 3.14Q3.57 2.12 4.55 1.55Q5.52 0.98 6.63 0.98Q7.75 0.98 8.76 1.54Q9.77 2.11 10.31 3.08Q10.85 4.04 10.85 5.25Q10.85 7.1 9.63 8.34Q8.42 9.58 6.64 9.58ZM22 14.73L23.18 13.96L19.3 8.08Q20.08 8.34 20.77 8.34Q22.47 8.34 23.67 7.1Q24.86 5.87 24.86 4.06Q24.86 2.82 24.28 1.82Q23.71 0.82 22.65 0.23Q21.59 -0.36 20.37 -0.36Q19.18 -0.36 18.17 0.21Q17.16 0.78 16.59 1.82Q16.01 2.85 16.01 4.03Q16.01 4.91 16.37 5.88Q16.72 6.86 17.64 8.22L22 14.73ZM20.42 7.08Q19.17 7.08 18.29 6.2Q17.41 5.31 17.41 4.05Q17.41 2.8 18.29 1.92Q19.17 1.04 20.42 1.04Q21.67 1.04 22.56 1.92Q23.44 2.8 23.44 4.05Q23.44 5.31 22.56 6.2Q21.67 7.08 20.42 7.08Z" transform="matrix(1 0 0 -1 -562.873 -110)" fill="#D9D9D9" />
+<path d="M12.11 10.62L12.11 0L10.76 0L10.76 1.83Q9.9 0.78 8.83 0.25Q7.76 -0.27 6.49 -0.27Q4.24 -0.27 2.64 1.36Q1.04 3 1.04 5.34Q1.04 7.64 2.66 9.27Q4.27 10.9 6.53 10.9Q7.84 10.9 8.9 10.34Q9.96 9.79 10.76 8.67L10.76 10.62L12.11 10.62ZM6.64 9.58Q5.5 9.58 4.53 9.02Q3.56 8.46 2.99 7.44Q2.42 6.43 2.42 5.29Q2.42 4.17 3 3.14Q3.57 2.12 4.55 1.55Q5.52 0.98 6.63 0.98Q7.75 0.98 8.76 1.54Q9.77 2.11 10.31 3.08Q10.85 4.04 10.85 5.25Q10.85 7.1 9.63 8.34Q8.42 9.58 6.64 9.58ZM17.31 11.04L15.84 11.04Q16.24 12.81 17.38 13.77Q18.51 14.73 20.05 14.73Q21.18 14.73 22.15 14.21Q23.12 13.7 23.65 12.83Q24.18 11.96 24.18 11.02Q24.18 9.16 22.34 8.08Q23.37 7.66 24.04 6.85Q24.97 5.7 24.97 4.29Q24.97 3.07 24.33 1.96Q23.69 0.85 22.57 0.24Q21.46 -0.36 20.08 -0.36Q18.23 -0.36 16.99 0.71Q15.75 1.78 15.37 3.85L16.77 3.85Q17.14 2.45 17.84 1.83Q18.72 1.04 20.1 1.04Q21.66 1.04 22.61 1.97Q23.56 2.91 23.56 4.17Q23.56 5.01 23.08 5.74Q22.61 6.47 21.82 6.85Q21.02 7.22 19.35 7.3L19.35 8.62Q20.34 8.62 21.15 8.97Q21.96 9.32 22.32 9.85Q22.69 10.39 22.69 11.03Q22.69 11.96 21.94 12.65Q21.2 13.33 20.05 13.33Q19.12 13.33 18.45 12.81Q17.78 12.29 17.31 11.04Z" transform="matrix(0 -1 -1 0 -410 162.873)" fill="#1C1917" />
+<path d="M12.11 10.62L12.11 0L10.76 0L10.76 1.83Q9.9 0.78 8.83 0.25Q7.76 -0.27 6.49 -0.27Q4.24 -0.27 2.64 1.36Q1.04 3 1.04 5.34Q1.04 7.64 2.66 9.27Q4.27 10.9 6.53 10.9Q7.84 10.9 8.9 10.34Q9.96 9.79 10.76 8.67L10.76 10.62L12.11 10.62ZM6.64 9.58Q5.5 9.58 4.53 9.02Q3.56 8.46 2.99 7.44Q2.42 6.43 2.42 5.29Q2.42 4.17 3 3.14Q3.57 2.12 4.55 1.55Q5.52 0.98 6.63 0.98Q7.75 0.98 8.76 1.54Q9.77 2.11 10.31 3.08Q10.85 4.04 10.85 5.25Q10.85 7.1 9.63 8.34Q8.42 9.58 6.64 9.58ZM22 14.73L23.18 13.96L19.3 8.08Q20.08 8.34 20.77 8.34Q22.47 8.34 23.67 7.1Q24.86 5.87 24.86 4.06Q24.86 2.82 24.28 1.82Q23.71 0.82 22.65 0.23Q21.59 -0.36 20.37 -0.36Q19.18 -0.36 18.17 0.21Q17.16 0.78 16.59 1.82Q16.01 2.85 16.01 4.03Q16.01 4.91 16.37 5.88Q16.72 6.86 17.64 8.22L22 14.73ZM20.42 7.08Q19.17 7.08 18.29 6.2Q17.41 5.31 17.41 4.05Q17.41 2.8 18.29 1.92Q19.17 1.04 20.42 1.04Q21.67 1.04 22.56 1.92Q23.44 2.8 23.44 4.05Q23.44 5.31 22.56 6.2Q21.67 7.08 20.42 7.08Z" transform="matrix(0.7071 0.7071 0.7071 -0.7071 -252.0316 -66.1737)" fill="#D9D9D9" />
+<path d="M2.9 1.6L2.9 -3.89L1.52 -3.89L1.52 10.81Q1.52 13.06 2.69 14.03Q3.85 15 5.43 15Q7.05 15 8 14.14Q8.96 13.27 8.96 11.83Q8.96 9.57 6.82 8.79Q8.69 8.6 9.8 7.45Q10.92 6.3 10.92 4.51Q10.92 2.47 9.56 1.1Q8.2 -0.27 6.2 -0.27Q4.11 -0.27 2.9 1.6ZM4.25 7.86L4.25 9Q7.56 9.09 7.56 11.69Q7.56 12.59 7.01 13.15Q6.46 13.71 5.54 13.71Q4.26 13.71 3.58 13.01Q2.9 12.3 2.9 10.49L2.91 4.5Q2.91 2.92 3.87 1.97Q4.82 1.03 6.18 1.03Q7.6 1.03 8.56 2.01Q9.52 2.99 9.52 4.42Q9.52 5.84 8.55 6.85Q7.58 7.86 4.93 7.86L4.25 7.86ZM21.44 14.73L21.73 14.73L21.73 4.72L23.47 4.72L23.47 3.34L21.73 3.34L21.73 0L20.3 0L20.3 3.34L13.43 3.34L21.44 14.73ZM20.3 4.72L20.3 10.7L16.07 4.72L20.3 4.72Z" transform="matrix(1 0 0 -1 -262.0039 -10)" fill="#D9D9D9" />
+<path d="M12.11 10.62L12.11 0L10.76 0L10.76 1.83Q9.9 0.78 8.83 0.25Q7.76 -0.27 6.49 -0.27Q4.24 -0.27 2.64 1.36Q1.04 3 1.04 5.34Q1.04 7.64 2.66 9.27Q4.27 10.9 6.53 10.9Q7.84 10.9 8.9 10.34Q9.96 9.79 10.76 8.67L10.76 10.62L12.11 10.62ZM6.64 9.58Q5.5 9.58 4.53 9.02Q3.56 8.46 2.99 7.44Q2.42 6.43 2.42 5.29Q2.42 4.17 3 3.14Q3.57 2.12 4.55 1.55Q5.52 0.98 6.63 0.98Q7.75 0.98 8.76 1.54Q9.77 2.11 10.31 3.08Q10.85 4.04 10.85 5.25Q10.85 7.1 9.63 8.34Q8.42 9.58 6.64 9.58ZM22 14.73L23.18 13.96L19.3 8.08Q20.08 8.34 20.77 8.34Q22.47 8.34 23.67 7.1Q24.86 5.87 24.86 4.06Q24.86 2.82 24.28 1.82Q23.71 0.82 22.65 0.23Q21.59 -0.36 20.37 -0.36Q19.18 -0.36 18.17 0.21Q17.16 0.78 16.59 1.82Q16.01 2.85 16.01 4.03Q16.01 4.91 16.37 5.88Q16.72 6.86 17.64 8.22L22 14.73ZM20.42 7.08Q19.17 7.08 18.29 6.2Q17.41 5.31 17.41 4.05Q17.41 2.8 18.29 1.92Q19.17 1.04 20.42 1.04Q21.67 1.04 22.56 1.92Q23.44 2.8 23.44 4.05Q23.44 5.31 22.56 6.2Q21.67 7.08 20.42 7.08Z" transform="matrix(0 -1 -1 0 -10 -37.127)" fill="#D9D9D9" />
+</g>
+</svg>
+</svg>

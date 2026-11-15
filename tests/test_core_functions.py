@@ -9259,7 +9259,12 @@ def test_plot_network_static_figure(tmp_path, evo_test_networks, mock_show):
     # hover table names every glycan and reaction
     with patch('glycowork.motif.draw.is_jupyter', return_value = True):
         out = plot_network(main_net, plot_format = 'kamada_kawai')
-    assert out is not None and '<svg' in out.data and '<script>' in out.data and out._repr_svg_() == out.data
+    assert out is not None and '<svg' in out.data and '<script>' in out.data
+    # one SVG for both themes: the notebook's following its own theme switch, the static twin for Markdown renderers
+    # (nbdev's README) following its reader's system
+    from glycowork.motif.draw import DARK_PAGES
+    assert f':is({DARK_PAGES}) #vc' in out.data and 'prefers-color-scheme' not in out.data
+    assert '<script' not in out._repr_svg_() and 'prefers-color-scheme' in out._repr_svg_()
     import json
     texts = set(json.loads(re.search(r'var T = (.*?), word = ', out.data).group(1))[0])
     assert {str(n) for n in main_net.nodes} <= texts
@@ -9272,6 +9277,20 @@ def test_plot_network_static_figure(tmp_path, evo_test_networks, mock_show):
     # a network pruned down to nothing still gets its (empty) figure
     plot_network(nx.DiGraph(), filepath = tmp_path / 'empty.svg')
     assert (tmp_path / 'empty.svg').exists()
+
+
+def test_finish_interactive_shows_both_themes_in_a_notebook(mock_show):
+    """In a notebook, an interactive figure is one SVG for both themes: the interactive one follows the page's own theme switch, the static one, which Markdown renderers take, its reader's system"""
+    from glycowork.motif.draw import finish, subplots, DARK_PAGES
+    fig, ax = subplots()
+    ax.scatter([0, 1, 2], [1, 0, 2], names = ['a', 'b', 'c'])
+    with patch('glycowork.motif.draw.is_jupyter', return_value = True), patch('IPython.display.display') as mock_display:
+        finish(fig, interactive = True)
+    bundle = mock_display.call_args[0][0]
+    assert mock_display.call_args[1] == {'raw': True} and not mock_show.called
+    assert '<script' not in bundle['image/svg+xml'] and 'prefers-color-scheme' in bundle['image/svg+xml']
+    assert '<script' in bundle['text/html'] and f':is({DARK_PAGES}) #vc' in bundle['text/html']
+    assert 'prefers-color-scheme' not in bundle['text/html']
 
 
 def test_plot_network_no_notebook(evo_test_networks):

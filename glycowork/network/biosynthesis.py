@@ -636,18 +636,19 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
         if filepath:
             Path(filepath).parent.mkdir(parents = True, exist_ok = True)
             fig.save(filepath)
-        from glycowork.motif.draw import is_jupyter
+        from glycowork.motif.draw import is_jupyter, DARK_PAGES
         if not draw_glycans or not is_jupyter():
             if draw_glycans and not filepath:
                 fig.show()
             return
-        # In a notebook, an SVG that answers the mouse: a reaction lights up all its arrows, and a glycan its node and drawing
-        svg = fig.to_svg(interactive = True).replace('<svg ', '<svg style="max-width:100%;height:auto" ', 1)
+        # In a notebook, an SVG that answers the mouse: a reaction lights up all its arrows, and a glycan its node and drawing; both themes in one SVG, as in finish
+        svg = fig.to_svg(themes = True, interactive = True, dark_when = DARK_PAGES).replace('<svg ', '<svg style="max-width:100%;height:auto" ', 1)
+        still = fig.to_svg(themes = True)
         from IPython.display import HTML
 
         class GlycanNetworkPlot(HTML):
             def _repr_svg_(self):
-                return svg
+                return still
 
         return GlycanNetworkPlot(svg)
     import html

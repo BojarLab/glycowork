@@ -1153,6 +1153,10 @@ def _margin(dim: float, # Base dimension for scaling
     return dim * (0.45 if sticker else 0.35 if shadow else 0.2)
 
 
+# The dark state of pages with a theme switch of their own, which an interactive figure inline in them follows: a Quarto site (glycowork's docs), JupyterLab, and VS Code
+DARK_PAGES = 'body.quarto-dark, body[data-jp-theme-light="false"], body.vscode-dark'
+
+
 def subplots(*args: Any,  # nrows and ncols, as in viscose.subplots
              figsize: tuple[float, float] = (6.4, 4.8),  # Figure size in inches
              **kwargs: Any  # Passed on to viscose.subplots
@@ -1169,8 +1173,10 @@ def finish(fig: vc.Figure,  # The finished figure
     if filepath:
         fig.save(filepath, interactive = interactive and Path(filepath).suffix.lower() == '.svg')
     if interactive and is_jupyter():
-        from IPython.display import HTML, display
-        display(HTML(fig.to_svg(interactive = True)))
+        from IPython.display import display
+        # Both themes in one SVG: the static one, which nbdev's README and other Markdown renderers take, follows its reader's light or dark mode, the interactive one the notebook's or the docs site's own theme switch
+        live = fig.to_svg(themes = True, interactive = True, dark_when = DARK_PAGES).replace('<svg ', '<svg style="max-width:100%;height:auto" ', 1)
+        display({'image/svg+xml': fig.to_svg(themes = True), 'text/html': live}, raw = True)
     else:
         fig.show(viewer = not filepath)
 
