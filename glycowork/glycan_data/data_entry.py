@@ -137,10 +137,13 @@ def _abundance_matrix(df: pd.DataFrame, # columns run, ion, label, and value, on
 
 def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd.DataFrame], # result file(s) of FragPipe/MSFragger-Glyco or O-Pair (psm.tsv), pGlyco3 or pGlycoQuant, Byonic or Byologic, GlycReSoft, MetaMorpheus O-Pair (.psmtsv), Glyco-Decipher, StrucGP, or PEAKS GlycanFinder
                          max_q: float = 0.01, # highest q-value/FDR a match may have, wherever the engine reports one
-                         sample_map: dict[str, str] | Callable[[str], str] | None = None # renames runs (raw files, or FragPipe experiments) into samples; runs sharing a sample, e.g., fractions, are summed
-                         ) -> GlycoDataFrame: # glycoforms as 'protein_site_composition' in column 'ID' ('protein_site_sequence' for StrucGP structure codes), samples as columns; ready for get_differential_expression(glycoproteomics = True) or get_glycoshift_per_site
-    "Reads the native output of glycoproteomics search engines into a site-specific glycoform x sample table, quantified by intensity where the engine reports one and by spectral counts otherwise"
-    recs, skipped = [], 0  # (run, ion, protein, site, composition, abundance); an ion has one abundance per run, so its repeated matches must not add up
+                         sample_map: dict[str, str] | Callable[[str], str] | None = None, # renames runs (raw files, or FragPipe experiments) into samples; runs sharing a sample, e.g., fractions, are summed
+                         level: str = 'glycoform' # 'glycoform', or 'psm' for one row per match: its run, scan, peptide, total composition, protein, sites, and charge (FragPipe/O-Pair, pGlyco3, Byonic, MetaMorpheus, and GlycanFinder name their spectra)
+                         ) -> GlycoDataFrame | pd.DataFrame: # glycoforms as 'protein_site_composition' in column 'ID' ('protein_site_sequence' for StrucGP structure codes), samples as columns; ready for get_differential_expression(glycoproteomics = True) or get_glycoshift_per_site. With level = 'psm', the matches, for comparing engines spectrum by spectrum
+    "Reads the native output of glycoproteomics search engines into a site-specific glycoform x sample table, quantified by intensity where the engine reports one and by spectral counts otherwise, or into its matches, spectrum by spectrum"
+    if level not in ('glycoform', 'psm'):
+        raise ValueError(f"level must be 'glycoform' or 'psm', not {level!r}")
+    recs, skipped, matches = [], 0, []  # (run, ion, protein, site, composition, abundance); an ion has one abundance per run, so its repeated matches must not add up
     files = [files] if isinstance(files, (str, Path, pd.DataFrame)) else list(files)  # a list, or any iterable such as Path.glob('*/psm.tsv')
     for fi, (f, stem) in enumerate(zip(files, _run_names(files))):
         frames = [f] if isinstance(f, pd.DataFrame) else _read_table(f)
@@ -167,9 +170,12 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
             has2 = depth.eq(2).groupby(lvl1).transform('any')
             df = df[(has2 & depth.eq(2)) | (~has2 & depth.eq(1))]
         runs, vals, wide = [stem] * len(df), None, {}
+        scans = peptides = charges = None  # what level = 'psm' reports of each match, from the engines that name their spectra
         if sig == 'fragpipe':
             runs = [(re.split(r'[\\/]', str(fl))[-2] if re.search(r'[\\/]', str(fl)) else '', str(s).rsplit('.', 3)[0]) for s, fl in zip(col('spectrum'), col('spectrumfile'))]  # (experiment, raw file)
             prots = col('proteinid') if 'proteinid' in c else col('protein')
+            scans, charges = [str(s).rsplit('.', 3)[1] if str(s).count('.') >= 3 else None for s in col('spectrum')], list(col('charge'))  # 'run.00001.00001.3'
+            peptides = list(col('peptide')) if 'peptide' in c else [re.sub(r'[^A-Z]', '', re.sub(r'\[[^\]]*\]', '', str(p))) for p in col('modifiedpeptide')]
             ions = [f'{r}/{p}/{z}/{g}' for (_, r), p, z, g in zip(runs, col('modifiedpeptide'), col('charge'), col('totalglycancomposition'))]  # an experiment's raw files are fractions, so an ion is collapsed per raw file and only then summed into its experiment
             pairs = []
             for g, am, sp, start in zip(col('totalglycancomposition'), col('assignedmodifications'), col('siteprobabilities'), col('proteinstart')):
@@ -189,6 +195,8 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
                 ions = list(col('spectrum'))  # reporter ions come from each spectrum, so every PSM of a glycoform adds up
         elif sig == 'pglyco':
             runs, prots = list(col('rawname')) if 'rawname' in c else runs, [p.split(';')[0] if isinstance(p, str) else p for p in col('proteins')]  # an empty protein cell, e.g., of merged cells in a published table, must not become the accession 'nan'
+            scans = list(col('scan')) if 'scan' in c else [str(s).rsplit('.', 5)[1] if isinstance(s, str) and s.count('.') >= 5 else None for s in col('glyspec')]  # 'S1.105.105.3.1.dta'
+            peptides, charges = [str(p).replace('J', 'N') for p in col('peptide')], list(col('charge'))  # pGlyco writes a glycosylated Asn as J
             pairs = [[(re.sub(r'\.0+$', '', str(s).split(';')[0]), g)] if isinstance(g, str) and pd.notna(s) else [] for s, g in zip(col('prosites'), col('glycancomposition'))]
             wide = {k: m[1] for k in df.columns if (m := re.fullmatch(r'ReportIon\s*\((.+)\)', str(k)))}  # pGlycoQuant TMT: one reporter ion column per channel, named by its m/z
             ions = [f'{r}/{s}' for r, s in zip(runs, col('glyspec'))] if wide else [f'{p}/{m}/{z}/{g}' for p, m, z, g in zip(col('peptide'), col('mod'), col('charge'), col('glycancomposition'))]  # reporter ions come from each spectrum, so every PSM adds up, whereas an LFQ intensity belongs to the ion and is repeated on each of its PSMs
@@ -200,6 +208,9 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
                 [p for p, _ in _glycan_mods(str(s))] for s in df[pep]]
             pairs = [(_pair_sites(int(float(st)), p, [x.strip() for x in g.split(',')]) if pd.notna(st) else []) if isinstance(g, str) else None for p, g, st in zip(pos, df[comp], df[start])]
             ions = [f'{r}/{s}/{z}/{g}' for r, s, z, g in zip(col('row#'), df[pep], col('z'), df[comp])]
+            if sig == 'byonic' and 'scan#' in c:  # 'controllerType=0 controllerNumber=1 scan=33455', the native ID of the spectrum
+                scans = [m[1] if (m := re.search(r'scan=(\d+)', str(s))) else None for s in col('scan#')]
+                peptides, charges = [re.sub(r'[^A-Za-z]', '', re.sub(r'\[[^\]]*\]', '', re.sub(r'^[A-Z-]\.|\.[A-Z-]$', '', str(s)))).upper() for s in df[pep]], list(col('z'))  # 'K.N[+1216.42]ATN[+2204.77]GTK.E'
             if sig == 'byologic':
                 runs, vals = [str(a).split(';')[0].strip() for a in col('msaliasname')] if 'msaliasname' in c else runs, num('xicareasummed')
             elif 'comment' in c:
@@ -217,6 +228,8 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
             mods = [_glycan_mods(str(s)) for s in col('fullsequence')]  # 'LQT[O-linked glycosylation:H1N1A2 on X]LAL'
             pairs = [_pair_sites(int(re.search(r'\d+', str(se))[0]), [p for p, _ in m], [t.split(':', 1)[-1].rsplit(' on ', 1)[0] for _, t in m]) for m, se in zip(mods, col('startandendresiduesinprotein'))]
             ions = list(col('fullsequence'))
+            scans, charges = list(col('scannumber')), list(col('precursorcharge'))
+            peptides = list(col('basesequence')) if 'basesequence' in c else [re.sub(r'\[[^\]]*\]', '', str(s)) for s in col('fullsequence')]
         elif sig in ('decipher', 'strucgp'):
             runs = list(col(k)) if (k := 'file' if sig == 'decipher' else 'filename') in c else runs  # published tables often drop the file column, so a DataFrame or file without it is one sample
             prots = [re.split(r'[;,]', p)[0] if isinstance(p, str) else p for p in col('protein' if sig == 'decipher' else 'proteinid')]
@@ -227,11 +240,16 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
             prots, ends = col('proteinaccession'), list(df.columns).index(c['sampleprofile(ratio)']) if 'sampleprofile(ratio)' in c else len(df.columns)
             pairs = [_pair_sites(int(float(st)), [p for p, _ in _glycan_mods(str(s), brackets = '()')], str(g).split(';')) if pd.notna(st) else [] for s, g, st in zip(col('peptide'), col('glycan'), col('start'))]
             ions, wide = [f'{s}/{g}' for s, g in zip(col('peptide'), col('glycan'))], {k: k[5:] for k in df.columns[:ends] if str(k).startswith('Area ')}  # the per-group 'Area' columns follow the sample profile
+            if 'scan' in c:
+                scans, charges = list(col('scan')), list(col('z'))
+                peptides = [re.sub(r'[^A-Z]', '', re.sub(r'\([^)]*\)', '', str(s))) for s in col('peptide')]
         else:  # Glyco-Decipher site table: 'P00738@211;P00739@153' maps to the first protein, 'O43866@226;O43866@229' to the ambiguous site '226/229'
             sites = [str(s).split(';') for s in col('site')]
             prots = [s[0].split('@')[0] if '@' in s[0] else None for s in sites]
             pairs = [[('/'.join(x.split('@')[-1] for x in s if x.split('@')[0] == p), g)] if isinstance(g, str) else None for s, p, g in zip(sites, prots, col('glycan'))]
             ions, wide = list(range(len(df))), {k: k for k in df.columns[2:]}
+        if level == 'psm' and scans is None:
+            raise ValueError(f"'{stem}' ({sig}) names no spectra; level = 'psm' reads FragPipe or O-Pair, pGlyco3, Byonic (with its 'Scan #' column), MetaMorpheus, and GlycanFinder output")
         wide = wide or {k: m[1] for k in df.columns if (m := re.fullmatch(r'Intensity\((.+)\)', str(k)))}  # pGlycoQuant appends one column per run to pGlyco3 or Byonic results
         abund = df[list(wide)].apply(pd.to_numeric, errors = 'coerce').fillna(0).to_numpy() if wide else None
         vals = None if vals is None else vals.to_numpy()
@@ -241,10 +259,33 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
             if not pr or pd.isna(prot):
                 skipped += 1
                 continue
+            if level == 'psm':
+                matches.append((runs[i][1] if isinstance(runs[i], tuple) else runs[i], scans[i], peptides[i], [comp for _, comp in pr], _accession(prot), ';'.join(site for site, _ in pr), charges[i]))
+                continue
             obs = zip(wide.values(), abund[i]) if wide else [(runs[i], 1.0 if vals is None else vals[i])]
             recs.extend((run, ion if wide or vals is not None else (fi, i), _accession(prot), site, comp, v) for run, v in obs if v > 0 for site, comp in pr)
     if skipped:
         warnings.warn(f"{skipped} matches had no protein or glycosylation site to place them on and were skipped.", stacklevel = 2)
+    if level == 'psm':
+        if not matches:
+            raise ValueError("No glycopeptide passed the filters; check that the files hold glycopeptide matches and that max_q is not too strict.")
+        out = pd.DataFrame(matches, columns = ['run', 'scan', 'peptide', 'composition', 'protein', 'sites', 'charge'])
+
+        def total(comps):  # the glycans of a match as one composition, None where one does not parse (a residual mass, a structure code)
+            summed = {}
+            try:
+                for g in comps:
+                    for k, v in canonicalize_composition(_COMP_ADDUCT.sub('', g)).items():
+                        summed[k] = summed.get(k, 0) + v
+            except (ValueError, TypeError, AttributeError):
+                return None
+            return canonicalize_composition(summed, as_string = True) or None
+
+        out['composition'] = [total(g) for g in out['composition']]
+        out['scan'] = pd.array([int(m[1]) if (m := re.search(r'(\d+)\D*$', str(s))) else None for s in out['scan']], dtype = 'Int64')  # GlycanFinder writes 'F1:1234'
+        out['charge'] = pd.to_numeric(out['charge'], errors = 'coerce').astype('Int64')
+        out['run'] = out['run'].astype(str)
+        return out
     if not recs:
         raise ValueError("No glycopeptide passed the filters; check that the files hold glycopeptide matches and that max_q is not too strict.")
     df = pd.DataFrame(recs, columns = ['run', 'ion', 'protein', 'site', 'comp', 'value'])

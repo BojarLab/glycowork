@@ -9754,6 +9754,40 @@ def test_read_glycoproteomics_byonic(tmp_path):
     assert out.set_index('ID')['run1'].to_dict() == {'P02763_33_H5N2': 1, 'P02763_36_H5N4A2': 1, 'P02763_71+76_H1N2A1': 1}
 
 
+def test_read_glycoproteomics_psm_level(tmp_path):
+    fragpipe = pd.DataFrame({'Spectrum': ['ctrl_run.00011.00011.3', 'ctrl_run.00012.00012.3'], 'Spectrum File': ['interact.pep.xml'] * 2, 'Peptide': ['ENGTVSR', 'ENGTVSR'],
+                             'Modified Peptide': ['EN[2319]GTVSR', 'EN[2465]GTVSR'], 'Charge': ['3', '2'], 'Protein Start': ['102'] * 2, 'Assigned Modifications': ['2N(2204.7724)', '2N(2350.8303)'],
+                             'Total Glycan Composition': ['HexNAc(4)Hex(5)NeuAc(2) % 2204.7724', 'HexNAc(4)Hex(5)Fuc(1)NeuAc(2) % 2350.8303'], 'Glycan q-value': ['0.0', '0.5'],
+                             'Is Decoy': ['false'] * 2, 'Protein ID': ['P19652'] * 2})
+    # one row per match that passed the filters, with its spectrum
+    assert read_glycoproteomics(fragpipe, level = 'psm').to_dict('list') == {'run': ['ctrl_run'], 'scan': [11], 'peptide': ['ENGTVSR'], 'composition': ['H5N4A2'],
+                                                                           'protein': ['P19652'], 'sites': ['103'], 'charge': [3]}
+    pglyco = pd.DataFrame({'GlySpec': ['S1.105.105.3.1.dta'], 'RawName': ['S1'], 'Peptide': ['RRJMTQGR'], 'Charge': ['3'], 'GlycanComposition': ['H(4)N(4)F(1)'],
+                           'Proteins': ['sp|P07998|RNAS1_HUMAN'], 'ProSites': ['62'], 'GlyDecoy': ['0'], 'PepDecoy': ['0'], 'TotalFDR': ['0.001']})
+    assert read_glycoproteomics(pglyco, level = 'psm').iloc[0][['run', 'scan', 'peptide', 'composition', 'sites']].tolist() == ['S1', 105, 'RRNMTQGR', 'H4N4F1', '62']  # J is pGlyco's glycosylated Asn
+    assert read_glycoproteomics(pglyco.assign(Scan = ['107']), level = 'psm')['scan'].tolist() == [107]  # a Scan column where pGlyco3 writes one
+    byonic = pd.DataFrame({'Protein Name': ['>sp|P02763|A1AG1_HUMAN Alpha-1-acid glycoprotein 1'], 'Peptide\n< ProteinMetrics Confidential >': ['K.N[+1216.42]ATN[+2204.77]GTK.E'],
+                           'Glycans\nNHFAGNa': ['HexNAc(2)Hex(5),HexNAc(4)Hex(5)NeuAc(2)'], 'Starting\nposition': [33], 'z': [3], 'Comment': ['run1.ScanId;v=1;d1=1.1.3'],
+                           'Scan #': ['controllerType=0 controllerNumber=1 scan=33455']})
+    byonic.to_excel(tmp_path / 'byonic.xlsx', sheet_name = 'Spectra', index = False)
+    # two glycans add up to the match's total composition, their sites joined
+    assert read_glycoproteomics(tmp_path / 'byonic.xlsx', level = 'psm').iloc[0].tolist() == ['run1', 33455, 'NATNGTK', 'H10N6A2', 'P02763', '33;36', 3]
+    metamorpheus = pd.DataFrame({'File Name': [r'E:\data\frac3.mzML'], 'Scan Number': ['812'], 'Precursor Charge': ['4'], 'Protein Accession': ['P55095'], 'Base Sequence': ['HAEGTFTSDVSSYLEGQAAK'],
+                                 'Start and End Residues In Protein': ['[98 to 117]'], 'Full Sequence': ['HAEGTFTSDVSS[O-linked glycosylation:H1N1A2 on X]YLEGQAAK'],
+                                 'Plausible GlycanComposition': ['H1N1A2'], 'Decoy/Contaminant/Target': ['T'], 'QValue': ['0']})
+    assert read_glycoproteomics(metamorpheus, level = 'psm').iloc[0].tolist() == ['frac3', 812, 'HAEGTFTSDVSSYLEGQAAK', 'H1N1A2', 'P55095', '109', 4]
+    glycanfinder = pd.DataFrame({'Protein Accession': ['P02749|APOH_HUMAN'], 'Peptide': ['LGN(+2786.96)WSAMPSC(+57.02)K'], 'Glycan': ['(HexNAc)4(Hex)5(NeuAc)4'], 'Glycan Type': ['N-Link'],
+                                 'Scan': ['F1:2210'], 'z': ['3'], 'Area C_3': ['10'], 'Sample Profile (Ratio)': ['1.00'], 'Start': ['251']})
+    assert read_glycoproteomics(glycanfinder, level = 'psm')[['scan', 'peptide', 'composition', 'sites']].iloc[0].tolist() == [2210, 'LGNWSAMPSCK', 'H5N4A4', '253']
+    glycresoft = pd.DataFrame({'glycopeptide': ['NEEYN(N-Glycosylation)K{Fuc:1; Hex:5; HexNAc:4; NeuAc:2}'], 'analysis': ['A'], 'q_value': ['0.001'], 'total_signal': ['1e6'],
+                               'peptide_start': ['86'], 'protein_name': ['sp|P01857|IGHG1_HUMAN']})
+    with pytest.raises(ValueError, match = 'names no spectra'):  # a table of glycopeptides has no spectra to compare
+        read_glycoproteomics(glycresoft, level = 'psm')
+    with pytest.raises(ValueError, match = "level must be"):
+        read_glycoproteomics(fragpipe, level = 'peptide')
+    assert read_glycoproteomics(fragpipe).to_dict('list') == {'ID': ['P19652_103_H5N4A2'], 'ctrl_run': [1.0]}  # the glycoform table as before
+
+
 def test_read_glycoproteomics_other_engines():
     glycresoft = pd.DataFrame({'glycopeptide': ['NEEYN(N-Glycosylation)K{Fuc:1; Hex:5; HexNAc:4; NeuAc:2}', 'N(N-Glycosylation)ITEIVYLTN(N-Glycosylation)TTIEK{Hex:10; HexNAc:8}'],
                                'analysis': ['A', 'A'], 'q_value': ['0.001', '0.0'], 'total_signal': ['1e6', '5e5'], 'peptide_start': ['86', '30'],

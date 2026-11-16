@@ -85,6 +85,10 @@
 ##### Added ✨
 - Added new curated N-glycoproteomics datasets: `human_colorectal_N_PMID40285620` and `mouse_ovary_aging_N_PMID40073759` (a31188c)
 
+#### data_entry
+##### Added ✨
+- Added the `level` keyword argument to `read_glycoproteomics` to work with `psm` instead of `glycoform` ()
+
 ### network
 #### biosynthesis
 ##### Fixed 🐛
