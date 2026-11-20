@@ -15,10 +15,10 @@ jobs:
   test:
     runs-on: 'ubuntu-latest'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Miniforge
-        uses: conda-incubator/setup-miniconda@v3
+        uses: conda-incubator/setup-miniconda@v4
         id: setup-miniforge
         continue-on-error: true
         with:
@@ -30,7 +30,7 @@ jobs:
           channel-priority: strict
 
       - name: Retry Setup Miniforge
-        uses: conda-incubator/setup-miniconda@v3
+        uses: conda-incubator/setup-miniconda@v4
         if: steps.setup-miniforge.outcome == 'failure'
         with:
           python-version: '3.11'
@@ -54,6 +54,6 @@ jobs:
           pytest --cov=../glycowork --cov-config=../.coveragerc --cov-report=xml
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           files: ./tests/coverage.xml

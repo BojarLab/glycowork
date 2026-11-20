@@ -14,7 +14,8 @@ $gw-glow: rgba(0, 0, 0, 0.6) !default;
 /*-- scss:rules --*/
 
 // glycan drawings come as GlycoDraw's die-cut stickers in dark mode (bin/docs_dark_glycans.py), which carry their own
-// white outline; other stored figures (matplotlib) are drawn for a white page and get a white card
+// white outline; interactive figures are inline SVGs that turn dark with the site's switch (DARK_PAGES in draw.py),
+// and the remaining stored PNG figures are drawn for a white page and get a white card
 .cell-output-display:not(.dark-content) img:not(.dark-content) {
   padding: 0.5rem;
   border-radius: 8px;

@@ -46,7 +46,7 @@ human_serum_bacteremia_N_PMID33535571,PMID:33535571,10.3390/jcm10030516,GlycoPOS
 human_serum_gangliosidosis_GSL_PMID39190143,PMID:39190143,10.1007/s00216-024-05487-3,,,Homo sapiens,serum,body fluid,,lipid,negative,none,RP-LC
 human_serum_ovarian_N_PMID41366864,PMID:41366864,10.1021/acs.jproteome.5c00442,GlycoPOST,GPST000583,Homo sapiens,serum,body fluid,ovarian carcinoma,N,positive,permethylated,MALDI
 human_serum_parkinson_GSL_PMID40379659,PMID:40379659,10.1038/s41467-025-59755-6,MassIVE,MSV000097015,Homo sapiens,serum,body fluid,,lipid,negative,none,RP-LC
-human_skin_O_PMC5871710,PMC5871710,10.3389/fonc.2018.00070,,,Homo sapiens,skin,primary tissue,basal/squamous cell carcinoma,O,negative,reduced,PGC-LC
+human_skin_O_PMC5871710,PMC5871710,10.3389/fonc.2018.00070,,,Homo sapiens,skin,primary tissue,basal cell carcinoma,O,negative,reduced,PGC-LC
 human_skin_O_PMC5871710_BCC,PMC5871710,10.3389/fonc.2018.00070,,,Homo sapiens,skin,primary tissue,basal cell carcinoma,O,negative,reduced,PGC-LC
 human_skin_O_PMC5871710_SCC,PMC5871710,10.3389/fonc.2018.00070,,,Homo sapiens,skin,primary tissue,squamous cell carcinoma,O,negative,reduced,PGC-LC
 human_influenza_N_10_648982026_02_02_703422,,10.1038/s42003-026010759-y,,,Homo sapiens,lung,cell line,lung adenocarcinoma,N,negative,reduced,PGC-LC
@@ -78,6 +78,8 @@ mouse_macrophages_infection_N_PMC8416091,PMC8416091,10.3389/fimmu.2021.722293,Pr
 mouse_tissues_N_PMID39930009,PMID:39930009,10.1038/s41594-025-01485-w,ProteomeXchange,PXD052447,Mus musculus,liver; kidney; brain,primary tissue,,N,positive,TMT,RP-LC
 schistosoma_mansoni_sex_N_PMID41545360,PMID:41545360,10.1038/s41467-026-68400-9,MassIVE,MSV000097695,Schistosoma mansoni,whole worm,whole organism,,N,positive,none,RP-LC
 schistosoma_mansoni_sex_O_PMID41545360,PMID:41545360,10.1038/s41467-026-68400-9,MassIVE,MSV000097695,Schistosoma mansoni,whole worm,whole organism,,O,positive,none,RP-LC
+human_colorectal_N_PMID40285620,PMID:40285620,10.1002/advs.202415645,ProteomeXchange,PXD055935; PXD055957,Homo sapiens,colorectal,primary tissue,colorectal carcinoma,N,positive,none,RP-LC
+mouse_ovary_aging_N_PMID40073759,PMID:40073759,10.1016/j.redox.2025.103584,ProteomeXchange,PXD056126,Mus musculus,ovary,primary tissue,,N,positive,TMT,RP-LC
 A549_influenza_PMID33046650,PMID:33046650,10.1073/pnas.2008203117,Synapse,syn21975628,Homo sapiens,lung,cell line,lung adenocarcinoma,,,,
 HEK_XBP1_PMID30305426,PMID:30305426,10.1073/pnas.1805425115,,,Homo sapiens,kidney,cell line,,,,,
 bacteria_PMID20973590,PMID:20973590,10.1021/ac1022309,,,Escherichia coli; Enterobacter cloacae; Staphylococcus aureus; Bacillus subtilis,,bacteria,,,,,

@@ -12,12 +12,14 @@ ring-closure digit, and '{pN}' is the substituent at carbon N. An unfilled slot 
 skeleton's own heteroatom, 'O' for a hydroxyl and 'N' for an amine.
 """
 
+from __future__ import annotations
+
 import re
 from functools import lru_cache
 from itertools import combinations, product
 from typing import NamedTuple
-import networkx as nx
-from glycowork.motif.graph import graph_to_string, glycan_graph_memoize, ensure_graph
+from glycowork.glycan_data.loader import nx
+from glycowork.motif.graph import graph_to_string, glycan_graph_memoize, GlycanGraph, _as_graph, _component
 
 CERAMIDE = 'OC[C@H](NC(=O)CCCCCCCCCCCCCCC)[C@H](O)/C=C/CCCCCCCCCCCCC'  # d18:1/16:0, the placeholder used whenever a sequence just says 'Cer'
 UNKNOWN_POSITION = 'lowest'  # where a modification without a position number goes; 'lowest' free slot reproduces what GlyLES did
@@ -483,14 +485,14 @@ def _ring_digit(n: int # Ring-closure index
 
 
 @glycan_graph_memoize(maxsize = 4096)
-def graph_to_smiles(graph: nx.DiGraph,  # Glycan graph, as produced by glycan_to_nxGraph
+def graph_to_smiles(graph: GlycanGraph | nx.DiGraph,  # Glycan graph, as produced by glycan_to_nxGraph
                     mapping: bool = False,  # Also return, for every atom of the SMILES, the graph node it came from
                     strict: bool = False  # Raise on an unknown linkage or modification position instead of taking the lowest free one
                     ) -> str | tuple:  # Isomeric SMILES, or (SMILES, atom-to-node tuple) when mapping
     "Assemble the isomeric SMILES of a glycan graph by splicing monosaccharide templates into each other"
     if not len(graph):  # an empty string or None became an empty graph, on which networkx raised 'Connectivity is undefined for the null graph'
         raise GlycanSMILESError('glycan graph is empty')
-    if not nx.is_weakly_connected(graph):
+    if len(_component(graph, next(iter(graph)))) != len(graph):
         raise GlycanSMILESError('glycan graph is disconnected; a floating substituent has no defined attachment point')
     labels = {n: graph.nodes[n]['string_labels'] for n in graph.nodes}
 
@@ -499,10 +501,10 @@ def graph_to_smiles(graph: nx.DiGraph,  # Glycan graph, as produced by glycan_to
         return fragment[:start] + piece + fragment[start + len(slot):], owners[:start] + piece_owners + owners[start + len(slot):]
 
     def build(node, anomer, depth):
-        taken = {int(p) for p in (labels[link].split('-')[-1] for link in graph.successors(node)) if p.isdigit()}
+        taken = {int(p) for p in (labels[link].split('-')[-1] for link in graph.succ[node]) if p.isdigit()}
         fragment, hetero, pending = _residue(labels[node], anomer, _ring_digit(depth + 1), _ring_digit(depth + 51) if 'Pyr' in labels[node] or 'Anhydro' in labels[node] else '', taken)
         owners, first = [node] * len(fragment), _anomeric_position(labels[node])
-        children = sorted(((graph.successors(link), labels[link]) for link in graph.successors(node)), key = lambda x: not x[1].split('-')[-1].isdigit())
+        children = sorted(((graph.succ[link], labels[link]) for link in graph.succ[node]), key = lambda x: not x[1].split('-')[-1].isdigit())
         for successors, link in children:
             child = next(iter(successors), None)
             if child is None:
@@ -558,12 +560,12 @@ def graph_to_smiles(graph: nx.DiGraph,  # Glycan graph, as produced by glycan_to
         smiles))  # a tuple, since the result is memoized and a caller editing a list would change it for every later call on that glycan
 
 
-def glycan_to_smiles(glycan: str | nx.DiGraph,  # Glycan in IUPAC-condensed format or as a networkx graph
+def glycan_to_smiles(glycan: str | GlycanGraph | nx.DiGraph,  # Glycan in IUPAC-condensed format or as a networkx graph
                      mapping: bool = False,  # Also return, for every atom of the SMILES, the graph node it came from
                      strict: bool = False  # Raise on an unknown linkage or modification position instead of taking the lowest free one
                      ) -> str | tuple:  # Isomeric SMILES, or (SMILES, atom-to-node tuple) when mapping
     "Convert a glycan in IUPAC-condensed format into an isomeric SMILES string"
-    return graph_to_smiles(ensure_graph(glycan), mapping = mapping, strict = strict)
+    return graph_to_smiles(_as_graph(glycan), mapping = mapping, strict = strict)
 
 
 _TOKEN_RE = re.compile(r'\[[^\]]*\]|Br|Cl|[BCNOPSFI]|%\d\d|\d|[()=#/\\.\-+]')
@@ -647,11 +649,11 @@ class Molecule(NamedTuple):
     bond_monos: list  # the monosaccharide every bond came from, taken from its first atom
 
 
-def glycan_to_molecule(glycan: str | nx.DiGraph, # Glycan in IUPAC-condensed format or as a networkx graph
+def glycan_to_molecule(glycan: str | GlycanGraph | nx.DiGraph, # Glycan in IUPAC-condensed format or as a networkx graph
                        strict: bool = False # Raise on an unknown linkage or modification position instead of taking the lowest free one
                        ) -> Molecule: # Atoms, bonds, rings, and the graph node every atom and bond came from
     "Build a glycan's molecular graph without a cheminformatics toolkit, keeping every atom's monosaccharide of origin"
-    smiles, owners = graph_to_smiles(ensure_graph(glycan), mapping = True, strict = strict)
+    smiles, owners = graph_to_smiles(_as_graph(glycan), mapping = True, strict = strict)
     atoms, bonds, rings, neighbors = parse_smiles(smiles)
     if len(atoms) != len(owners):
         raise GlycanSMILESError('atom mapping does not line up with the parsed SMILES')

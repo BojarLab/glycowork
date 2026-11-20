@@ -11,10 +11,10 @@ jobs:
   style:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - run: pip install pycodestyle
@@ -39,7 +39,7 @@ jobs:
           [ -s style.patch ] || rm style.patch
       - name: Upload fixes for the style bot
         if: failure() && hashFiles('style.patch') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: style-fix
           path: style.patch

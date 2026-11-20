@@ -136,6 +136,7 @@ _WURCS_BACKBONES = {}  # (SkeletonCode, ring, amine positions): glycowork name, 
 _WURCS_SKELETONS = {}  # (skeleton, D/L): (SkeletonCode, anomeric position, ring, C-branch MAPs) from wurcs_tokens.json, filled by the first glycan_to_wurcs call
 _GWB_RESIDUE = re.compile(r'^([\d?])(?:([ab?])(\d))?(?:([DLX])-)?([A-Za-z0-9]+?)(?:,([pfo]))?$')
 _MONO_STEM = re.compile(rf'(?:[\d?/]+[A-Za-z]+|{_MOD_NAMES})+$')  # strips trailing modifications to expose the monosaccharide stem
+_KCF_NAMES = {'L4-en-thrHexA': 'L-4dThrHexA4en', 'Cym': 'Dig3Me', '2,6dribHex': 'Dig', '2,6daraHex': 'Oli', 'Formyl': 'Fo', 'Ino(acyl)-P': 'Ins', 'Ino-P': 'Ins', 'Ino': 'Ins'}  # KEGG's spellings of what glycowork calls otherwise; an inositol phospholipid counts as its inositol, as a ceramide counts as Cer
 _LINEARCODE_MAPPING = {'G': 'Glc', 'ME': 'me', 'M': 'Man', 'A': 'Gal', 'NN': 'Neu5Ac', 'GlcN': 'GlcNAc', 'GN': 'GlcNAc',
                        'GalN': 'GalNAc', 'AN': 'GalNAc', 'F': 'Fuc', 'K': 'Kdn', 'W': 'Kdo', 'L': 'GalA', 'I': 'IdoA', 'PYR': 'Pyr', 'R': 'Araf', 'H': 'Rha',
                        'X': 'Xyl', 'B': 'Rib', 'U': 'GlcA', 'O': 'All', 'E': 'Fruf', '[': '', ']': '', 'me': 'Me', 'PC': 'PCho', 'T': 'Ac', 'NJ': 'Neu5Gc'}
@@ -171,9 +172,9 @@ PDB_TO_IUPAC = {'NDG':'GlcNAc(a','NAG':'GlcNAc(b','MAN':'Man(a', 'BMA':'Man(b', 
                 'XYZ':'Xylf(b', '1CU': 'Fru(b',  '0CU': 'Fru(b', '4CD': 'Fru(a', '1CD': 'Fru(a', 'LXC':'L-Xyl(b', 'HSY':'L-Xyl(a', 'SIA':'Neu5Ac(a', 'SLB':'Neu5Ac(b', 'FRU': 'Fru(b', 'AHR':'Araf(a', '2GS':'Gal2Me(a',
                 'NGC':'Neu5Gc(a', 'NGE':'Neu5Gc(b', 'BDP':'GlcA(b', 'GCU':'GlcA(a','VYS':'GlcNS(a', '0YS':'GlcNS(a', '4YS':'GlcNS(a', '6YS':'GlcNS(a', 'UYS':'GlcNS(a', 'QYS':'GlcNS(a', 'GCS':'GlcN(b',
                 'PA1':'GlcN(a', 'ROH':' ', 'BGC':'Glc(b', '0OA':'GalA(a', '4OA':'GalA(a', 'BCA':'2-4-diacetimido-2-4-6-trideoxyhexose(a', 'ASO':'1,5-Anhydro-Glc-ol(?', 'L6N':'Glc6Me(?', 'BM3':'ManNAc(a',
-                "NAG6SO3":"GlcNAc6S(b", "NDG6SO3":"GlcNAc6S(a", "GLC4SO3":"GalNAc4S(b", "NGA4SO3":"GalNAc4S(b", 'A2G4SO3':'GalNAc4S(a', "IDR2SO3":"IdoA2S(a", '289':'DDManHep(a',
+                "NAG6SO3": "GlcNAc6S(b", "NDG6SO3": "GlcNAc6S(a", "GLC4SO3": "Glc4S(a", "NGA4SO3": "GalNAc4S(b", 'A2G4SO3': 'GalNAc4S(a', "IDR2SO3": "IdoA2S(a", '289': 'DDManHep(a',
                 "BDP3SO3":"GlcA3S(b", "BDP2SO3":"GlcA2S(b", "GCU2SO3":"GlcA2S(a", "SIA9ACX":"Neu5Ac9Ac(a", "MAN2MEX":"Man2Me(a", "MAN3MEX":"Man3Me(a", '5N6':'Neu5Ac9Ac(a', 'PKM':'Neu4Ac5Ac(a', 'GMH':'LDManHep(a',
-                "SIA9MEX":"Neu5Ac9Me(a", "NGC9MEX":"Neu5Gc9Me(a", "BDP4MEX":"GlcA4Me(b", "GAL6SO3":"Gal6S(b", "NDG3SO3":"GlcNAc3S6S(a", "TOA2SO3": "GalA2S(a", 'GN1':'GlcNAc1P(a',
+                "SIA9MEX": "Neu5Ac9Me(a", "NGC9MEX": "Neu5Gc9Me(a", "BDP4MEX": "GlcA4Me(b", "GAL6SO3": "Gal6S(b", "NDG3SO3": "GlcNAc3S(a", "TOA2SO3": "GalA2S(a", 'GN1': 'GlcNAc1P(a',
                 "NAG6PCX":"GlcNAc6PCho(b", "UYS6SO3":"GlcNS6S(a", 'VYS3SO3':'GlcNS3S6S(a',  'VYS6SO3':'GlcNS3S6S(a', "QYS3SO3":"GlcNS3S6S(a", "QYS6SO3":"GlcNS3S6S(a", "4YS6SO3":"GlcNS6S(a", "6YS6SO3":"GlcNS6S(a",
                 "FUC2MEX3MEX4MEX": "Fuc2Me3Me4Me(a", "QYS3SO36SO3": "GlcNS3S6S(a", "VYS3SO36SO3": "GlcNS3S6S(a", "NDG3SO36SO3": "GlcNAc3S6S(a", "RAM2MEX3MEX": "Rha2Me3Me(a", "RAM2ACX": "Rha2Ac(a",
                 "SIO":"Neu4Ac5Ac9Ac(a", "1GN":"GalN(b", "KD5":"4,7-Anhydro-Kdof(a", "BDR":"Ribf(b", "G1P":"Glc1P(a", "3LJ":"GlcN6S(a", "SGN":"GlcNS6S(a", "95Z":"ManN(a", "ADA":"GalA(a",
@@ -182,7 +183,8 @@ PDB_TO_IUPAC = {'NDG':'GlcNAc(a','NAG':'GlcNAc(b','MAN':'Man(a', 'BMA':'Man(b', 
                 "X6X":"GalN(a", "TVD":"GlcNAc1NAc(b", "MJJ":"Neu2Me5Ac9Ac(a", "K5B":"4,7-Anhydro-Kdof(b", "GAL3SO3": "Gal3S(b", "GAL3SO36SO3": "Gal3S6S(b", "GAL4SO36SO3": "Gal4S6S(b", "GAL4SO3": "Gal4S(b",
                 "A2G6SO3": "GalNAc6S(a", "GLC6SO3": "Glc6S(a", "0KN": "Kdn(a", "0eB": "Alt(a", "0bA": "Sor(a", "0JA": "Tag(a", "0NB": "D-All(a", 'FUC2MEX': 'Fuc2Me(a', 'FUC3MEX': 'Fuc3Me(a', 'FUC4MEX': 'Fuc4Me(a',
                 'RAM2MEX': 'Rha2Me(a', 'RAM3MEX': 'Rha3Me(a', 'FUC2MEX3MEX': 'Fuc2Me3Me(a', 'FUC2MEX4MEX': 'Fuc2Me4Me(a', 'FUC3MEX4MEX': 'Fuc3Me4Me(a', '0WA': 'ManNAc(a', '0RU': 'Ribf(a',
-                '0QB': 'Qui(a', '0PD': 'Psif(a', '0DA': 'Lyx(a', '0kB': 'L-Gul(a', '0tA': 'L-Tal(a', 'NBG': 'GlcNAc(b', 'KDO': 'Kdo(a', '0KO': 'Kdo(a', '4aA': 'Ara(a', "UYS6SO36SO3": "GlcNS6S(a", "IDR2SO32SO3": "IdoA2S(a"}
+                '0QB': 'Qui(a', '0PD': 'Psif(a', '0DA': 'Lyx(a', '0kB': 'L-Gul(a', '0tA': 'L-Tal(a', 'NBG': 'GlcNAc(b', 'KDO': 'Kdo(a', '0KO': 'Kdo(a', '4aA': 'Ara(a', "UYS6SO36SO3": "GlcNS6S(a", "IDR2SO32SO3": "IdoA2S(a",
+                "BGC6SO3": "Glc6S(b", "NGA3SO3": "GalNAc3S(b", "NGA6SO3": "GalNAc6S(b", "NGA4SO36SO3": "GalNAc4S6S(b", "GAL3SO34SO3": "Gal3S4S(b"}
 
 
 def rescue_glycans(func: Callable  # Function to wrap, taking its glycan(s) as first parameter
@@ -218,23 +220,21 @@ def parse_floating_bit(bit: str # Content of one {...} floating bit, without bra
     alts = [a for a in bit.split('|') if a]
     if not any('^' in a for a in alts):
         return bit, {}
-    import networkx as nx
-    from glycowork.motif.graph import glycan_to_nxGraph_int, graph_to_string
+    from glycowork.motif.graph import _glycan_graph_int, _descendants, graph_to_string
     fragments, links, anchors = set(), set(), {}
     for a in alts:
         marked = [i for i, x in enumerate(min_process_glycans([a])[0]) if x.endswith('^')]
         if len(marked) != 1:
             raise ValueError(f"Every floating-bit alternative needs exactly one '^' marking the uncertain residue: {a}")
-        g = glycan_to_nxGraph_int(a.replace('^', ''))
-        floating = nx.descendants(g, marked[0]) | {marked[0]}
-        link = next(g.predecessors(marked[0]))
+        g = _glycan_graph_int(a.replace('^', ''))
+        floating = _descendants(g, marked[0]) | {marked[0]}
+        link = next(iter(g.pred[marked[0]]))
         linkage = g.nodes[link]['string_labels']
         fragments.add(graph_to_string(g.subgraph(floating)))
         links.add(linkage)
-        if (parent := next(g.predecessors(link), None)) is not None:
-            context = g.subgraph(set(g.nodes) - floating - {link}).copy()
-            context.nodes[parent]['string_labels'] += '^'
-            anchors[linkage] = graph_to_string(context)
+        if (parent := next(iter(g.pred[link]), None)) is not None:
+            context = g.subgraph(set(g) - floating - {link})
+            anchors[linkage] = graph_to_string(context.with_attr('string_labels', {parent: context.nodes[parent]['string_labels'] + '^'}))
     if len(fragments) > 1:
         raise ValueError(f"All alternatives of a floating bit must share the same fragment: {bit}")
     prefixes = {l[:l.index('-')] for l in links}
@@ -703,7 +703,7 @@ def glycoct_to_iupac(glycoct: str # Glycan in GlycoCT format
         iupac = iupac.replace(']', '', 1)
     iupac = iupac.replace('[[', '[').replace(']]', ']')
     if floating_specs:
-        from glycowork.motif.graph import glycan_to_nxGraph, resolve_anchor
+        from glycowork.motif.graph import _glycan_graph, resolve_anchor
         parent_of = {c: (p, l) for p, kids in iupac_parts.items() for l, c in kids}
 
         def gct_subtree(n, depth, extra = ''):
@@ -720,7 +720,7 @@ def glycoct_to_iupac(glycoct: str # Glycan in GlycoCT format
                 chain += f"({l}){residue_dic[n]}"
             return chain
 
-        main_graph = glycan_to_nxGraph(iupac)
+        main_graph = _glycan_graph(iupac)
         for part, parents, linkage in floating_specs:
             alternatives = []
             for pid in parents:
@@ -874,7 +874,7 @@ def get_mono(token: str # WURCS monosaccharide token
         if not mono:
             raise ValueError(
                 f"WURCS monosaccharide token '{token}' is not supported yet, so this WURCS string cannot be converted to IUPAC-condensed; please report the token as an issue at https://github.com/BojarLab/glycowork/issues.")
-    mono = ''.join(f"{b.replace('-', ',')}-Anhydro-" for b in bridges) + mono
+    mono = ''.join(f"{b.replace('-', ',')}-Anhydro-" for b in bridges) + multireplace(mono, COMMON_ENANTIOMER)  # a default enantiomer goes unstated (All, not L-All), as in canonicalize_iupac
     mono += anomer if anomer and anomer in ['a', 'b'] else '?'
     return mono
 
@@ -1692,6 +1692,14 @@ def nglycan_stub_to_iupac(nglycan_stub: str # Glycan in a N-glycan stub format
     return f"{parts}{nglycan_stub}"
 
 
+@lru_cache(maxsize = 4096)
+def _kcf_default_l(name: str # Residue name without D-/L-
+                   ) -> bool: # Whether glycowork reads this name as L
+    "KEGG states every L (LFuc) and means D by a bare name, so its Fuc is D-Fuc; heptoses such as DLGlcHep carry their configuration in the name"
+    from glycowork.motif.smiles import ENANTIOMER  # smiles.py is built on graph.py, which imports this module
+    return bool(re.match(rf"(?:{'|'.join(sorted((k for k, v in ENANTIOMER.items() if v == 'L' and not re.match('[DL][DL]', k)), key = len, reverse = True))})f?(?![a-z])", name))
+
+
 def kcf_to_iupac(kcf_string: str # Glycan sequence in KCF format
                  ) -> str: # IUPAC-condensed format glycan sequence
     """Convert KCF format glycan sequence to IUPAC-condensed format"""
@@ -1712,23 +1720,31 @@ def kcf_to_iupac(kcf_string: str # Glycan sequence in KCF format
             continue
         if section == 'NODE' and len(nodes) < node_count:
             parts = line.split()
-            node_id = int(parts[0])
-            monosaccharide = re.sub(r'^([DL])(?=[A-Z][a-z])', r'\1-', parts[1][0].upper() + parts[1][
-                1:])  # capitalize() would turn GlcA, IdoA, Neu5Gc into Glca (Glc-alpha), Idoa, Neu5gc; KEGG's LFuc and LIdoA to L-Fuc and L-IdoA
-            nodes[node_id] = monosaccharide
+            l_form, anhydro, name = re.fullmatch(r'(L(?=[A-Z][a-z]|\d))?(\d,\d-Anhydro-)?(.*)', multireplace(parts[1], _KCF_NAMES).removeprefix('D/L')).groups()  # L3,6-Anhydro-Gal; an open configuration is the default one
+            name = f"{anhydro or ''}{('' if l_form else 'D-') if _kcf_default_l(name) else 'L-' if l_form else ''}{name}"
+            nodes[int(parts[0])] = re.sub(r'^D(?=[A-Z][a-z]|\d)', 'D-', name if name.startswith(('dHex', 'nHep')) else name[0].upper() + name[1:])  # capitalize() would turn GlcA, IdoA, Neu5Gc into Glca (Glc-alpha), Idoa, Neu5gc
         elif section == 'EDGE' and len(edges) < edge_count:
             parts = line.split()
-            donor_info = parts[1]
-            acceptor_info = parts[2]
-            donor_parts = donor_info.split(':')
-            donor_node = int(donor_parts[0])
-            linkage_info = donor_parts[1] if len(donor_parts) > 1 else ''
-            anomeric = linkage_info[0] if linkage_info else '?'
-            donor_carbon = linkage_info[1:] if len(linkage_info) > 1 else '?'
-            acceptor_parts = acceptor_info.split(':')
-            acceptor_node = int(acceptor_parts[0])
-            acceptor_carbon = acceptor_parts[1] if len(acceptor_parts) > 1 and acceptor_parts[1] else '?'
-            edges.append({'donor': donor_node, 'acceptor': acceptor_node, 'anomeric': anomeric, 'donor_carbon': donor_carbon, 'acceptor_carbon': acceptor_carbon})
+            donor_node, _, linkage_info = parts[1].partition(':')
+            acceptor_node, _, acceptor_carbon = parts[2].partition(':')
+            anomeric, donor_carbon = re.fullmatch(r'([ab?]?)(.*)', linkage_info).groups()  # 2:b1, or 2:1 with an unknown anomer
+            edges.append({'donor': int(donor_node), 'acceptor': int(acceptor_node), 'anomeric': anomeric, 'donor_carbon': donor_carbon or '?',
+                          'acceptor_carbon': re.sub(r'^[ab?](?=\d)', '', acceptor_carbon) or '?'})  # sucrose states the anomer of both residues, 1:b2 2:a1
+    for edge in edges:
+        if not edge['anomeric'] and edge['acceptor_carbon'] == '?' and edge['donor_carbon'] != '?' and re.fullmatch(_MOD_NAMES, nodes[edge['acceptor']]):  # a residue pointing at its substituent (4:2 3), which KEGG also writes the other way round (3 4:2)
+            edge.update(donor = edge['acceptor'], acceptor = edge['donor'], donor_carbon = '?', acceptor_carbon = edge['donor_carbon'])
+    for edge in [e for e in edges if nodes[e['donor']] == 'Protein']:  # the protein on the ethanolamine of a GPI anchor
+        del nodes[edge['donor']]
+        edges.remove(edge)
+    for edge in [e for e in edges if nodes[e['donor']] == 'EtN' and nodes[e['acceptor']] == 'P']:  # a phosphate that carries an ethanolamine is PEtN
+        nodes[edge['acceptor']] = 'PEtN'
+        del nodes[edge['donor']]
+        edges.remove(edge)
+    aglycone = []
+    for edge in [e for e in edges if nodes[e['acceptor']] in ('Asn', 'Ser', 'Thr', 'Cer', 'Ser/Thr', 'Protein', 'PP-Dol', 'PP-Und')]:  # no residue of the glycan, whichever atom KEGG links it through; canonicalize_iupac only keeps the first four
+        carrier = nodes.pop(edge['acceptor'], '')
+        aglycone += [f"1{carrier}"] if carrier in ('Asn', 'Ser', 'Thr', 'Cer') else []
+        edges.remove(edge)
     children = {node_id: [] for node_id in nodes}
     for edge in edges:
         children[edge['acceptor']].append(edge)
@@ -1737,12 +1753,84 @@ def kcf_to_iupac(kcf_string: str # Glycan sequence in KCF format
 
     def build_iupac(node_id: int):
         subs = [e for e in children[node_id] if re.fullmatch(_MOD_NAMES, nodes[e['donor']]) and not children[e['donor']]]  # KEGG writes substituents (S, P, Me, Ac) as their own nodes
-        monosaccharide = nodes[node_id] + ''.join(f"{'O' if e['acceptor_carbon'] == '?' else e['acceptor_carbon']}{nodes[e['donor']]}" for e in subs)
+        stem, form = re.fullmatch(r'(.*?)(-[a-z]+)?', nodes[node_id]).groups()
+        core, *written = re.split(r'(?=\d[A-Z])', stem)
+        mods = written + (aglycone if node_id == reducing_end else []) + [f"{'O' if e['acceptor_carbon'] == '?' else e['acceptor_carbon']}{nodes[e['donor']]}" for e in subs]
+        monosaccharide = core + ''.join(sorted(mods, key = lambda m: m[0] if m[0].isdigit() else ':') if len(mods) > len(written) or core == 'Neu' else mods) + (form or '')  # by position, also where KEGG leads with the N-acyl of a sialic acid (Neu5Gc4Ac)
         node_children = sorted((e for e in children[node_id] if e not in subs), key = lambda e: int(e['acceptor_carbon']) if e['acceptor_carbon'].isdigit() else -1, reverse = True)
-        child_strings = [f"{build_iupac(e['donor'])}({e['anomeric']}{e['donor_carbon']}-{e['acceptor_carbon']})" for e in node_children]
+        child_strings = [f"{build_iupac(e['donor'])}({e['anomeric'] or ('?' if e['donor_carbon'] in ('1', '2', '?') and not nodes[e['donor']].endswith('-ol') else '')}{e['donor_carbon']}-{e['acceptor_carbon']})" for e in node_children]
         return (child_strings[0] if child_strings else '') + ''.join(f'[{c}]' for c in child_strings[1:]) + monosaccharide
 
     return build_iupac(reducing_end)
+
+
+def glycan_to_kcf(glycan: str, # Glycan in IUPAC-condensed format
+                  entry: str = 'glycowork' # Name on the ENTRY line, which has to differ between the glycans of one file
+                  ) -> str: # Glycan in KCF as KEGG GLYCAN writes it, with node 1 at the reducing end
+    "Convert glycan from IUPAC-condensed to KCF (KEGG Chemical Function format), e.g., for KEGG's KCaM search or the RINGS tools"
+    from glycowork.motif.graph import _glycan_graph
+    if '{' in glycan or glycan.startswith('['):
+        raise ValueError(f"'{glycan}' has floating parts or is a repeating unit, which KCF cannot write.")
+    graph = _glycan_graph(glycan)
+    labels = {n: d['string_labels'] for n, d in graph.nodes.items()}
+    nodes = []  # (name, parent, donor, acceptor), in the order KEGG numbers them: breadth-first from the reducing end, substituents first, higher positions first
+    queue = [(max(graph.nodes), None, '', '?')]  # the reducing end is the highest node, and edges run from parent via linkage to child
+
+    def rank(acceptor: str) -> int:
+        return max((int(p) for p in re.findall(r'\d+', acceptor)), default = 0)
+
+    while queue:
+        node, parent, donor, acceptor = queue.pop(0)
+        label = labels[node]
+        if parent is None and (aglycone := re.search(r'(?<=[A-Za-z])1(Ser|Thr|Asn|Cer)', label)):  # its anomer stays open, as glycowork does not hold one
+            label = label[:aglycone.start()] + label[aglycone.end():]
+            nodes.append((aglycone.group(1), None, '', '?'))
+            parent, donor, acceptor = 0, '1', '1' if aglycone.group(1) == 'Cer' else '?'  # KEGG's Cer has a position, its amino acids none
+        links = []
+        for linkage in graph.succ[node]:
+            if not (link := re.fullmatch(r'([ab]?)\??([\d?]*)-([\d?/]+)', labels[linkage])):
+                raise ValueError(f"'{labels[linkage]}' in '{glycan}' is not a linkage KCF can write.")
+            links.append((link.group(3), link.group(1) + link.group(2).replace('?', ''), graph.succ[linkage][0]))
+        linked = {donor.lstrip('ab')} | {p for acc, _, _ in links for p in acc.split('/')}
+        subs = [m for m in re.finditer(r'([\dO])(PEtN|S|P)(?![A-Za-z])', label) if m.group(1) not in linked]  # KEGG's own nodes, except on a linked position: a phosphodiester stays with its residue (GlcNAc1P(a1-6)Man)
+        name = ''.join(label[start:end] for start, end in zip([0] + [m.end() for m in subs], [m.start() for m in subs] + [len(label)]))
+        anhydro, dl, rest = re.fullmatch(r'(\d,\d-Anhydro-)?(?:([DL])-)?(.*)', name).groups()
+        if anhydro and dl == 'D' and not _kcf_default_l(rest):  # 2,5-Anhydro-D-Tal, which KEGG has no spelling for, stays as it is
+            dl, rest = None, f"D-{rest}"
+        prefix = ('' if _kcf_default_l(rest) else 'D') if dl == 'D' else 'L' if dl == 'L' or _kcf_default_l(rest) else ''
+        rest = re.sub(r'(?<=\d)Fo(?![a-z])', 'Formyl', re.sub(r'^(Neu)(.*?)(5[AG]c)', r'\1\3\2', rest))
+        rest = re.sub(r'^Oli(?=\d)', '2,6daraHex', re.sub(r'^Dig(?=\d(?:Ac|Me))', '2,6dribHex', rest))
+        name = {'L-4dThrHexA4en': 'L4-en-thrHexA', 'Dig3Me': 'Cym', 'Ins': 'Ino'}.get(name, f"{prefix}{anhydro or ''}{rest}")
+        this = len(nodes)
+        nodes.append((name, parent, donor, acceptor))
+        for m in sorted(subs, key = lambda m: rank(m.group(1)), reverse = True):
+            nodes.append(('P' if m.group(2) == 'PEtN' else m.group(2), this, '', '?' if m.group(1) == 'O' else m.group(1)))
+            if m.group(2) == 'PEtN':
+                nodes.append(('EtN', len(nodes) - 1, '', '?'))
+        queue += [(child, this, d, acc) for acc, d, child in sorted(links, key = lambda k: rank(k[0]), reverse = True)]
+    depths, kids = [], [[] for _ in nodes]
+    for i, (_, parent, _, acceptor) in enumerate(nodes):
+        depths.append(0 if parent is None else depths[parent] + 1)
+        if parent is not None:
+            kids[parent].append((-rank(acceptor), i))
+    rows, leaves = [0.0] * len(nodes), [0]
+
+    def place(i: int) -> None:
+        "Lays out a subtree from the top down: one row per leaf, each parent centered on its branches, higher positions on top, as in KEGG"
+        if not kids[i]:
+            rows[i] = -8.0 * leaves[0]
+            leaves[0] += 1
+            return
+        order = [k for _, k in sorted(kids[i])]
+        for k in order:
+            place(k)
+        rows[i] = (rows[order[0]] + rows[order[-1]]) / 2
+
+    place(0)
+    width, shift = max(len(n[0]) for n in nodes) + 2, (max(rows) + min(rows)) / 2
+    node_lines = [f"{'':12}{i + 1:<4}{n[0]:<{width}}{(max(depths) / 2 - depths[i]) * 8:>6g}{rows[i] - shift:>6g}" for i, n in enumerate(nodes)]
+    edge_lines = [f"{'':12}{i:<6}{str(i + 1) + (':' + n[2] if n[2] else ''):<8}{n[1] + 1}{':' + n[3] if n[3] != '?' else ''}" for i, n in enumerate(nodes) if i]
+    return '\n'.join([f"ENTRY       {entry:<28}Glycan", f"NODE        {len(nodes)}", *node_lines, f"EDGE        {len(nodes) - 1}", *edge_lines, '///'])
 
 
 def check_nomenclature(glycan: str # Glycan string to check
@@ -2175,23 +2263,22 @@ def _canonicalize_iupac(glycan: str | int  # Glycan sequence in any supported fo
         raise ValueError(f"Mismatching brackets in formatted glycan string: {glycan}")
     # Canonicalize branch ordering
     if '[' in glycan and not glycan.startswith('[') and ']' in glycan and not repeat:
-        from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string
+        from glycowork.motif.graph import _glycan_graph, graph_to_string
         if '^' not in glycan:
-            g = glycan_to_nxGraph.__wrapped__(glycan).copy()  # a copy, since the graph can come straight out of glycan_to_nxGraph_int's cache
-            clash = False
+            g, clash = _glycan_graph.__wrapped__(glycan), {}
             for n in g:  # one acceptor position takes one child; sanitize_iupac only sees a branch next to its main chain, so sibling branches that only meet after reordering are caught here, else a second pass would make them uncertain
-                pos = [(c, g.nodes[c]['string_labels'].rpartition('-')) for c in g.successors(n)]
+                pos = [(c, g.nodes[c]['string_labels'].rpartition('-')) for c in g.succ[n]]
                 for c, (donor, _, acc) in pos:
                     if acc.isdigit() and sum(a == acc for _, (_, _, a) in pos) > 1:
-                        g.nodes[c]['string_labels'], clash = f"{donor}-?", True
-            glycan = graph_to_string(g) if not clash else graph_to_string(glycan_to_nxGraph.__wrapped__(multireplace(_sia_onto_neu(graph_to_string(g)), _POST_PROCESS)))  # a sialic acid made uncertain here takes the a2-3/6 (a2-8 on Neu) default a second pass would give it, and may then sort elsewhere
+                        clash[c] = f"{donor}-?"
+            glycan = graph_to_string(g) if not clash else graph_to_string(_glycan_graph.__wrapped__(multireplace(_sia_onto_neu(graph_to_string(g.with_attr('string_labels', clash))), _POST_PROCESS)))  # a sialic acid made uncertain here takes the a2-3/6 (a2-8 on Neu) default a second pass would give it, and may then sort elsewhere
         elif (cut := glycan.rfind('}') + 1) and '[' in glycan[cut:]:
-            glycan = glycan[:cut] + graph_to_string(glycan_to_nxGraph.__wrapped__(glycan[cut:]))
+            glycan = glycan[:cut] + graph_to_string(_glycan_graph.__wrapped__(glycan[cut:]))
     if '{' in glycan:
         if '^' in glycan:
-            from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string
+            from glycowork.motif.graph import _glycan_graph, graph_to_string
             for bit in [b for b in re.findall(r'\{.*?\}', glycan) if '^' in b]:
-                alts = sorted((graph_to_string(glycan_to_nxGraph.__wrapped__(a)) for a in bit[1:-1].split('|')),
+                alts = sorted((graph_to_string(_glycan_graph.__wrapped__(a)) for a in bit[1:-1].split('|')),
                               key = lambda a: (not (p := re.search(r'\^\([ab?][12]-([\d?/]+)\)', a).group(1)).isdigit(),
                                                int(p) if p.isdigit() else 99, a))
                 glycan = glycan.replace(bit, '{' + '|'.join(alts) + '}')

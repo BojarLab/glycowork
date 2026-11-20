@@ -1,25 +1,28 @@
 from __future__ import annotations
 from pathlib import Path
-from glycowork.glycan_data.loader import unwrap, resolve_motif_name, lib, pd
+from glycowork.glycan_data.loader import unwrap, resolve_motif_name, lib, pd, nx
 from glycowork.motif.regex import get_match
-from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, graph_to_string, resolve_anchor
+from glycowork.motif.graph import subgraph_isomorphism, graph_to_string, resolve_anchor, GlycanGraph, _glycan_graph, _slim, _component, _for_vf2, _label_match, _ANY_ORDER
 from glycowork.motif.tokenization import get_core, get_modification, SIALIC_KEYS
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit, is_composition, canonicalize_composition, _COMP_ORDER, PDB_TO_IUPAC
 import copy
 import os
+import sys
 import warnings
 import html
 import base64
 import hashlib
 from io import BytesIO
 from typing import Any
-import networkx as nx
 from glycorender import svgdraw as draw
 import numpy as np
 import struct
 import re
 from math import sin, cos, radians, sqrt, atan, degrees
+import viscose as vc
 
+# Aura unless the user chose another palette with viscose.set_palette, before or after importing this
+vc.default_palette('aura')
 
 # Adjusted SNFG color palette
 col_dict_base = {
@@ -351,7 +354,7 @@ def draw_shape(
         drawing.append(p)
     elif shape == 'dHex':
         # Deoxyhexose - triangle
-        drawing.append(draw.Lines(x_base- half_dim, y_base+inside_hex_dim,  # -(dim*1/3)
+        drawing.append(draw.Lines(x_base - half_dim, y_base+inside_hex_dim,  # -(dim*1/3)
                                   x_base, y_base-inside_hex_dim,
                                   x_base+half_dim, y_base+inside_hex_dim,
                                   close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = stroke_w))
@@ -527,7 +530,7 @@ def add_bond(
         length = ((x_stop - x_start) ** 2 + (y_stop - y_start) ** 2) ** 0.5
         segment = length / (2 * max(3, round(length / (0.4 * dim))))
     p = draw.Path(stroke_width = final_width, stroke = col_dict['snfg_red'] if color_highlight else col_dict['black'],
-                  class_ = 'snfg-linkage',
+                  class_ = 'snfg-linkage', stroke_linecap = 'round',
                   **({'stroke_dasharray': f"{segment},{segment}"} if dashed else {}))
     p.M(x_start, y_start).L(x_stop, y_stop)
     drawing.append(p)
@@ -680,37 +683,39 @@ def process_bonds(
 
 
 def get_highlight_attribute(
-        glycan_graph: nx.DiGraph, # NetworkX glycan graph
+        glycan_graph: GlycanGraph | nx.DiGraph, # Glycan graph; a networkx graph gets the attribute in place
         motif_string: str, # Motif to highlight
         termini_list: list = [], # Terminal position specifications
         reverse_highlight: bool = False # Whether to highlight everything EXCEPT highlight_motif
-) -> nx.DiGraph: # Graph with highlight attributes
+) -> GlycanGraph | nx.DiGraph: # Graph with highlight attributes
     "Labels nodes in glycan graph based on presence in specified motif"
     if motif_string:
-        motif = glycan_to_nxGraph(motif_string, termini = 'provided' if termini_list else None, termini_list = termini_list)
-        _, mappings = subgraph_isomorphism(glycan_graph, motif, termini_list = termini_list, return_matches = True)
+        motif = _glycan_graph(motif_string, termini = 'provided' if termini_list else None, termini_list = termini_list)
+        _, mappings = subgraph_isomorphism(glycan_graph, motif, termini_list = termini_list, return_matches = _ANY_ORDER)
         matched = set(unwrap(mappings))
         if not matched:
             warnings.warn(
                 f"highlight_motif '{motif_string}' does not occur in {graph_to_string(glycan_graph)}, so nothing is highlighted.")
         in_label, out_label = ('hide', 'show') if reverse_highlight else ('show', 'hide')
-        mapping_show = {node: in_label if node in matched else out_label for node in glycan_graph.nodes()}
+        mapping_show = {node: in_label if node in matched else out_label for node in glycan_graph}
     else:
-        mapping_show = {node: 'show' for node in glycan_graph.nodes()}
+        mapping_show = {node: 'show' for node in glycan_graph}
+    if isinstance(glycan_graph, GlycanGraph):
+        return glycan_graph.with_attr('highlight_labels', mapping_show)
     nx.set_node_attributes(glycan_graph, dict(sorted(mapping_show.items())), 'highlight_labels')
     return glycan_graph
 
 
-def get_branches_from_graph(graph: nx.DiGraph, main_chain: list, main_chain_sugars: list):
+def get_branches_from_graph(graph: GlycanGraph | nx.DiGraph, main_chain: list, main_chain_sugars: list):
     """Extract branch structures based on paths to lowest node index tips"""
-    main_chain_set = set(main_chain)
+    graph, main_chain_set = _slim(graph), set(main_chain)
     all_nodes = main_chain_set.copy()
     main_chain_sugars = sorted(main_chain_sugars, reverse = True)
 
     def add_branch(branch_list: list, start_node: int, connection: tuple):
         # A branch always follows the lowest node index at a fork
         path = [start_node]
-        while successors := [n for n in graph.successors(path[-1]) if n not in all_nodes]:
+        while successors := [n for n in graph.succ[path[-1]] if n not in all_nodes]:
             path.append(min(successors))
         branch_list.append({'nodes': path, 'sugar_nodes': sorted([n for n in path if n % 2 == 0], reverse = True),
                             'connection': connection})
@@ -720,16 +725,16 @@ def get_branches_from_graph(graph: nx.DiGraph, main_chain: list, main_chain_suga
         level = []
         for i, branch in enumerate(parent_level):
             for j, node in enumerate(branch['sugar_nodes']):
-                if graph.out_degree(node) > 1:
-                    for succ in sorted(graph.successors(node)):
+                if len(graph.succ[node]) > 1:
+                    for succ in sorted(graph.succ[node]):
                         if succ not in all_nodes:
                             add_branch(level, succ, (i, j))
         return level
 
     first_level = []
     for node in main_chain:
-        if node % 2 == 0 and graph.out_degree(node) > 1:  # Sugar with branches
-            for succ in sorted(graph.successors(node)):
+        if node % 2 == 0 and len(graph.succ[node]) > 1:  # Sugar with branches
+            for succ in sorted(graph.succ[node]):
                 if succ not in all_nodes:
                     add_branch(first_level, succ, (0, main_chain_sugars.index(node)))
     levels = [first_level]
@@ -746,10 +751,9 @@ def get_coordinates_and_labels(
         reverse_highlight: bool = False # Whether to highlight everything EXCEPT highlight_motif
 ) -> list[list]: # Drawing coordinates and labels (monosaccharide label, x position, y position, modification, bond, conformation)
     "Calculates drawing coordinates and formats labels for glycan visualization"
-    graph = glycan_to_nxGraph(draw_this, termini = 'calc' if termini_list else 'ignore').copy()
+    graph = _glycan_graph(draw_this, termini = 'calc' if termini_list else 'ignore')
     graph = get_highlight_attribute(graph, highlight_motif, termini_list = termini_list, reverse_highlight = reverse_highlight)
-    node_values = list(nx.get_node_attributes(graph, 'string_labels').values())
-    highlight_values = list(nx.get_node_attributes(graph, 'highlight_labels').values())
+    node_values, highlight_values = [d['string_labels'] for d in graph.nodes.values()], [d['highlight_labels'] for d in graph.nodes.values()]
     parsed_sugars = {}
     for idx, raw_label in enumerate(node_values):
         if idx % 2:
@@ -782,16 +786,26 @@ def get_coordinates_and_labels(
             modification_text = f"{match.group(1)}Subst" if match else (
                 modification_text if ('Subst' in modification_text or normalized_label != 'Unknown') else '')
         parsed_sugars[idx] = (normalized_label, ('!' + modification_text) if negated else modification_text)
-    root = max(graph.nodes())
-    leaves = [n for n in graph.nodes() if graph.out_degree(n) == 0 and n != root] if len(graph) > 1 else [0]
-    main_chain = nx.shortest_path(graph.reverse(copy = False), leaves[0], root) if leaves else []
+    root = max(graph.nodes)
+    # A Y/Z marker stands where its lost residue sat, so one that replaced a Fuc (as good as the only residue on GlcNAc a1-3, a1-4 or a1-6, alternatives such as a1-3/4 included, and on Gal a1-2) is laid out as that Fuc and gets its own label back at the end
+    lost_fuc = {}
+    for n, (label, mod) in list(parsed_sugars.items()):
+        if label in {'Y', 'Z'} and n != root:
+            bond = next(iter(graph.pred[n]))
+            parent = parsed_sugars[next(iter(graph.pred[bond]))][0]
+            if (parent == 'GlcNAc' and re.fullmatch(r'a1-[346](?:/[346])*', node_values[bond])) or (parent == 'Gal' and node_values[bond] == 'a1-2'):
+                lost_fuc[n], parsed_sugars[n] = label, ('Fuc', mod)
+    leaves = [n for n in graph if not graph.succ[n] and n != root] if len(graph) > 1 else [0]
+    main_chain = leaves[:1]
+    while main_chain and main_chain[-1] != root:
+        main_chain.append(graph.pred[main_chain[-1]][0])
     # A bisected N-glycan core is laid out from its a1-3 arm as the chain, which puts the bisecting GlcNAc in line and the a1-6 arm above; a sequence written along the a1-6 arm stacked the a1-3 arm and the bisecting GlcNAc above it instead, so the chain is rerouted into the a1-3 arm
     for i in range(2, len(main_chain) - 1, 2):
-        kids = {node_values[e]: next(iter(graph.successors(e))) for e in graph.successors(main_chain[i])}
+        kids = {node_values[e]: next(iter(graph.succ[e])) for e in graph.succ[main_chain[i]]}
         if (parsed_sugars[main_chain[i]][0] == 'Man' and node_values[main_chain[i + 1]] == 'b1-4' and node_values[main_chain[i - 1]] == 'a1-6'
                 and parsed_sugars.get(kids.get('b1-4'), ('',))[0] == 'GlcNAc' and parsed_sugars.get(kids.get('a1-3'), ('',))[0] == 'Man'):
-            path = [next(e for e in graph.successors(main_chain[i]) if node_values[e] == 'a1-3')]
-            while successors := list(graph.successors(path[-1])):
+            path = [next(e for e in graph.succ[main_chain[i]] if node_values[e] == 'a1-3')]
+            while successors := graph.succ[path[-1]]:
                 path.append(min(successors))
             main_chain = path[::-1] + main_chain[i:]
             break
@@ -1074,6 +1088,9 @@ def get_coordinates_and_labels(
     for lane, branches in enumerate(branch_levels, start = 1):
         for b, branch in enumerate(branches):
             node_positions.update({n: (lane, b, i) for i, n in enumerate(branch['sugar_nodes'])})
+    for n, label in lost_fuc.items():
+        lane, b, i = node_positions[n]
+        (main_sugar if not lane else lv_sugar[lane - 1][b])[i] = label
     data_combined = [[main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf,
                       main_sugar_highlight, main_bond_highlight]] + [
                         [lv_sugar[i], lv_x_pos[i], lv_y_pos[i], lv_sugar_modification[i], lv_bond[i], lv_connection[i],
@@ -1109,6 +1126,8 @@ def draw_bracket(
 
 def is_jupyter() -> bool:
     "Detects if code is running in Jupyter notebook environment"
+    if 'IPython' not in sys.modules:  # a kernel has always loaded it, and importing it here costs a script about 2 seconds
+        return False
     try:
         from IPython import get_ipython
         return 'IPKernelApp' in get_ipython().config  # Check if in IPython kernel
@@ -1134,34 +1153,76 @@ def _margin(dim: float, # Base dimension for scaling
     return dim * (0.45 if sticker else 0.35 if shadow else 0.2)
 
 
+# The dark state of pages with a theme switch of their own, which an interactive figure inline in them follows: a Quarto site (glycowork's docs), JupyterLab, and VS Code
+DARK_PAGES = 'body.quarto-dark, body[data-jp-theme-light="false"], body.vscode-dark'
+
+
+def subplots(*args: Any,  # nrows and ncols, as in viscose.subplots
+             figsize: tuple[float, float] = (6.4, 4.8),  # Figure size in inches
+             **kwargs: Any  # Passed on to viscose.subplots
+             ) -> tuple:  # (figure, axes)
+    "viscose.subplots at the size glycowork's figures have always had"
+    return vc.subplots(*args, figsize = figsize, **kwargs)
+
+
+def finish(fig: vc.Figure,  # The finished figure
+           filepath: str | Path = '',  # Path to save it to (.png, .pdf, or .svg)
+           interactive: bool = False  # An SVG file, and the figure inline in a notebook, answer the mouse: hover text, and everything of the same name lit up across panels and figures
+           ) -> None:
+    "Saves a figure if given a path, and shows it inline wherever that works; only an unsaved figure may open the system's image viewer, or a script saving many figures opens a window for each"
+    if filepath:
+        fig.save(filepath, interactive = interactive and Path(filepath).suffix.lower() == '.svg')
+    if interactive and is_jupyter():
+        from IPython.display import display
+        # Both themes in one SVG: the static one, which nbdev's README and other Markdown renderers take, follows its reader's light or dark mode, the interactive one the notebook's or the docs site's own theme switch
+        live = fig.to_svg(themes = True, interactive = True, dark_when = DARK_PAGES).replace('<svg ', '<svg style="max-width:100%;height:auto" ', 1)
+        display({'image/svg+xml': fig.to_svg(themes = True), 'text/html': live}, raw = True)
+    else:
+        fig.show(viewer = not filepath)
+
+
+def _compact_glyph(label: str,  # A label in a figure
+                   vertical: bool  # Whether the drawing runs up the page
+                   ) -> Any:  # Its compact SNFG drawing, or None to keep the label as text
+    "viscose's glyphs = 'glycan_compact': as its built-in 'glycan', in GlycoDraw's compact style"
+    try:
+        return GlycoDraw(label, vertical = vertical, compact = True, suppress = True, restrict_vocab = True)
+    except Exception:
+        return None
+
+
+vc.register_glyphs('glycan_compact', _compact_glyph)
+
+
+def check_kwargs(kwargs: dict[str, Any],  # Extra keyword arguments a function received
+                 func: str,  # The function's name
+                 allowed: tuple[str, ...]  # What it passes on to viscose
+                 ) -> None:
+    "Stops extra keyword arguments that viscose would not understand, with a message naming the ones it would"
+    if unknown := sorted(set(kwargs) - set(allowed)):
+        raise TypeError(f"{func} got {', '.join(map(repr, unknown))}; its extra keyword arguments go to viscose, which takes {', '.join(allowed)}.")
+
+
 def display_svg_with_matplotlib(
         svg_data: Any, # SVG drawing object
         chem: bool = False, # Whether svg_data comes from RDKit chemical
         shadow: bool = False,  # Draw a soft drop shadow under the monosaccharide symbols
         sticker: bool = False  # Cut the whole structure out as a die-cut sticker
 ) -> None:
-    "Renders SVG using matplotlib for non-Jupyter environments"
+    "Renders SVG to a PNG for non-Jupyter environments, shown in the system's image viewer from a terminal and skipped where nothing can show it"
     _, convert_svg_to_png = _get_glycorender()
-    import matplotlib.pyplot as plt
     # Get original SVG dimensions and scale them up
     width, height = getattr(svg_data, 'width', 800), getattr(svg_data, 'height', 800)
     svg_data = svg_data if isinstance(svg_data, str) else svg_data.as_svg()
     # Convert to PNG with larger dimensions
-    png_output = convert_svg_to_png(svg_data, output_width = width, background = (1.0, 1.0, 1.0), shadow = shadow,
-                                    sticker = sticker, output_height = height, scale = 2.0, return_bytes = True, chem = chem)
-    img = plt.imread(BytesIO(png_output), format = 'png')
-    dpi = plt.rcParams['figure.dpi']
-    fig = plt.figure(figsize = (img.shape[1] / dpi, img.shape[0] / dpi))
-    plt.imshow(img)
-    plt.axis('off')
-    plt.show()
-    plt.close(fig)
+    vc.show_png(lambda: convert_svg_to_png(svg_data, output_width = width, background = (1.0, 1.0, 1.0), shadow = shadow, sticker = sticker,
+                                           output_height = height, scale = 2.0, return_bytes = True, chem = chem))
 
 
-def _written_positions(graph: nx.DiGraph # Glycan graph from glycan_to_nxGraph
+def _written_positions(graph: GlycanGraph # Glycan graph from _glycan_graph
                        ) -> dict[int, int]: # Node: its position in the sequence as written
     "glycan_to_nxGraph numbers the main part from 0 and the floating parts after it, although they are written before it"
-    main = nx.node_connected_component(graph.to_undirected(as_view = True), 0)
+    main = _component(graph, 0)
     return {n: i for i, n in enumerate(sorted(graph, key = lambda n: (n in main, n)))}
 
 
@@ -1169,9 +1230,8 @@ def _drawn_from(draw_this: str, # reordered IUPAC-condensed glycan sequence
                 glycan: str # original IUPAC-condensed glycan sequence
                 ) -> list[int]: # Per residue of draw_this, in written order, its index in glycan
     "Matches the reordered residues to the original ones by exact label, as compare_glycans would let b1-? stand in for b1-2"
-    g1, g2 = glycan_to_nxGraph(glycan), glycan_to_nxGraph(draw_this)
-    mappy = next(nx.isomorphism.DiGraphMatcher(g2, g1, node_match = nx.isomorphism.categorical_node_match(
-        'string_labels', None)).isomorphisms_iter())
+    g1, g2 = _glycan_graph(glycan), _glycan_graph(draw_this)
+    mappy = next(nx.isomorphism.DiGraphMatcher(_for_vf2(g2), _for_vf2(g1), node_match = _label_match).isomorphisms_iter())
     pos1, at2 = _written_positions(g1), {i: n for n, i in _written_positions(g2).items()}
     return [pos1[mappy[at2[i]]] // 2 for i in range(0, len(g2), 2)]
 
@@ -1182,7 +1242,7 @@ def process_per_residue(
         glycan: str, # original IUPAC-condensed glycan sequence
 ) -> dict[int, float]: # Value per sugar node of the drawn sequence
     "Maps per-residue scalar values onto the sugar nodes of the drawn sequence"
-    n_residues = (len(glycan_to_nxGraph(draw_this)) + 1) // 2
+    n_residues = (len(_glycan_graph(draw_this)) + 1) // 2
     if n_residues != len(per_residue):
         raise ValueError(
             f"per_residue has {len(per_residue)} values but {glycan} has {n_residues} monosaccharides to color")
@@ -1197,7 +1257,7 @@ def process_per_linkage(
         glycan: str, # original IUPAC-condensed glycan sequence
 ) -> dict[int, bool]: # Flag per linkage node of the drawn sequence
     "Maps which linkages to highlight onto the linkage nodes of the drawn sequence"
-    n_linkages = len(glycan_to_nxGraph(glycan)) // 2
+    n_linkages = len(_glycan_graph(glycan)) // 2
     if any(not 0 <= i < n_linkages for i in highlight_linkages):
         raise ValueError(
             f"highlight_linkages {highlight_linkages} has to index the {n_linkages} linkages of {glycan}, starting from 0")
@@ -1244,7 +1304,7 @@ def get_mono_atoms(
         raise ValueError(f"No highlight color for {unknown}; choose from {list(_CHEM_INDEX)}")
     from glycowork.motif.smiles import glycan_to_smiles
     smiles, owners = glycan_to_smiles(draw_this, mapping = True)
-    graph = glycan_to_nxGraph(draw_this)
+    graph = _glycan_graph(draw_this)
     cores = {node: get_core(graph.nodes[node]['string_labels']) for node in set(owners)}
     return smiles, {atom: _CHEM_INDEX[cores[owner]] for atom, owner in enumerate(owners) if cores[owner] in mono_list}
 
@@ -1274,9 +1334,8 @@ def add_colors_to_map(
         hex_codes: bool = True # Return hex color codes
 ) -> None:
     "Adds color assignments to mapping dictionary for chemical structure visualization"
-    from matplotlib.colors import ColorConverter
     color = chem_cols_alpha[col_num] if alpha else chem_cols[col_num]
-    color = color if hex_codes else ColorConverter().to_rgb(color)
+    color = color if hex_codes else tuple(int(color[i:i + 2], 16) / 255 for i in (1, 3, 5))
     for el in els:
         cols.setdefault(el, [])
         if color not in cols[el]: cols[el].append(color)
@@ -1430,7 +1489,8 @@ class GlycanDrawing:
         self.dim = dim
 
     def as_svg(self):
-        data = self.drawing_obj.as_svg()
+        # glycorender joins every shape round, so a browser shows the same tips and corners as the PNG and the PDF
+        data = self.drawing_obj.as_svg().replace('<svg ', '<svg stroke-linejoin="round" ', 1)
         return data.replace('<svg ', f'<svg aria-label="{self.alt_text}" role="img" ', 1) if self.alt_text else data
 
     def as_standalone_svg(self):
@@ -1798,7 +1858,8 @@ def GlycoDraw(
             # a sialic acid of known linkage (Neu5Ac_a2-6, from a linkage-specific derivatization) is its symbol, with the linkage after the count
             base, link = next(((b, f' α2,{k[-1]}') for b, keys in SIALIC_KEYS.items() for k in keys if k == mono), (mono, ''))
             if base in sugar_dict:
-                shape, color, furanose = sugar_dict[base]
+                # a composition's dHex is Fuc in every realistic sample, so it gets Fuc's red triangle
+                shape, color, furanose = sugar_dict['Fuc' if base == 'dHex' else base]
                 draw_shape(shape, color, x_pos = -(cursor + 0.5), y_pos = row, col_dict = col_dict_base, drawing = d, furanose = furanose, dim = dim)
                 cursor += 1.2
             else:
@@ -1832,7 +1893,7 @@ def GlycoDraw(
     cut = glycan.rfind('}') + 1 if '^' in glycan else 0
     # A repeat unit is laid out as written, so that its backbone stays the main chain; reordered by linkage, the chain could run into a branch, with the brackets around a side residue
     draw_this = glycan[:cut] + (glycan[cut:] if glycan[cut:].startswith('[') or (repeat and not repeat_range) else graph_to_string(
-        glycan_to_nxGraph(glycan[cut:]), order_by = "linkage"))
+        _glycan_graph(glycan[cut:]), order_by = "linkage"))
     if per_residue:
         per_residue_by_node = process_per_residue(draw_this, per_residue, glycan)
     if highlight_linkages:
@@ -1840,7 +1901,7 @@ def GlycoDraw(
     if highlight_residues is not None:
         # Mapped like per_residue, with the leading repeat placeholder and the trailing blank as residues that are never highlighted
         shift = 1 if repeat and not repeat_range else 0
-        shown_by_node = process_per_residue(draw_this, [k - shift in highlight_residues for k in range((len(glycan_to_nxGraph(glycan)) + 1) // 2)], glycan)
+        shown_by_node = process_per_residue(draw_this, [k - shift in highlight_residues for k in range((len(_glycan_graph(glycan)) + 1) // 2)], glycan)
     if compact:
         show_linkage = False
     if isinstance(highlight_motif, str):
@@ -1880,12 +1941,12 @@ def GlycoDraw(
         draw_this = draw_this[:openpos-1] + len(draw_this[openpos-1:closepos+1])*'*' + draw_this[closepos+1:]
     draw_this = draw_this.replace('*', '')
     if anchored_bits:  # An anchor matching nothing must not silently delete its residue from the drawing
-        anchor_graph = glycan_to_nxGraph(draw_this)
+        anchor_graph = _glycan_graph(draw_this)
         placeable = [any(resolve_anchor(anchor_graph, anchor) for anchor in bit_anchors.values()) for _, bit_anchors, _ in
                      anchored_bits]
         floaty_bits += [(bit, off) for (bit, _, off), ok in zip(anchored_bits, placeable) if not ok]
         anchored_bits = [entry for entry, ok in zip(anchored_bits, placeable) if ok]
-    if restrict_vocab and not _drawable(draw_this, libr):
+    if restrict_vocab and not _drawable(draw_this, libr = libr):
         if "!" in draw_this:
             draw_this = re.sub(r'\[!.*?\)\]|!.*?\)', '', draw_this)
         else:
@@ -1898,7 +1959,7 @@ def GlycoDraw(
     lv_sugar, lv_x_pos, lv_y_pos, lv_sugar_modification, lv_bond, lv_connection, lv_conf, lv_sugar_label, lv_bond_label = map(
         list, zip(*data[1:-1]))
     if highlight_residues is not None:
-        tree, shown = glycan_to_nxGraph(draw_this), {node for node, flag in shown_by_node.items() if flag}
+        tree, shown = _glycan_graph(draw_this), {node for node, flag in shown_by_node.items() if flag}
 
         def bond_label(child):
             # A drawn residue's linkage stays visible when both of its residues are highlighted, or when it is one of highlight_linkages
@@ -1917,7 +1978,8 @@ def GlycoDraw(
 
     # Calculate angles for main chain Y, Z fragments
     def calculate_degree(y1, y2, x1, x2):
-        return degrees(atan((y1-y2) / (2*(x2-x1))))
+        # A marker tucked into its parent's column, as for a lost Fuc, hangs on a vertical bond
+        return (90 if y1 < y2 else -90) if x1 == x2 else degrees(atan((y1-y2) / (2*(x2-x1))))
 
     main_deg = [calculate_degree(main_sugar_y_pos[k], main_sugar_y_pos[k - 1], main_sugar_x_pos[k], main_sugar_x_pos[k - 1])
         if sugar in {'Z', 'Y'} and k > 0 else 0 for k, sugar in enumerate(main_sugar)]
@@ -1966,7 +2028,7 @@ def GlycoDraw(
         col_dict = col_dict_transparent if main_sugar_label[0] == 'hide' else col_dict_base
         x_base = -label_x * dim * (1.2 if compact else 2)
         y_base = label_y * dim * (0.6 if compact else 1) + 5
-        d.append(draw.Text(reducing_end_label, dim * 0.35, x_base, y_base, text_anchor = 'end', fill = col_dict['black'], dominant_baseline = 'middle'))
+        d.append(draw.Text(reducing_end_label, dim * 0.35, x_base, y_base, text_anchor = 'end', fill = col_dict['black']))
     # Bond main chain
     [add_bond(main_sugar_x_pos[k+1], main_sugar_x_pos[k], main_sugar_y_pos[k + 1], main_sugar_y_pos[k], d, label = main_bond[k], dim = dim, compact = compact, highlight = main_bond_label[k], color_highlight = per_linkage_by_node.get(node_at[(0, 0, k + 1)] + 1, False) if highlight_linkages else False) for k in range(len(main_sugar) - 1)]
     # Bond within each branch, at every branch level; level 1 also connects to the main chain
@@ -2202,58 +2264,257 @@ def plot_glycans_grid(
         grid, shadow = drawing.shadow, sticker = drawing.sticker)
 
 
-def _spread_glycans(placements: list, # (x, y, w, h, anchor_x, anchor_y) per glycan, (x, y) being its natural corner
+def _figure_ink(svg: str, # SVG of a viscose figure, without its glycan labels
+                canvas: tuple # (width, height) of the figure
+                ) -> tuple: # Boxes (left, top, right, bottom) nothing may touch, and (x, y, weight) of what a glycan should rather not hide
+    "Reads what a viscose figure has drawn, in page points, so that glycans can be placed clear of it; a figure from elsewhere has nothing to avoid"
+    blocked, marks = [], []
+    if '<metadata>viscose</metadata>' not in svg:
+        return blocked, marks
+    ch = canvas[1]
+    axes = [[float(v) for v in rect] for rect in re.findall(r'<clipPath[^>]*><rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"', svg)]
+    if len(axes) in (1, 2):  # a single axes: glycans stay level with its plot area, its smallest clip, and to its right, away from ticks and names
+        left, low, _width, high = min(axes, key = lambda rect: rect[2] * rect[3])
+        blocked += [(-1e4, -1e4, left, 1e5), (-1e4, -1e4, 1e5, ch - low - high), (-1e4, ch - low, 1e5, 1e5)]
+    for line in svg.split('\n'):
+        if 'data-right' in line:  # a label left as text
+            at = re.search(r'translate\(([\d.-]+) ([\d.-]+)\)[^>]*data-right="([\d.]+)"', line)
+            if at:
+                blocked.append((float(at.group(1)), float(at.group(2)) - 10.0, float(at.group(3)), float(at.group(2)) + 4.0))
+            continue
+        path = re.search(r'<path d="([^"]*)"', line)
+        if not path:
+            continue
+        xy = np.array(re.findall(r'-?\d*\.?\d+', path.group(1)), dtype = float)
+        xy = xy[:len(xy) // 2 * 2].reshape(-1, 2)
+        if not len(xy):
+            continue
+        matrix = re.search(r'transform="matrix\(([^)]*)\)"', line)
+        if matrix:
+            a, b, c, d, e, f = (float(v) for v in matrix.group(1).split())
+            xy = np.column_stack([a * xy[:, 0] + c * xy[:, 1] + e, b * xy[:, 0] + d * xy[:, 1] + f])
+        x, y = xy[:, 0], ch - xy[:, 1]
+        filled = 'fill="none"' not in line
+        if matrix or (filled and 'stroke=' in line and 'clip-path' not in line):  # text and its halo, or a network's node
+            blocked.append((x.min(), y.min(), x.max(), y.max()))
+        elif filled:  # points of a scatter, flat ones sharing a path, or an arrow's head
+            for part in path.group(1).split('M')[1:]:
+                xy = np.array(re.findall(r'-?\d*\.?\d+', part), dtype = float)
+                marks.append((xy[::2].mean(), ch - xy[1::2].mean(), 12.0))
+        else:  # a line, with a dotted guide weighing little
+            weight = 0.5 if 'stroke-dasharray' in line else 3.0
+            for x0, y0, x1, y1 in zip(x, y, x[1:], y[1:]):
+                k = int(max(abs(x1 - x0), abs(y1 - y0)) // 6) + 1
+                marks += [(x0 + (x1 - x0) * i / k, y0 + (y1 - y0) * i / k, weight) for i in range(k)]
+    return blocked, marks
+
+
+def _spread_glycans(placements: list, # (x, y, w, h, anchor_x, anchor_y) per glycan, (x, y) being the natural corner of its ink
                     canvas: tuple, # (width, height) of the figure
-                    iterations: int = 300, # Relaxation passes
-                    pad: float = 4.0 # Minimum gap to open between boxes
-                    ) -> list: # Settled top-left corners
-    "Nudges overlapping glycan boxes apart while keeping them near their anchors"
-    pos = [[x, y] for x, y, _w, _h, _ax, _ay in placements]
-    n = len(placements)
-    if n < 2:
-        return pos
-    cw, ch = canvas
-    for _ in range(iterations):
-        hot = [False] * n
-        for i in range(n):
-            for j in range(i + 1, n):
-                (xi, yi), (xj, yj) = pos[i], pos[j]
-                wi, hi, wj, hj = placements[i][2], placements[i][3], placements[j][2], placements[j][3]
-                ox = min(xi + wi, xj + wj) - max(xi, xj) + pad
-                oy = min(yi + hi, yj + hj) - max(yi, yj) + pad
-                if ox <= 0 or oy <= 0:
-                    continue
-                hot[i] = hot[j] = True
-                if ox < oy:  # separate along whichever axis needs the smaller push
-                    d = ox / 2.0 * (1 if xi < xj else -1)
-                    pos[i][0] -= d
-                    pos[j][0] += d
-                else:
-                    d = oy / 2.0 * (1 if yi < yj else -1)
-                    pos[i][1] -= d
-                    pos[j][1] += d
-        for i, (x, y, w, h, _ax, _ay) in enumerate(placements):
-            if not hot[i]:  # only drift home once this box has stopped colliding
-                pos[i][0] += (x - pos[i][0]) * 0.05
-                pos[i][1] += (y - pos[i][1]) * 0.05
-            pos[i][0] = max(0.0, min(cw - w, pos[i][0]))
-            pos[i][1] = max(0.0, min(ch - h, pos[i][1]))
-        if not any(hot):
+                    blocked: list = (), # Boxes (left, top, right, bottom) no glycan may touch
+                    marks: list = (), # (x, y, weight) of what a glycan should rather not hide
+                    ports: list | None = None, # (dx, dy, radius) per glycan, from its ink's corner to the symbols a leader may end on; default: its middle
+                    pad: float = 4.0, # Minimum gap around each glycan
+                    step: float = 3.0 # Grid of places tried, in points
+                    ) -> tuple: # Top-left corners of the ink, leaders as (x0, y0, x1, y1) or None, and how many leaders cross another, run through a glycan, or run long
+    "Places each glycan at the free spot nearest its anchor, keeping all clear of each other and of what is blocked, with short leaders that do not cross"
+    P = np.array(placements, dtype = float).reshape(-1, 6)
+    n, (cw, ch) = len(P), canvas
+    ports = [np.array([(w / 2, h / 2, min(w, h) / 2)]) for _x, _y, w, h, _ax, _ay in P] if ports is None else [np.array(q, dtype = float).reshape(-1, 3) for q in ports]
+    pos, ends = P[:, :2].copy(), np.full((n, 2), np.nan)
+    placed = np.zeros(n, dtype = bool)
+    edge = min(2.0, pad)
+    walls = np.array(blocked, dtype = float).reshape(-1, 4)
+    soft = np.array(list(marks) + [(ax, ay, 150.0) for ax, ay in P[:, 4:6]], dtype = float).reshape(-1, 3)
+    grid_w, grid_h = int(cw * 3 / step) + 8, int(ch / step) + 8
+    cover = np.zeros((grid_h + 1, grid_w + 1))
+    inside = (soft[:, 0] >= 0) & (soft[:, 1] >= 0) & (soft[:, 0] < (grid_w - 1) * step) & (soft[:, 1] < (grid_h - 1) * step)
+    np.add.at(cover, ((soft[inside, 1] / step).astype(int) + 1, (soft[inside, 0] / step).astype(int) + 1), soft[inside, 2])
+    cover = cover.cumsum(0).cumsum(1)
+
+    def _hits_box(x0, y0, x1, y1, left, top, right, bottom):
+        "Whether segments run through boxes, all broadcast together"
+        dx, dy = x1 - x0, y1 - y0
+        lo = np.zeros(np.broadcast(dx, dy, left, right).shape)
+        hi, hit = np.ones_like(lo), np.ones_like(lo, dtype = bool)
+        for p, q in ((-dx, x0 - left), (dx, right - x0), (-dy, y0 - top), (dy, bottom - y0)):
+            with np.errstate(divide = 'ignore', invalid = 'ignore'):
+                r = q / p
+            hit &= (p != 0) | (q >= 0)
+            lo, hi = np.where(p < 0, np.maximum(lo, r), lo), np.where(p > 0, np.minimum(hi, r), hi)
+        return hit & (lo <= hi)
+
+    def _crossed(x0, y0, x1, y1, u0, v0, u1, v1):
+        "Whether segments cross each other, all broadcast together"
+        side = lambda ax, ay, bx, by, cx, cy: (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+        return (side(u0, v0, u1, v1, x0, y0) * side(u0, v0, u1, v1, x1, y1) < 0) & (side(x0, y0, x1, y1, u0, v0) * side(x0, y0, x1, y1, u1, v1) < 0)
+
+    def _port(i, xs, ys):
+        "The symbol a leader runs to from the ink at (xs, ys), and how far its edge lies"
+        q = ports[i]
+        cx, cy = xs[:, None] + q[:, 0], ys[:, None] + q[:, 1]
+        gap = np.hypot(cx - P[i, 4], cy - P[i, 5]) - q[:, 2]
+        k, row = gap.argmin(1), np.arange(len(xs))
+        return cx[row, k], cy[row, k], np.maximum(gap[row, k], 0.0)
+
+    def _solid(i, skip = -1):
+        "What the ink of glycan i has to keep clear of"
+        others = np.flatnonzero(placed & (np.arange(n) != i) & (np.arange(n) != skip))
+        boxes = np.column_stack([pos[others], pos[others] + P[others, 2:4]])
+        return others, boxes, np.vstack([boxes, walls])
+
+    def _held(i, X, Y):
+        "What the ink at (X, Y) would hide, leaving out its own anchor, which it may stand right beside"
+        gx0, gx1 = np.clip(((X - 3.0) / step).astype(int) + 1, 0, grid_w), np.clip(((X + P[i, 2] + 3.0) / step).astype(int) + 1, 0, grid_w)
+        gy0, gy1 = np.clip(((Y - 3.0) / step).astype(int) + 1, 0, grid_h), np.clip(((Y + P[i, 3] + 3.0) / step).astype(int) + 1, 0, grid_h)
+        own_x, own_y = int(P[i, 4] / step), int(P[i, 5] / step)
+        near = (gx0 <= own_x) & (own_x < gx1) & (gy0 <= own_y) & (own_y < gy1) if 0 <= P[i, 4] < (grid_w - 1) * step and 0 <= P[i, 5] < (grid_h - 1) * step else False
+        return cover[gy1, gx1] - cover[gy0, gx1] - cover[gy1, gx0] + cover[gy0, gx0] - 150.0 * near
+
+    def _place(i):
+        "The best spot for one glycan, given all others placed so far"
+        x0, y0, w, h, ax, ay = P[i]
+        others, boxes, solid = _solid(i)
+        # glycans keep their gap from each other, and only a sliver from the figure, as a node's glycan stands right beside it
+        gaps = np.where(np.arange(len(solid)) < len(boxes), pad, 1.0)
+        drawn = others[~np.isnan(ends[others, 0])]
+        a0, b0, a1, b1 = P[drawn, 4], P[drawn, 5], ends[drawn, 0], ends[drawn, 1]
+        low_x, high_x, low_y, high_y = np.minimum(a0, a1), np.maximum(a0, a1), np.minimum(b0, b1), np.maximum(b0, b1)
+        px, py = np.delete(P[:, 4], i), np.delete(P[:, 5], i)
+        hi_x, hi_y = max(edge, cw - w - edge), max(edge, ch - h - edge)
+        # Its natural spot, if free, right by its point, and hiding next to nothing, needs no search
+        at_x, at_y = np.array([x0]), np.array([y0])
+        if edge <= x0 <= hi_x and edge <= y0 <= hi_y and _port(i, at_x, at_y)[2][0] < 9.0 and _held(i, at_x, at_y)[0] <= 6.0 and not (
+                (solid[:, 0] - gaps < x0 + w) & (solid[:, 2] + gaps > x0) & (solid[:, 1] - gaps < y0 + h) & (solid[:, 3] + gaps > y0)).any() and not (
+                len(drawn) and _hits_box(a0, b0, a1, b1, x0 - 1.0, y0 - 1.0, x0 + w + 1.0, y0 + h + 1.0).any()):
+            return x0, y0
+        best, best_cost, inner = None, np.inf, -1.0
+        reach = 60.0 + max(w, h)
+        while True:
+            whole = edge >= ax - w - reach and hi_x <= ax + reach and edge >= ay - h - reach and hi_y <= ay + reach
+            # far from its point a glycan needs no fine placing, so a wide search looks at about as many places as a narrow one
+            size = (min(hi_x, ax + reach) - max(edge, ax - w - reach)) * (min(hi_y, ay + reach) - max(edge, ay - h - reach)) / step ** 2
+            pitch = step * max(1, int(max(size / 12000.0, 0.0) ** 0.5))
+            xs = x0 + pitch * np.arange(np.ceil((max(edge, ax - w - reach) - x0) / pitch), np.floor((min(hi_x, ax + reach) - x0) / pitch) + 1)
+            ys = y0 + pitch * np.arange(np.ceil((max(edge, ay - h - reach) - y0) / pitch), np.floor((min(hi_y, ay + reach) - y0) / pitch) + 1)
+            xs = xs if len(xs) else np.array([min(max(x0, edge), hi_x)])
+            ys = ys if len(ys) else np.array([min(max(y0, edge), hi_y)])
+            free = np.ones((len(ys), len(xs)), dtype = bool)
+            lefts, rights = np.searchsorted(xs, solid[:, 0] - gaps - w, 'right'), np.searchsorted(xs, solid[:, 2] + gaps, 'left')
+            tops, bottoms = np.searchsorted(ys, solid[:, 1] - gaps - h, 'right'), np.searchsorted(ys, solid[:, 3] + gaps, 'left')
+            for k in np.flatnonzero((lefts < rights) & (tops < bottoms)):
+                free[tops[k]:bottoms[k], lefts[k]:rights[k]] = False
+            rows, columns = np.nonzero(free)
+            X, Y = xs[columns], ys[rows]
+            d = np.hypot(np.maximum(np.maximum(X - ax, ax - X - w), 0.0), np.maximum(np.maximum(Y - ay, ay - Y - h), 0.0))
+            # what the last, narrower search looked at needs no second look
+            X, Y, d = X[d > inner], Y[d > inner], d[d > inner]
+            if len(X):
+                base = _held(i, X, Y) + 0.02 * np.hypot(X - x0, Y - y0) + 30.0 * ((d < 3.0) & ((X != x0) | (Y != y0)))
+                bound = base + d + d * d / 60.0
+                # beyond the best spots, a thin sample tells as much as all of them, as neighbors cross the same things
+                order = np.argsort(bound, kind = 'stable')
+                order = np.concatenate([order[:256], order[256::max(1, (len(order) - 256) // 512)]])
+                for start in range(0, len(order), 256):
+                    chunk = order[start:start + 256]
+                    if bound[chunk[0]] >= best_cost:
+                        break
+                    gx, gy, gap = _port(i, X[chunk], Y[chunk])
+                    cost = base[chunk] + gap + gap * gap / 60.0
+                    # what already costs more than the best spot so far needs no further look
+                    keep = cost < best_cost
+                    if not keep.any():
+                        continue
+                    chunk, gx, gy, gap, cost = chunk[keep], gx[keep], gy[keep], gap[keep], cost[keep]
+                    hx, hy, lead = X[chunk], Y[chunk], gap >= 9.0
+                    # only what lies within reach of these spots and their leaders can meet them
+                    x_lo, x_hi, y_lo, y_hi = min(hx.min(), ax) - 4.0, max(hx.max() + w, ax) + 4.0, min(hy.min(), ay) - 4.0, max(hy.max() + h, ay) + 4.0
+                    seen = (low_x <= x_hi) & (high_x >= x_lo) & (low_y <= y_hi) & (high_y >= y_lo)
+                    if seen.any():
+                        u0, v0, u1, v1 = a0[seen][:, None], b0[seen][:, None], a1[seen][:, None], b1[seen][:, None]
+                        cost = cost + 1000.0 * (_crossed(u0, v0, u1, v1, ax, ay, gx, gy) & lead).sum(0)
+                        cost = cost + 2000.0 * _hits_box(u0, v0, u1, v1, hx - 1.0, hy - 1.0, hx + w + 1.0, hy + h + 1.0).sum(0)
+                    seen = (boxes[:, 0] <= x_hi) & (boxes[:, 2] >= x_lo) & (boxes[:, 1] <= y_hi) & (boxes[:, 3] >= y_lo)
+                    if seen.any():
+                        cost = cost + 2000.0 * (_hits_box(ax, ay, gx, gy, boxes[seen, 0][:, None] - 1.0, boxes[seen, 1][:, None] - 1.0,
+                                                          boxes[seen, 2][:, None] + 1.0, boxes[seen, 3][:, None] + 1.0) & lead).sum(0)
+                    seen = (px >= x_lo) & (px <= x_hi) & (py >= y_lo) & (py <= y_hi)
+                    if seen.any():
+                        qx, qy, vx, vy = px[seen][:, None], py[seen][:, None], gx - ax, gy - ay
+                        k = np.clip(((qx - ax) * vx + (qy - ay) * vy) / np.maximum(vx * vx + vy * vy, 1e-9), 0, 1)
+                        cost = cost + 40.0 * ((np.hypot(ax + k * vx - qx, ay + k * vy - qy) < 3.5) & lead).sum(0)
+                    j = int(np.argmin(cost))
+                    if cost[j] < best_cost:
+                        best, best_cost = (hx[j], hy[j]), cost[j]
+            if best is not None and (whole or best_cost <= reach + reach * reach / 60.0):
+                return best
+            if whole:  # nowhere left on the page: a column of its own to the right of everything, the page grows to hold it
+                return max([cw] + [box[2] for box in boxes]) + pad, max(edge, min(y0, ch - h - edge))
+            inner, reach = reach, reach * 2
+
+    def _settle(i, x, y):
+        "Puts glycan i at (x, y), with its leader"
+        pos[i], placed[i] = (x, y), True
+        ex, ey, gap = _port(i, np.array([x]), np.array([y]))
+        ends[i] = (ex[0], ey[0]) if gap[0] >= 9.0 else (np.nan, np.nan)
+
+    def _tangled():
+        "Pairs of glycans whose leaders cross, leaders running through another glycan by (glycan, glycan it runs through), and glycans whose leader runs long"
+        have = np.flatnonzero(~np.isnan(ends[:, 0]))
+        a0, b0, a1, b1 = P[have, 4], P[have, 5], ends[have, 0], ends[have, 1]
+        crossing = _crossed(a0[:, None], b0[:, None], a1[:, None], b1[:, None], a0, b0, a1, b1)
+        through = _hits_box(a0[:, None], b0[:, None], a1[:, None], b1[:, None], pos[:, 0], pos[:, 1], pos[:, 0] + P[:, 2], pos[:, 1] + P[:, 3])
+        through[np.arange(len(have)), have] = False
+        return ([(have[i], have[j]) for i, j in zip(*np.nonzero(np.triu(crossing, 1)))], [(have[i], j) for i, j in zip(*np.nonzero(through))],
+                have[np.hypot(a1 - a0, b1 - b0) > 0.25 * ch].tolist())
+
+    def _score():
+        "Tangles first, then how far the leaders run"
+        return sum(map(len, _tangled())), float(np.hypot(*(ends - P[:, 4:6]).T)[~np.isnan(ends[:, 0])].sum())
+
+    for _ in range(3):
+        moved = False
+        for i in sorted(range(n), key = lambda i: (-P[i, 2] * P[i, 3], i)):
+            spot = _place(i)
+            moved |= not (placed[i] and np.allclose(spot, pos[i]))
+            _settle(i, *spot)
+            cw = max(cw, spot[0] + P[i, 2] + edge)
+        # Two crossing leaders uncross when their glycans trade places, if each fits where the other stood
+        for i, j in _tangled()[0]:
+            spots = pos[[j, i]] + (P[[j, i], 2:4] - P[[i, j], 2:4]) / 2
+            fits = [edge <= x and x + P[k, 2] + edge <= cw and edge <= y and y + P[k, 3] + edge <= ch and not (
+                (solid[:, 0] - pad < x + P[k, 2]) & (solid[:, 2] + pad > x) & (solid[:, 1] - pad < y + P[k, 3]) & (solid[:, 3] + pad > y)).any()
+                    for k, (x, y), solid in ((i, spots[0], _solid(i, j)[2]), (j, spots[1], _solid(j, i)[2]))]
+            (xi, yi), (xj, yj) = spots
+            if all(fits) and not (xi < xj + P[j, 2] + pad and xj < xi + P[i, 2] + pad and yi < yj + P[j, 3] + pad and yj < yi + P[i, 3] + pad):
+                _settle(i, xi, yi)
+                _settle(j, xj, yj)
+                moved = True
+        if not moved:
             break
-    return pos
-
-
-def _leader_line(anchor: tuple, # (x, y) of the data point
-                 box: tuple # (x, y, w, h) of the placed glycan
-                 ) -> str: # SVG path, or '' when the anchor sits inside the box
-    "Draws a thin line from a data point to the glycan that was moved away from it"
-    ax, ay = anchor
-    x, y, w, h = box
-    cx, cy = max(x, min(x + w, ax)), max(y, min(y + h, ay))
-    if abs(cx - ax) < 1 and abs(cy - ay) < 1:
-        return ''
-    return ('<path d="M%.2f,%.2f L%.2f,%.2f" stroke="#7a7a7a" stroke-width="0.8" '
-            'fill="none" stroke-linecap="round" />' % (ax, ay, cx, cy))
+    best = (_score(), pos.copy(), ends.copy())
+    # Whatever is still tangled, and what stands around a leader too long, starts over among the others, the farthest from its anchor first
+    stale = 0
+    for attempt in range(4):
+        if best[0][0] == 0 or stale == 2:
+            break
+        pairs, through, far = _tangled()
+        again = {int(k) for pair in pairs + through for k in pair} | set(far)
+        for i in far:
+            again |= {int(k) for k in np.argsort(np.hypot(*(pos + P[:, 2:4] / 2 - P[i, 4:6]).T))[:4]}
+        again = sorted(again)
+        gaps = np.hypot(*(np.nan_to_num(ends, nan = 0.0) - P[:, 4:6]).T) * ~np.isnan(ends[:, 0])
+        placed[again], ends[again] = False, np.nan
+        for i in sorted(again, key = lambda i: ((-gaps[i] if attempt % 2 == 0 else gaps[i]), i)):
+            spot = _place(i)
+            _settle(i, *spot)
+            cw = max(cw, spot[0] + P[i, 2] + edge)
+        stale += 1
+        if (score := _score()) < best[0]:
+            best, stale = (score, pos.copy(), ends.copy()), 0
+    (tangles, _length), pos, ends = best
+    leaders = [None if np.isnan(ex) else (ax, ay, ex, ey) for (ax, ay), (ex, ey) in zip(P[:, 4:6].tolist(), ends.tolist())]
+    return pos.tolist(), leaders, tangles
 
 
 def annotate_figure(
@@ -2288,6 +2549,9 @@ def annotate_figure(
     # Get svg code
     svg_tmp = svg_input if isinstance(svg_input, str) and '<svg' in svg_input else Path(svg_input).read_text(
         encoding = "utf-8")
+    # On a dark page, such as viscose draws in dark mode, glycans are die-cut stickers, as the SNFG's black bonds and text would vanish into it
+    paper = re.search(r'<rect width="[\d.]+" height="[\d.]+" fill="#([0-9A-Fa-f]{6})"', svg_tmp)
+    sticker = bool(paper) and np.dot([int(paper.group(1)[i:i + 2], 16) / 255 for i in (0, 2, 4)], (0.2126, 0.7152, 0.0722)) < 0.5
     # Get all text labels
     matches = re.findall(r"<!--.*-->[\s\S]*?<\/g>", svg_tmp)
     # Prepare for appending
@@ -2325,25 +2589,64 @@ def annotate_figure(
             # block wholesale would break every later <use> of those glyphs (silently blanking characters
             # in the title and axis labels); keep the definitions and delete only the drawn text
             svg_tmp = svg_tmp.replace(match, ''.join(re.findall(r'<defs>[\s\S]*?</defs>', match)))
-            if glycan_scale == '' or current_label not in glycan_scale[
-                1]:  # a label the DE table does not rank still gets drawn, just unscaled
-                d = GlycoDraw(current_label, compact = compact, suppress = True, restrict_vocab = True)
-            else:
-                _dim = (scale_range[1] - scale_range[0]) * (
-                        (glycan_scale[0][glycan_scale[1].index(current_label)] - _y_min) / _y_range) + scale_range[0]
-                d = GlycoDraw(current_label, compact = compact, dim = _dim, suppress = True, restrict_vocab = True)
-            svg_from_pdf = pdf_to_svg_bytes(d.as_svg())
+            # a label the DE table does not rank still gets drawn, just unscaled
+            _dim = 50 if glycan_scale == '' or current_label not in glycan_scale[1] else (scale_range[1] - scale_range[0]) * (
+                    (glycan_scale[0][glycan_scale[1].index(current_label)] - _y_min) / _y_range) + scale_range[0]
+            d = GlycoDraw(current_label, compact = compact, dim = _dim, suppress = True, restrict_vocab = True, sticker = sticker)
+            svg_from_pdf = pdf_to_svg_bytes(d.as_svg(), sticker = sticker)
             data = svg_from_pdf.replace('<?xml version="1.0" encoding="UTF-8"?>', '').replace('<?xml version="1.0"?>', '')
             size = re.search(r'<svg[^>]*?width="([\d.]+)"[^>]*?height="([\d.]+)"', data)
-            gw, gh = (float(size.group(1)) * glyc_scale, float(size.group(2)) * glyc_scale) if size else (0.0, 0.0)
-            drawn.append((anchor[0], anchor[1] + glyc_offset * glyc_scale, gw, gh, anchor[0], anchor[1], data))
+            gw, gh = (float(size.group(1)), float(size.group(2))) if size else (0.0, 0.0)
+            # a leader ends on a symbol, as the corners of a drawing's box often hold nothing
+            root = re.search(r'<g transform="matrix\(1 0 0 1 ([-\d.]+) ([-\d.]+)\)">', data)
+            symbols = []
+            for path in re.finditer(r'<path d="([^"]*)" fill="#[^"]*"[^>]*?stroke-width[^>]*?/>', data):
+                if root and 'transform' not in path.group(0):
+                    xy = np.array(re.findall(r'-?\d*\.?\d+', path.group(1)), dtype = float).reshape(-1, 2) + (float(root.group(1)), float(root.group(2)))
+                    symbols.append((*((xy.min(0) + xy.max(0)) / 2), np.ptp(xy, axis = 0).max() / 2))
+            # and on the structure itself, as what stands before a bracket are its floating parts
+            bracket = re.search(r'<path d="M(-?[\d.]+) [^"]*M[^"]*" fill="none"', data)
+            if root and bracket:
+                symbols = [v for v in symbols if v[0] > float(bracket.group(1)) + float(root.group(1))] or symbols
+            drawn.append((_dim, gw, gh, anchor[0], anchor[1], data, symbols or [(gw / 2, gh / 2, min(gw, gh) / 2)]))
         edit_svg = False
     canvas = re.search(r'<svg[^>]*?width="([\d.]+)[a-z]*"[^>]*?height="([\d.]+)[a-z]*"', svg_tmp)
     canvas = (float(canvas.group(1)), float(canvas.group(2))) if canvas else (1000.0, 1000.0)
-    for (_x, _y, gw, gh, ax, ay, data), (gx, gy) in zip(drawn, _spread_glycans([d[:6] for d in drawn], canvas)):
-        svg_tmp += '\n' + _leader_line((ax, ay), (gx, gy, gw, gh))
-        svg_tmp += '\n<g transform="translate(%.2f %.2f) scale(%s %s)">\n%s\n</g>' % (gx, gy, glyc_scale,
-                                                                                      glyc_scale, data)
+    blocked, marks = _figure_ink(svg_tmp, canvas)
+    # Crowded figures take smaller glycans, down to the smallest size of the scale, the most significant shrinking most, until no leader is long or tangled
+    unlabeled = re.search(r'data-width-unlabeled="([\d.]+)"', svg_tmp)
+    room = (float(unlabeled.group(1)) if unlabeled else canvas[0]) * canvas[1]
+    tangles = np.inf
+    for shrink in (1.0, 0.7, 0.45, 0.25, 0.0):
+        scaled = [glyc_scale * (scale_range[0] + (d[0] - scale_range[0]) * shrink) / d[0] for d in drawn]
+        if shrink and sum(d[1] * d[2] * scale ** 2 for d, scale in zip(drawn, scaled)) > 0.2 * room:  # past this share of the page, leaders find no way through
+            continue
+        # the canvas' margin holds no ink but a sticker's cut, which counts as drawn; the symbols of a sticker stand where a plain drawing's would
+        insets = [(_margin(d[0], sticker = sticker) - (0.22 * d[0] if sticker else 0.0)) * scale for d, scale in zip(drawn, scaled)]
+        natural = [(_margin(d[0]) - (0.22 * d[0] if sticker else 0.0)) * scale for d, scale in zip(drawn, scaled)]
+        boxes = [(d[3] + at, d[4] + glyc_offset * glyc_scale + at, d[1] * scale - 2 * inset, d[2] * scale - 2 * inset, d[3], d[4])
+                 for d, scale, inset, at in zip(drawn, scaled, insets, natural)]
+        ports = [[(x * scale - inset, y * scale - inset, r * scale) for x, y, r in d[6]] for d, scale, inset in zip(drawn, scaled, insets)]
+        attempt = _spread_glycans(boxes, canvas, blocked = blocked, marks = marks, ports = ports)
+        if attempt[2] < tangles:
+            spots, leaders, tangles = attempt
+            scales, inks = scaled, [(*box, inset) for box, inset in zip(boxes, insets)]
+        # a stray crossing among many glycans is not worth smaller drawings
+        if tangles <= len(drawn) // 25:
+            break
+    # viscose widens the page by each glycan label's text, which the drawing rarely fills, so the page ends at what it holds: the width it needs without those labels, the drawings, and any label left as text
+    page = re.search(r'(<rect width=")[\d.]+(" height="[\d.]+" fill="[^"]*") data-width-unlabeled="([\d.]+)"', svg_tmp)
+    if page:
+        width = max([float(page.group(3))] + [float(v) + 4.0 for v in re.findall(r'data-right="([\d.]+)"', svg_tmp)]
+                    + [gx + p[2] + 4.0 for p, (gx, _gy) in zip(inks, spots)])
+        svg_tmp = svg_tmp.replace(page.group(0), f'{page.group(1)}{width:.2f}{page.group(2)}', 1)
+        svg_tmp = re.sub(r'(<svg[^>]*?width=")[\d.]+("[^>]*?viewBox="0 0 )[\d.]+', rf'\g<1>{width:.2f}\g<2>{width:.2f}',
+                         svg_tmp, count = 1)
+    # Leaders first, so that each drawing covers the end of its own and none lies over a drawing
+    for leader in filter(None, leaders):
+        svg_tmp += '\n<path d="M%.2f,%.2f L%.2f,%.2f" stroke="#7a7a7a" stroke-width="0.8" fill="none" stroke-linecap="round" />' % leader
+    for p, (gx, gy), scale, d in zip(inks, spots, scales, drawn):
+        svg_tmp += '\n<g transform="translate(%.2f %.2f) scale(%s %s)">\n%s\n</g>' % (gx - p[6], gy - p[6], scale, scale, d[5])
     svg_tmp += '</svg>'
     if filepath:
         filepath = Path(filepath)

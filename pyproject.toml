@@ -1,13 +1,15 @@
 [build-system]
-requires = ["setuptools>=64.0"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 # Project metadata
 [project]
 name = "glycowork"
-version = "1.11.1"
+version = "1.12.0"
 description = "The Python package for glycan data science: reads any glycan notation, motif search, SNFG drawing, glycomics statistics, curated glycan data"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     {name = "Daniel Bojar", email = "daniel.bojar@gu.se"}
 ]
@@ -25,14 +27,12 @@ classifiers = [
 requires-python = ">=3.11"
 dependencies = [
     "numpy",
-    "matplotlib",
-    "scikit-learn",
     "networkx>=3.4",
     "scipy>=1.16",
-    "seaborn",
     "pandas>=2.2.2",
     "openpyxl",
-    "glycorender~=0.5.3"
+    "glycorender~=0.5.8",
+    "viscose~=0.3.1"
 ]
 
 [project.urls]
@@ -43,7 +43,7 @@ Changelog = "https://github.com/BojarLab/glycowork/blob/master/CHANGELOG.md"
 Issues = "https://github.com/BojarLab/glycowork/issues"
 
 [project.optional-dependencies]
-ml = ["torch_geometric", "torch", "xgboost", "huggingface_hub>=0.16.0"]
+ml = ["torch_geometric", "torch", "xgboost", "huggingface_hub>=0.16.0", "scikit-learn"]
 chem = ["rdkit>=2021.9.2", "py3Dmol"]
 all = ["glycowork[ml,chem]"]
 dev = ["glycowork[all]", "nbdev", "pytest"]

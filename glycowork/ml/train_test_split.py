@@ -1,5 +1,4 @@
 from glycowork.motif.processing import canonicalize_iupac
-from sklearn.model_selection import StratifiedShuffleSplit, train_test_split
 import random
 import re
 import numpy as np
@@ -51,6 +50,7 @@ def hierarchy_filter(df_in: pd.DataFrame, # dataframe of glycan sequences and ta
     class_converter = {c: k for k, c in enumerate(class_list)}
     # Split each class proportionally
     all_x, all_y = df[col].tolist(), [class_converter[c] for c in df[rank]]
+    from sklearn.model_selection import StratifiedShuffleSplit
     train_idx, val_idx = next(StratifiedShuffleSplit(n_splits = 1, test_size = 0.2, random_state = 42).split(all_x, all_y))
     train_x, train_y = [all_x[k] for k in train_idx], [all_y[k] for k in train_idx]
     val_x, val_y = [all_x[k] for k in val_idx], [all_y[k] for k in val_idx]
@@ -70,6 +70,7 @@ def general_split(glycans: list[str], # list of IUPAC-condensed glycans
                   test_size: float = 0.2 # size of test set
                   ) -> tuple[list[str], list[str], list[float | int | str], list[float | int | str]]: # train/test splits
     "splits glycans and labels into train / test sets"
+    from sklearn.model_selection import train_test_split
     return train_test_split(glycans, labels, shuffle = True, test_size = test_size, random_state = 42)
 
 

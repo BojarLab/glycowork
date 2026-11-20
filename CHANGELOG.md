@@ -1,100 +1,95 @@
 # Changelog
 
-## [1.11.1]
-- `drawsvg` is no longer a dependency: `GlycoDraw` builds its SVG with `glycorender`'s `svgdraw` (`glycorender>=0.5.0`), with identical output and ~1.45x faster drawing (f41edb7)
-- bumped `glycorender` version dependency to `0.5.3` for additional speed-ups in drawing and smaller filesize of finished drawings (1753c8f)
-- initial package import in most cases is now 1.5-2x as fast by lazy-loading `pandas` (6957d6a)
-- moderate performance improvements throughout the package (especially glycoproteomics-related) (bc72318)
-- the documentation has been restyled and now also contains a dark mode (d03a069)
+## [1.12.0]
+- All figures are now drawn with `viscose` instead of `matplotlib` and `seaborn`, which are no longer dependencies. The default palette is Aura; `viscose.set_palette` picks another (73bca70)
+- `**kwargs` of `get_heatmap`, `get_volcano`, and `plot_embeddings` go to `viscose`, and anything it does not know raises a `TypeError` listing what it takes; `plot_embeddings(palette = ...)` names a viscose palette; `get_heatmap(return_plot = True)` returns a `viscose` figure first (73bca70)
+- Glycan graphs now run on a lightweight graph class of their own: `import glycowork` and drawing a glycan no longer load networkx (import plus first `GlycoDraw` 0.37 to 0.19 s, 43 to 33 MB), the graph cache takes 89% less memory (382 to 41 MB for 30,000 glycans), building glycan graphs is 3.2x faster, `compare_glycans` 2.5-2.8x, `subgraph_isomorphism` 1.6-1.9x, `graph_to_string` on strings 1.7x, and `annotate_dataset` 1.6-1.7x. `glycan_to_nxGraph`, `ensure_graph`, and `get_possible_topologies(return_graphs = True)` still return networkx graphs, and every function still takes them (ad36d33)
+- The above also speeds up `network` operations by an additional 1.3-1.6x by switching to `GlycanGraph` internally (274aac9)
+- Statistics now run on `scipy.special` alone: `glycowork.motif.analysis` imports 35-40% faster and with 24 MB less, imputation fits its censoring model with an analytic gradient (`get_differential_expression` 2.5x faster, and a better optimum on sparse tables), `get_SparCC` with `partial_correlations = True` is 12x faster and counts the controls in its degrees of freedom, `get_SparCC` p-values are exact up to 9 samples and calibrated into the tails beyond, detection tests of absent features are exact at any number of groups, and glycosite p-values use the Cauchy combination, which holds whatever the dependence between a site's glycoforms (54728d1)
+- scikit-learn is no longer a core dependency (`glycowork[ml]`, `plot_embeddings`, and `MissForest` still use it) (790a9b8)
 
 ### motif
-#### draw
+#### graph
 ##### Added ✨
-- `GlycanDrawing.as_markdown(size = 14)` returns the drawing as an inline `<img>` (base64 SVG data URI) for Markdown text, e.g., `IPython.display.Markdown(f'... {d.as_markdown()} ...')`, scaled so each monosaccharide symbol is `size` px tall (ba25f21)
-- `GlycanDrawing.as_sticker()` returns any drawing as a die-cut sticker, exactly as `GlycoDraw(..., sticker = True)` would have drawn it, e.g., for slides or pages with a dark background (0820c34)
-- frontends with a dark background can set `GLYCOWORK_DARK_DISPLAY=1`, and drawings then display, and inline with `as_markdown`, as die-cut stickers (0820c34)
-- frontends that show rich output outside Jupyter (such as an editor's console) can set `GLYCOWORK_RICH_DISPLAY=1`, and `GlycoDraw` and `plot_glycans_grid` then return their drawing instead of opening a matplotlib window (6957d6a)
-
-##### Changed 🔄
-- a sticker drawing (`sticker = True`) now displays on a transparent background in notebooks, so it looks the same in light and dark themes, instead of on a white box (0820c34)
-- Better drawing of repeat units with branches (5134bdd)
-- `GlycoDraw` `.png` outputs are now much faster (364808d)
+- Added `glycan_to_glycangraph`, which returns the cached, read-only `GlycanGraph` glycowork's motif code runs on (the nodes, attributes, and neighbor order of `glycan_to_nxGraph`, without networkx), for code that only reads glycan graphs (0f3af98)
 
 ##### Fixed 🐛
-- `plot_glycans_excel` leaves the cell of a motif defined by a glyco-regex (such as `Nglycan_complex` in motif-level `get_differential_expression` results) empty instead of failing the whole export, as `annotate_figure` already did (a1ae680)
-- `plot_glycans_excel` closes and removes its workbook when a glycan cannot be drawn, instead of leaving it open and half-written (91e264a)
-- `per_residue`, `highlight_linkages`, and `highlight_residues` in `GlycoDraw` land on the right arm when another arm carries a wildcard linkage (e.g., `GlcNAc(b1-?)` next to `GlcNAc(b1-2)`) (5134bdd)
-
-##### Deprecated ⚠️
+- `possible_topology_check` takes a single glycan to check against as a string or graph, which it read character by character and matched nothing (9f987b0)
 
 #### processing
 ##### Added ✨
-- `glycan_to_wurcs` converts IUPAC-condensed to WURCS 2.0 in WURCSFramework's canonical order, as GlyTouCan writes it (97% coverage), e.g., for GlyTouCan registration or lookup (322fc99)
-
-##### Changed 🔄
-- Improved GlycoCT/GlycoCT XML parsing of phosphodiesters and more exotic monosaccharides (8649553)
-- `get_class` can now also deal with aglycones, such as in `Gal(b1-3)GalNAc1Ser` (8649553)
-- Improved galactose/sialic acid GlySeeker conversion in `canonicalize_iupac` (48162a4)
+- Added `glycan_to_kcf`, which writes KCF as KEGG GLYCAN does, for KEGG's KCaM search or the RINGS tools (bfa9757)
 
 ##### Fixed 🐛
-- `wurcs_to_iupac` now reads residues past the 52nd (`aa`, `ab`, ...), alditols with substituents (`h2122h_3*OSO/3=O/3=O`), anhydro forms (`2,7-Anhydro-Kdo`, `1,5-Anhydro-Glc-ol`), PCho and lactyl groups, and Pse with any acyls on its amines; phosphodiesters are written on the donor (`Rib5P-ol(5-1)`), and `Glc3S-ol` no longer becomes `Glc3-S-ol` (322fc99)
-- Fixed some WURCS tokens (322fc99)
+- `kcf_to_iupac` reads KEGG's bare `Fuc`, `Ara`, and `AllNAc` as D, as KEGG means them; both anomers of a sucrose linkage, unknown anomers (`2:1`), phosphoethanolamines, carriers such as `PP-Dol` and `protein`, inositol, and KEGG's spellings (`Cym`, `2,6daraHex`, `L4-en-thrHexA`, `Formyl`) are read as well, so all 1,000 KEGG entries tested now read (bfa9757)
+- `kcf_to_iupac` keeps `dHex` as it is, which it turned into `D-Hex` (bfa9757)
+- `PDB_TO_IUPAC` now maps `NDG3SO3` to `GlcNAc3S` instead of `GlcNAc3S6S` and adds `BGC6SO3`, `NGA3SO3`, `NGA6SO3`, `NGA4SO36SO3`, and `GAL3SO34SO3` (2a509fe), and `GLC4SO3` to `Glc4S` instead of `GalNAc4S` (9f987b0)
 
 #### tokenization
 ##### Added ✨
-- Pyridylamination as reducing-end label: `modification = 'PA'` (2-aminopyridine, +78.058 Da) in `composition_to_mass`, `glycan_to_mass`, `get_formula`, `mz_to_composition`, and `mz_to_structures` (2aff05a)
-- Also added mass support for reducing-end modifications `reduced_D` (NaBD4 reduction, +HD), `APTS`, `aminoxyTMT`, and `GirardP` (8770c04)
-- `sample_prep` keyword arguments now also accept the option of `deuteropermethylated` (8770c04)
-- Mass calculation functions etc now support more peptide modifications with their Unimod (PSI-MS) names, such as `'NC[Carbamidomethyl]SK'` (54a3ea2)
-- Added `anilide` and `d5-anilide` to the supported sialic acid derivatization (from glycoqueuing), as `GQ` and `GQ-d5` (6a9dae8)
-- `'Li+'` as an adduct ion (`get_ion_mzs(adducts = 'Li+')`, `mz_to_composition(extras = ['adduct'], adduct_ions = 'Li+')`) and lithium in `calculate_adduct_mass`, for lithium acetate mobile phases (42fd181)
-- `modification = 'benzyl'` for benzyl glycosides (e.g., the Bn-GalNAc primer of CORA) in `composition_to_mass`, `glycan_to_mass`, `get_formula`, `mz_to_composition`, and `mz_to_structures` (1753c8f)
+- Added mass support for `glycolate` and `lactate` reducing end modifications, from hypochlorite O-glycan release (bbadeb4)
+- Added `composition_database` to build glycoproteomics search base, taxonomically gated and drawn from `df_glycan` (5febbfa)
 
 ##### Changed 🔄
-- `calculate_adduct_mass` can now also read signed formula parts such as `'C5H6N2-O'` (2aff05a)
-- `sialic_derivatization` also weighs a derivatization done before permethylation (`sample_prep = 'permethylated'` or `'deuteropermethylated'`), whose amides are capped on their N-H instead of the carboxyl's methyl ester (`SIALIC_PRODUCT_CAPS`; a lactone raises); a derivatization making the same product of every sialic acid (`GQ`, `('amide', 'amide')`) needs no linkages, and `sialic_linkage_splits(composition, sialic_derivatization)` leaves its compositions unsplit (f0e2839)
-- `glycan_to_mass` and `get_formula` can now weigh residues outside `lib` (e.g., the written-out ethyl ester `Neu1Et5Ac`) atom by atom instead of raising (1753c8f)
+- `glycan_to_mass` and `get_formula` now raise a `ValueError` when modification is set but the glycan has no free reducing end (alditols other than reduction, aldonic acids, inositol, aglycones, sucrose/trehalose-type linkages) (6e0e4d9)
 
-#### smiles
+##### Fixed 🐛
+
+##### Deprecated ⚠️
+
+#### draw
 ##### Added ✨
-- Sialic acid methylamides (e.g., SALSA's a2-3 product) are now supported in SMILES generation (5134bdd)
+- Annotated volcano plots + networks in dark mode settings now automatically carry sticker-mode glycan drawings (b8fa046)
+
+##### Changed 🔄
+- Up and down in volcano and MA plots, heatmap and coverage scales, and network nodes and fold-change edges take the palette's colors; the `origin` values of `highlight_network` and `network_alignment` are palette names now (73bca70)
+- The overlap of glycans in annotated volcano plots and networks has been much reduced (b8fa046)
+
+##### Fixed 🐛
+- `GlycoDraw` draws a Y or Z fragment that replaced a Fuc where the Fuc sat, with its bond at the Fuc's angle, so lost core and antenna Fuc fragments read as such (c7678b7)
+- Fixed minor visual discrepancies between `png` and `svg` outputs of `GlycoDraw` (e6d5083)
+
+#### annotate
+##### Added ✨
+- Added `get_motif_atoms` and `get_composition_atoms`, which split a parent motif or glycoform by the children covering it, into parts that sum to the parent (bfa9757)
+- Added the `carriers` keyword argument to `get_motif_dag` and `return_counts` to `quantify_motifs` (bfa9757)
+
+##### Fixed 🐛
+- `get_motif_dag` proves containment on the measured structures when they are given, since wildcard matching accepted edges such as `Neu5Ac` to `Sia(a2-3)Gal` (bfa9757)
 
 #### analysis
 ##### Added ✨
-- Added the new `covariates` keyword argument to `get_differential_expression` and `get_glycanova` to include per-sample covariates (e.g., secretor status, sex, age, batch) (b62b240)
+- `get_differential_expression`, `get_glycanova`, and `get_pvals_motifs` now also report `Own share` (the mean share of a parent motif that no child covers; 0 means purely inherited) and `Share shift` (the largest change in share of any of its contexts, in percentage points) for parent motifs (bfa9757)
+- Motif tables in `get_differential_expression`, `get_glycanova`, and `get_roc` now center each sample on a reference that counts a motif at 1 / sqrt(1 + its parents and children), moved a tenth of the way to the median (9afd96d)
+- With 6 or more samples in the two largest groups a motif is tested against a change of `min_change` (0.03 log2, TREAT) in `get_differential_expression` and `get_glycanova` (9afd96d)
 
 ##### Changed 🔄
-- `get_glycanova`'s Tukey post-hoc p-values are now ~13x faster to compute (16 groups: 1,173 to 97 s) and stay accurate for very small p-values, which were noise below ~1e-11 before (096a01e)
+- Residuals and redistributions come from an exact partition of each parent, so overlapping children no longer overshoot it; glycoform containment uses the cumulative abundance at or above a composition (bfa9757)
+- `correct_multiple_testing` keeps its corrected p-values above 90% significant instead of switching the whole family to Bonferroni, which returned fewer calls for more evidence and did not lower FDR where the log-ratio reference moves; the warning stays (ad36d33)
+- `get_equivalence_test` takes `scale_var`, and `get_differential_expression` passes the scale uncertainty to it (ad36d33)
+- The scale uncertainty `gamma` now enters `get_differential_expression` and `get_glycanova` as a variance on every sample's log-ratio instead of a random draw per run; results no longer depend on the seed (469cd62)
+- Motifs on every glycan in the same number, whose abundance is the total signal by construction, no longer get a test of their own in `get_differential_expression`, `get_glycanova`, `get_time_series`, `get_jtk`, and `get_cosinor`, per glycosite for glycoform motifs. They stay in the log-ratio reference and in the decomposition (469cd62)
+- Redistribution in `get_differential_expression` falls back to a permutation test where Hotelling's T2 is undefined (bfa9757)
+- `Redistribution p-val` in `get_differential_expression` and `get_glycanova` now also tests each context of a parent, with a share-weighted Simes over moderated F tests on log2(part / rest), joined with the test of all parts by a Cauchy combination, and `get_glycanova` tests all parts by a one-way MANOVA, which is Hotelling's T2 on two groups, instead of PERMANOVA (6bb539b)
 
 ##### Fixed 🐛
-- A glycan or motif without any detection in a whole group no longer shifts every other feature: its floor (1e-7) entered each sample's CLR geometric mean and the ALR reference search, so samples with more such features moved as a whole. In `get_differential_expression` and `get_glycanova` such features are now tested on their detection instead (Fisher's exact test, exact McNemar when paired), with Cohen's h (Cramer's V for ANOVA) as effect size and pairwise detection tests as ANOVA post-hoc, and a floored copy of a glycan listed more than once is no longer averaged into its measured copies (c759330)
+- Glycoforms without detection in a whole group get a detection test and stay out of their site's log-ratio reference; the floor shifted every other glycoform of the site otherwise (2a509fe)
+- In `get_differential_expression`, `get_glycanova`, and `get_pvals_motifs`, a parent whose own context is measured in too few samples of a group to test gets no residual p-value or effect size (NaN) and stays out of the residuals' correction; it got residual p 1 and effect size 0, which reads as purely inherited (274aac9)
 
 ### glycan_data
+#### frame
+##### Fixed 🐛
+- `GlycoDataFrame.abundance` keeps one row per copy of a duplicated glycan column in the transposed layout, in line with `.glycans` (2a509fe)
+
 #### loader
 ##### Added ✨
-- Added new curated `human_headandneck_O_GPST000316` glycomics datasets to `glycomics_data_loader` (8770c04)
+- Added new curated N-glycoproteomics datasets: `human_colorectal_N_PMID40285620` and `mouse_ovary_aging_N_PMID40073759` (a31188c)
 
-##### Changed 🔄
-- Skyline imports in `read_glycomics` can now distinguish blanks, pooled QCs, and calibration standards from real samples (6957d6a)
-- `read_glycomics` is now more robust to glycolipidomics input (c7fb126)
-
-##### Fixed 🐛
-- Fixed some GlyTouCan IDs being linked to the wrong glycan (6a9dae8)
-
-#### stats
+#### data_entry
 ##### Added ✨
-- `detection_test` tests whether detection differs between groups (Fisher's exact test, Monte Carlo beyond two groups, or exact McNemar for paired samples) and returns Cohen's h or Cramer's V (c759330)
-
-##### Changed 🔄
-- Improved estimate of `mahalanobis_variance` (cb9feeb)
-- `impute_and_normalize(return_masks = True)` also returns which cells hold a group's floor and which were detected; `get_additive_logratio_transformation` and `get_procrustes_scores` take `reference`, the rows that may serve as reference (c759330)
-- The ALR reference of a two-group comparison (`get_procrustes_scores`) is now the feature whose log-ratio to the geometric mean varies least over all samples (paired: across each pair), resulting in better FDR and +0.14 power (10ce1fe)
-
-##### Fixed 🐛
-- `attrs['transform']` of `get_differential_expression` and other `preprocess_data` users no longer reports CLR for an ALR whose reference glycan was listed more than once (10ce1fe)
+- Added the `level` keyword argument to `read_glycoproteomics` to work with `psm` instead of `glycoform` (09f4e15)
 
 ### network
 #### biosynthesis
-##### Added ✨
-- Added the new `covariates` keyword argument to `get_differential_biosynthesis` to include per-sample covariates (e.g., secretor status, sex, age, batch) (400dd87)
-- Added the new `analysis` option of `"steps"` to `get_differential_biosynthesis` to compare biosynthetic step yields between conditions (each motif as the log2 ratio to its tightest containing motif, i.e., how much of the available substrate a step converts) (400dd87)
+##### Fixed 🐛
+- `get_maximum_flow` and `get_differential_biosynthesis` no longer change with the interpreter's hash seed (6bb539b)

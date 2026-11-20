@@ -16,7 +16,6 @@ import threading
 import time
 import traceback
 import urllib.request
-import warnings
 import pandas as pd
 try:
     from PySide6.QtCore import Qt, QObject, Signal, QTimer, QSettings, QAbstractTableModel, QModelIndex, QSortFilterProxyModel, QRectF, QSize, QUrl
@@ -85,18 +84,12 @@ def _worker_main(jobs, messages):
 
     sys.stdout = sys.stderr = Pipe()
     try:
-        import matplotlib
-        matplotlib.use('Agg')
-        import matplotlib.pyplot as plt
         from glycowork.glycan_data.data_entry import read_abundances
         from glycowork.motif import analysis
         from glycowork.motif.processing import GLYCOFORM_ID, is_composition
     except Exception:
         messages.put(('fatal', traceback.format_exc()))
         return
-    # The plotting functions end with plt.show(), which only warns under Agg
-    warnings.filterwarnings('ignore', message = '.*non-interactive.*')
-    warnings.filterwarnings('ignore', message = '.*FigureCanvasAgg.*')
     glycanish = lambda x: isinstance(x, str) and ('(' in x or is_composition(x))
     messages.put(('ready', None))
     parent = mp.parent_process()
@@ -166,7 +159,6 @@ def _worker_main(jobs, messages):
                 for n, (name, (func, kwargs)) in enumerate(figures.items()):
                     path = os.path.join(p['folder'], f'{p["stamp"]}_{n}.png')
                     result = getattr(analysis, func)(**kwargs, filepath = path)
-                    plt.close('all')
                     out[name] = (path, (func, kwargs))
                     if func == 'get_pcoa':
                         # The coordinates come with the figure, and PERMANOVA and the explained variance in their attrs
@@ -179,8 +171,6 @@ def _worker_main(jobs, messages):
                 messages.put(('saved', path))
         except Exception:
             messages.put(('error', traceback.format_exc()))
-        finally:
-            plt.close('all')
 
 
 class Runner(QObject):
@@ -1787,20 +1777,26 @@ def main():
         app.setWindowIcon(QIcon(os.path.join(sys._MEIPASS, 'glycowork.ico')))
     if sys.argv[1:2] == ['--self-test']:
         # For the app build: draws a glycan in this process, then reads a shipped dataset and runs a differential expression with its figures in the worker,
-        # all without a window; exits with 0 only if every step worked
-        images, runner, outcome, log = GlycanImages(), Runner(), {}, []
+        # and saves those figures again as SVG and PDF, all without a window; exits with 0 only if every step worked
+        images, runner, outcome, log, saved = GlycanImages(), Runner(), {}, [], []
         runner.log.connect(log.append)
         runner.failed.connect(lambda text: (log.append(text), app.quit()))
 
         def step(kind, content):
             outcome[kind] = content
-            if kind != 'loaded':
+            if kind == 'loaded':
+                contrasts = content['contrasts']
+                runner.submit('run', {'analysis': 'diff', 'df': content['df'], 'kind': content['kind'], 'paired': content['paired'], 'motifs': False, 'feature_set': [],
+                                      'groups': [(g, [s for s in contrasts if contrasts[s] == g]) for g in dict.fromkeys(contrasts.values())], 'transform': None,
+                                      'annotate': True, 'show_all': False, 'folder': tempfile.mkdtemp(prefix = 'glycowork-self-test-'), 'stamp': 0})
+            elif kind == 'result':
+                for path, plot in content['figures'].values():
+                    runner.submit('figure', (plot, os.path.splitext(path)[0] + '.svg'))
+                    runner.submit('figure', (plot, os.path.splitext(path)[0] + '.pdf'))
+            elif kind == 'saved':
+                saved.append(content)
+            if not runner.open_jobs:
                 app.quit()
-                return
-            contrasts = content['contrasts']
-            runner.submit('run', {'analysis': 'diff', 'df': content['df'], 'kind': content['kind'], 'paired': content['paired'], 'motifs': False, 'feature_set': [],
-                                  'groups': [(g, [s for s in contrasts if contrasts[s] == g]) for g in dict.fromkeys(contrasts.values())], 'transform': None,
-                                  'annotate': True, 'show_all': False, 'folder': tempfile.mkdtemp(prefix = 'glycowork-self-test-'), 'stamp': 0})
 
         runner.done.connect(step)
         images.get(EMBLEM, compact = False)
@@ -1811,7 +1807,8 @@ def main():
         result, drawing = outcome.get('result', {}), images.images.get((EMBLEM, False, ()), QImage())
         checks = {'SNFG drawing in the window process': not drawing.isNull(), f'{EXAMPLE_DATASET} read': 'loaded' in outcome,
                   'differential expression': len(result.get('tables', {}).get('Differential expression', [])) > 0,
-                  'volcano and MA plot saved': len(result.get('figures', {})) == 2 and all(os.path.getsize(path) > 0 for path, _ in result['figures'].values())}
+                  'volcano and MA plot saved': len(result.get('figures', {})) == 2 and all(os.path.getsize(path) > 0 for path, _ in result['figures'].values()),
+                  'volcano and MA plot saved as SVG and PDF': len(saved) == 4 and all(os.path.getsize(path) > 0 for path in saved)}
         with open('glycowork_self_test.log', 'w', encoding = 'utf-8') as file:
             file.write(''.join(log) + '\n' + ''.join(f'{name}: {"ok" if ok else "FAILED"}\n' for name, ok in checks.items()))
         sys.exit(0 if all(checks.values()) else 1)
