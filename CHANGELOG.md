@@ -87,7 +87,7 @@
 
 #### data_entry
 ##### Added ✨
-- Added the `level` keyword argument to `read_glycoproteomics` to work with `psm` instead of `glycoform` ()
+- Added the `level` keyword argument to `read_glycoproteomics` to work with `psm` instead of `glycoform` (09f4e15)
 
 ### network
 #### biosynthesis

@@ -874,7 +874,7 @@ def get_mono(token: str # WURCS monosaccharide token
         if not mono:
             raise ValueError(
                 f"WURCS monosaccharide token '{token}' is not supported yet, so this WURCS string cannot be converted to IUPAC-condensed; please report the token as an issue at https://github.com/BojarLab/glycowork/issues.")
-    mono = ''.join(f"{b.replace('-', ',')}-Anhydro-" for b in bridges) + mono
+    mono = ''.join(f"{b.replace('-', ',')}-Anhydro-" for b in bridges) + multireplace(mono, COMMON_ENANTIOMER)  # a default enantiomer goes unstated (All, not L-All), as in canonicalize_iupac
     mono += anomer if anomer and anomer in ['a', 'b'] else '?'
     return mono
 
