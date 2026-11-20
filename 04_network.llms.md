@@ -16,7 +16,7 @@
 ``` python
 def construct_network(
     glycans:str | list[str] | pandas.DataFrame, # Glycan(s), or an abundance frame (glycans as first column or index, samples as columns)
-    allowed_ptms:str | frozenset[str]=frozenset({'9Ac', '6S', '6P', '3S', '1P', 'OP', 'OAc', '4Ac', '3P', 'OS'}), # Allowed PTM(s)
+    allowed_ptms:str | frozenset[str]=frozenset({'1P', 'OP', '4Ac', '6P', 'OS', 'OAc', '9Ac', '3P', '6S', '3S'}), # Allowed PTM(s)
     edge_type:str='monolink', # Edge label type: monolink/monosaccharide/enzyme
     permitted_roots:str | frozenset[str] | None=None, # Allowed root node(s)
     abundances:list[float]=[], # Glycan abundances in the same order as glycans; default:empty
@@ -52,7 +52,7 @@ def plot_network(
     compact:bool=False, # Use compact SNFG style
     glycan_size:str='small', # Glycan size preset ('small', 'medium', 'large')
     title:str | None=None, # Plot title; None for none, as before
-)->None: # Jupyter-renderable plot (interactive HTML, or SVG with draw_glycans); outside Jupyter it opens in the browser
+)->None: # Jupyter-renderable plot (interactive HTML, or with draw_glycans an interactive SVG of the SNFG figure); outside Jupyter it opens in the browser
 ```
 
 *Visualize biosynthetic network*
@@ -196,7 +196,7 @@ def network_alignment(
 )->networkx.classes.digraph.DiGraph: # Combined network
 ```
 
-*Combine two networks into one with color coding (brown: shared, blue: only in a, orange: only in b)*
+*Combine two networks into one with color coding in the palette (a neutral: shared, main hue: only in a, second hue: only in b)*
 
 ``` python
 from glycowork.network.biosynthesis import net_dic

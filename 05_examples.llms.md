@@ -32,12 +32,12 @@ df_fish = df_species[df_species.Class == 'Actinopterygii'].reset_index(drop = Tr
 To have a better overview of the glycans similarities in fish, you can plot these data using `glycowork.motif.analysis.plot_embeddings`. The best option here, to visualize the data, is to color the dots by taxonomic family.
 
 ``` python
-plot_embeddings(df_fish.glycan.values.tolist(), label_list = df_fish.Family.values.tolist())
+plot_embeddings(df_fish.glycan.values.tolist(), label_list = df_fish.Family.values.tolist(), interactive = True)
 ```
 
     Download completed.
 
-![](05_examples_files/figure-html/cell-5-output-2.png)
+
 
 Interesting! First, the graph shows a large Salmonidae cluster in addition to a separate cluster of various families.\
 
@@ -45,22 +45,22 @@ Now, let’s focus on further analyses. We will first convert our data into a co
 
 ``` python
 df_map_fish = presence_to_matrix(df_fish, label_col_name = 'Family')
-get_heatmap(df_map_fish, motifs = True, feature_set = ['known', 'exhaustive'], datatype = 'presence', show_all = True)
+get_heatmap(df_map_fish, motifs = True, feature_set = ['known', 'exhaustive'], datatype = 'presence', show_all = True, interactive = True)
 ```
 
-![](05_examples_files/figure-html/cell-6-output-1.png)
+
 
 The first thing that catches the eye is the presence of a bunch of glycan motifs in Mugilidae to Cichlidae that are absent in the other classes. One hypothesis for this is that these families mainly contain glycosphingolipids in our database, while the other families focus on *N*-linked glycans (and Salmonidae + Cyprinidae have both as well-investigated families).\
 
 To visualize which dots from the embedding plot correspond to glycosphingolipids, we can focus on 1Cer-containing glycans. We can map them again but with the additional option `shape_feature`. This parameter allows you to transform dots into crosses if the corresponding glycan contains the specified monosaccharide, modification, or linkage.
 
 ``` python
-plot_embeddings(df_fish.glycan.values.tolist(), label_list = df_fish.Family.values.tolist(), shape_feature = "1Cer")
+plot_embeddings(df_fish.glycan.values.tolist(), label_list = df_fish.Family.values.tolist(), shape_feature = "1Cer", interactive = True)
 ```
 
     Download completed.
 
-![](05_examples_files/figure-html/cell-7-output-2.png)
+
 
 As you can see, in `df_species`, 1Cer-containing glycans (crosses) are only present in one of the two clusters (in the class Actinopterygii). In this cluster, they in turn show enriched locations, presumably corresponding to certain groups of related glycans.\
 
@@ -107,36 +107,35 @@ Another way to analyze the glycan binding capacities of lectins is to use `glyco
 results = get_pvals_motifs(glycan_binding.iloc[:,:-2].T.reset_index(), feature_set = ['exhaustive'], multiple_samples = True)
 ```
 
-    Significance inflation detected. The CLR/ALR transformation possibly cannot handle this dataset. Consider running again with a higher gamma value. Proceed with caution; for now switching to Bonferroni correction to be conservative about this.
-    Chosen grouping: by_motif_family
+    Possible significance inflation: more than 90% of tests are significant, which in log-ratio data can also come from a moved reference instead of from each feature. Proceed with caution, and consider running again with a higher gamma value.
 
-|   | motif | pval | corr_pval | significant | effect_size | equivalence_pval | Explained by | Redistribution p-val | Residual p-val | Residual effect size |
-|----|----|----|----|----|----|----|----|----|----|----|
-| 46 | Gal | 0 | 0 | True | 1.41 | 1 | Neu(a2-3/6)Gal (-1.42), Rha(a1-2/3/4)Gal (-1.41), Neu4Ac5Ac(a2-3)Gal (-1.41), Gal(?1-3)FucNAc (-1.41), Neu5GcOMe(a2-6)Gal (-1.41), +104 more | 0.536 | nan | 0 |
-| 130 | GlcNAc | 0 | 0 | True | 1.4 | 1 | L-QuiNAc(a1-3)GlcNAc (-1.40), FucNAc(a1-3)GlcNAc (-1.40), GlcNAc(b1-2/3)Rib5P-ol (-1.40), GlcNAc(b1-2/4)GalA (-1.40), FucNAm(a1-3)GlcNAc (-1.40), +104 more | 0.148 | nan | 0 |
-| 357 | Gal(?1-3/4/6)GlcNAc | 0 | 0 | True | 1.2 | 1 | Gal(b1-6)GlcNAc (-1.20), Gal(a1-3)GlcNAc (-1.18), Gal(a1-4)GlcNAc (-1.14), Gal(b1-3)GlcNAc (-0.67), Gal(b1-4)GlcNAc (-0.10) | 2.35e-105 | 1 | 0 |
-| 851 | Man(?1-3/4)GlcNAc | 0 | 0 | True | 1.17 | 1 | Man(b1-3)GlcNAc (-1.17), Man(a1-4)GlcNAc (-1.16), Man(b1-4)GlcNAc (-0.00) | 4.32e-105 | 1 | 0 |
-| 866 | Man(b1-4)GlcNAc | 0 | 0 | True | 1.17 | 1 |  | nan | nan | nan |
-| 857 | Man(a1-3)Man | 0 | 0 | True | 1.15 | 1 |  | nan | nan | nan |
-| 705 | GlcNAc(b1-2)Man | 0 | 0 | True | 1.15 | 1 |  | nan | nan | nan |
-| 862 | Man(a1-6)Man | 0 | 0 | True | 1.14 | 1 |  | nan | nan | nan |
-| 192 | Man | 0 | 0 | True | 1.14 | 1 | Man6P(a1-2/3/6)Man (-1.15), GlcNAc1P(b1-6)Man (-1.15), GlcNAc(a1-6)Man (-1.14), Man(a1-2/3)Fuc (-1.14), GlcNAc(a1-2)Man (-1.14), +29 more | 0.224 | nan | 0 |
-| 412 | Gal(b1-4)GlcNAc | 0 | 0 | True | 1.1 | 1 |  | nan | nan | nan |
-| 663 | GlcNAc(?1-2/3/4/6)Man | 0 | 0 | True | 1.07 | 1 | GlcNAc(a1-6)Man (-1.08), GlcNAc(a1-2)Man (-1.08), GlcNAc(b1-3)Man (-1.04), GlcNAc(b1-4)Man (-0.72), GlcNAc(b1-6)Man (-0.57), +1 more | 2.57e-88 | 1 | 0 |
-| 264 | Sia | 0 | 0 | True | 1.02 | 1 | Sia(b2-6)GalNAc (-0.98), Sia(b2-6)Gal (-0.98), Neu5Gc (-0.86), Sia(a2-6)GalNAc (-0.79), Neu5Ac (-0.00) | 5.17e-154 | 1 | 0 |
-| 218 | Neu5Ac | 0 | 0 | True | 1.02 | 1 | Neu5Ac(b1-6)GalNAc (-1.02), Neu5Ac(a2-2/3/6)Glc (-1.02), Neu5Ac(a2-6)Glc6S (-1.02), Neu5Ac(a2-6)GlcNAc6S (-1.02), Neu5Ac(a2-3/6)Gal3S (-1.01), +10 more | nan | 1 | 0 |
-| 849 | Man(?1-2/3/4/6)Man | 0 | 0 | True | 1.01 | 1 | Man(a1-4)Man (-0.99), Man(b1-4)Man (-0.99), Man(a1-2)Man (-0.69), Man(a1-3)Man (+0.15), Man(a1-6)Man (+0.14) | 3.25e-138 | 1 | 0 |
-| 1000 | Sia(?2-2/3/6)Gal | 0 | 0 | True | 0.988 | 1 | Sia(b2-6)Gal (-0.95), Neu5Gc(?2-3/6)Gal (-0.83), Sia(a2-6)Gal (-0.42), Sia(a2-3)Gal (-0.22), Neu5Ac(?2-2/3/6)Gal (-0.02) | 4.5e-164 | 1 | 0 |
-| 894 | Neu5Ac(?2-2/3/6)Gal | 0 | 0 | True | 0.965 | 1 | Neu5Ac(a2-2)Gal (-0.97), Neu5Ac(b2-3)Gal (-0.94), Neu5Ac(b2-6)Gal (-0.94), Neu5Ac(a2-6)Gal (-0.40), Neu5Ac(a2-3)Gal (-0.22) | 9.12e-161 | 1 | 0 |
-| 32 | Fuc | 0 | 0 | True | 0.964 | 1 | GlcA(?1-3/4)Fuc (-0.97), Man(a1-2/3)Fuc (-0.97), Glc(a1-3)Fuc (-0.97), Fuc(a1-3)Xulf (-0.97), Fuc(a1-3)Xluf (-0.97), +14 more | 0.87 | nan | 0 |
-| 729 | GlcNAc(b1-4)GlcNAc | 0 | 0 | True | 0.944 | 1 |  | nan | nan | nan |
-| 666 | GlcNAc(?1-3/4/6)GlcNAc | 0 | 0 | True | 0.942 | 1 | GlcNAc(a1-3)GlcNAc (-0.95), GlcNAc(a1-4)GlcNAc (-0.91), GlcNAc(b1-3)GlcNAc (-0.88), GlcNAc(b1-6)GlcNAc (-0.87), GlcNAc(b1-4)GlcNAc (+0.00) | 1.45e-119 | 1 | 0 |
-| 74 | GalNAc | 0 | 0 | True | 0.853 | 1 | GalNAc(?1-2/4)Glc (-0.86), GalNAc(?1-2/3/4)Rha (-0.86), GalA(?1-3)GalNAc (-0.86), Neu5Ac(b1-6)GalNAc (-0.86), GalNAc(a1-4)Qui3NAc (-0.86), +70 more | 0.00252 | nan | 0 |
-| 304 | Fuc(?1-2/3/4/6)GlcNAc | 0 | 0 | True | 0.801 | 1 | Fuc(b1-4)GlcNAc (-0.79), Fuc(b1-3)GlcNAc (-0.78), Fuc(a1-2)GlcNAc (-0.78), Fuc(a1-4)GlcNAc (-0.54), Fuc(a1-3)GlcNAc (-0.28), +1 more | 1.26e-39 | 1 | 0 |
-| 661 | GlcNAc(?1-2/3/4/6)Gal | 0 | 0 | True | 0.786 | 1 | GlcNAc(b1-2)Gal (-0.76), GlcNAc(a1-3)Gal (-0.71), GlcNAc(b1-4)Gal (-0.70), GlcNAc(a1-6)Gal (-0.69), GlcNAc(a1-4)Gal (-0.57), +2 more | 2.76e-92 | 1 | 0 |
-| 1001 | Sia(a2-3)Gal | 0 | 0 | True | 0.764 | 1 | Kdn(a2-3)Gal (-0.70), Neu5Gc(a2-3)Gal (-0.62), Neu5Ac(a2-3)Gal (-0.02) | 8.99e-88 | 1 | 0 |
-| 713 | GlcNAc(b1-3)Gal | 0 | 0 | True | 0.755 | 1 |  | nan | nan | nan |
-| 899 | Neu5Ac(a2-3)Gal | 0 | 0 | True | 0.743 | 1 |  | nan | nan | nan |
+|   | motif | pval | corr_pval | significant | effect_size | equivalence_pval | Explained by | Redistribution p-val | Residual p-val | Residual effect size | Own share | Share shift |
+|----|----|----|----|----|----|----|----|----|----|----|----|----|
+| 46 | Gal | 0 | 0 | True | 1.41 | 1 | Gal(?1-3/4/6)GlcNAc & Sia(?2-2/3/6)Gal (+5.3 pp), Gal(?1-3/4/6)GlcNAc & GlcNAc(?1-2/3/4/6)Gal (+4.7 pp), Gal(?1-3/4/6)GlcNAc (-2.4 pp), Gal(?1-2/3/4/6)Gal (-1.5 pp), Fuc(?1-2/3)Gal & Gal(?1-3/4/6)GlcNAc (-1.4 pp), +181 more | 0.717 | nan | 0 | 0.000461 | 5.29 |
+| 130 | GlcNAc | 0 | 0 | True | 1.4 | 1 | Gal(?1-3/4/6)GlcNAc & GlcNAc(?1-2/3/4/6)Gal (+2.7 pp), Gal(?1-3/4/6)GlcNAc & GlcNAc(?1-2/3/4/6)GalNAc (-1.8 pp), Gal(?1-3/4/6)GlcNAc (-1.6 pp), GlcNAc(?1-3/4/6)GlcNAc (+1.5 pp), GlcNAc(?1-3/4/6)GlcNAc & Man(?1-3/4)GlcNAc (+1.4 pp), +182 more | nan | nan | nan | 0.000194 | 2.69 |
+| 357 | Gal(?1-3/4/6)GlcNAc | 0 | 0 | True | 1.2 | 1 | Gal(b1-4)GlcNAc (+6.2 pp), Gal(b1-3)GlcNAc (-6.0 pp), Gal(a1-4)GlcNAc (-0.1 pp), Gal(a1-3)GlcNAc (-0.0 pp), Gal(b1-6)GlcNAc (-0.0 pp) | 2.42e-105 | nan | nan | 0 | 6.15 |
+| 851 | Man(?1-3/4)GlcNAc | 0 | 0 | True | 1.17 | 1 | Man(b1-4)GlcNAc (+0.0 pp), Man(a1-4)GlcNAc (-0.0 pp), Man(b1-3)GlcNAc (-0.0 pp) | 4.46e-105 | nan | nan | 0 | 0.0235 |
+| 866 | Man(b1-4)GlcNAc | 0 | 0 | True | 1.17 | 1 |  | nan | nan | nan | nan | nan |
+| 857 | Man(a1-3)Man | 0 | 0 | True | 1.15 | 1 |  | nan | nan | nan | nan | nan |
+| 705 | GlcNAc(b1-2)Man | 0 | 0 | True | 1.15 | 1 |  | nan | nan | nan | nan | nan |
+| 862 | Man(a1-6)Man | 0 | 0 | True | 1.14 | 1 |  | nan | nan | nan | nan | nan |
+| 192 | Man | 0 | 0 | True | 1.14 | 1 | GlcNAc(?1-2/3/4/6)Man (-3.3 pp), Man(?1-2/3/4/6)Man (+1.9 pp), GlcNAc(?1-2/3/4/6)Man & Man(?1-3/6)GalNAc (+1.1 pp), Man(?1-2/3/4/6)Man & Man(?1-3/4)GlcNAc (+0.6 pp), GlcNAc(?1-2/3/4/6)Man & Man(?1-2/3/4/6)Man & Man(?1-3/4)GlcNAc (-0.4 pp), +39 more | 0.275 | nan | 0 | 0.000806 | 3.26 |
+| 412 | Gal(b1-4)GlcNAc | 0 | 0 | True | 1.1 | 1 |  | nan | nan | nan | nan | nan |
+| 663 | GlcNAc(?1-2/3/4/6)Man | 0 | 0 | True | 1.07 | 1 | GlcNAc(b1-6)Man (+0.9 pp), GlcNAc(b1-3)Man (-0.4 pp), GlcNAc(b1-2)Man (-0.3 pp), GlcNAc(b1-4)Man (-0.2 pp), GlcNAc(a1-2)Man (-0.0 pp), +1 more | 2.64e-88 | nan | nan | 0 | 0.937 |
+| 264 | Sia | 0 | 0 | True | 1.02 | 1 | Neu5Ac (+4.8 pp), Neu5Gc (-3.1 pp), Neu5Gc & Sia(b2-6)Gal (-0.5 pp), Neu5Ac & Sia(b2-6)GalNAc (-0.5 pp), Neu5Gc & Sia(a2-6)GalNAc (-0.4 pp), +3 more | 1.56e-157 | nan | nan | 0 | 4.82 |
+| 218 | Neu5Ac | 0 | 0 | True | 1.02 | 1 | Neu5Ac(?2-2/3/6)Gal (+5.0 pp), Neu5Ac(a2-8)Sia & Neu5Ac(a2-8/9)Neu5Ac & Sia(a2-8)Neu5Ac (-2.8 pp), Neu5Ac(?2-2/3/6)Gal & Neu5Ac(a2-8)Sia & Neu5Ac(a2-8/9)Neu5Ac & Sia(a2-8)Neu5Ac (-1.2 pp), Neu5Ac(a2-3)GalNAc (-0.8 pp), Neu5Ac(b2-6)GalNAc (-0.6 pp), +15 more | nan | nan | nan | 0.00104 | 5.02 |
+| 849 | Man(?1-2/3/4/6)Man | 0 | 0 | True | 1.01 | 1 | Man(a1-2)Man (+1.0 pp), Man(a1-6)Man (-0.7 pp), Man(a1-3)Man (-0.3 pp), Man(a1-4)Man (+0.0 pp), Man(b1-4)Man (+0.0 pp) | 3.35e-138 | nan | nan | 0 | 0.954 |
+| 1000 | Sia(?2-2/3/6)Gal | 0 | 0 | True | 0.988 | 1 | Neu5Ac(?2-2/3/6)Gal & Sia(a2-6)Gal (+4.5 pp), Sia(a2-3)Gal (-2.6 pp), Neu5Gc(?2-3/6)Gal & Sia(a2-3)Gal (-2.4 pp), Neu5Ac(?2-2/3/6)Gal & Sia(a2-3)Gal (+2.4 pp), Neu5Gc(?2-3/6)Gal & Sia(a2-6)Gal (-0.7 pp), +4 more | 3.56e-180 | nan | nan | 0 | 4.46 |
+| 894 | Neu5Ac(?2-2/3/6)Gal | 0 | 0 | True | 0.965 | 1 | Neu5Ac(a2-6)Gal (+2.6 pp), Neu5Ac(a2-3)Gal (-2.2 pp), Neu5Ac(b2-6)Gal (-0.4 pp), Neu5Ac(b2-3)Gal (+0.0 pp), Neu5Ac(a2-2)Gal (-0.0 pp) | 9.4e-161 | nan | nan | 0 | 2.56 |
+| 32 | Fuc | 0 | 0 | True | 0.964 | 1 | Fuc(?1-2/3/4/6)GlcNAc (+6.6 pp), Fuc(?1-2/3)Gal (-5.3 pp), Fuc(a1-2)Gal6S (-0.4 pp), Fuc(a1-2/3/4)Glc (-0.4 pp), Fuc(a1-3)GlcNAc6S (+0.4 pp), +22 more | 0.883 | nan | 0 | 0.000842 | 6.62 |
+| 729 | GlcNAc(b1-4)GlcNAc | 0 | 0 | True | 0.944 | 1 |  | nan | nan | nan | nan | nan |
+| 666 | GlcNAc(?1-3/4/6)GlcNAc | 0 | 0 | True | 0.942 | 1 | GlcNAc(b1-3)GlcNAc (-0.1 pp), GlcNAc(b1-4)GlcNAc (+0.1 pp), GlcNAc(a1-4)GlcNAc (+0.0 pp), GlcNAc(b1-6)GlcNAc (-0.0 pp), GlcNAc(a1-3)GlcNAc (-0.0 pp) | 1.49e-119 | nan | nan | 0 | 0.071 |
+| 74 | GalNAc | 0 | 0 | True | 0.853 | 1 | Man(?1-3/6)GalNAc (+2.5 pp), GlcNAc(?1-2/3/4/6)GalNAc (-2.4 pp), Gal(?1-3/4/6)GalNAc (-2.0 pp), GalNAc(?1-2/3/4/6)Gal (+1.4 pp), Gal(?1-3/4/6)GalNAc & GalNAc(?1-2/3/4/6)Gal (-1.4 pp), +104 more | 0.555 | nan | 0 | 0.00143 | 2.5 |
+| 304 | Fuc(?1-2/3/4/6)GlcNAc | 0 | 0 | True | 0.801 | 1 | Fuc(a1-6)GlcNAc (+8.0 pp), Fuc(a1-3)GlcNAc (-4.2 pp), Fuc(a1-4)GlcNAc (-3.2 pp), Fuc(b1-3)GlcNAc (-0.5 pp), Fuc(b1-4)GlcNAc (+0.0 pp), +1 more | 1.3e-39 | nan | nan | 0 | 7.97 |
+| 661 | GlcNAc(?1-2/3/4/6)Gal | 0 | 0 | True | 0.786 | 1 | GlcNAc(b1-3)Gal (+5.0 pp), GlcNAc(b1-6)Gal (-2.7 pp), GlcNAc(b1-4)Gal (-0.8 pp), GlcNAc(a1-6)Gal (-0.4 pp), GlcNAc(b1-2)Gal (-0.4 pp), +2 more | 2.85e-92 | nan | nan | 0 | 4.96 |
+| 1001 | Sia(a2-3)Gal | 0 | 0 | True | 0.764 | 1 | Neu5Ac(a2-3)Gal (+6.8 pp), Kdn(a2-3)Gal (-3.6 pp), Neu5Gc(a2-3)Gal (-3.3 pp) | 9.27e-88 | nan | nan | 0 | 6.85 |
+| 713 | GlcNAc(b1-3)Gal | 0 | 0 | True | 0.755 | 1 |  | nan | nan | nan | nan | nan |
+| 899 | Neu5Ac(a2-3)Gal | 0 | 0 | True | 0.743 | 1 |  | nan | nan | nan | nan | nan |
 
 These results indicate, for each motif, a p-value and a corrected p-value. These quantitative results support our qualitative observations from before. However, this represents a bird’s eye view across all lectins in the dataset. A follow-up analysis might be to focus on a specific group of lectins, analyzing their binding patterns in depth.
 
@@ -222,11 +221,10 @@ plot_network(network, draw_glycans = True)
 
 
 
-Hover for details
+We can see that, in these networks, every dot is a glycan (and can be hovered over to see its sequence) and every link is the addition of a monosaccharide in a defined linkage by an enzyme. Solid burgundy dots are glycans which we provided as input, pale teal glycans are inferred in order to connect the network.\
 
-We can see that, in these networks, every dot is a glycan (and can be hovered over to see its sequence) and every link is the addition of a monosaccharide in a defined linkage by an enzyme. Blue dots are glycans which we provided as input, orange glycans are inferred in order to connect the network.\
-
-One thing you can immediately see is that there often are multiple paths to reach a blue dot, via several orange routes. This is because we don’t know the order in which the monosaccharides have been added. We show in recent work that this order is highly conserved. Therefore, we could use knowledge gathered over decades in the breast milk of over a hundred mammalian species, to find out which order is realistic.\
+One thing you can immediately see is that there often are multiple paths to reach a burgundy dot, via several pale teal routes. This is because we don’t know the order in which the monosaccharides have been added. We show in recent work that this order is highly conserved. Therefore, we could use knowledge gathered over decades in the breast milk of over a hundred mammalian species, to find out which order is realistic.\
+\
 
 `glycowork` can help you here as well, since it contains pre-computed biosynthetic networks for milk glycans of \>100 mammalian species. We can use the `glycowork.network.biosynthesis.evoprune_network` function to use this information to prune our networks, removing paths that are evolutionarily very unlikely.
 
@@ -242,9 +240,7 @@ plot_network(network, draw_glycans = True)
 
 
 
-Hover for details
-
-Nice, that’s a bit more organized! `evoprune_network` has removed a few of the nodes that had zero probability. You can see that the orange nodes have changed size as well. This is to indicate their probability. If you change the `threshold` parameter of `evoprune_network` these low-probability nodes might also be pruned away, yet network connectivity is always preserved.\
+Nice, that’s a bit more organized! `evoprune_network` has removed a few of the nodes that had zero probability. You can see that the pale teal nodes have changed size as well. This is to indicate their probability. If you change the `threshold` parameter of `evoprune_network` these low-probability nodes might also be pruned away, yet network connectivity is always preserved.\
 
 Now, let’s say we want to highlight parts of the network containing the monosaccharide Fuc. For this, we can use `glycowork.network.biosynthesis.highlight_network`. With this function, you can highlight many things in a network: motifs, abundances, species occurence, evolutionary conservation, etc.
 
@@ -255,9 +251,7 @@ plot_network(network, draw_glycans = True)
 
 
 
-Hover for details
-
-You can see that the node color has changed now. Every glycan/node that contains Fuc now is showing up as a green node, while those lacking Fuc are purple. You can also still make out which nodes are inferred (transparent) and actually observed (solid). The probabilities from `evoprune_network`are also still contained within the network. Apart from these visualizations, you can use these networks for all kinds of analytical work, from `glycowork.motif.graph.generate_graph_features` to `glycowork.network.evolution.get_communities`; your only limitation is your creativity!:-)
+You can see that the node color has changed now. Every glycan/node that contains Fuc now is showing up as a burgundy node, while those lacking Fuc are teal. You can also still make out which nodes are inferred (transparent) and actually observed (solid). The probabilities from `evoprune_network`are also still contained within the network. Apart from these visualizations, you can use these networks for all kinds of analytical work, from `glycowork.motif.graph.generate_graph_features` to `glycowork.network.evolution.get_communities`; your only limitation is your creativity!:-)
 
 We can also use the functions within `glycowork.network` to compare species and their milk glycomes: Let’s have a look at the two pre-computed biosynthetic networks (found in net_dic) of black bears (*Ursus americanus*) and brown bears (*Ursus arctos*).
 
@@ -269,8 +263,6 @@ plot_network(network = brownbear_network, draw_glycans = True)
 
 
 
-Hover for details
-
 As in our example we have two networks, it is possible to directly combine and compare them to identify conserved and specific nodes, using for instance `glycowork.network.biosynthesis.network_alignment`.
 
 ``` python
@@ -280,9 +272,7 @@ plot_network(network = combined_network, draw_glycans = True)
 
 
 
-Hover for details
-
-In this new representation, the blue nodes are specific to network_a (here the black bear), and orange nodes are specific to network_b (the brown bear). The remaining brown nodes are conserved in both species. Virtual nodes follow the same color scheme but are transparent. Here, we can see many blue nodes that are specific to the black bear. This is not so surprising, as the black bear network is larger.
+In this new representation, the burgundy nodes are specific to network_a (here the black bear), and teal nodes are specific to network_b (the brown bear). The remaining gray-mauve nodes are conserved in both species. Virtual nodes follow the same color scheme but are transparent. Here, we can see many burgundy nodes that are specific to the black bear. This is not so surprising, as the black bear network is larger.
 
 We can also make use of the `network.evolution` module to compare the similarity of related species, such as different kinds of bears. Using the metric of Jaccard distance between their networks, we can retrieve sequences and networks for various bear species within `glycowork` with the function `glycowork.network.evolution.distance_from_metric`. Then, we can use the distance matrix in the `glycowork.network.evolution.dendrogram_from_distance` function to plot the resulting clustering. One immediate result here is that polar bears (*Ursus maritimus*) seem to have a very different milk glycome from other types of bears!
 
@@ -297,12 +287,12 @@ dendrogram_from_distance(dm)
 
 |   | Ursus_americanus | Ursus_arctos | Ursus_arctos_lasiotus | Ursus_arctos_yesoensis | Ursus_maritimus | Ursus_thibetanus_japonicus |
 |----|----|----|----|----|----|----|
-| Ursus_americanus | 0.000000 | 0.345238 | 0.958333 | 0.882353 | 0.852174 | 0.828571 |
-| Ursus_arctos | 0.345238 | 0.000000 | 0.940299 | 0.866667 | 0.829545 | 0.867470 |
-| Ursus_arctos_lasiotus | 0.958333 | 0.940299 | 0.000000 | 0.850000 | 0.693878 | 0.854167 |
-| Ursus_arctos_yesoensis | 0.882353 | 0.866667 | 0.850000 | 0.000000 | 0.721311 | 0.500000 |
-| Ursus_maritimus | 0.852174 | 0.829545 | 0.693878 | 0.721311 | 0.000000 | 0.681818 |
-| Ursus_thibetanus_japonicus | 0.828571 | 0.867470 | 0.854167 | 0.500000 | 0.681818 | 0.000000 |
+| Ursus_americanus | 0.000000 | 0.867470 | 0.829545 | 0.345238 | 0.866667 | 0.940299 |
+| Ursus_arctos | 0.867470 | 0.000000 | 0.681818 | 0.828571 | 0.500000 | 0.854167 |
+| Ursus_arctos_lasiotus | 0.829545 | 0.681818 | 0.000000 | 0.852174 | 0.721311 | 0.693878 |
+| Ursus_arctos_yesoensis | 0.345238 | 0.828571 | 0.852174 | 0.000000 | 0.882353 | 0.958333 |
+| Ursus_maritimus | 0.866667 | 0.500000 | 0.721311 | 0.882353 | 0.000000 | 0.850000 |
+| Ursus_thibetanus_japonicus | 0.940299 | 0.854167 | 0.693878 | 0.958333 | 0.850000 | 0.000000 |
 
 # Example 5: Differential glycomics analyses
 
@@ -342,19 +332,19 @@ get_differential_expression(df)
 
 |  | Glycan | Mean abundance | Log2FC | p-val | corr p-val | significant | corr Levene p-val | Effect size | Equivalence p-val |
 |----|----|----|----|----|----|----|----|----|----|
-| 12 | Neu5Ac(a2-3)Gal(b1-4)GlcNAc6S(b1-6)\[Neu5Ac(a2-... | 4.361908 | 1.191371 | 0.000169 | 0.000631 | True | 0.334477 | 1.668369 | 1.000000 |
-| 3 | Gal3/6S(b1-3)\[Neu5Ac(a2-6)\]GalNAc | 2.118118 | -1.629791 | 0.000210 | 0.000631 | True | 0.796428 | -1.495267 | 1.000000 |
-| 8 | Neu5Ac(a2-3)Gal(b1-3)\[Neu5Ac(a2-8)Neu5Ac(a2-6)... | 0.855547 | -0.774705 | 0.000560 | 0.001119 | True | 0.854606 | -1.725754 | 1.000000 |
-| 6 | Neu5Ac(a2-3)Gal(b1-3)\[Gal(b1-4)GlcNAc6S(b1-6)\]... | 1.478294 | 1.350737 | 0.001512 | 0.002268 | True | 0.334477 | 1.161091 | 1.000000 |
-| 9 | Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)\[Gal(b1-3)\]Ga... | 8.683615 | 0.653972 | 0.006455 | 0.007746 | True | 0.854606 | 1.083785 | 1.000000 |
-| 10 | Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)\[Neu5Ac(a2-3)... | 16.574095 | 0.428917 | 0.015762 | 0.015762 | True | 0.854606 | 1.165862 | 1.000000 |
-| 7 | Neu5Ac(a2-3)Gal(b1-3)\[Neu5Ac(a2-6)\]GalNAc | 39.974312 | -0.338316 | 0.025138 | 0.025138 | True | 0.854606 | -1.461205 | 1.000000 |
-| 0 | Fuc(a1-2)Gal(b1-4)GlcNAc(b1-6)\[Gal(b1-3)\]GalNAc | 1.731629 | 0.578361 | 0.063939 | 0.063939 | False | 0.854606 | 0.599029 | 0.956049 |
-| 4 | Neu5Ac(a2-3)Gal(b1-3)GalNAc | 11.907405 | -0.301955 | 0.074372 | 0.074372 | False | 0.854606 | -0.801246 | 0.956049 |
-| 5 | Neu5Ac(a2-3)Gal(b1-3)\[Gal(b1-4)GlcNAc(b1-6)\]Ga... | 1.982424 | -0.385582 | 0.083481 | 0.083481 | False | 0.854606 | -0.616242 | 0.956049 |
-| 1 | Gal(b1-3)\[Neu5Ac(a2-6)\]GalNAc | 0.775084 | -0.437895 | 0.094276 | 0.094276 | False | 0.334477 | -0.556086 | 0.956049 |
-| 2 | Gal(b1-4)GlcNAc(b1-6)\[Gal(b1-3)\]GalNAc | 2.088084 | -0.070387 | 0.715357 | 0.715357 | False | 0.854606 | -0.127870 | 0.956049 |
-| 11 | Neu5Ac(a2-3)Gal(b1-4)GlcNAc6S(b1-6)\[Gal(b1-3)\]... | 7.469484 | -0.003783 | 0.984235 | 0.984235 | False | 0.854606 | -0.006934 | 0.956049 |
+| 12 | Neu5Ac(a2-3)Gal(b1-4)GlcNAc6S(b1-6)\[Neu5Ac(a2-... | 4.361908 | 1.161117 | 0.000436 | 0.001813 | True | 0.323144 | 1.792393 | 1.000000 |
+| 3 | Gal3/6S(b1-3)\[Neu5Ac(a2-6)\]GalNAc | 2.118118 | -1.668882 | 0.000686 | 0.001813 | True | 0.863659 | -1.625010 | 1.000000 |
+| 8 | Neu5Ac(a2-3)Gal(b1-3)\[Neu5Ac(a2-8)Neu5Ac(a2-6)... | 0.855547 | -0.807588 | 0.000906 | 0.001813 | True | 0.863659 | -1.679109 | 1.000000 |
+| 10 | Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)\[Neu5Ac(a2-3)... | 16.574095 | 0.451016 | 0.002419 | 0.003629 | True | 0.863659 | 1.712897 | 1.000000 |
+| 9 | Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)\[Gal(b1-3)\]Ga... | 8.683615 | 0.645701 | 0.004846 | 0.005739 | True | 0.323144 | 1.272522 | 1.000000 |
+| 6 | Neu5Ac(a2-3)Gal(b1-3)\[Gal(b1-4)GlcNAc6S(b1-6)\]... | 1.478294 | 1.276033 | 0.005739 | 0.005739 | True | 0.323144 | 1.154285 | 1.000000 |
+| 7 | Neu5Ac(a2-3)Gal(b1-3)\[Neu5Ac(a2-6)\]GalNAc | 39.974312 | -0.309870 | 0.006933 | 0.006933 | True | 0.863659 | -1.759388 | 1.000000 |
+| 4 | Neu5Ac(a2-3)Gal(b1-3)GalNAc | 11.907405 | -0.317089 | 0.068772 | 0.068772 | False | 0.863659 | -0.729002 | 0.937868 |
+| 1 | Gal(b1-3)\[Neu5Ac(a2-6)\]GalNAc | 0.775084 | -0.466568 | 0.080582 | 0.080582 | False | 0.323144 | -0.647163 | 0.937868 |
+| 5 | Neu5Ac(a2-3)Gal(b1-3)\[Gal(b1-4)GlcNAc(b1-6)\]Ga... | 1.982424 | -0.361797 | 0.095590 | 0.095590 | False | 0.863659 | -0.626730 | 0.937868 |
+| 0 | Fuc(a1-2)Gal(b1-4)GlcNAc(b1-6)\[Gal(b1-3)\]GalNAc | 1.731629 | 0.514017 | 0.154049 | 0.154049 | False | 0.863659 | 0.500396 | 0.937868 |
+| 2 | Gal(b1-4)GlcNAc(b1-6)\[Gal(b1-3)\]GalNAc | 2.088084 | -0.083491 | 0.660362 | 0.660362 | False | 0.863659 | -0.154318 | 0.937868 |
+| 11 | Neu5Ac(a2-3)Gal(b1-4)GlcNAc6S(b1-6)\[Gal(b1-3)\]... | 7.469484 | -0.032598 | 0.862640 | 0.862640 | False | 0.863659 | -0.060511 | 0.937868 |
 
 Okay, seems like there are quite a few glycan that are either higher or lower in the cancer samples (see the “Log2FC” or “Effect size” columns for the direction of the effect)! A really important column here is the “corr p-val” column, which indicates the p-values of the comparisons after a two-stage Benjamini-Hochberg correction for multiple testing. By comparing this with a significance threshold, we can tell whether the observed difference is statistically significant. Usually, this threshold is p \< 0.05 but this is a bad convention, since the meaning of p-values changes with sample size (a p-value of 0.049 at a sample size of 1,000 should not be considered significant but it should at a sample size of 10). `glycowork` adjusts this for you.
 
@@ -365,35 +355,47 @@ df_res = get_differential_expression(df, motifs = True)
 df_res
 ```
 
-    Chosen grouping: by_motif_family
-
-|  | Glycan | Mean abundance | Log2FC | p-val | corr p-val | significant | corr Levene p-val | Effect size | Equivalence p-val | Explained by | Redistribution p-val | Residual p-val | Residual effect size |
-|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
-| 1 | Internal_LacNAc_type2 | 3.181490 | 0.623914 | 0.000183 | 0.000365 | True | 0.973152 | 2.031779 | 1.000000 | H_antigen_type2 (+0.08) | 0.999388 | 0.002732 | 1.815136 |
-| 14 | Neu5Ac(a2-8)Neu5Ac | 0.101874 | -0.786713 | 0.000269 | 0.000539 | True | 0.966300 | -1.701406 | 1.000000 |  | NaN | NaN | NaN |
-| 7 | Gal3/6S(b1-3)GalNAc | 0.253167 | -1.538591 | 0.000539 | 0.001078 | True | 0.717715 | -1.492278 | 1.000000 |  | NaN | NaN | NaN |
-| 13 | Neu5Ac(a2-6)GalNAc | 5.191807 | -0.263247 | 0.001618 | 0.001618 | True | 0.717715 | -1.474973 | 1.000000 | Disialyl_T_antigen (+0.02) | 0.010802 | 0.004998 | -1.399822 |
-| 11 | Gal(b1-3)GalNAc | 11.590007 | 0.181353 | 0.001788 | 0.001788 | True | 0.717715 | 1.913002 | 1.000000 | Oglycan_core1 (-0.32), Oglycan_core2 (+0.29) | 0.002481 | 1.000000 | 0.000000 |
-| 5 | Oglycan_core2 | 3.663874 | 0.474670 | 0.001873 | 0.001873 | True | 0.889380 | 1.257691 | 1.000000 |  | NaN | NaN | NaN |
-| 6 | Gal | 16.827021 | 0.261506 | 0.004396 | 0.004396 | True | 0.717715 | 1.245106 | 1.000000 | Terminal_LacNAc_type2 (-0.43), Internal_LacNAc... | 0.004638 | 1.000000 | 0.000000 |
-| 3 | Disialyl_T_antigen | 4.846368 | -0.247367 | 0.004553 | 0.004553 | True | 0.717715 | -1.233701 | 1.000000 |  | NaN | NaN | NaN |
-| 9 | GlcNAc6S(b1-6)GalNAc | 1.573141 | 0.503116 | 0.010337 | 0.010337 | True | 0.717715 | 0.974911 | 1.000000 |  | NaN | NaN | NaN |
-| 0 | H_antigen_type2 | 0.205325 | 0.704798 | 0.040932 | 0.040932 | True | 0.814021 | 0.715006 | 1.000000 |  | NaN | NaN | NaN |
-| 4 | Oglycan_core1 | 7.926133 | -0.143565 | 0.085429 | 0.085429 | False | 0.717715 | -0.594946 | 0.880232 | Disialyl_T_antigen (-0.10) | 0.004372 | 0.245211 | 0.470052 |
-| 2 | Terminal_LacNAc_type2 | 0.482384 | -0.163598 | 0.245667 | 0.245667 | False | 0.814021 | -0.386140 | 0.880232 |  | NaN | NaN | NaN |
-| 12 | Neu5Ac(a2-3)Gal | 13.510278 | 0.107799 | 0.266595 | 0.266595 | False | 0.717715 | 0.376281 | 0.880232 | Disialyl_T_antigen (-0.36) | 0.000185 | 0.002732 | 1.656784 |
-| 8 | GalNAc | 11.843174 | 0.088708 | 0.303224 | 0.303224 | False | 0.769358 | 0.384407 | 0.880232 | Gal3/6S(b1-3)GalNAc (-1.63), GlcNAc6S(b1-6)Gal... | 0.009985 | 1.000000 | 0.000000 |
-| 10 | Neu5Ac | 18.803959 | 0.026365 | 0.761181 | 0.761181 | False | 0.717715 | 0.107014 | 0.880232 | Neu5Ac(a2-8)Neu5Ac (-0.81), Neu5Ac(a2-6)GalNAc... | 0.001908 | 1.000000 | 0.000000 |
+|  | Glycan | Mean abundance | Log2FC | p-val | corr p-val | significant | corr Levene p-val | Effect size | Equivalence p-val | Explained by | Redistribution p-val | Residual p-val | Residual effect size | Own share | Share shift |
+|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
+| 1 | Internal_LacNAc_type2 | 3.181490 | 0.629218 | 0.000341 | 0.000930 | True | 0.809856 | 2.024134 | 1.00000 | own (-0.4 pp), H_antigen_type2 (+0.4 pp) | 0.999372 | 0.000973 | 1.752198 | 0.932489 | 0.399422 |
+| 14 | Neu5Ac(a2-8)Neu5Ac | 0.101874 | -0.700013 | 0.000511 | 0.000930 | True | 0.970523 | -1.764310 | 1.00000 |  | NaN | NaN | NaN | NaN | NaN |
+| 5 | Oglycan_core2 | 3.663874 | 0.539096 | 0.000669 | 0.000930 | True | 0.968329 | 1.752368 | 1.00000 |  | NaN | NaN | NaN | NaN | NaN |
+| 7 | Gal3/6S(b1-3)GalNAc | 0.253167 | -1.561307 | 0.000744 | 0.000930 | True | 0.689685 | -1.594817 | 1.00000 |  | NaN | NaN | NaN | NaN | NaN |
+| 13 | Neu5Ac(a2-6)GalNAc | 5.191807 | -0.261994 | 0.002723 | 0.002723 | True | 0.689685 | -1.678032 | 1.00000 | own (-3.3 pp), Disialyl_T_antigen (+3.3 pp) | 0.008718 | 0.003205 | -1.393824 | 0.062958 | 3.252698 |
+| 9 | GlcNAc6S(b1-6)GalNAc | 1.573141 | 0.622170 | 0.003281 | 0.003281 | True | 0.812358 | 1.307735 | 1.00000 |  | NaN | NaN | NaN | NaN | NaN |
+| 6 | Gal | 16.827021 | 0.269992 | 0.005502 | 0.005502 | True | 0.689685 | 1.461744 | 1.00000 | Gal(b1-3)GalNAc & Neu5Ac(a2-3)Gal (-7.5 pp), I... | 0.004339 | 0.008077 | 1.170811 | 0.010159 | 7.494404 |
+| 3 | Disialyl_T_antigen | 4.846368 | -0.212051 | 0.011678 | 0.011678 | True | 0.689685 | -1.313190 | 1.00000 |  | NaN | NaN | NaN | NaN | NaN |
+| 12 | Neu5Ac(a2-3)Gal | 13.510278 | 0.235863 | 0.013555 | 0.013555 | True | 0.689685 | 1.170308 | 1.00000 | own (+10.9 pp), Disialyl_T_antigen (-10.9 pp) | 0.000167 | 0.001647 | 1.633830 | 0.637635 | 10.914831 |
+| 11 | Gal(b1-3)GalNAc | 11.590007 | 0.139839 | 0.071633 | 0.071633 | True | 0.630051 | 0.882967 | 0.95138 | Oglycan_core2 (+8.6 pp), Oglycan_core1 (-8.6 pp) | 0.002199 | NaN | NaN | 0.000000 | 8.601248 |
+| 0 | H_antigen_type2 | 0.205325 | 0.621591 | 0.088213 | 0.088213 | False | 0.689685 | 0.617573 | 0.95138 |  | NaN | NaN | NaN | NaN | NaN |
+| 10 | Neu5Ac | 18.803959 | 0.097243 | 0.190218 | 0.190218 | True | 0.630051 | 0.642730 | 0.95138 | Neu5Ac(a2-3)Gal (+6.9 pp), Neu5Ac(a2-6)GalNAc ... | 0.000931 | NaN | NaN | 0.000000 | 6.930478 |
+| 2 | Terminal_LacNAc_type2 | 0.482384 | -0.095839 | 0.512608 | 0.512608 | False | 0.970523 | -0.232577 | 0.95138 |  | NaN | NaN | NaN | NaN | NaN |
+| 4 | Oglycan_core1 | 7.926133 | -0.045150 | 0.611926 | 0.611926 | False | 0.689685 | -0.203302 | 0.95138 | Disialyl_T_antigen (-6.9 pp), own (+6.9 pp) | 0.004423 | 0.162119 | 0.529420 | 0.390381 | 6.925934 |
+| 8 | GalNAc | 11.843174 | 0.000000 | 1.000000 | 1.000000 | False | 1.000000 | 0.000000 | 1.00000 | Gal(b1-3)GalNAc & Neu5Ac(a2-6)GalNAc (-9.2 pp)... | 0.001023 | NaN | NaN | 0.000000 | 9.192285 |
 
 So here we see now that extended core 2 structures, especially sulfated ones, are significantly increasing in cancer, whereas core 1 structures do not change significantly. What’s interesting here is that most forms of sialylation are in fact decreasing in cancer, despite the typical finding that sialylation increases in tumor and despite the fact that there are individual sialylated structures that significantly increase. On the one hand, this of course depends on the tumor / type of cancer. But it’s very important to keep that this is precisely why it’s key to analyze glycomics data at the motif level to get an overall picture, as the intuition can often be led astray by looking at individual structures.
 
 Okay, last but not least, let’s make a volcano plot with the results we got from the motif-level analysis! For this, we can use the `glycowork.motif.analysis.get_volcano` function, which takes the output from `glycowork.motif.analysis.get_differential_expression` and can also be further styled with `GlycoDraw` as is discussed below.
 
 ``` python
-get_volcano(df_res, annotate_volcano=True)
+get_volcano(df_res, annotate_volcano = True, interactive = True)
 ```
 
-![](05_examples_files/figure-html/cell-33-output-1.svg)
+
+
+With `interactive = True`, every figure of `glycowork.motif.analysis` answers the mouse, in a notebook or on a web page like this one: a point, cell, or label says what it is and gives its values, and the same glycan, motif, or sample lights up in every other interactive figure on the page. Hover over a motif in the volcano plot above, and its row lights up in this heatmap of the same samples; hover over a sample here, and its point in the PCA below follows. `highlight` keeps the glycans, motifs, or samples you name in full shade, while everything else recedes toward the page in its own hue.
+
+``` python
+get_heatmap(df, motifs = True, feature_set = ['known', 'exhaustive'], highlight = ['Oglycan_core2', 'Internal_LacNAc_type2'], interactive = True)
+```
+
+
+
+``` python
+get_pca(df, motifs = True, interactive = True)
+```
+
+
 
 # Deep Learning Code Snippets
 
@@ -459,9 +461,9 @@ While it has a slightly lower performance than `LectinOracle`, `LectinOracle_fle
 GlycoDraw('Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc')
 ```
 
-![](05_examples_files/figure-html/cell-34-output-1.png)
+![](05_examples_files/figure-html/cell-36-output-1.png)
 
-![](05_examples_files/figure-html/cell-34-output-2.png)
+![](05_examples_files/figure-html/cell-36-output-2.png)
 
 Okay, that’s all nice and well. But what if you don’t have lots of space in your figure?
 
@@ -472,9 +474,9 @@ GlycoDraw('Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man
          compact = True)
 ```
 
-![](05_examples_files/figure-html/cell-35-output-1.png)
+![](05_examples_files/figure-html/cell-37-output-1.png)
 
-![](05_examples_files/figure-html/cell-35-output-2.png)
+![](05_examples_files/figure-html/cell-37-output-2.png)
 
 You can also go beyond mere drawing and add some more information, such as motif highlighting! In the below example, we highlight all Lewis antigen motifs in that structure.
 
@@ -483,9 +485,9 @@ GlycoDraw('Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Gal(b1-3)[Fuc(a
          highlight_motif = 'Fuc(a1-?)[Gal(b1-?)]GlcNAc')
 ```
 
-![](05_examples_files/figure-html/cell-36-output-1.png)
+![](05_examples_files/figure-html/cell-38-output-1.png)
 
-![](05_examples_files/figure-html/cell-36-output-2.png)
+![](05_examples_files/figure-html/cell-38-output-2.png)
 
 Or you could draw repeat structures, such as in glycosaminoglycans (GAGs). Here’s one example:
 
@@ -493,9 +495,9 @@ Or you could draw repeat structures, such as in glycosaminoglycans (GAGs). Here�
 GlycoDraw('GalNAc4S(b1-4)GlcA(b1-3)', repeat = '2-3')
 ```
 
-![](05_examples_files/figure-html/cell-37-output-1.png)
+![](05_examples_files/figure-html/cell-39-output-1.png)
 
-![](05_examples_files/figure-html/cell-37-output-2.png)
+![](05_examples_files/figure-html/cell-39-output-2.png)
 
 Or how about visualizing flexibility, attention, or any kind of attribution on a per-monosaccharide basis?
 
@@ -503,9 +505,9 @@ Or how about visualizing flexibility, attention, or any kind of attribution on a
 GlycoDraw("Fuc(a1-2)[Neu5Ac(a2-3)]Gal(b1-3)[Neu5Ac(a2-8)Neu5Ac(a2-6)]GalNAc", per_residue = [0.9, 0.7, 0.3, 0.2, 0.5, 0.1])
 ```
 
-![](05_examples_files/figure-html/cell-38-output-1.png)
+![](05_examples_files/figure-html/cell-40-output-1.png)
 
-![](05_examples_files/figure-html/cell-38-output-2.png)
+![](05_examples_files/figure-html/cell-40-output-2.png)
 
 Or put glycans right into your text: `as_markdown` turns any drawing into an inline image for Markdown, scaled so that each monosaccharide is about as tall as a line of text.
 

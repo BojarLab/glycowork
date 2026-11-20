@@ -131,22 +131,22 @@ plot_glycans_grid(['Gal(b1-4)GlcNAc', 'Fuc(a1-2)Gal(b1-4)GlcNAc', 'Neu5Ac(a2-6)G
 
 ``` python
 def get_pvals_motifs(
-    df:pandas.DataFrame | str | pathlib.Path, # Input dataframe, filepath (.csv/.xlsx), or shipped dataset name
+    df:pd.DataFrame | str | Path, # Input dataframe, filepath (.csv/.xlsx), or shipped dataset name
     label_col_name:str='target', # Column name for labels
     zscores:bool=True, # Whether data are z-scores
     thresh:float=1.645, # Threshold to separate positive/negative
     sorting:bool=True, # Sort p-value dataframe
     feature_set:str | list[str]=['exhaustive'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     multiple_samples:bool=False, # Multiple samples with glycan columns
-    motifs:pandas.DataFrame | None=None, # Modified motif_list
+    motifs:pd.DataFrame | None=None, # Modified motif_list
     custom_motifs:str | list[str]=[], # Custom motifs if using 'custom' feature set
-    grouped_BH:bool=True, # Two-stage adaptive Benjamini-Hochberg within DAG-grouped motif families
+    grouped_BH:bool=False, # Two-stage adaptive Benjamini-Hochberg within groups instead of over all features: DAG-grouped families for motifs and glycoforms; at equal false positives this does worse than a flat correction, so it is only on request
     moderate_variance:bool=True, # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
-    top_explained:int | None=5, # How many child motifs to name in 'Explained by'; None names all of them
-)->glycowork.glycan_data.frame.GlycoDataFrame: # DataFrame with p-values, FDR-corrected p-values, significance, Cohen's d effect sizes, and equivalence p-values for glycan motifs
+    top_explained:int | None=5, # How many contexts to name in 'Explained by', those whose share of the parent moved most; None names all of them
+)->GlycoDataFrame: # DataFrame with p-values, FDR-corrected p-values, significance, Cohen's d effect sizes, and equivalence p-values for glycan motifs, and the decomposition of every parent motif, as in get_differential_expression
 ```
 
-*Identifies significantly enriched glycan motifs using a moderated t-test with DAG-grouped FDR correction and Cohen’s d effect size calculation, comparing samples above/below threshold*
+*Identifies significantly enriched glycan motifs using a moderated t-test with FDR correction (DAG-grouped with grouped_BH) and Cohen’s d effect size calculation, comparing samples above/below threshold, and decomposes every parent motif into its contexts*
 
 ``` python
 glycans = ['Man(a1-3)[Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc',
@@ -162,20 +162,19 @@ out = get_pvals_motifs(test_df, 'binding').iloc[:10,:]
 ```
 
     Glyco-Motif enrichment p-value test
-    Chosen grouping: by_motif_family
 
-|   | motif | pval | corr_pval | significant | effect_size | equivalence_pval | Explained by | Redistribution p-val | Residual p-val | Residual effect size |
-|----|----|----|----|----|----|----|----|----|----|----|
-| 3 | GlcNAc | 0.000685 | 0.000685 | True | 8.217313 | 1.000000 | Fuc(a1-3)GlcNAc (-7.51), GlcNAc(b1-4)GlcNAc (-0.00) | nan | 1.000000 | 0.000000 |
-| 8 | GlcNAc(b1-4)GlcNAc | 0.001104 | 0.001104 | True | 8.217313 | 1.000000 |  | nan | nan | nan |
-| 6 | Man | 0.002273 | 0.002728 | True | 6.172967 | 1.000000 | Man(a1-2/3/6)Man (-2.14) | nan | 1.000000 | 0.000000 |
-| 11 | Man(a1-3)Man | 0.012950 | 0.012950 | True | 4.701182 | 1.000000 |  | nan | nan | nan |
-| 10 | Man(a1-2/3/6)Man | 0.007816 | 0.007816 | True | 4.032437 | 1.000000 | Man(a1-2)Man (-2.71), Man(a1-3)Man (+0.67) | nan | 1.000000 | 0.000000 |
-| 9 | Man(a1-2)Man | 0.225862 | 0.225862 | False | 1.321958 | 0.846667 |  | nan | nan | nan |
-| 5 | Kdo | 0.218480 | 0.385142 | False | -1.224745 | 0.846667 |  | nan | nan | nan |
-| 4 | GlcOPN | 0.256761 | 0.385142 | False | -1.224745 | 0.846667 |  | nan | nan | nan |
-| 1 | GalNAc(a1-4)GlcNAcA | 0.399098 | 0.399098 | False | -1.224745 | 0.846667 |  | nan | nan | nan |
-| 2 | Glc | 0.227811 | 0.274784 | False | -1.224745 | 0.846667 | Glc(b1-3)Glc (+0.00) | nan | 1.000000 | 0.000000 |
+|   | motif | pval | corr_pval | significant | effect_size | equivalence_pval | Explained by | Redistribution p-val | Residual p-val | Residual effect size | Own share | Share shift |
+|----|----|----|----|----|----|----|----|----|----|----|----|----|
+| 3 | GlcNAc | 0.001803 | 0.007430 | True | 8.217313 | 1.000000 | GlcNAc(b1-4)GlcNAc, Fuc(a1-3)GlcNAc & GlcNAc(b1-4)GlcNAc | 0.219102 | nan | nan | 0.000000 | nan |
+| 8 | GlcNAc(b1-4)GlcNAc | 0.002123 | 0.007430 | True | 8.217313 | 1.000000 |  | nan | nan | nan | nan | nan |
+| 6 | Man | 0.004634 | 0.010814 | True | 6.172967 | 1.000000 | Man(a1-2/3/6)Man | nan | nan | nan | 0.000000 | nan |
+| 11 | Man(a1-3)Man | 0.014133 | 0.021590 | True | 4.701182 | 1.000000 |  | nan | nan | nan | nan | nan |
+| 10 | Man(a1-2/3/6)Man | 0.015421 | 0.021590 | True | 4.032437 | 1.000000 | Man(a1-3)Man, Man(a1-2)Man, own | nan | nan | nan | 0.344444 | nan |
+| 9 | Man(a1-2)Man | 0.236758 | 0.236758 | False | 1.321958 | 0.846667 |  | nan | nan | nan | nan | nan |
+| 5 | Kdo | 0.252158 | 0.252158 | False | -1.224745 | 0.846667 |  | nan | nan | nan | nan | nan |
+| 4 | GlcOPN | 0.266371 | 0.266371 | False | -1.224745 | 0.846667 |  | nan | nan | nan | nan | nan |
+| 1 | GalNAc(a1-4)GlcNAcA | 0.331776 | 0.331776 | False | -1.224745 | 0.846667 |  | nan | nan | nan | nan | nan |
+| 2 | Glc | 0.255517 | 0.255517 | False | -1.224745 | 0.846667 | Glc(b1-3)Glc | nan | nan | nan | 0.000000 | nan |
 
 ------------------------------------------------------------------------
 
@@ -183,7 +182,7 @@ out = get_pvals_motifs(test_df, 'binding').iloc[:10,:]
 
 ``` python
 def get_representative_substructures(
-    enrichment_df:pandas.DataFrame, # Output from get_pvals_motifs
+    enrichment_df:pd.DataFrame, # Output from get_pvals_motifs
 )->list[str]: # Up to 10 minimal glycans containing enriched motifs
 ```
 
@@ -195,21 +194,22 @@ def get_representative_substructures(
 
 ``` python
 def get_heatmap(
-    df:pandas.DataFrame | str | pathlib.Path, # Input dataframe or filepath (.csv/.xlsx)
+    df:pd.DataFrame | str | Path, # Input dataframe or filepath (.csv/.xlsx)
     motifs:bool=False, # Analyze motifs instead of sequences
     feature_set:str | list[str]=['known'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     transform:str='', # Transform data before plotting
     datatype:str='response', # Data type: 'response' for quantitative values or 'presence' for presence/absence
     rarity_filter:float=0.05, # Min proportion for non-zero values
-    filepath:str | pathlib.Path='', # Path to save plot
+    filepath:str | Path='', # Path to save plot
     index_col:str='glycan', # Column to use as index
     custom_motifs:str | list[str]=[], # Custom motifs if using 'custom' feature set
-    return_plot:bool=False, # Return plot object
+    return_plot:bool=False, # Return the viscose figure, the column names, and the transformed dataframe instead of showing or saving
     show_all:bool=False, # Show all tick labels
     title:str | None=None, # Plot title; None for none, as before
-    dist_func:Union[str, Callable, NoneType]=None, # scipy.spatial.distance metric name or callable on two vectors to cluster rows and columns with; None keeps seaborn's default euclidean
+    dist_func:str | Callable | None=None, # scipy.spatial.distance metric name or callable on two vectors to cluster rows and columns with; None keeps the default euclidean
+    interactive:bool=False, # An SVG file, and the heatmap inline in a notebook, answer the mouse: each cell's glycan, sample, and value, and a glycan's or sample's cells lit up from its label
     **kwargs:Any
-)->tuple[typing.Any, list[str], pandas.DataFrame] | None: # None or (plot object, column names, transformed dataframe) if return_plot=True
+)->tuple[Any, list[str], pd.DataFrame] | None: # None or (viscose figure, column names, transformed dataframe) if return_plot=True
 ```
 
 *Creates hierarchically clustered heatmap visualization of glycan/motif abundances*
@@ -225,10 +225,10 @@ label2 = [0.134, 0.345, 1.15, 0.233, 2.981]
 label3 = [0.334, 0.245, 1.55, 0.133, 2.581]
 test_df = pd.DataFrame([label, label2, label3], columns = glycans)
 
-get_heatmap(test_df, motifs = True, feature_set = ['known', 'exhaustive'])
+get_heatmap(test_df, motifs = True, feature_set = ['known', 'exhaustive'], interactive = True)
 ```
 
-![](03_motif_files/figure-html/cell-13-output-1.png)
+
 
 ------------------------------------------------------------------------
 
@@ -237,27 +237,28 @@ get_heatmap(test_df, motifs = True, feature_set = ['known', 'exhaustive'])
 ``` python
 def plot_embeddings(
     glycans:list[str], # List of IUPAC-condensed glycan sequences
-    emb:dict[str, numpy.ndarray] | pandas.DataFrame | None=None, # Glycan embeddings dict/DataFrame; defaults to SweetNet embeddings
-    label_list:list[typing.Any] | None=None, # Labels for coloring points
+    emb:dict[str, np.ndarray] | pd.DataFrame | None=None, # Glycan embeddings dict/DataFrame; defaults to SweetNet embeddings
+    label_list:list[Any] | None=None, # Labels for coloring points
     shape_feature:str | None=None, # Monosaccharide/bond for point shapes
-    filepath:str | pathlib.Path='', # Path to save plot
+    filepath:str | Path='', # Path to save plot
     alpha:float=0.8, # Point transparency
-    palette:str='colorblind', # Color palette for groups
+    palette:str | None=None, # viscose palette ('aura', 'lumen', 'couture', 'poster'); None for the current default
     title:str | None=None, # Plot title; None for none, as before
+    interactive:bool=False, # An SVG file, and the plot inline in a notebook, answer the mouse: each glycan by name, and the same glycan in every other interactive figure
     **kwargs:Any
-)->None: # Keyword args passed to seaborn scatterplot
+)->None: # Keyword args passed to viscose's scatter: s, size, sizes, marker, edge
 ```
 
 *Visualizes learned glycan embeddings using t-SNE dimensionality reduction with optional group coloring*
 
 ``` python
 df_fabales = df_species[df_species.Order == 'Fabales'].reset_index(drop = True)
-plot_embeddings(df_fabales.glycan.values.tolist(), label_list = df_fabales.Family.values.tolist())
+plot_embeddings(df_fabales.glycan.values.tolist(), label_list = df_fabales.Family.values.tolist(), interactive = True)
 ```
 
     Download completed.
 
-![](03_motif_files/figure-html/cell-15-output-2.png)
+
 
 ------------------------------------------------------------------------
 
@@ -266,12 +267,12 @@ plot_embeddings(df_fabales.glycan.values.tolist(), label_list = df_fabales.Famil
 ``` python
 def characterize_monosaccharide(
     sugar:str, # Monosaccharide or linkage to analyze
-    df:pandas.DataFrame | None=None, # DataFrame with glycan column 'glycan'; defaults to df_species
+    df:pd.DataFrame | None=None, # DataFrame with glycan column 'glycan'; defaults to df_species
     mode:str='sugar', # Analysis mode: 'sugar', 'bond', 'sugarbond'
     rank:str | None=None, # Column name for group filtering
     focus:str | None=None, # Row value for group filtering
     modifications:bool=False, # Consider modified monosaccharides
-    filepath:str | pathlib.Path='', # Path to save plot
+    filepath:str | Path='', # Path to save plot
     thresh:int=10, # Minimum count threshold for inclusion
     title:str | None=None, # Plot title; None keeps the default, '' removes it
 )->None:
@@ -291,7 +292,7 @@ characterize_monosaccharide('Rha', rank = 'Kingdom', focus = 'Fungi', modificati
 
 ``` python
 def get_differential_expression(
-    df:pandas.DataFrame | str | pathlib.Path, # DataFrame with glycans in rows (col 1) and abundance values in subsequent columns
+    df:pd.DataFrame | str | Path, # DataFrame with glycans in rows (col 1) and abundance values in subsequent columns
     group1:list[str | int] | None=None, # Column indices/names for first group; default: from the frame's contrasts
     group2:list[str | int] | None=None, # Column indices/names for second group; default: from the frame's contrasts
     motifs:bool=False, # Analyze motifs instead of sequences; per glycosite (protein_site_motif) for glycoproteomics data
@@ -302,22 +303,23 @@ def get_differential_expression(
     set_thresh:float=0.9, # Correlation threshold for clusters
     effect_size_variance:bool=False, # Calculate effect size variance
     min_samples:float=0.1, # Min fraction (0-1) of non-zero samples required
-    grouped_BH:bool | None=None, # Use two-stage adaptive Benjamini-Hochberg; None infers True for motifs (DAG-grouped families) and False for sequences
+    grouped_BH:bool=False, # Two-stage adaptive Benjamini-Hochberg within groups instead of over all features: DAG-grouped families for motifs and glycoforms; at equal false positives this does worse than a flat correction, so it is only on request
     custom_motifs:str | list[str]=[], # Custom motifs if using 'custom' feature set
     transform:str | None=None, # Transformation type: "CLR" or "ALR"; None auto-decides
-    gamma:float=0.1, # Uncertainty parameter for CLR transform
+    gamma:float=0.07, # Scale uncertainty of a sample's log-ratio, added to the variance of the tests
     custom_scale:float | dict=0, # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
     moderate_variance:bool=True, # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
     glycoproteomics:bool | None=None, # Whether data is from glycoproteomics (rows protein_site_glycan); default: whenever every row label is protein_site_glycan
+    min_change:float=0.03, # log2 change a motif's moderated (or covariate-adjusted) test is held against (TREAT, McCarthy and Smyth 2009) when the two largest groups have 6 samples or more; Welch's test (moderate_variance = False) takes none; 0 tests against no change
     level:str='peptide', # Analysis level for glycoproteomics
     monte_carlo:bool=False, # Use Monte Carlo for technical variation
-    random_state:int | numpy.random._generator.Generator | None=None, # optional random state for reproducibility
-    top_explained:int | None=5, # How many child motifs to name in 'Explained by'; None names all of them
-    covariates:pandas.DataFrame | pandas.Series | dict | None=None, # per-sample nuisance variables indexed by sample name (e.g., secretor status, sex, age, batch; a dict maps samples to one covariate); each feature is fit as group plus covariates and the group effect is tested within them
-)->glycowork.glycan_data.frame.GlycoDataFrame: # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes (Cohen's h of the detection rates for features absent from a whole group)
+    random_state:int | np.random.Generator | None=None, # optional random state for reproducibility
+    top_explained:int | None=5, # How many contexts to name in 'Explained by', those whose share of the parent moved most; None names all of them
+    covariates:pd.DataFrame | pd.Series | dict | None=None, # per-sample nuisance variables indexed by sample name (e.g., secretor status, sex, age, batch; a dict maps samples to one covariate); each feature is fit as group plus covariates and the group effect is tested within them
+)->GlycoDataFrame: # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes (Cohen's h of the detection rates for features absent from a whole group); with motifs or glycoproteomics, every parent also gets its decomposition: 'Explained by' (its contexts, i.e., the children covering each part of it and 'own' for the part none covers, with their change in share of the parent in percentage points), 'Redistribution p-val' and 'Residual p-val' (FDR-corrected), 'Residual effect size', 'Own share' (the mean share of the parent that no child covers; 0 means purely inherited, with no residual test), and 'Share shift' (the largest change in share of any context, in percentage points)
 ```
 
-*Performs differential expression analysis using Welch’s t-test (or Hotelling’s T2 for sets, or a linear model with covariates) with multiple testing correction on glycomics abundance data*
+*Performs differential expression analysis using a moderated t-test (Welch’s or the paired t-test with moderate_variance = False, Hotelling’s T2 for sets, or a linear model with covariates) with multiple testing correction on glycomics abundance data*
 
 ``` python
 test_df = glycomics_data_loader.human_skin_O_PMC5871710_BCC
@@ -327,25 +329,24 @@ res
 ```
 
     {'healthy': ['control_1', 'control_2', 'control_3', 'control_4', 'control_5', 'control_6', 'control_7', 'control_8', 'control_9', 'control_10', 'control_11', 'control_12', 'control_13', 'control_14', 'control_15', 'control_16', 'control_17', 'control_18', 'control_19', 'control_20'], 'cancer': ['tumor_1', 'tumor_2', 'tumor_3', 'tumor_4', 'tumor_5', 'tumor_6', 'tumor_7', 'tumor_8', 'tumor_9', 'tumor_10', 'tumor_11', 'tumor_12', 'tumor_13', 'tumor_14', 'tumor_15', 'tumor_16', 'tumor_17', 'tumor_18', 'tumor_19', 'tumor_20']} True
-    Chosen grouping: by_motif_family
 
-|  | Glycan | Mean abundance | Log2FC | p-val | corr p-val | significant | corr Levene p-val | Effect size | Equivalence p-val | Explained by | Redistribution p-val | Residual p-val | Residual effect size |
-|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
-| 12 | Neu5Ac(a2-3)Gal | 12.345115 | 0.313599 | 0.000015 | 0.000029 | True | 0.846171 | 1.286347 | 1.000000 | Disialyl_T_antigen (-0.36) | 0.005505 | 0.000193 | 1.168046 |
-| 0 | H_antigen_type2 | 0.247156 | -0.654481 | 0.001817 | 0.001863 | True | 0.996125 | -0.788570 | 1.000000 |  | NaN | NaN | NaN |
-| 7 | Gal3/6S(b1-3)GalNAc | 0.159900 | -0.838774 | 0.000696 | 0.002088 | True | 0.846171 | -0.847840 | 1.000000 |  | NaN | NaN | NaN |
-| 1 | Internal_LacNAc_type2 | 2.328696 | 0.491517 | 0.003104 | 0.003104 | True | 0.608968 | 0.731626 | 1.000000 | H_antigen_type2 (-1.15) | 0.000306 | 0.000971 | 0.871276 |
-| 9 | GlcNAc6S(b1-6)GalNAc | 1.046247 | 0.884675 | 0.004181 | 0.005233 | True | 0.996125 | 0.684443 | 1.000000 |  | NaN | NaN | NaN |
-| 4 | Oglycan_core1 | 7.956860 | 0.234965 | 0.005233 | 0.005233 | True | 0.996125 | 0.692574 | 1.000000 | Disialyl_T_antigen (-0.28) | 0.002596 | 0.000238 | 1.077778 |
-| 6 | Gal | 18.541780 | 0.184057 | 0.009787 | 0.009787 | True | 0.996125 | 0.661140 | 1.000000 | Terminal_LacNAc_type2 (-0.60), Internal_LacNAc... | 0.002265 | 1.000000 | 0.000000 |
-| 10 | Neu5Ac | 16.553504 | 0.195722 | 0.009963 | 0.009963 | True | 0.996125 | 0.666531 | 1.000000 | Neu5Ac(a2-8)Neu5Ac (-0.82), Neu5Ac(a2-6)GalNAc... | 0.005061 | 1.000000 | 0.000000 |
-| 14 | Neu5Ac(a2-8)Neu5Ac | 0.038663 | -0.621757 | 0.013059 | 0.013059 | True | 0.608968 | -0.582300 | 1.000000 |  | NaN | NaN | NaN |
-| 2 | Terminal_LacNAc_type2 | 2.440640 | -0.413622 | 0.014311 | 0.014311 | True | 0.608968 | -0.577125 | 1.000000 |  | NaN | NaN | NaN |
-| 8 | GalNAc | 12.886096 | 0.121066 | 0.030163 | 0.030163 | True | 0.996125 | 0.645643 | 1.000000 | Gal3/6S(b1-3)GalNAc (-0.96), GlcNAc6S(b1-6)Gal... | 0.003977 | 1.000000 | 0.000000 |
-| 11 | Gal(b1-3)GalNAc | 12.726196 | 0.099145 | 0.071818 | 0.071818 | False | 0.842190 | 0.437094 | 0.831783 | Oglycan_core1 (+0.14), Oglycan_core2 (-0.07) | 0.271310 | 1.000000 | 0.000000 |
-| 13 | Neu5Ac(a2-6)GalNAc | 4.169726 | -0.061919 | 0.493222 | 0.493222 | False | 0.996125 | -0.152631 | 0.450845 | Disialyl_T_antigen (+0.02) | 0.000587 | 0.000845 | -0.913043 |
-| 3 | Disialyl_T_antigen | 3.790085 | -0.043993 | 0.654437 | 0.654437 | False | 0.996125 | -0.099488 | 0.450845 |  | NaN | NaN | NaN |
-| 5 | Oglycan_core2 | 4.769337 | 0.025826 | 0.811772 | 0.811772 | False | 0.996125 | 0.052366 | 0.450845 |  | NaN | NaN | NaN |
+|  | Glycan | Mean abundance | Log2FC | p-val | corr p-val | significant | corr Levene p-val | Effect size | Equivalence p-val | Explained by | Redistribution p-val | Residual p-val | Residual effect size | Own share | Share shift |
+|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
+| 12 | Neu5Ac(a2-3)Gal | 12.345115 | 0.330767 | 0.000104 | 0.000313 | True | 0.857479 | 1.177999 | 1.000000 | own (+5.8 pp), Disialyl_T_antigen (-5.8 pp) | 0.005894 | 0.000224 | 1.181000 | 0.690026 | 5.828469 |
+| 7 | Gal3/6S(b1-3)GalNAc | 0.159900 | -0.860519 | 0.000458 | 0.000686 | True | 0.871148 | -0.900973 | 1.000000 |  | NaN | NaN | NaN | NaN | NaN |
+| 10 | Neu5Ac | 16.553504 | 0.250313 | 0.001182 | 0.001182 | True | 0.988404 | 1.023307 | 1.000000 | Neu5Ac(a2-3)Gal (+4.2 pp), Neu5Ac(a2-6)GalNAc ... | 0.007822 | NaN | NaN | 0.000000 | 4.218622 |
+| 1 | Internal_LacNAc_type2 | 2.328696 | 0.544551 | 0.001205 | 0.001205 | True | 0.457201 | 0.841349 | 1.000000 | H_antigen_type2 (-8.5 pp), own (+8.5 pp) | 0.000208 | 0.001135 | 0.889611 | 0.882424 | 8.457788 |
+| 9 | GlcNAc6S(b1-6)GalNAc | 1.046247 | 0.968909 | 0.002289 | 0.002289 | True | 0.988404 | 0.748463 | 1.000000 |  | NaN | NaN | NaN | NaN | NaN |
+| 4 | Oglycan_core1 | 7.956860 | 0.244047 | 0.002591 | 0.002591 | True | 0.988404 | 0.850903 | 1.000000 | Disialyl_T_antigen (-6.6 pp), own (+6.6 pp) | 0.003105 | 0.000224 | 1.144535 | 0.524478 | 6.624431 |
+| 0 | H_antigen_type2 | 0.247156 | -0.636916 | 0.002952 | 0.002952 | True | 0.988404 | -0.754866 | 1.000000 |  | NaN | NaN | NaN | NaN | NaN |
+| 11 | Gal(b1-3)GalNAc | 12.726196 | 0.173808 | 0.003929 | 0.003929 | True | 0.871148 | 0.939203 | 1.000000 | Oglycan_core1 (+2.9 pp), Oglycan_core2 (-2.9 pp) | 0.272833 | NaN | NaN | 0.000000 | 2.857836 |
+| 6 | Gal | 18.541780 | 0.188717 | 0.007758 | 0.007758 | True | 0.457201 | 0.812072 | 1.000000 | Terminal_LacNAc_type2 (-5.2 pp), Internal_LacN... | 0.005607 | 0.006086 | 0.691309 | 0.009637 | 5.240004 |
+| 2 | Terminal_LacNAc_type2 | 2.440640 | -0.406134 | 0.013461 | 0.013461 | True | 0.457201 | -0.599961 | 1.000000 |  | NaN | NaN | NaN | NaN | NaN |
+| 14 | Neu5Ac(a2-8)Neu5Ac | 0.038663 | -0.557318 | 0.025664 | 0.025664 | True | 0.512107 | -0.522887 | 1.000000 |  | NaN | NaN | NaN | NaN | NaN |
+| 5 | Oglycan_core2 | 4.769337 | 0.063015 | 0.610413 | 0.610413 | False | 0.988404 | 0.117887 | 0.404767 |  | NaN | NaN | NaN | NaN | NaN |
+| 3 | Disialyl_T_antigen | 3.790085 | 0.029148 | 0.752186 | 0.752186 | False | 0.988404 | 0.077969 | 0.312504 |  | NaN | NaN | NaN | NaN | NaN |
+| 13 | Neu5Ac(a2-6)GalNAc | 4.169726 | -0.019160 | 0.828309 | 0.828309 | False | 1.000000 | -0.053712 | 0.312504 | Disialyl_T_antigen (+3.0 pp), own (-3.0 pp) | 0.000640 | 0.001135 | -0.890779 | 0.090282 | 3.000549 |
+| 8 | GalNAc | 12.886096 | 0.000000 | 1.000000 | 1.000000 | False | 1.000000 | 0.000000 | 1.000000 | GlcNAc6S(b1-6)GalNAc & Gal(b1-3)GalNAc (+4.4 p... | 0.006745 | NaN | NaN | 0.000000 | 4.397031 |
 
 ------------------------------------------------------------------------
 
@@ -353,26 +354,28 @@ res
 
 ``` python
 def get_volcano(
-    df_res:pandas.DataFrame | str | pathlib.Path, # DataFrame from get_differential_expression with columns [Glycan, Log2FC, p-val, corr p-val]
+    df_res:pd.DataFrame | str | Path, # DataFrame from get_differential_expression with columns [Glycan, Log2FC, p-val, corr p-val]
     y_thresh:float | None=None, # Corrected p threshold for labeling; default: alpha stamped by the analysis function, else 0.05
     x_thresh:float=0, # Absolute x metric threshold for labeling
     n:int | None=None, # Sample size for Bayesian-Adaptive Alpha
-    label_changed:bool=True, # Add text labels to significant points
+    label_changed:bool=True, # Label significant points
     x_metric:str='Log2FC', # x-axis metric: 'Log2FC' or 'Effect size'; glycosite-level results (glycoproteomics) have no Log2FC and use Effect size
-    annotate_volcano:bool=True, # Annotate dots with SNFG images
-    filepath:str | pathlib.Path='', # Path to save plot
+    annotate_volcano:bool=True, # Label significant glycans with their SNFG drawings instead of text
+    filepath:str | Path='', # Path to save plot
     title:str | None=None, # Plot title; default: the dataset name the analysis stamped on df_res, '' for none
+    highlight:list[str] | None=None, # Glycans (or glycosites) to keep in full shade, with their drawings, while everything else recedes toward the page in its own hue
+    interactive:bool=False, # An SVG file, and the plot inline in a notebook, answer the mouse: each point's glycan and values, its drawing lit up with it, and the same glycan in every other interactive figure
     **kwargs:Any
-)->None: # Displays volcano plot, or returns it as a Jupyter-renderable SVG when annotate_volcano
+)->None: # Displays or saves the volcano plot
 ```
 
 *Creates volcano plot showing -log10(FDR-corrected p-values) vs Log2FC or effect size*
 
 ``` python
-get_volcano(res)
+get_volcano(res, interactive = True)
 ```
 
-![](03_motif_files/figure-html/cell-21-output-1.svg)
+
 
 ------------------------------------------------------------------------
 
@@ -380,7 +383,7 @@ get_volcano(res)
 
 ``` python
 def get_coverage(
-    df:pandas.DataFrame | str | pathlib.Path, # DataFrame with glycans in rows (col 1), abundances in columns
+    df:pd.DataFrame | str | Path, # DataFrame with glycans in rows (col 1), abundances in columns
     filepath:str='', # Path to save plot
     title:str | None=None, # Plot title; None for none, as before
 )->None:
@@ -401,8 +404,8 @@ get_coverage(test_df)
 
 ``` python
 def get_pca(
-    df:pandas.DataFrame | str | pathlib.Path, # DataFrame with glycans in rows (col 1), abundances in columns
-    groups:list[int] | pandas.DataFrame | None=None, # Group labels (e.g., [1,1,1,2,2,2,3,3,3]) or metadata DataFrame with 'id' column
+    df:pd.DataFrame | str | Path, # DataFrame with glycans in rows (col 1), abundances in columns
+    groups:list[int] | pd.DataFrame | None=None, # Group labels (e.g., [1,1,1,2,2,2,3,3,3]) or metadata DataFrame with 'id' column
     motifs:bool=False, # Analyze motifs instead of sequences
     feature_set:str | list[str]=['known', 'exhaustive'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     pc_x:int=1, # Principal component for x-axis
@@ -410,22 +413,23 @@ def get_pca(
     color:str | None=None, # Column in metadata for color grouping; recommended to be categorical
     shape:str | None=None, # Column in metadata for shape grouping; recommended to be categorical
     size:str | None=None, # Column in metadata for point size control; recommended to be scalar
-    filepath:str | pathlib.Path='', # Path to save plot
+    filepath:str | Path='', # Path to save plot
     custom_motifs:str | list[str]=[], # Custom motifs if using 'custom' feature set
     transform:str | None=None, # Transformation type: "CLR" or "ALR"
     rarity_filter:float=0.05, # Min proportion for non-zero values
     eigenvalues:bool=False, # Plot the explained variance as a separate subplot
     title:str | None=None, # Plot title; None for none, as before
+    interactive:bool=False, # An SVG file, and the plot inline in a notebook, answer the mouse: each sample's name, group, and place, and the same sample in every other interactive figure
 )->None:
 ```
 
 *Performs PCA on glycan/motif abundance data with group-based visualization*
 
 ``` python
-get_pca(test_df, motifs = True, groups = [1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2])
+get_pca(test_df, motifs = True, groups = [1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2], interactive = True)
 ```
 
-![](03_motif_files/figure-html/cell-25-output-1.png)
+
 
 ------------------------------------------------------------------------
 
@@ -433,9 +437,9 @@ get_pca(test_df, motifs = True, groups = [1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,
 
 ``` python
 def get_pcoa(
-    df:pandas.DataFrame | str | pathlib.Path, # Abundance dataframe or filepath (glycans as rows, samples as columns) or a square distance matrix, e.g., from get_distance_matrix or get_biodiversity
+    df:pd.DataFrame | str | Path, # Abundance dataframe or filepath (glycans as rows, samples as columns) or a square distance matrix, e.g., from get_distance_matrix or get_biodiversity
     groups:list[str | int] | None=None, # Group label per sample for coloring and PERMANOVA; default: from the frame's contrasts
-    dist_func:Union[str, Callable[[list, list], float]]='euclidean', # scipy.spatial.distance metric name or callable on two lists; euclidean on CLR data is the Aitchison distance
+    dist_func:str | Callable[[list, list], float]='euclidean', # scipy.spatial.distance metric name or callable on two lists; euclidean on CLR data is the Aitchison distance
     motifs:bool=False, # Analyze motifs instead of sequences
     feature_set:str | list[str]=['known', 'exhaustive'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     custom_motifs:str | list[str]=[], # Custom motifs if using 'custom' feature set
@@ -443,10 +447,11 @@ def get_pcoa(
     pco_x:int=1, # Principal coordinate for x-axis
     pco_y:int=2, # Principal coordinate for y-axis
     permutations:int=999, # Number of permutations for PERMANOVA
-    random_state:int | numpy.random._generator.Generator | None=None, # optional random state for reproducibility
-    filepath:str | pathlib.Path='', # Path to save plot
+    random_state:int | np.random.Generator | None=None, # optional random state for reproducibility
+    filepath:str | Path='', # Path to save plot
     title:str | None=None, # Plot title; None for none
-)->pandas.DataFrame: # Sample coordinates on all principal coordinates, explained variance and PERMANOVA in .attrs
+    interactive:bool=False, # An SVG file, and the plot inline in a notebook, answer the mouse: each sample's name, group, and place, and the same sample in every other interactive figure
+)->pd.DataFrame: # Sample coordinates on all principal coordinates, explained variance and PERMANOVA in .attrs
 ```
 
 *Performs principal coordinate analysis (PCoA) on any sample distance matrix with group-based visualization and PERMANOVA*
@@ -457,8 +462,8 @@ def get_pcoa(
 
 ``` python
 def get_pval_distribution(
-    df_res:pandas.DataFrame | str | pathlib.Path, # Output DataFrame from get_differential_expression
-    filepath:str | pathlib.Path='', # Path to save plot
+    df_res:pd.DataFrame | str | Path, # Output DataFrame from get_differential_expression
+    filepath:str | Path='', # Path to save plot
     title:str | None=None, # Plot title; None for none, as before
 )->None:
 ```
@@ -477,21 +482,22 @@ get_pval_distribution(res)
 
 ``` python
 def get_ma(
-    df_res:pandas.DataFrame | str | pathlib.Path, # Output DataFrame from get_differential_expression; glycosite-level results are plotted per glycoform
+    df_res:pd.DataFrame | str | Path, # Output DataFrame from get_differential_expression; glycosite-level results are plotted per glycoform
     log2fc_thresh:int=1, # Log2FC threshold for highlighting
     sig_thresh:float | None=None, # Significance threshold for highlighting; defaults to the sample-size-adjusted alpha stored on the results
-    filepath:str | pathlib.Path='', # Path to save plot
+    filepath:str | Path='', # Path to save plot
     title:str | None=None, # Plot title; default: the dataset name the analysis stamped on df_res, '' for none
+    interactive:bool=False, # An SVG file, and the plot inline in a notebook, answer the mouse: each point's glycan and values, and the same glycan in every other interactive figure
 )->None:
 ```
 
 *Generates MA plot (mean abundance vs log2 fold change) from differential expression results*
 
 ``` python
-get_ma(res)
+get_ma(res, interactive = True)
 ```
 
-![](03_motif_files/figure-html/cell-30-output-1.png)
+
 
 ------------------------------------------------------------------------
 
@@ -499,24 +505,25 @@ get_ma(res)
 
 ``` python
 def get_glycanova(
-    df:pandas.DataFrame | str | pathlib.Path, # DataFrame with glycans in rows (col 1) and abundance values in columns
-    groups:list[typing.Any] | None=None, # Group labels for samples (e.g., [1,1,1,2,2,2,3,3,3]); inferred from a GlycoDataFrame's contrasts if omitted
+    df:pd.DataFrame | str | Path, # DataFrame with glycans in rows (col 1) and abundance values in columns
+    groups:list[Any] | None=None, # Group labels for samples (e.g., [1,1,1,2,2,2,3,3,3]); inferred from a GlycoDataFrame's contrasts if omitted
     impute:bool=True, # Replace zeros with impute_biosynthetic predictions
     motifs:bool=False, # Analyze motifs instead of sequences; per glycosite (protein_site_motif) for glycoproteomics data
     feature_set:str | list[str]=['exhaustive', 'known'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     min_samples:float=0.1, # Min fraction (0-1) of non-zero samples required
     posthoc:bool=True, # Perform Tukey's HSD test post-hoc (pairwise Fisher tests with Holm for features absent from a whole group)
-    grouped_BH:bool | None=None, # Use two-stage adaptive Benjamini-Hochberg; None infers True for motifs (DAG-grouped families) and False for sequences
+    grouped_BH:bool=False, # Two-stage adaptive Benjamini-Hochberg within groups instead of over all features: DAG-grouped families for motifs and glycoforms; at equal false positives this does worse than a flat correction, so it is only on request
     custom_motifs:str | list[str]=[], # Custom motifs if using 'custom' feature set
     transform:str | None=None, # Transformation type: "CLR" or "ALR"; None auto-decides
-    gamma:float=0.1, # Uncertainty parameter for CLR transform
+    gamma:float=0.07, # Scale uncertainty of a sample's log-ratio, added to the variance of the tests
     custom_scale:float | dict=0, # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
     moderate_variance:bool=True, # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
     glycoproteomics:bool | None=None, # Whether rows are glycoforms from glycoproteomics instead of glycans; default: whenever every row label is protein_site_glycan
-    random_state:int | numpy.random._generator.Generator | None=None, # optional random state for reproducibility
-    top_explained:int | None=5, # How many child motifs to name in 'Explained by'; None names all of them
-    covariates:pandas.DataFrame | pandas.Series | dict | None=None, # per-sample nuisance variables indexed by sample name (e.g., secretor status, sex, age, batch); the groups are tested by ANCOVA, post-hoc tests on covariate-adjusted values
-)->tuple[glycowork.glycan_data.frame.GlycoDataFrame, dict[str, pandas.DataFrame]]: # (ANOVA results with F-stats and omega-squared effect sizes (Cramer's V for features absent from a whole group), post-hoc results)
+    min_change:float=0.03, # log2 change a motif's moderated F test (or ANCOVA) is held against (TREAT, McCarthy and Smyth 2009) when the two largest groups have 6 samples or more; Welch's ANOVA (moderate_variance = False) takes none; 0 tests against no change
+    random_state:int | np.random.Generator | None=None, # optional random state for reproducibility
+    top_explained:int | None=5, # How many contexts to name in 'Explained by', those whose share of the parent moved most; None names all of them
+    covariates:pd.DataFrame | pd.Series | dict | None=None, # per-sample nuisance variables indexed by sample name (e.g., secretor status, sex, age, batch); the groups are tested by ANCOVA, post-hoc tests on covariate-adjusted values
+)->tuple[GlycoDataFrame, dict[str, pd.DataFrame]]: # (ANOVA results with F-stats and omega-squared effect sizes (Cramer's V for features absent from a whole group), and the decomposition of every parent as in get_differential_expression, with each context's share change as the spread of its group means; post-hoc results)
 ```
 
 *Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey’s HSD post-hoc testing on glycomics data across multiple groups*
@@ -530,15 +537,15 @@ anv
 
 |  | Glycan | F statistic | p-val | corr p-val | significant | Effect size |
 |----|----|----|----|----|----|----|
-| 1 | Gal(b1-4)GlcNAc(b1-6)\[Gal(b1-3)\]GalNAc | 3.789915 | 0.042303 | 0.311002 | False | 0.221331 |
-| 3 | Neu5Ac(a2-3)Gal(b1-3)\[Gal(b1-4)GlcNAc(b1-6)\]Ga... | 3.111038 | 0.069111 | 0.311002 | False | 0.231571 |
-| 0 | Gal(b1-3)\[Neu5Ac(a2-6)\]GalNAc | 1.749110 | 0.202223 | 0.348838 | False | 0.073247 |
-| 2 | Neu5Ac(a2-3)Gal(b1-3)GalNAc | 1.583464 | 0.232558 | 0.348838 | False | 0.201921 |
-| 4 | Neu5Ac(a2-3)Gal(b1-3)\[Neu5Ac(a2-6)\]GalNAc | 1.992994 | 0.165249 | 0.348838 | False | 0.198865 |
-| 5 | Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3/6)\[GlcNAc(b1-... | 2.111745 | 0.150018 | 0.348838 | False | 0.096276 |
-| 6 | Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)\[Gal(b1-3)\]Ga... | 0.598796 | 0.560056 | 0.605809 | False | -0.077190 |
-| 7 | Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)\[Neu5Ac(a2-3)... | 0.515408 | 0.605809 | 0.605809 | False | -0.056393 |
-| 8 | Neu5Ac(a2-3)Gal(b1-4)GlcNAc6S(b1-6)\[Neu5Ac(a2-... | 0.731458 | 0.494973 | 0.605809 | False | -0.009179 |
+| 3 | Neu5Ac(a2-3)Gal(b1-3)\[Gal(b1-4)GlcNAc(b1-6)\]Ga... | 3.506767 | 0.069634 | 0.208902 | False | 0.319464 |
+| 4 | Neu5Ac(a2-3)Gal(b1-3)\[Neu5Ac(a2-6)\]GalNAc | 5.428591 | 0.025000 | 0.208902 | False | 0.569871 |
+| 8 | Neu5Ac(a2-3)Gal(b1-4)GlcNAc6S(b1-6)\[Neu5Ac(a2-... | 3.841228 | 0.057364 | 0.208902 | False | 0.509180 |
+| 1 | Gal(b1-4)GlcNAc(b1-6)\[Gal(b1-3)\]GalNAc | 2.212410 | 0.159531 | 0.315733 | False | 0.166329 |
+| 0 | Gal(b1-3)\[Neu5Ac(a2-6)\]GalNAc | 2.077350 | 0.175407 | 0.315733 | False | 0.181654 |
+| 6 | Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)\[Gal(b1-3)\]Ga... | 1.075410 | 0.377133 | 0.541314 | False | 0.067622 |
+| 5 | Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3/6)\[GlcNAc(b1-... | 0.943378 | 0.421022 | 0.541314 | False | -0.011509 |
+| 2 | Neu5Ac(a2-3)Gal(b1-3)GalNAc | 0.737553 | 0.502312 | 0.565101 | False | 0.046293 |
+| 7 | Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)\[Neu5Ac(a2-3)... | 0.423507 | 0.665829 | 0.665829 | False | -0.061268 |
 
 ------------------------------------------------------------------------
 
@@ -546,8 +553,8 @@ anv
 
 ``` python
 def get_meta_analysis(
-    effect_sizes:numpy.ndarray | list[float], # List of Cohen's d/other effect sizes
-    variances:numpy.ndarray | list[float], # Associated variance estimates
+    effect_sizes:np.ndarray | list[float], # List of Cohen's d/other effect sizes
+    variances:np.ndarray | list[float], # Associated variance estimates
     model:str='fixed', # 'fixed' or 'random' effects model
     filepath:str='', # Path to save Forest plot
     study_names:list[str]=[], # Names corresponding to each effect size
@@ -571,20 +578,20 @@ get_meta_analysis([-8.759, -6.363, -5.199, -3.952],
 
 ``` python
 def get_time_series(
-    df:pandas.DataFrame | str | pathlib.Path, # DataFrame with sample IDs as 'sampleID_timepoint_replicate' in col 1 (e.g., T1_h5_r1)
+    df:pd.DataFrame | str | Path, # DataFrame with sample IDs as 'sampleID_timepoint_replicate' in col 1 (e.g., T1_h5_r1)
     impute:bool=True, # Replace zeros with impute_biosynthetic predictions
     motifs:bool=False, # Analyze motifs instead of sequences
     feature_set:str | list[str]=['known', 'exhaustive'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     degree:int=1, # Polynomial degree for regression
     min_samples:float=0.1, # Min fraction (0-1) of non-zero samples required
-    grouped_BH:bool | None=None, # Family-grouped two-stage Benjamini-Hochberg via the motif DAG; None infers True for motifs and False for sequences
+    grouped_BH:bool=False, # Two-stage adaptive Benjamini-Hochberg within groups instead of over all features: DAG-grouped families for motifs and glycoforms; at equal false positives this does worse than a flat correction, so it is only on request
     custom_motifs:str | list[str]=[], # Custom motifs if using 'custom' feature set
     transform:str | None=None, # Transformation type: "CLR" or "ALR"; None auto-decides
-    gamma:float=0.1, # Uncertainty parameter for CLR transform
+    gamma:float=0.07, # Scale uncertainty of a sample's log-ratio, added to the variance of the test
     custom_scale:float | dict=0, # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
     glycoproteomics:bool | None=None, # Whether rows are glycoforms, ordered by composition containment instead of substructure containment; default: whenever every row label is protein_site_glycan
-    random_state:int | numpy.random._generator.Generator | None=None, # optional random state for reproducibility
-)->glycowork.glycan_data.frame.GlycoDataFrame: # DataFrame with regression coefficients and FDR-corrected p-values
+    random_state:int | np.random.Generator | None=None, # optional random state for reproducibility
+)->GlycoDataFrame: # DataFrame with regression coefficients and FDR-corrected p-values
 ```
 
 *Analyzes time series glycomics data using polynomial regression*
@@ -600,9 +607,9 @@ get_time_series(pd.DataFrame(t_dic).set_index("ID").T)
 
 |  | Glycan | Change | p-val | corr p-val | significant |
 |----|----|----|----|----|----|
-| 1 | Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)\[Gal(b1-3)\]Ga... | 0.168078 | 0.001757 | 0.005272 | True |
-| 0 | Fuc(a1-2)Gal(b1-3)GalNAc | -0.082124 | 0.012562 | 0.012562 | True |
-| 2 | Neu5Ac(a2-6)GalNAc | -0.095766 | 0.009956 | 0.012562 | True |
+| 1 | Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)\[Gal(b1-3)\]Ga... | 0.179419 | 0.001065 | 0.003194 | True |
+| 0 | Fuc(a1-2)Gal(b1-3)GalNAc | -0.081221 | 0.005786 | 0.007421 | True |
+| 2 | Neu5Ac(a2-6)GalNAc | -0.098198 | 0.007421 | 0.007421 | True |
 
 ------------------------------------------------------------------------
 
@@ -610,7 +617,7 @@ get_time_series(pd.DataFrame(t_dic).set_index("ID").T)
 
 ``` python
 def get_jtk(
-    df_in:pandas.DataFrame | str | pathlib.Path, # DataFrame with glycans in rows (first column), then groups arranged by ascending timepoints
+    df_in:pd.DataFrame | str | Path, # DataFrame with glycans in rows (first column), then groups arranged by ascending timepoints
     timepoints:int, # Number of timepoints (each must have same number of replicates)
     interval:int, # Time units between experimental timepoints
     periods:int | list[int]=[12, 24], # Cycle length(s) to test, in the time units of interval (e.g., hours)
@@ -618,12 +625,12 @@ def get_jtk(
     feature_set:str | list[str]=['known', 'exhaustive', 'terminal'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     custom_motifs:str | list[str]=[], # Custom motifs if using 'custom' feature set
     transform:str | None=None, # Transformation type: "CLR" or "ALR"; None auto-decides
-    gamma:float=0.1, # Uncertainty parameter for CLR transform
+    gamma:float=0.07, # Unused, since a rank test has no variance to carry it; kept so existing calls keep working
     correction_method:str='two-stage', # Multiple testing correction method
-    grouped_BH:bool | None=None, # Family-grouped two-stage Benjamini-Hochberg via the motif DAG; None infers True for motifs and False for sequences
+    grouped_BH:bool=False, # Two-stage adaptive Benjamini-Hochberg within groups instead of over all features: DAG-grouped families for motifs and glycoforms; at equal false positives this does worse than a flat correction, so it is only on request
     glycoproteomics:bool | None=None, # Whether rows are glycoforms, ordered by composition containment instead of substructure containment; default: whenever every row label is protein_site_glycan
-    random_state:int | numpy.random._generator.Generator | None=None, # optional random state for reproducibility
-)->glycowork.glycan_data.frame.GlycoDataFrame: # DataFrame with JTK results: adjusted p-values, period length, lag phase, amplitude
+    random_state:int | np.random.Generator | None=None, # optional random state for reproducibility
+)->GlycoDataFrame: # DataFrame with JTK results: adjusted p-values, period length, lag phase, amplitude
 ```
 
 *Identifies rhythmically expressed glycans using Jonckheere-Terpstra-Kendall algorithm for time series analysis*
@@ -644,24 +651,22 @@ get_jtk(t_df.reset_index(), tps, interval, periods = periods)
 
 |  | Molecule_Name | Adjusted_P_value | Period_Length | Lag_Phase | Amplitude | significant |
 |----|----|----|----|----|----|----|
-| 0 | Neu5Ac(a2-3)Gal(b1-3)GalNAc | 0.710523 | 8 | 7.0 | 0.142857 | False |
-| 1 | Gal(b1-3)GalNAc | 0.710523 | 8 | 6.0 | 0.285714 | False |
-| 2 | Gal(b1-3)\[Neu5Ac(a2-6)\]GalNAc | 0.710523 | 8 | 1.0 | 0.142857 | False |
-| 3 | Fuc(a1-2)Gal(b1-3)GalNAc | 0.710523 | 8 | 3.0 | 0.285714 | False |
+| 0 | Gal(b1-3)GalNAc | 0.515302 | 8 | 7.0 | 0.285714 | False |
+| 1 | Gal(b1-3)\[Neu5Ac(a2-6)\]GalNAc | 0.515302 | 8 | 7.0 | 0.285714 | False |
+| 2 | Fuc(a1-2)Gal(b1-3)GalNAc | 0.515302 | 8 | 3.0 | 0.428571 | False |
+| 3 | Neu5Ac(a2-3)Gal(b1-3)GalNAc | 0.710523 | 8 | 5.0 | 0.142857 | False |
 
 ``` python
 get_jtk(t_df.reset_index(), tps, interval, periods = periods, motifs = True, feature_set = ['terminal'])
 ```
 
-    Chosen grouping: by_motif_family
-
 |  | Molecule_Name | Adjusted_P_value | Period_Length | Lag_Phase | Amplitude | significant |
 |----|----|----|----|----|----|----|
-| 0 | Terminal_Fuc(a1-2) | 0.173546 | 8 | 3.0 | 0.500000 | False |
-| 1 | Terminal_Gal(b1-3) | 0.173546 | 8 | 7.0 | 0.428571 | False |
-| 2 | Terminal_Neu5Ac(a2-3) | 0.536187 | 8 | 5.0 | 0.214286 | False |
-| 3 | Terminal_Neu5Ac(a2-3/6) | 0.536187 | 8 | 5.0 | 0.285714 | False |
-| 4 | Terminal_Neu5Ac(a2-6) | 0.536187 | 8 | 1.0 | 0.357143 | False |
+| 0 | Terminal_Fuc(a1-2) | 0.663776 | 8 | 1.0 | 0.357143 | False |
+| 1 | Terminal_Gal(b1-3) | 0.663776 | 8 | 7.0 | 0.357143 | False |
+| 2 | Terminal_Neu5Ac(a2-3) | 0.670233 | 8 | 5.0 | 0.214286 | False |
+| 3 | Terminal_Neu5Ac(a2-6) | 0.670233 | 8 | 7.0 | 0.214286 | False |
+| 4 | Terminal_Neu5Ac(a2-3/6) | 0.710523 | 8 | 5.0 | 0.142857 | False |
 
 ------------------------------------------------------------------------
 
@@ -669,20 +674,20 @@ get_jtk(t_df.reset_index(), tps, interval, periods = periods, motifs = True, fea
 
 ``` python
 def get_cosinor(
-    df_in:pandas.DataFrame | str | pathlib.Path, # DataFrame with glycans in rows (first column) and samples in the other columns
-    timepoints:int | list[float] | numpy.ndarray, # Number of timepoints, for columns arranged by ascending time with equal replicates (as in get_jtk), or the time of each sample column (any spacing or replication)
+    df_in:pd.DataFrame | str | Path, # DataFrame with glycans in rows (first column) and samples in the other columns
+    timepoints:int | list[float] | np.ndarray, # Number of timepoints, for columns arranged by ascending time with equal replicates (as in get_jtk), or the time of each sample column (any spacing or replication)
     interval:float=1, # Time units between timepoints (only used if timepoints is a number)
     periods:float | list[float]=[24], # Candidate period(s) in time units; each feature gets its best-fitting one, with the p-value Bonferroni-corrected for the number of candidates
     motifs:bool=False, # Analyze motifs instead of sequences
     feature_set:str | list[str]=['known', 'exhaustive', 'terminal'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     custom_motifs:str | list[str]=[], # Custom motifs if using 'custom' feature set
     transform:str | None=None, # Transformation type: "CLR" or "ALR"; None auto-decides
-    gamma:float=0.1, # Uncertainty parameter for CLR transform
+    gamma:float=0.07, # Scale uncertainty of a sample's log-ratio, added to the variance of the test
     correction_method:str='two-stage', # Multiple testing correction method
-    grouped_BH:bool | None=None, # Family-grouped two-stage Benjamini-Hochberg via the motif DAG; None infers True for motifs and False for sequences
+    grouped_BH:bool=False, # Two-stage adaptive Benjamini-Hochberg within groups instead of over all features: DAG-grouped families for motifs and glycoforms; at equal false positives this does worse than a flat correction, so it is only on request
     glycoproteomics:bool | None=None, # Whether rows are glycoforms, ordered by composition containment instead of substructure containment; default: whenever every row label is protein_site_glycan
-    random_state:int | numpy.random._generator.Generator | None=None, # optional random state for reproducibility
-)->glycowork.glycan_data.frame.GlycoDataFrame: # DataFrame with cosinor results: best period, mesor, amplitude, acrophase (peak time, on the time axis of timepoints), R2, raw and adjusted p-values
+    random_state:int | np.random.Generator | None=None, # optional random state for reproducibility
+)->GlycoDataFrame: # DataFrame with cosinor results: best period, mesor, amplitude, acrophase (peak time, on the time axis of timepoints), R2, raw and adjusted p-values
 ```
 
 *Identifies rhythmically expressed glycans or motifs with single-harmonic cosinor regression, reporting amplitude and acrophase (peak time) next to an F-test against no rhythm; unlike get_jtk, timepoints may be unevenly spaced or unevenly replicated*
@@ -693,10 +698,10 @@ get_cosinor(t_df.reset_index(), tps, interval, periods = [12, 24])
 
 |  | Molecule_Name | P_value | Period_Length | Mesor | Amplitude | Acrophase | R2 | Adjusted_P_value | significant |
 |----|----|----|----|----|----|----|----|----|----|
-| 0 | Neu5Ac(a2-3)Gal(b1-3)GalNAc | 0.005179 | 24 | -0.750058 | 0.636106 | 14.912602 | 0.907681 | 0.010358 | True |
-| 1 | Gal(b1-3)GalNAc | 0.010804 | 24 | -0.612597 | 0.644458 | 0.958050 | 0.876116 | 0.010804 | True |
-| 2 | Gal(b1-3)\[Neu5Ac(a2-6)\]GalNAc | 0.069740 | 24 | -0.805610 | 0.527460 | 12.003714 | 0.738795 | 0.069740 | True |
-| 3 | Fuc(a1-2)Gal(b1-3)GalNAc | 0.318671 | 24 | 2.072303 | 0.388154 | 1.998049 | 0.520349 | 0.318671 | False |
+| 0 | Neu5Ac(a2-3)Gal(b1-3)GalNAc | 0.009663 | 24 | -0.712493 | 0.622951 | 15.126483 | 0.893959 | 0.009663 | True |
+| 1 | Gal(b1-3)GalNAc | 0.005313 | 24 | -0.601119 | 0.633333 | 0.994390 | 0.919461 | 0.009663 | True |
+| 2 | Gal(b1-3)\[Neu5Ac(a2-6)\]GalNAc | 0.115207 | 24 | -0.741875 | 0.429620 | 12.064299 | 0.696447 | 0.115207 | False |
+| 3 | Fuc(a1-2)Gal(b1-3)GalNAc | 0.323007 | 24 | 2.055488 | 0.385476 | 3.391751 | 0.529040 | 0.323007 | False |
 
 ------------------------------------------------------------------------
 
@@ -704,7 +709,7 @@ get_cosinor(t_df.reset_index(), tps, interval, periods = [12, 24])
 
 ``` python
 def get_biodiversity(
-    df:pandas.DataFrame | str | pathlib.Path, # DataFrame with glycans in rows (col 1), abundances in columns
+    df:pd.DataFrame | str | Path, # DataFrame with glycans in rows (col 1), abundances in columns
     group1:list[str | int] | None=None, # First group column indices or group labels; default: from the frame's contrasts
     group2:list[str | int] | None=None, # Second group indices or additional group labels; default: from the frame's contrasts
     metrics:list[str]=['alpha', 'beta'], # Diversity metrics to calculate
@@ -714,10 +719,10 @@ def get_biodiversity(
     paired:bool | None=None, # Whether samples are paired; default: from the frame
     permutations:int=999, # Number of permutations for ANOSIM/PERMANOVA
     transform:str | None=None, # Transformation type: "CLR" or "ALR"
-    dist_func:Union[str, Callable, NoneType]=None, # scipy.spatial.distance metric name or callable for beta diversity; default: braycurtis if transform = "Nothing", else euclidean (Aitchison distance on log-ratios)
-    gamma:float=0.1, # Uncertainty parameter for CLR transform
+    dist_func:str | Callable | None=None, # scipy.spatial.distance metric name or callable for beta diversity; default: braycurtis if transform = "Nothing", else euclidean (Aitchison distance on log-ratios)
+    gamma:float=0.07, # Scale uncertainty of a sample's log-ratio; these tests take no such variance, so it has no effect here
     custom_scale:float | dict=0, # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
-    random_state:int | numpy.random._generator.Generator | None=None, # optional random state for reproducibility
+    random_state:int | np.random.Generator | None=None, # optional random state for reproducibility
     circadian:bool=False, # test whether diversity changes rhythmically over time via JTK
     timepoints:int | None=None, # number of timepoints, columns ordered by ascending timepoint (required if circadian)
     interval:int=1, # time units between timepoints (only relevant if circadian)
@@ -735,184 +740,184 @@ res
 
     (                       Metric  Group1 mean  Group2 mean     p-val  \
      0           simpson_diversity     0.876756     0.874348  0.000443   
-     1           shannon_diversity     2.244523     2.225758  0.001255   
-     2     Beta diversity (ANOSIM)          NaN          NaN  0.002000   
-     3  Beta diversity (PERMANOVA)          NaN          NaN  0.002000   
+     1     Beta diversity (ANOSIM)          NaN          NaN  0.001000   
+     2           shannon_diversity     2.244523     2.225758  0.001255   
+     3  Beta diversity (PERMANOVA)          NaN          NaN  0.004000   
      4            species_richness    15.000000    15.000000  1.000000   
      
         Effect size  corr p-val  significant  
      0    -0.948203    0.000443         True  
-     1    -0.846077    0.001255         True  
-     2     0.188566    0.002000         True  
-     3     5.583354    0.002000         True  
+     1     0.166092    0.001000         True  
+     2    -0.846077    0.001255         True  
+     3     5.039267    0.004000         True  
      4     0.000000    1.000000        False  ,
                  control_1  control_2  control_3  control_4  control_5  control_6  \
-     control_1    0.000000   2.468605   3.219773   3.547879   1.683100   3.475447   
-     control_2    2.468605   0.000000   2.297694   2.679064   2.384198   2.844599   
-     control_3    3.219773   2.297694   0.000000   1.322106   3.144578   4.631515   
-     control_4    3.547879   2.679064   1.322106   0.000000   3.487061   4.948857   
-     control_5    1.683100   2.384198   3.144578   3.487061   0.000000   3.180142   
-     control_6    3.475447   2.844599   4.631515   4.948857   3.180142   0.000000   
-     control_7    1.705143   2.441621   3.493949   3.690858   2.772165   3.266817   
-     control_8    1.988837   1.877254   3.276978   3.497749   2.487358   2.458114   
-     control_9    2.910796   2.807673   3.864873   4.336024   3.615115   3.444445   
-     control_10   1.950670   2.641473   4.123190   4.470577   2.336412   2.047429   
-     control_11   2.126936   1.983422   2.917195   3.538471   2.232348   2.648045   
-     control_12   3.890187   2.235635   2.502925   3.435423   3.788631   4.262512   
-     control_13   3.262471   1.947637   3.633341   4.139216   3.772189   3.181875   
-     control_14   3.204359   1.411597   2.634386   3.347329   3.349799   3.493967   
-     control_15   3.469505   1.462537   3.287079   3.460895   3.470620   2.860301   
-     control_16   3.134200   1.686293   2.090097   2.971119   3.254491   4.000192   
-     control_17   2.940751   1.649726   2.610784   3.345235   3.201940   3.509533   
-     control_18   2.715693   2.738157   1.968326   1.598788   3.212088   5.065846   
-     control_19   3.911231   5.550462   5.826237   5.787237   4.783100   5.446369   
-     control_20   3.582369   3.552533   2.318463   2.968550   3.928537   5.779615   
-     tumor_1      2.288187   2.491535   2.427182   3.491011   2.324187   3.931309   
-     tumor_2      2.491034   3.566609   4.186507   4.740574   2.689456   3.588158   
-     tumor_3      3.838434   4.443823   4.796325   5.851548   4.357685   4.660899   
-     tumor_4      2.892877   4.526809   4.582073   5.296299   3.482623   5.023658   
-     tumor_5      4.379914   4.904538   5.884048   6.692547   4.903481   4.287772   
-     tumor_6      4.546253   5.346522   6.407226   7.084310   4.991457   4.204977   
-     tumor_7      3.912857   3.276828   3.804088   4.855699   3.854233   3.697074   
-     tumor_8      3.285207   3.995706   4.839851   5.410133   4.110546   3.791720   
-     tumor_9      4.169500   4.544534   5.086052   5.739536   5.054963   4.893838   
-     tumor_10     3.344534   3.692349   4.949658   5.702753   3.761015   2.898755   
-     tumor_11     3.020348   4.115141   4.495357   5.155513   3.211059   4.023108   
-     tumor_12     3.744053   2.348433   3.020770   3.821250   3.996783   4.084373   
-     tumor_13     2.705654   1.134934   3.095735   3.658740   2.715985   2.524830   
-     tumor_14     2.641863   1.225830   2.200278   2.775819   2.841152   3.523533   
-     tumor_15     3.960528   3.186287   3.286791   4.202841   4.580778   5.060585   
-     tumor_16     4.113015   3.096309   3.603232   4.593119   4.490088   4.432897   
-     tumor_17     2.907768   1.297669   2.070248   2.650838   3.106771   3.856230   
-     tumor_18     2.938670   2.967581   3.988129   4.690057   2.940891   3.068111   
-     tumor_19     4.395063   6.188330   6.388777   6.233811   5.277394   6.220262   
-     tumor_20     3.724356   3.180760   2.196601   3.356134   4.002378   5.287895   
+     control_1    0.000000   2.189057   3.279195   3.639123   1.600369   3.364105   
+     control_2    2.189057   0.000000   2.430126   2.919068   2.252723   2.709203   
+     control_3    3.279195   2.430126   0.000000   1.323491   3.163762   4.648128   
+     control_4    3.639123   2.919068   1.323491   0.000000   3.507262   5.140842   
+     control_5    1.600369   2.252723   3.163762   3.507262   0.000000   3.160838   
+     control_6    3.364105   2.709203   4.648128   5.140842   3.160838   0.000000   
+     control_7    1.562020   2.296838   3.446875   3.775674   2.601173   3.230489   
+     control_8    1.663898   1.710927   3.293046   3.701043   2.372779   2.513443   
+     control_9    2.946287   2.761555   3.948984   4.473887   3.558401   3.403415   
+     control_10   1.917649   2.560114   4.172163   4.532170   2.320303   2.170189   
+     control_11   2.190294   1.847402   2.949477   3.571532   2.092873   2.668721   
+     control_12   3.839071   2.224854   2.418201   3.244765   3.751964   4.339525   
+     control_13   2.916172   1.658361   3.612180   4.176221   3.540008   2.939459   
+     control_14   3.302443   1.483304   2.735893   3.389411   3.493258   3.590285   
+     control_15   3.256428   1.296581   3.136260   3.456819   3.269974   2.711850   
+     control_16   2.993693   1.600046   2.236370   3.112076   3.133547   3.907087   
+     control_17   3.034324   1.571621   2.680523   3.414862   3.261701   3.503399   
+     control_18   2.444061   2.659839   2.050524   1.713738   2.884627   4.878661   
+     control_19   4.011191   5.492408   5.851280   6.011540   4.684671   5.397882   
+     control_20   3.471103   3.294483   2.062709   2.615031   3.641736   5.628410   
+     tumor_1      2.374431   2.344119   2.317438   3.355681   2.323051   3.987210   
+     tumor_2      2.685835   3.461634   4.267266   4.838044   2.699561   3.541890   
+     tumor_3      3.810433   4.032772   4.452800   5.569927   4.089343   4.626591   
+     tumor_4      3.047418   4.299196   4.520909   5.195286   3.300757   4.989853   
+     tumor_5      4.378799   4.629653   5.776235   6.645640   4.722116   4.168830   
+     tumor_6      4.701402   5.231011   6.448041   7.223912   4.982148   4.255696   
+     tumor_7      3.907110   3.097289   3.698385   4.831446   3.830102   3.701967   
+     tumor_8      3.394589   3.988394   4.863391   5.528962   4.101604   3.904877   
+     tumor_9      4.163098   4.411993   5.149292   5.825752   4.912862   4.802829   
+     tumor_10     3.333712   3.450904   4.891656   5.748521   3.652833   2.866393   
+     tumor_11     3.058607   3.982458   4.595714   5.246426   3.089701   4.080880   
+     tumor_12     3.668014   2.209956   3.198800   3.881555   3.942656   4.010699   
+     tumor_13     2.646604   1.024779   3.313461   3.880759   2.821367   2.310540   
+     tumor_14     2.621400   1.196313   2.306727   2.859741   2.862467   3.434946   
+     tumor_15     3.965829   3.066275   3.410151   4.157689   4.585647   5.007887   
+     tumor_16     3.920403   2.748572   3.467191   4.404290   4.273998   4.294648   
+     tumor_17     2.836561   1.076175   2.134853   2.599505   3.022334   3.639431   
+     tumor_18     2.915407   2.666540   3.947426   4.649879   2.804690   2.875298   
+     tumor_19     4.489201   6.004658   6.156727   6.140094   5.190067   6.147289   
+     tumor_20     3.796391   3.046132   2.065605   3.081061   3.956557   5.273098   
      
                  control_7  control_8  control_9  control_10  ...  tumor_11  \
-     control_1    1.705143   1.988837   2.910796    1.950670  ...  3.020348   
-     control_2    2.441621   1.877254   2.807673    2.641473  ...  4.115141   
-     control_3    3.493949   3.276978   3.864873    4.123190  ...  4.495357   
-     control_4    3.690858   3.497749   4.336024    4.470577  ...  5.155513   
-     control_5    2.772165   2.487358   3.615115    2.336412  ...  3.211059   
-     control_6    3.266817   2.458114   3.444445    2.047429  ...  4.023108   
-     control_7    0.000000   1.201477   1.948433    1.758108  ...  3.405495   
-     control_8    1.201477   0.000000   1.760593    1.366530  ...  3.217559   
-     control_9    1.948433   1.760593   0.000000    2.272090  ...  2.993728   
-     control_10   1.758108   1.366530   2.272090    0.000000  ...  2.688525   
-     control_11   2.048773   1.443322   1.767267    1.677971  ...  2.281849   
-     control_12   4.077566   3.598668   3.623234    4.208491  ...  4.621330   
-     control_13   2.924184   2.591659   2.846241    3.119307  ...  4.721637   
-     control_14   3.121872   2.648195   2.831547    3.352762  ...  4.398215   
-     control_15   3.066343   2.304979   2.871188    3.130537  ...  4.738938   
-     control_16   3.363026   3.078532   3.430205    3.742200  ...  4.556415   
-     control_17   2.865466   2.408771   2.301380    3.043546  ...  3.735184   
-     control_18   3.119995   3.285354   4.114189    4.130747  ...  4.935647   
-     control_19   3.402467   4.034578   4.411020    3.879292  ...  4.231050   
-     control_20   4.384365   4.421777   4.835912    4.986077  ...  5.012777   
-     tumor_1      3.088164   2.958317   3.303680    3.103777  ...  2.989727   
-     tumor_2      2.886284   2.642746   2.619393    2.121498  ...  0.850462   
-     tumor_3      4.119708   4.104650   3.544329    3.776558  ...  2.707058   
-     tumor_4      3.680360   3.854386   3.714950    3.427984  ...  1.770596   
-     tumor_5      4.272613   4.046936   3.199465    3.451164  ...  2.659752   
-     tumor_6      4.423976   4.213954   3.607641    3.377535  ...  2.632130   
-     tumor_7      3.856605   3.465342   3.035033    3.515631  ...  3.168408   
-     tumor_8      2.380499   2.663546   1.935332    2.468447  ...  2.724558   
-     tumor_9      3.385319   3.572012   2.078336    3.675380  ...  3.171551   
-     tumor_10     3.207591   2.889885   2.536034    2.272368  ...  2.505579   
-     tumor_11     3.405495   3.217559   2.993728    2.688525  ...  0.000000   
-     tumor_12     3.767588   3.261217   3.055137    3.879619  ...  4.379136   
-     tumor_13     2.738463   2.122849   2.803993    2.548079  ...  4.101109   
-     tumor_14     2.598313   2.097768   2.364797    2.950728  ...  3.808831   
-     tumor_15     3.934628   3.824875   3.281342    4.426797  ...  4.567879   
-     tumor_16     4.092128   3.724746   3.219082    4.149805  ...  4.318607   
-     tumor_17     2.955076   2.593234   3.021394    3.437302  ...  4.472500   
-     tumor_18     3.135558   2.523906   2.241670    2.250767  ...  1.951492   
-     tumor_19     4.080270   4.697457   5.039276    4.539426  ...  4.678628   
-     tumor_20     4.132016   4.027648   3.950113    4.613526  ...  4.351279   
+     control_1    1.562020   1.663898   2.946287    1.917649  ...  3.058607   
+     control_2    2.296838   1.710927   2.761555    2.560114  ...  3.982458   
+     control_3    3.446875   3.293046   3.948984    4.172163  ...  4.595714   
+     control_4    3.775674   3.701043   4.473887    4.532170  ...  5.246426   
+     control_5    2.601173   2.372779   3.558401    2.320303  ...  3.089701   
+     control_6    3.230489   2.513443   3.403415    2.170189  ...  4.080880   
+     control_7    0.000000   0.899800   1.923915    1.651800  ...  3.107620   
+     control_8    0.899800   0.000000   1.670621    1.240657  ...  3.018421   
+     control_9    1.923915   1.670621   0.000000    2.248298  ...  2.807084   
+     control_10   1.651800   1.240657   2.248298    0.000000  ...  2.626591   
+     control_11   2.062132   1.457371   1.835514    1.786295  ...  2.305791   
+     control_12   3.982150   3.471418   3.619184    4.344306  ...  4.730398   
+     control_13   2.742715   2.156748   2.715349    2.976193  ...  4.498702   
+     control_14   3.246034   2.677239   2.980631    3.624590  ...  4.584761   
+     control_15   2.903826   2.205436   2.745019    2.999619  ...  4.560919   
+     control_16   3.282899   2.863729   3.364885    3.775790  ...  4.426170   
+     control_17   2.844313   2.289405   2.288247    3.216258  ...  3.862417   
+     control_18   2.893451   3.027048   4.018700    3.790758  ...  4.634459   
+     control_19   3.412638   4.009372   4.369959    3.681636  ...  3.879383   
+     control_20   4.182170   4.101254   4.680511    4.864620  ...  4.878839   
+     tumor_1      2.949461   2.725153   3.178083    3.268507  ...  2.950257   
+     tumor_2      2.673190   2.468014   2.382725    2.040470  ...  0.713519   
+     tumor_3      3.908559   3.725688   3.332593    3.964732  ...  2.700365   
+     tumor_4      3.581309   3.615355   3.614863    3.453070  ...  1.584133   
+     tumor_5      4.129413   3.783364   2.995783    3.533260  ...  2.564510   
+     tumor_6      4.400594   4.131158   3.503093    3.551918  ...  2.621983   
+     tumor_7      3.676860   3.260058   2.920105    3.757696  ...  3.415927   
+     tumor_8      2.379384   2.567724   2.017774    2.634378  ...  2.563745   
+     tumor_9      3.162531   3.248544   1.868199    3.586959  ...  3.051295   
+     tumor_10     3.036265   2.622293   2.312164    2.430560  ...  2.427136   
+     tumor_11     3.107620   3.018421   2.807084    2.626591  ...  0.000000   
+     tumor_12     3.627637   3.048036   2.977109    3.893219  ...  4.507566   
+     tumor_13     2.679920   1.963737   2.792664    2.627324  ...  4.191049   
+     tumor_14     2.526615   1.988775   2.350311    2.944522  ...  3.809589   
+     tumor_15     3.850298   3.540936   3.228426    4.489226  ...  4.714213   
+     tumor_16     3.805755   3.324353   2.988270    4.152579  ...  4.345819   
+     tumor_17     2.865769   2.400985   3.017841    3.404423  ...  4.493154   
+     tumor_18     2.898077   2.277602   2.056370    2.230677  ...  2.089739   
+     tumor_19     3.948380   4.561997   4.858888    4.294517  ...  4.393897   
+     tumor_20     4.099991   3.878246   4.022798    4.761352  ...  4.591603   
      
                  tumor_12  tumor_13  tumor_14  tumor_15  tumor_16  tumor_17  \
-     control_1   3.744053  2.705654  2.641863  3.960528  4.113015  2.907768   
-     control_2   2.348433  1.134934  1.225830  3.186287  3.096309  1.297669   
-     control_3   3.020770  3.095735  2.200278  3.286791  3.603232  2.070248   
-     control_4   3.821250  3.658740  2.775819  4.202841  4.593119  2.650838   
-     control_5   3.996783  2.715985  2.841152  4.580778  4.490088  3.106771   
-     control_6   4.084373  2.524830  3.523533  5.060585  4.432897  3.856230   
-     control_7   3.767588  2.738463  2.598313  3.934628  4.092128  2.955076   
-     control_8   3.261217  2.122849  2.097768  3.824875  3.724746  2.593234   
-     control_9   3.055137  2.803993  2.364797  3.281342  3.219082  3.021394   
-     control_10  3.879619  2.548079  2.950728  4.426797  4.149805  3.437302   
-     control_11  2.778048  2.123021  1.861858  3.332524  3.067669  2.508273   
-     control_12  1.203142  2.195039  1.751476  1.988133  1.777293  1.630189   
-     control_13  1.996080  1.343739  2.001572  2.643974  2.466764  1.896976   
-     control_14  1.185084  1.199938  1.102742  2.099911  1.929396  0.967147   
-     control_15  2.345477  1.527028  1.745469  3.469990  3.215957  1.915264   
-     control_16  1.637987  1.727284  1.494080  2.062082  2.152106  0.978943   
-     control_17  1.135477  1.559092  0.860537  1.912926  1.780359  1.247750   
-     control_18  3.818196  3.532707  2.715008  3.907790  4.509003  2.519622   
-     control_19  6.805516  5.945286  5.676018  6.763438  6.955198  6.117307   
-     control_20  3.389918  3.867231  3.142313  3.079027  3.701748  2.784954   
-     tumor_1     2.816145  2.557554  2.348743  2.912569  2.874042  2.480550   
-     tumor_2     4.019861  3.566406  3.295896  4.326440  4.118325  3.963429   
-     tumor_3     3.838788  4.034084  4.036864  3.520094  3.152610  4.415768   
-     tumor_4     4.610573  4.489025  4.101568  4.376777  4.434165  4.571735   
-     tumor_5     4.356852  4.370615  4.490635  4.432914  3.875373  5.072272   
-     tumor_6     5.233723  4.887966  5.100473  5.426741  4.882806  5.739144   
-     tumor_7     2.914164  3.014374  3.072493  3.222631  2.532553  3.465164   
-     tumor_8     4.434114  3.908547  3.844830  4.375099  4.234550  4.395062   
-     tumor_9     4.212275  4.469594  3.995506  3.892852  3.877787  4.597440   
-     tumor_10    3.683185  3.120813  3.583792  4.029954  3.422198  4.099940   
-     tumor_11    4.379136  4.101109  3.808831  4.567879  4.318607  4.472500   
-     tumor_12    0.000000  2.047845  1.573929  1.486088  1.187239  1.651741   
-     tumor_13    2.047845  0.000000  1.565690  2.983117  2.623838  1.573725   
-     tumor_14    1.573929  1.565690  0.000000  2.293256  2.375453  0.925990   
-     tumor_15    1.486088  2.983117  2.293256  0.000000  1.205507  2.257323   
-     tumor_16    1.187239  2.623838  2.375453  1.205507  0.000000  2.459471   
-     tumor_17    1.651741  1.573725  0.925990  2.257323  2.459471  0.000000   
-     tumor_18    2.917487  2.704761  2.570243  3.540438  3.050259  3.275947   
-     tumor_19    7.376543  6.607802  6.213383  7.300621  7.581433  6.668810   
-     tumor_20    2.339844  3.342930  2.519523  1.852860  2.337824  2.390821   
+     control_1   3.668014  2.646604  2.621400  3.965829  3.920403  2.836561   
+     control_2   2.209956  1.024779  1.196313  3.066275  2.748572  1.076175   
+     control_3   3.198800  3.313461  2.306727  3.410151  3.467191  2.134853   
+     control_4   3.881555  3.880759  2.859741  4.157689  4.404290  2.599505   
+     control_5   3.942656  2.821367  2.862467  4.585647  4.273998  3.022334   
+     control_6   4.010699  2.310540  3.434946  5.007887  4.294648  3.639431   
+     control_7   3.627637  2.679920  2.526615  3.850298  3.805755  2.865769   
+     control_8   3.048036  1.963737  1.988775  3.540936  3.324353  2.400985   
+     control_9   2.977109  2.792664  2.350311  3.228426  2.988270  3.017841   
+     control_10  3.893219  2.627324  2.944522  4.489226  4.152579  3.404423   
+     control_11  2.722646  2.178340  1.761032  3.374181  2.922497  2.394362   
+     control_12  1.314212  2.441305  1.628164  2.032989  1.667232  1.529560   
+     control_13  1.831822  1.031375  1.773337  2.542083  2.251702  1.786693   
+     control_14  0.965456  1.460349  1.069369  1.986698  1.631148  0.896053   
+     control_15  2.125436  1.269093  1.524511  3.229391  2.825731  1.474332   
+     control_16  1.563784  1.870817  1.416241  2.077010  1.811706  1.133722   
+     control_17  0.985214  1.660124  0.739239  1.812686  1.383400  1.212908   
+     control_18  3.787552  3.549314  2.692948  3.862769  4.272389  2.542476   
+     control_19  6.783886  5.904689  5.680695  6.778238  6.770615  6.108408   
+     control_20  3.367943  3.957910  2.945399  3.135170  3.551862  2.821520   
+     tumor_1     2.821660  2.821917  2.202075  2.981224  2.673284  2.499823   
+     tumor_2     4.101044  3.672436  3.323355  4.449289  4.080944  4.012578   
+     tumor_3     3.732924  3.986820  3.703253  3.553144  2.981439  4.231662   
+     tumor_4     4.598953  4.592305  4.019189  4.504010  4.391641  4.620472   
+     tumor_5     4.306805  4.290418  4.310561  4.466260  3.848585  5.013262   
+     tumor_6     5.298535  4.928295  5.084323  5.546488  4.949049  5.782407   
+     tumor_7     2.956111  3.015728  2.906227  3.303740  2.323310  3.297845   
+     tumor_8     4.580904  4.040687  3.908239  4.582926  4.269257  4.488274   
+     tumor_9     4.239627  4.392591  3.908377  3.994373  3.820734  4.575360   
+     tumor_10    3.701436  3.090812  3.452637  4.086122  3.362829  4.033950   
+     tumor_11    4.507566  4.191049  3.809589  4.714213  4.345819  4.493154   
+     tumor_12    0.000000  2.048930  1.386014  1.408052  1.095546  1.610220   
+     tumor_13    2.048930  0.000000  1.632993  3.060704  2.537069  1.609610   
+     tumor_14    1.386014  1.632993  0.000000  2.134123  2.005739  0.837455   
+     tumor_15    1.408052  3.060704  2.134123  0.000000  1.211781  2.360305   
+     tumor_16    1.095546  2.537069  2.005739  1.211781  0.000000  2.303894   
+     tumor_17    1.610220  1.609610  0.837455  2.360305  2.303894  0.000000   
+     tumor_18    2.837428  2.586584  2.414836  3.521248  2.881413  3.120236   
+     tumor_19    7.198907  6.494642  6.073256  7.119879  7.263920  6.509721   
+     tumor_20    2.430435  3.512557  2.401296  2.096585  2.295295  2.428773   
      
                  tumor_18  tumor_19  tumor_20  
-     control_1   2.938670  4.395063  3.724356  
-     control_2   2.967581  6.188330  3.180760  
-     control_3   3.988129  6.388777  2.196601  
-     control_4   4.690057  6.233811  3.356134  
-     control_5   2.940891  5.277394  4.002378  
-     control_6   3.068111  6.220262  5.287895  
-     control_7   3.135558  4.080270  4.132016  
-     control_8   2.523906  4.697457  4.027648  
-     control_9   2.241670  5.039276  3.950113  
-     control_10  2.250767  4.539426  4.613526  
-     control_11  1.494133  5.163824  3.312187  
-     control_12  3.322332  7.692524  2.010076  
-     control_13  3.321105  6.858445  3.569878  
-     control_14  2.972485  7.008998  2.609105  
-     control_15  3.244148  6.827899  4.004887  
-     control_16  3.453214  7.081476  1.956607  
-     control_17  2.342762  6.526540  2.466054  
-     control_18  4.577234  5.604184  3.267136  
-     control_19  5.286767  1.240709  6.581604  
-     control_20  4.650972  6.962530  1.896271  
-     tumor_1     2.678595  6.013224  2.053539  
-     tumor_2     1.574194  4.531684  4.207256  
-     tumor_3     2.890704  6.358839  3.609429  
-     tumor_4     2.938220  4.706202  4.011672  
-     tumor_5     2.494305  6.177002  5.085724  
-     tumor_6     2.961191  5.714909  5.926882  
-     tumor_7     2.447520  6.923979  3.227349  
-     tumor_8     2.999749  4.377423  4.774996  
-     tumor_9     3.236675  5.257604  4.588223  
-     tumor_10    1.958069  5.821096  4.533396  
-     tumor_11    1.951492  4.678628  4.351279  
-     tumor_12    2.917487  7.376543  2.339844  
-     tumor_13    2.704761  6.607802  3.342930  
-     tumor_14    2.570243  6.213383  2.519523  
-     tumor_15    3.540438  7.300621  1.852860  
-     tumor_16    3.050259  7.581433  2.337824  
-     tumor_17    3.275947  6.668810  2.390821  
-     tumor_18    0.000000  5.799777  3.789222  
-     tumor_19    5.799777  0.000000  7.117017  
-     tumor_20    3.789222  7.117017  0.000000  
+     control_1   2.915407  4.489201  3.796391  
+     control_2   2.666540  6.004658  3.046132  
+     control_3   3.947426  6.156727  2.065605  
+     control_4   4.649879  6.140094  3.081061  
+     control_5   2.804690  5.190067  3.956557  
+     control_6   2.875298  6.147289  5.273098  
+     control_7   2.898077  3.948380  4.099991  
+     control_8   2.277602  4.561997  3.878246  
+     control_9   2.056370  4.858888  4.022798  
+     control_10  2.230677  4.294517  4.761352  
+     control_11  1.241908  5.085699  3.330435  
+     control_12  3.241860  7.468738  1.741217  
+     control_13  2.972459  6.549843  3.507222  
+     control_14  2.963489  6.995844  2.498568  
+     control_15  2.910627  6.561692  3.683692  
+     control_16  3.131565  6.903082  1.799521  
+     control_17  2.317238  6.455428  2.363333  
+     control_18  4.303700  5.262728  3.145325  
+     control_19  5.147589  1.129026  6.703441  
+     control_20  4.409562  6.736363  1.605563  
+     tumor_1     2.508329  5.818290  2.014108  
+     tumor_2     1.646358  4.340451  4.418603  
+     tumor_3     2.708482  6.242690  3.512597  
+     tumor_4     2.897385  4.748166  4.149318  
+     tumor_5     2.395040  6.075587  5.162200  
+     tumor_6     2.990619  5.688459  6.130379  
+     tumor_7     2.430189  6.711568  3.234363  
+     tumor_8     3.034554  3.971228  5.027911  
+     tumor_9     3.173201  4.908155  4.843837  
+     tumor_10    1.830436  5.626133  4.636710  
+     tumor_11    2.089739  4.393897  4.591603  
+     tumor_12    2.837428  7.198907  2.430435  
+     tumor_13    2.586584  6.494642  3.512557  
+     tumor_14    2.414836  6.073256  2.401296  
+     tumor_15    3.521248  7.119879  2.096585  
+     tumor_16    2.881413  7.263920  2.295295  
+     tumor_17    3.120236  6.509721  2.428773  
+     tumor_18    0.000000  5.693971  3.797656  
+     tumor_19    5.693971  0.000000  7.034401  
+     tumor_20    3.797656  7.034401  0.000000  
      
      [40 rows x 40 columns])
 
@@ -922,16 +927,16 @@ res
 
 ``` python
 def get_SparCC(
-    df1:pandas.DataFrame | str | pathlib.Path, # First DataFrame with glycans in rows (col 1) and abundances in columns
-    df2:pandas.DataFrame | str | pathlib.Path, # Second DataFrame with same format as df1
+    df1:pd.DataFrame | str | Path, # First DataFrame with glycans in rows (col 1) and abundances in columns
+    df2:pd.DataFrame | str | Path, # Second DataFrame with same format as df1
     motifs:bool=False, # Analyze motifs instead of sequences
     feature_set:str | list[str]=['known', 'exhaustive'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     custom_motifs:str | list[str]=[], # Custom motifs if using 'custom' feature set
     transform:str | None=None, # Transformation type: "CLR" or "ALR"
-    gamma:float=0.1, # Uncertainty parameter for CLR transform
+    gamma:float=0.07, # Unused, since a rank correlation has no variance to carry it; kept so existing calls keep working
     partial_correlations:bool=False, # Use regularized partial correlations
-    random_state:int | numpy.random._generator.Generator | None=None, # optional random state for reproducibility
-)->tuple[pandas.DataFrame, pandas.DataFrame]: # (Spearman correlation matrix, FDR-corrected p-value matrix)
+    random_state:int | np.random.Generator | None=None, # optional random state for reproducibility
+)->tuple[pd.DataFrame, pd.DataFrame]: # (Spearman correlation matrix, FDR-corrected p-value matrix)
 ```
 
 *Calculates SparCC (Sparse Correlations for Compositional Data) between two matching datasets (e.g., glycomics)*
@@ -945,8 +950,8 @@ df1 = df1.set_index(df1.columns.tolist()[0]).T.reset_index()
 df2 = df2.set_index(df2.columns.tolist()[0]).T.reset_index()
 
 corr, pval = get_SparCC(df1, df2, motifs = True, transform = "CLR")
-import seaborn as sns
-sns.clustermap(corr)
+import viscose
+viscose.clustermap(corr, palette = 'aura', figsize = (10, 10))[0].show()
 ```
 
 ![](03_motif_files/figure-html/cell-45-output-1.png)
@@ -957,7 +962,7 @@ sns.clustermap(corr)
 
 ``` python
 def get_roc(
-    df:pandas.DataFrame | str | pathlib.Path, # DataFrame with glycans in rows (col 1), abundances in columns
+    df:pd.DataFrame | str | Path, # DataFrame with glycans in rows (col 1), abundances in columns
     group1:list[str | int] | None=None, # First group indices/names; default: from the frame's contrasts
     group2:list[str | int] | None=None, # Second group indices/names; default: from the frame's contrasts
     motifs:bool=False, # Analyze motifs instead of sequences
@@ -967,13 +972,13 @@ def get_roc(
     min_samples:float=0.1, # Min fraction (0-1) of non-zero samples required
     custom_motifs:str | list[str]=[], # Custom motifs if using 'custom' feature set
     transform:str | None=None, # Transformation type: "CLR" or "ALR"
-    gamma:float=0.1, # Uncertainty parameter for CLR transform
+    gamma:float=0.07, # Scale uncertainty of a sample's log-ratio; a classifier takes no such variance, so it has no effect here
     custom_scale:float | dict=0, # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
-    filepath:str | pathlib.Path='', # Path to save ROC plot
+    filepath:str | Path='', # Path to save ROC plot
     multi_score:bool=False, # Find best multi-glycan score
-    random_state:int | numpy.random._generator.Generator | None=None, # optional random state for reproducibility
+    random_state:int | np.random.Generator | None=None, # optional random state for reproducibility
     title:str | None=None, # Plot title; None keeps the default, '' removes it
-)->list[tuple[str, float]] | dict[typing.Any, tuple[str, float]] | tuple['LogisticRegression', float, list[str]]: # (feature, ROC AUC) pairs sorted by AUC; with more than two groups, class: (best feature, AUC); with multi_score, (model, ROC AUC, selected features)
+)->list[tuple[str, float]] | dict[Any, tuple[str, float]] | tuple[LogisticModel, float, list[str]]: # (feature, ROC AUC) pairs sorted by AUC; with more than two groups, class: (best feature, AUC); with multi_score, (model, ROC AUC of held-out samples, selected features)
 ```
 
 *Calculates ROC curves and AUC scores for glycans/motifs or multi-glycan classifiers*
@@ -984,21 +989,21 @@ get_roc(test_df, motifs = True)
 
 ![](03_motif_files/figure-html/cell-47-output-1.png)
 
-    [('Neu5Ac(a2-3)Gal', 0.82),
-     ('Gal3/6S(b1-3)GalNAc', 0.2225),
-     ('Neu5Ac', 0.7675000000000001),
-     ('Gal(b1-3)GalNAc', 0.7525),
+    [('Neu5Ac(a2-3)Gal', 0.8075),
+     ('Neu5Ac', 0.805),
+     ('Gal3/6S(b1-3)GalNAc', 0.24),
+     ('Internal_LacNAc_type2', 0.735),
+     ('GlcNAc6S(b1-6)GalNAc', 0.7325),
      ('H_antigen_type2', 0.275),
-     ('GlcNAc6S(b1-6)GalNAc', 0.7225),
-     ('Terminal_LacNAc_type2', 0.29),
-     ('Internal_LacNAc_type2', 0.6975),
-     ('Gal', 0.6699999999999999),
-     ('Oglycan_core1', 0.655),
-     ('Neu5Ac(a2-8)Neu5Ac', 0.375),
-     ('GalNAc', 0.6075),
-     ('Oglycan_core2', 0.54),
-     ('Disialyl_T_antigen', 0.48),
-     ('Neu5Ac(a2-6)GalNAc', 0.485)]
+     ('Oglycan_core1', 0.705),
+     ('Terminal_LacNAc_type2', 0.2975),
+     ('Gal(b1-3)GalNAc', 0.7000000000000001),
+     ('Gal', 0.6925),
+     ('GalNAc', 0.6924999999999999),
+     ('Neu5Ac(a2-8)Neu5Ac', 0.37750000000000006),
+     ('Oglycan_core2', 0.5375),
+     ('Neu5Ac(a2-6)GalNAc', 0.475),
+     ('Disialyl_T_antigen', 0.505)]
 
 ------------------------------------------------------------------------
 
@@ -1006,15 +1011,15 @@ get_roc(test_df, motifs = True)
 
 ``` python
 def get_distance_matrix(
-    df:pandas.DataFrame | str | pathlib.Path, # Input dataframe or filepath (.csv/.tsv/.xlsx), glycans as rows and samples as columns
-    dist_func:Union[str, Callable[[list, list], float]]='euclidean', # scipy.spatial.distance metric name or callable on two lists; euclidean on CLR data is the Aitchison distance
+    df:pd.DataFrame | str | Path, # Input dataframe or filepath (.csv/.tsv/.xlsx), glycans as rows and samples as columns
+    dist_func:str | Callable[[list, list], float]='euclidean', # scipy.spatial.distance metric name or callable on two lists; euclidean on CLR data is the Aitchison distance
     compare:str='samples', # What to compare pairwise: 'samples' or 'features' (glycans/motifs)
     motifs:bool=False, # Analyze motifs instead of sequences
     feature_set:str | list[str]=['known'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     custom_motifs:str | list[str]=[], # Custom motifs if using 'custom' feature set
     transform:str | None='CLR', # Transform data before comparing: 'CLR', 'ALR', or None
     index_col:str='glycan', # Column to use as index
-)->pandas.DataFrame: # Square distance matrix, e.g., for dendrogram_from_distance
+)->pd.DataFrame: # Square distance matrix, e.g., for dendrogram_from_distance
 ```
 
 *Calculates pairwise distances between samples or glycans/motifs from an abundance dataframe, with optional motif quantification and compositional transformation*
@@ -1025,12 +1030,12 @@ def get_distance_matrix(
 
 ``` python
 def get_lectin_array(
-    df:pandas.DataFrame | str | pathlib.Path, # DataFrame with samples as rows and lectins as columns, first column containing sample IDs
+    df:pd.DataFrame | str | Path, # DataFrame with samples as rows and lectins as columns, first column containing sample IDs
     group1:list[str | int] | None=None, # First group sample names or row indices (0-based, or 1-based when no index is 0), or one group label per sample if group2 is omitted; inferred from a GlycoDataFrame's contrasts if omitted
     group2:list[str | int] | None=None, # Second group sample names or row indices; inferred from a GlycoDataFrame's contrasts if omitted
     paired:bool | None=None, # Whether samples are paired; inferred from a GlycoDataFrame if omitted
     transform:str='', # Optional log2 transformation
-)->pandas.DataFrame: # DataFrame with altered glycan motifs, supporting lectins, and effect sizes
+)->pd.DataFrame: # DataFrame with altered glycan motifs, supporting lectins, and effect sizes
 ```
 
 *Analyzes lectin microarray data by mapping lectin binding patterns to glycan motifs, calculating Cohen’s d effect sizes between groups and clustering results by significance*
@@ -1132,17 +1137,17 @@ get_lectin_array(lectin_df, [5,6,7], [8,9,10])
 
 ``` python
 def get_glycoshift_per_site(
-    df:pandas.DataFrame | str | pathlib.Path, # DataFrame with rows formatted as 'protein_site_composition' in col 1, abundances in remaining cols
+    df:pd.DataFrame | str | Path, # DataFrame with rows formatted as 'protein_site_composition' in col 1, abundances in remaining cols
     group1:list[str | int] | None=None, # First group indices/names or group labels for multi-group; default: from the frame's contrasts
     group2:list[str | int] | None=None, # Second group indices/names; default: from the frame's contrasts
     paired:bool | None=None, # Whether samples are paired; default: from the frame
     impute:bool=True, # Replace zeros with impute_biosynthetic predictions
-    min_samples:float=0.2, # Min fraction (0-1) of non-zero samples required
-    gamma:float=0.1, # Uncertainty parameter for CLR transform
+    min_samples:float=0.2, # Min fraction (0-1) of samples in which a glycosite was measured
+    gamma:float=0.07, # Scale uncertainty of a sample's log-ratio, added to the variance of the test
     custom_scale:float | dict=0, # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
-    random_state:int | numpy.random._generator.Generator | None=None, # optional random state for reproducibility
+    random_state:int | np.random.Generator | None=None, # optional random state for reproducibility
     glycan_class:str | None=None, # Glycan class of the glycoforms ('N', 'O', ...); N-glycan type features (complex, high_Man, hybrid, core/antennary fucose, bisecting) only enter the model for 'N'; default: the dataset's glycan_class metadata, else 'N'
-)->pandas.DataFrame: # DataFrame with GLM coefficients and FDR-corrected p-values
+)->pd.DataFrame: # DataFrame with GLM coefficients and FDR-corrected p-values
 ```
 
 *Analyzes site-specific glycosylation changes in glycoproteomics data using generalized linear models (GLM) with compositional data normalization*
@@ -1155,63 +1160,26 @@ get_glycoshift_per_site(df_milk, ['Colostrum1', 'Colostrum2', 'Colostrum3'], ['M
 
 |  | Condition_coefficient | Condition_corr_pval | Condition_significant | Hex_Condition_coefficient | Hex_Condition_corr_pval | Hex_Condition_significant | HexNAc_Condition_coefficient | HexNAc_Condition_corr_pval | HexNAc_Condition_significant | Neu5Ac_Condition_coefficient | ... | complex_Condition_significant | dHex_Condition_coefficient | dHex_Condition_corr_pval | dHex_Condition_significant | high_Man_Condition_coefficient | high_Man_Condition_corr_pval | high_Man_Condition_significant | hybrid_Condition_coefficient | hybrid_Condition_corr_pval | hybrid_Condition_significant |
 |----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
-| P10909_374 | 11.007827 | 8.092243e-22 | True | -21.866671 | 1.819095e-22 | True | 5.578404 | 1.576562e-20 | True | -1.422656 | ... | True | 34.446135 | 3.594519e-23 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P01011_106 | 36.915718 | 9.899568e-21 | True | 8.593441 | 6.036643e-22 | True | -28.322276 | 1.198489e-19 | True | 9.371360 | ... | True | -35.940292 | 9.485707e-22 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P07602_215 | 11.887741 | 3.399843e-20 | True | -33.818338 | 1.561163e-19 | True | 29.342116 | 2.767400e-19 | True | 5.566635 | ... | True | 11.887741 | 3.999815e-20 | True | 9.104423 | 3.362082e-19 | True | 0.000000 | 1.000000 | False |
-| P24821_327 | 1.358945 | 6.515765e-15 | True | 6.794723 | 6.132485e-15 | True | 5.435778 | 6.324125e-15 | True | -39.823518 | ... | True | 1.358945 | 5.110404e-15 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P06858_70 | -0.137687 | 2.741216e-14 | True | -0.688437 | 2.579968e-14 | True | -0.550750 | 2.660592e-14 | True | -13.363438 | ... | True | 12.950375 | 4.045636e-18 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P10909_103 | -0.721154 | 2.456535e-12 | True | -3.605772 | 2.312033e-12 | True | -2.884618 | 2.043672e-12 | True | 21.181837 | ... | True | -0.721154 | 1.926694e-12 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P01833_186 | 1.300711 | 1.017785e-10 | True | -5.369004 | 5.830579e-11 | True | 5.202845 | 7.683278e-11 | True | -1.418266 | ... | True | 4.019688 | 4.809724e-14 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P01871_46 | 2.170283 | 4.187967e-10 | True | 1.146676 | 3.972924e-04 | True | -3.393175 | 1.003374e-12 | True | 14.244591 | ... | True | 2.170283 | 3.583288e-10 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P02765_156 | -0.519886 | 4.788857e-10 | True | 2.985334 | 3.825655e-10 | True | -2.079543 | 4.183207e-10 | True | -6.624535 | ... | True | 5.584763 | 3.434170e-10 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P25311_109 | -0.368422 | 2.741089e-09 | True | -1.842111 | 2.579849e-09 | True | -1.473689 | 2.418608e-09 | True | 0.017052 | ... | True | 9.412616 | 1.660768e-13 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P0C0L5_226 | -28.656498 | 2.975290e-09 | True | 18.096138 | 2.772959e-09 | True | -57.312996 | 2.647133e-09 | True | 0.000000 | ... | False | 0.000000 | 1.000000e+00 | False | -28.656498 | 1.155113e-08 | True | 0.000000 | 1.000000 | False |
-| P47710_69 | 0.279969 | 3.734651e-09 | True | -1.475748 | 8.715094e-09 | True | 1.119877 | 3.345977e-09 | True | 1.048123 | ... | True | 3.155565 | 4.799426e-09 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P08571_151 | -27.922110 | 5.800812e-09 | True | 17.991876 | 5.054349e-09 | True | -21.915590 | 1.702305e-08 | True | 14.497459 | ... | True | 0.000000 | 1.000000e+00 | False | -42.320351 | 5.783135e-09 | True | -5.330584 | 0.398619 | False |
-| P01591_71 | 42.541599 | 8.477669e-08 | True | -5.166757 | 2.810473e-02 | True | -8.650273 | 1.027186e-03 | True | -8.713971 | ... | True | -3.123779 | 3.339279e-01 | False | 0.000000 | 1.000000e+00 | False | 18.275951 | 0.000538 | True |
-| P10909_291 | 0.115116 | 4.889396e-07 | True | 0.575581 | 5.259182e-07 | True | -0.911443 | 2.630226e-07 | True | 0.115116 | ... | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 1.371908 | 0.000006 | True |
-| Q08380_551 | -2.416570 | 4.889396e-07 | True | -5.689635 | 3.721454e-11 | True | 8.116556 | 1.192939e-11 | True | 6.474847 | ... | True | 0.000000 | 1.000000e+00 | False | -8.891417 | 7.687681e-11 | True | 0.000000 | 1.000000 | False |
-| P0DOX2_246 | -13.580865 | 1.637397e-04 | True | 0.689838 | 3.010212e-01 | False | 5.795945 | 1.562258e-04 | True | -5.070921 | ... | True | -18.702344 | 4.990650e-04 | True | 0.710907 | 8.727273e-01 | False | -1.378544 | 0.945455 | False |
-| P01024_85 | -11.039726 | 1.529300e-03 | True | 9.460843 | 1.363301e-03 | True | -22.079453 | 1.335888e-03 | True | 0.000000 | ... | False | 0.000000 | 1.000000e+00 | False | -11.039726 | 6.477035e-03 | True | 0.000000 | 1.000000 | False |
-| P19652_56 | -0.001621 | 4.035872e-03 | True | -0.008103 | 3.608545e-03 | True | -0.006483 | 3.544106e-03 | True | -0.003241 | ... | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P02788_156 | -13.409647 | 4.852328e-03 | True | 4.497341 | 2.965550e-02 | True | -2.179494 | 3.358536e-01 | False | 1.801164 | ... | True | 6.459422 | 1.777605e-03 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P24821_1018 | 1.628020 | 3.403608e-02 | True | -1.297808 | 2.965550e-02 | True | 3.256039 | 3.153342e-02 | True | 0.000000 | ... | False | 0.000000 | 1.000000e+00 | False | 1.628020 | 1.261337e-01 | False | 0.000000 | 1.000000 | False |
-| P0DOX2_207 | -12.713679 | 5.803763e-02 | True | -3.166871 | 8.499776e-02 | False | 7.838112 | 7.248072e-05 | True | 7.352821 | ... | True | -0.148102 | 9.604860e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P07602_101 | 0.000944 | 8.213297e-02 | False | 0.004718 | 7.408072e-02 | True | 0.003774 | 7.639574e-02 | True | 0.000944 | ... | False | 0.000944 | 1.307307e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P01833_135 | -0.001365 | 9.783597e-02 | False | -0.006825 | 8.499776e-02 | False | -0.005460 | 8.765394e-02 | False | -0.002730 | ... | False | -0.001365 | 1.534682e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| Q6WN34_114 | -0.000546 | 1.566794e-01 | False | -0.002732 | 1.369299e-01 | False | -0.002185 | 1.412089e-01 | False | -0.000546 | ... | False | -0.000546 | 2.396272e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P02788_497 | 1.406250 | 1.566794e-01 | False | -3.945483 | 1.778568e-01 | False | 5.625002 | 1.409846e-01 | False | -7.770275 | ... | False | 3.473427 | 5.470211e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P01877_327 | 10.139194 | 1.920099e-01 | False | -3.769092 | 4.938894e-04 | True | 2.883046 | 5.057712e-01 | False | -5.768511 | ... | False | 0.000000 | 1.000000e+00 | False | 15.907705 | 1.449311e-04 | True | 1.079359 | 0.945455 | False |
-| P00709_90 | -0.561673 | 2.096062e-01 | False | -0.946003 | 5.100415e-01 | False | -2.246693 | 1.964261e-01 | False | 0.668611 | ... | False | 19.674465 | 2.379337e-16 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P01833_469 | -9.767329 | 2.237880e-01 | False | 10.248731 | 6.520996e-05 | True | -12.514158 | 9.332801e-06 | True | -1.985840 | ... | True | 0.596568 | 7.272727e-01 | False | 0.000000 | 1.000000e+00 | False | -20.498904 | 0.000562 | True |
-| Q08380_125 | -0.002017 | 2.237880e-01 | False | -0.010087 | 2.081277e-01 | False | -0.008070 | 2.077081e-01 | False | -0.002017 | ... | False | -0.002017 | 3.547631e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| Q13410_55 | -8.933516 | 2.373962e-01 | False | -1.433458 | 4.137702e-01 | False | 7.500058 | 2.077081e-01 | False | -9.771402 | ... | False | 10.071922 | 1.369400e-02 | True | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P01033_101 | -0.000955 | 2.560696e-01 | False | -0.004774 | 2.507795e-01 | False | -0.003819 | 2.560696e-01 | False | -0.000955 | ... | False | -0.000955 | 4.267827e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P10909_86 | 0.002258 | 2.560696e-01 | False | 0.011290 | 2.560696e-01 | False | 0.009032 | 2.560696e-01 | False | 0.002258 | ... | False | 0.002258 | 4.267827e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P01876_340 | 7.603177 | 2.560696e-01 | False | -1.438773 | 2.252206e-01 | False | -0.073076 | 9.739093e-01 | False | 2.642875 | ... | False | -5.274189 | 1.307307e-01 | False | 0.703402 | 8.727273e-01 | False | 7.170895 | 0.398619 | False |
-| P0C0L5_1391 | -0.002707 | 2.704897e-01 | False | -0.013534 | 2.704897e-01 | False | -0.010828 | 2.704897e-01 | False | -0.002707 | ... | False | -0.002707 | 4.327835e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| Q9NZJ4_3757 | 0.001253 | 2.962280e-01 | False | 0.007517 | 2.962280e-01 | False | 0.005012 | 2.962280e-01 | False | 0.001253 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| O60225_152 | 0.000330 | 3.273787e-01 | False | 0.002969 | 3.273787e-01 | False | 0.000660 | 3.273787e-01 | False | 0.000000 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000330 | 8.727273e-01 | False | 0.000000 | 1.000000 | False |
-| P24821_1119 | -0.001260 | 4.282784e-01 | False | -0.006302 | 4.282784e-01 | False | -0.005042 | 4.282784e-01 | False | -0.001260 | ... | False | -0.001260 | 6.344866e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P01833_421 | -5.429280 | 4.626961e-01 | False | -5.040469 | 1.365327e-01 | False | 9.672193 | 4.776485e-02 | True | -0.562121 | ... | False | -0.161116 | 9.549389e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P02788_534 | -0.000608 | 4.872411e-01 | False | -0.003041 | 4.872411e-01 | False | -0.002433 | 4.872411e-01 | False | -0.000608 | ... | False | -0.000608 | 6.620121e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P25311_112 | 0.001661 | 4.965091e-01 | False | 0.008304 | 4.965091e-01 | False | 0.006643 | 4.965091e-01 | False | 0.001661 | ... | False | 0.001661 | 6.620121e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P00734_143 | -0.000248 | 5.072288e-01 | False | -0.001242 | 5.072288e-01 | False | -0.000994 | 5.072288e-01 | False | -0.000497 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P01833_499 | -6.304288 | 5.115586e-01 | False | 7.196460 | 3.536410e-03 | True | -9.906141 | 8.139259e-02 | False | -8.425216 | ... | False | 2.187014 | 6.620121e-01 | False | -16.906167 | 2.213538e-02 | True | -3.706189 | 0.945455 | False |
-| P07602_332 | 0.000929 | 5.419882e-01 | False | 0.001857 | 5.419882e-01 | False | 0.001857 | 5.419882e-01 | False | 0.000000 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000929 | 8.727273e-01 | False | 0.000000 | 1.000000 | False |
-| Q6ZMW3_1352 | -0.000986 | 5.560690e-01 | False | -0.002959 | 5.560690e-01 | False | -0.004931 | 5.560690e-01 | False | 0.000000 | ... | False | -0.000986 | 7.175083e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P02790_453 | -0.001216 | 5.800360e-01 | False | -0.006081 | 5.800360e-01 | False | -0.004865 | 5.800360e-01 | False | -0.002432 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P02749_253 | 0.000824 | 6.283032e-01 | False | 0.004118 | 6.283032e-01 | False | 0.003295 | 6.283032e-01 | False | 0.001647 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P00738_241 | 0.000473 | 7.923659e-01 | False | 0.002363 | 7.923659e-01 | False | 0.001891 | 7.923659e-01 | False | 0.000945 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P02788_521 | 0.000183 | 8.036502e-01 | False | 0.000913 | 8.036502e-01 | False | 0.000730 | 8.036502e-01 | False | 0.000365 | ... | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P07602_426 | -0.000476 | 8.227525e-01 | False | -0.002379 | 8.227525e-01 | False | -0.000952 | 8.227525e-01 | False | 0.000000 | ... | False | 0.000000 | 1.000000e+00 | False | -0.000476 | 8.727273e-01 | False | 0.000000 | 1.000000 | False |
-| P00739_126 | -0.000261 | 8.298991e-01 | False | -0.001307 | 8.298991e-01 | False | -0.001045 | 8.298991e-01 | False | -0.000261 | ... | False | -0.000261 | 8.298991e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P18505_376 | 0.000512 | 8.520762e-01 | False | 0.002558 | 8.520762e-01 | False | 0.002046 | 8.520762e-01 | False | 0.001023 | ... | False | 0.001535 | 8.520762e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| Q08431_238 | -0.032680 | 8.616991e-01 | False | 0.048280 | 7.836892e-01 | False | -0.092457 | 7.759790e-01 | False | -0.027097 | ... | False | 0.000000 | 1.000000e+00 | False | -0.005583 | 9.827333e-01 | False | -0.027097 | 0.945455 | False |
-| Q08380_69 | -0.000080 | 9.493157e-01 | False | -0.000482 | 9.493157e-01 | False | -0.000321 | 9.493157e-01 | False | -0.000080 | ... | False | -0.000080 | 9.493157e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
-| P0DOX2_320 | 0.407500 | 9.620596e-01 | False | 1.168275 | 5.843695e-01 | False | -0.703303 | 8.207185e-01 | False | -15.551187 | ... | False | 6.842047 | 1.578354e-01 | False | 0.000000 | 1.000000e+00 | False | 0.000000 | 1.000000 | False |
+| P0DOX2_207 | -2.616566e+00 | 0.111467 | False | -2.754507e-02 | 0.993745 | False | 1.132648e+00 | 0.453541 | False | 5.847057e-01 | ... | True | -2.478600e-01 | 1.000000 | False | 0.000000 | 1.0 | False | 0.000000 | 1.0 | False |
+| P0DOX2_246 | 2.061284e+00 | 0.556737 | False | 6.547170e-02 | 0.993745 | False | -9.562788e-01 | 0.568366 | False | -2.679332e-01 | ... | False | 0.000000e+00 | 1.000000 | False | -0.474023 | 1.0 | False | 0.639710 | 1.0 | False |
+| P01833_499 | 1.650798e+00 | 0.638025 | False | -5.431291e-01 | 0.993745 | False | 6.632489e-03 | 1.000000 | False | 1.714963e-01 | ... | True | 8.584074e-01 | 0.416504 | False | 0.000000 | 1.0 | False | 0.761305 | 1.0 | False |
+| Q13410_55 | -3.927859e-02 | 0.756586 | False | -1.963929e-01 | 0.993745 | False | -1.571143e-01 | 0.713161 | False | 5.816099e-01 | ... | False | 9.396850e-01 | 0.416504 | False | 0.000000 | 1.0 | False | 0.000000 | 1.0 | False |
+| P01833_469 | 1.217803e+00 | 0.939804 | False | -3.060501e-01 | 0.993745 | False | -5.399030e-02 | 1.000000 | False | -4.141730e-01 | ... | False | -1.761702e-01 | 0.416504 | False | 0.000000 | 1.0 | False | 0.000000 | 1.0 | False |
+| P01876_340 | 8.057109e-01 | 0.939804 | False | 2.567329e-02 | 0.993745 | False | -3.376974e-01 | 0.713161 | False | -1.930209e-01 | ... | False | 6.219545e-01 | 0.416504 | False | -0.207015 | 1.0 | False | 0.697013 | 1.0 | False |
+| P01591_71 | 7.912830e-01 | 0.939804 | False | -2.830325e-01 | 0.993745 | False | -7.041685e-02 | 1.000000 | False | 1.673986e-01 | ... | False | 5.995272e-01 | 0.416504 | False | 0.000000 | 1.0 | False | 0.285325 | 1.0 | False |
+| P01833_186 | -5.242921e-03 | 0.959706 | False | 5.592449e-02 | 0.993745 | False | -2.097168e-02 | 1.000000 | False | -9.262493e-02 | ... | False | 8.213909e-02 | 1.000000 | False | 0.000000 | 1.0 | False | 0.000000 | 1.0 | False |
+| P01833_421 | 1.571438e+00 | 0.959706 | False | -9.678376e-01 | 0.993745 | False | 6.239413e-01 | 0.713161 | False | 5.635945e-01 | ... | False | -2.788752e-01 | 1.000000 | False | 0.000000 | 1.0 | False | 0.000000 | 1.0 | False |
+| P00709_90 | 4.762284e-02 | 0.959706 | False | 2.381142e-01 | 0.993745 | False | 1.904913e-01 | 1.000000 | False | -1.365188e+00 | ... | False | 0.000000e+00 | 1.000000 | False | 0.000000 | 1.0 | False | 0.000000 | 1.0 | False |
+| P02788_156 | -1.859454e-01 | 0.959706 | False | 6.728378e-01 | 0.993745 | False | -8.089389e-01 | 0.713161 | False | -4.021612e-01 | ... | False | 4.507586e-01 | 0.416504 | False | 0.000000 | 1.0 | False | 0.000000 | 1.0 | False |
+| P01877_327 | 1.913927e-01 | 0.959706 | False | -1.766702e-01 | 0.993745 | False | 3.827854e-01 | 1.000000 | False | 0.000000e+00 | ... | False | 0.000000e+00 | 1.000000 | False | 0.191393 | 1.0 | False | 0.000000 | 1.0 | False |
+| P0DOX2_320 | -1.126158e+00 | 0.959706 | False | 1.112945e-01 | 0.993745 | False | 3.577483e-01 | 1.000000 | False | 2.418221e-01 | ... | False | 1.784370e-01 | 1.000000 | False | 0.000000 | 1.0 | False | 0.000000 | 1.0 | False |
+| P01024_85 | -2.183521e-03 | 0.959706 | False | -1.746817e-02 | 0.993745 | False | -4.367043e-03 | 1.000000 | False | 0.000000e+00 | ... | False | 0.000000e+00 | 1.000000 | False | -0.002184 | 1.0 | False | 0.000000 | 1.0 | False |
+| Q08431_238 | -1.452088e-01 | 0.959706 | False | 1.267247e-01 | 0.993745 | False | -3.062377e-01 | 1.000000 | False | -1.582020e-02 | ... | False | 0.000000e+00 | 1.000000 | False | -0.129389 | 1.0 | False | -0.015820 | 1.0 | False |
+| P02788_497 | 2.006471e-03 | 1.000000 | False | 9.555178e-02 | 0.993745 | False | 8.025885e-03 | 1.000000 | False | -3.830702e-01 | ... | False | -2.605003e-01 | 1.000000 | False | 0.000000 | 1.0 | False | 0.000000 | 1.0 | False |
+| P25311_109 | 2.249751e-03 | 1.000000 | False | 1.124876e-02 | 0.993745 | False | 8.999006e-03 | 1.000000 | False | -9.898907e-02 | ... | False | 2.249751e-03 | 1.000000 | False | 0.000000 | 1.0 | False | 0.000000 | 1.0 | False |
+| P10909_103 | 6.167906e-18 | 1.000000 | False | 3.083953e-17 | 1.000000 | False | 2.467162e-17 | 1.000000 | False | 1.233581e-17 | ... | False | 6.167906e-18 | 1.000000 | False | 0.000000 | 1.0 | False | 0.000000 | 1.0 | False |
 
-55 rows × 27 columns
+18 rows × 27 columns
 
 ``` python
 #glycoproteomics data are recognized by their protein_site_glycan row labels: glycoforms are compared within their glycosite, motifs are quantified per glycosite, and diversity becomes per-site microheterogeneity
@@ -1219,13 +1187,12 @@ print(get_differential_expression(df_milk, motifs = True).head())
 get_biodiversity(df_milk, metrics = ['alpha'])[0].head()
 ```
 
-    Chosen grouping: by_motif_family
-         Glycosite    corr p-val  significant  Effect size
-    0    P00709_90  2.904331e-26         True    -3.112571
-    14  P0DOX2_246  5.889920e-26         True    -0.323954
-    11  P07602_215  3.653765e-25         True    -0.348624
-    8   P01877_327  3.445288e-11         True   -22.614158
-    15  P0DOX2_320  2.547771e-07         True     1.068710
+         Glycosite  corr p-val  significant  Effect size
+    8   P01877_327    0.000002         True   -22.266972
+    14  P0DOX2_246    0.000010         True     2.453219
+    0    P00709_90    0.000027         True    -9.089121
+    11  P07602_215    0.000038         True    10.180789
+    15  P0DOX2_320    0.010698         True     2.356109
 
 |  | Metric | Group1 mean | Group2 mean | p-val | Effect size | corr p-val | significant |
 |----|----|----|----|----|----|----|----|
@@ -1245,12 +1212,12 @@ get_biodiversity(df_milk, metrics = ['alpha'])[0].head()
 
 ``` python
 def annotate_glycan(
-    glycan:str | networkx.classes.digraph.DiGraph, # IUPAC-condensed glycan sequence or NetworkX graph
-    motifs:pandas.DataFrame | str | list[str] | None=None, # Motif dataframe (motif_name + motif columns), or motif sequence(s); defaults to motif_list
+    glycan:str | nx.DiGraph, # IUPAC-condensed glycan sequence or NetworkX graph
+    motifs:pd.DataFrame | str | list[str] | None=None, # Motif dataframe (motif_name + motif columns), or motif sequence(s); defaults to motif_list
     termini_list:list=[], # Monosaccharide positions: 'terminal', 'internal', or 'flexible'
-    gmotifs:list[networkx.classes.digraph.DiGraph] | None=None, # Precalculated motif graphs for speed
+    gmotifs:list[GlycanGraph | nx.DiGraph | list] | None=None, # Precalculated motif graphs (or compiled glyco-regexes) for speed
     condense:bool=False, # Remove columns with only zeros
-)->pandas.DataFrame: # DataFrame with motif counts for the glycan
+)->pd.DataFrame: # DataFrame with motif counts for the glycan
 ```
 
 *Counts occurrences of known motifs in a glycan structure using subgraph isomorphism*
@@ -1272,12 +1239,12 @@ annotate_glycan("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)
 ``` python
 def annotate_dataset(
     glycans:str | list[str], # Glycan(s) in IUPAC-condensed nomenclature
-    motifs:pandas.DataFrame | None=None, # Motif dataframe (name + sequence); defaults to motif_list
+    motifs:pd.DataFrame | None=None, # Motif dataframe (name + sequence); defaults to motif_list
     feature_set:str | list[str]=['known'], # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical, size_branch
     termini_list:list=[], # Monosaccharide positions: 'terminal', 'internal', or 'flexible'
     condense:bool=False, # Remove columns with only zeros
     custom_motifs:str | list[str]=[], # Custom motifs (sequences, r-prefixed glyco-regexes, or motif_list names) when using 'custom' feature set; columns keep these labels
-)->pandas.DataFrame: # DataFrame mapping glycans to motif counts and other features
+)->pd.DataFrame: # DataFrame mapping glycans to motif counts and other features
 ```
 
 *Comprehensive glycan annotation combining multiple feature types: structural motifs, graph properties, terminal sequences*
@@ -1304,12 +1271,13 @@ out = annotate_dataset(glycans)
 
 ``` python
 def quantify_motifs(
-    df:pandas.DataFrame | str | pathlib.Path, # DataFrame, filepath, or shipped dataset name, with samples as columns, abundances as values
+    df:pd.DataFrame | str | Path, # DataFrame, filepath, or shipped dataset name, with samples as columns, abundances as values
     glycans:list[str] | None=None, # List of IUPAC-condensed glycan sequences or compositions, or glycoproteomics glycoforms as protein_site_glycan; auto-detected from the first column, or the index, if None
     feature_set:str | list[str]=['known', 'exhaustive'], # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical, size_branch
     custom_motifs:str | list[str]=[], # Custom motifs (sequences, r-prefixed glyco-regexes, or motif_list names) when using 'custom' feature set
     remove_redundant:bool=True, # Remove redundant motifs via deduplicate_motifs
-)->pandas.DataFrame: # DataFrame with motif abundances (motifs as rows, samples as columns); for glycoforms, one row per glycosite and motif as protein_site_motif
+    return_counts:bool=False, # Also return the glycans x motifs occurrence counts the abundances were weighted with
+)->pd.DataFrame | tuple[pd.DataFrame, pd.DataFrame]: # DataFrame with motif abundances (motifs as rows, samples as columns); for glycoforms, one row per glycosite and motif as protein_site_motif
 ```
 
 *Extracts and quantifies motif abundances from glycan abundance data by weighting motif occurrences; glycoproteomics glycoforms are quantified per glycosite*
@@ -1345,8 +1313,9 @@ quantify_motifs(test_df.iloc[:, 1:], test_df.iloc[:, 0].values.tolist(), ['known
 ``` python
 def get_motif_dag(
     motifs:list[str], # Motif labels as produced by annotate_dataset/quantify_motifs, optionally per glycosite as protein_site_motif
-    abundances:pandas.DataFrame | None=None, # Motifs x samples abundances, used as an exact prefilter for containment (not needed for per-glycosite motifs)
-)->networkx.classes.digraph.DiGraph: # Transitively reduced containment DAG; edge parent -> child means parent is a substructure of child
+    abundances:pd.DataFrame | None=None, # Motifs x samples abundances, a prefilter for containment when carriers is not given (not needed for per-glycosite motifs)
+    carriers:pd.DataFrame | None=None, # Glycans x motifs counts of the measured structures; a child's carriers must all carry the parent, which makes the graph independent of samples and labels
+)->nx.DiGraph: # Transitively reduced containment DAG; edge parent -> child means parent is a substructure of child
 ```
 
 *Builds the containment DAG of a motif set, in which a parent motif is a substructure of each of its children; per-glycosite motifs are only ordered within their glycosite*
@@ -1358,11 +1327,36 @@ def get_motif_dag(
 ``` python
 def get_composition_dag(
     compositions:list[str], # Composition or IUPAC-condensed labels, optionally prefixed as protein_site_composition
-    abundances:pandas.DataFrame | None=None, # Glycoforms x samples abundances, used as an exact prefilter for containment
-)->networkx.classes.digraph.DiGraph: # Transitively reduced containment DAG; edge parent -> child means parent is contained in child
+    abundances:pd.DataFrame | None=None, # Glycoforms x samples abundances, used as an exact prefilter for containment
+)->nx.DiGraph: # Transitively reduced containment DAG; edge parent -> child means parent is contained in child
 ```
 
 *Builds the containment DAG of a glycoform set, ordering parts by substructure containment where sequences are given and by component-wise composition dominance otherwise*
+
+------------------------------------------------------------------------
+
+### get_motif_atoms
+
+``` python
+def get_motif_atoms(
+    dag:nx.DiGraph, # Containment DAG of the motifs in counts
+    counts:pd.DataFrame, # Glycans x motifs occurrence counts, as from annotate_dataset
+)->dict[str, tuple[list[tuple[str, ...]], np.ndarray]]: # Parent motif to (atoms named by the children covering them, () being the part outside every child; atoms x glycans counts)
+```
+
+*Splits every occurrence of a parent motif by which children cover it, so that overlapping children, and children holding several occurrences of their parent, still partition the parent exactly: the atoms of a parent sum to its counts in every glycan*
+
+------------------------------------------------------------------------
+
+### get_composition_atoms
+
+``` python
+def get_composition_atoms(
+    dag:nx.DiGraph, # Containment DAG of glycoforms, from get_composition_dag
+)->dict[str, tuple[list[tuple[str, ...]], list[list[str]]]]: # Parent glycoform to (atoms named by the children covering them, () being the glycoform itself; the glycoforms in each atom)
+```
+
+*Splits the glycoforms at or above a parent by which children they sit at or above, so that a parent’s cumulative abundance partitions exactly: its own part is its measured abundance, the rest is what it was extended to*
 
 ------------------------------------------------------------------------
 
@@ -1375,7 +1369,7 @@ def get_k_saccharides(
     up_to:bool=False, # Include fragments up to size k (adds monosaccharides)
     just_motifs:bool=False, # Return nested list of motifs instead of count DataFrame
     terminal:bool=False, # Only count terminal fragments
-)->pandas.DataFrame | list[list[str]]: # DataFrame of k-saccharide counts or list of motifs per glycan
+)->pd.DataFrame | list[list[str]]: # DataFrame of k-saccharide counts or list of motifs per glycan
 ```
 
 *Extracts k-saccharide fragments from glycan sequences with options for different fragment sizes and positions*
@@ -1399,7 +1393,7 @@ out = get_k_saccharides(glycans, size = 3)
 
 ``` python
 def get_terminal_structures(
-    glycan:str | networkx.classes.digraph.DiGraph, # IUPAC-condensed glycan sequence or NetworkX graph
+    glycan:str | nx.DiGraph, # IUPAC-condensed glycan sequence or NetworkX graph
     size:int=1, # Number of monosaccharides in terminal fragment (1 or higher)
 )->list[str]: # List of terminal structures with linkages
 ```
@@ -1422,7 +1416,7 @@ def get_molecular_properties(
     verbose:bool=False, # Print SMILES not found on PubChem
     placeholder:bool=False, # Return dummy values instead of dropping failed requests
     pubchem:bool=False, # Additionally fetch xlogp and complexity, the only two descriptors that cannot be computed from the structure
-)->pandas.DataFrame: # DataFrame with molecular parameters
+)->pd.DataFrame: # DataFrame with molecular parameters
 ```
 
 *Computes molecular properties of glycans from their own SMILES, optionally enriched with the two empirical descriptors only PubChem has*
@@ -1441,9 +1435,9 @@ out = get_molecular_properties(["Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5
 
 ``` python
 def get_glycan_similarity(
-    glycan1:str | networkx.classes.digraph.DiGraph, # IUPAC-condensed glycan sequence or NetworkX graph
-    glycan2:str | networkx.classes.digraph.DiGraph, # IUPAC-condensed glycan sequence or NetworkX graph
-    motifs:pandas.DataFrame | None=None, # Motif dataframe (name + sequence); defaults to motif_list
+    glycan1:str | nx.DiGraph, # IUPAC-condensed glycan sequence or NetworkX graph
+    glycan2:str | nx.DiGraph, # IUPAC-condensed glycan sequence or NetworkX graph
+    motifs:pd.DataFrame | None=None, # Motif dataframe (name + sequence); defaults to motif_list
     feature_set:str | list[str]=['known', 'exhaustive', 'terminal'], # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical, size_branch
 )->float: # Cosine similarity between glycan1 and glycan2
 ```
@@ -1485,11 +1479,25 @@ print(glycan_to_nxGraph('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]Glc
 
 ------------------------------------------------------------------------
 
+### glycan_to_glycangraph
+
+``` python
+def glycan_to_glycangraph(
+    glycan:str, # Glycan in IUPAC-condensed format
+    termini:str='ignore', # How to encode terminal/internal position; options: ignore, calc, provided
+    termini_list:str | list[str] | None=None, # List of positions from terminal/internal/flexible
+)->GlycanGraph: # Read-only GlycanGraph: nodes maps a node to its attributes, succ and pred a node to a tuple of neighbors; cached and shared between calls, so never edit it
+```
+
+*Convert glycans into the lightweight graph glycowork’s motif code runs on, for code that only reads the graph: the nodes, attributes, and neighbor order of glycan_to_nxGraph at a tenth of its memory and without networkx; also works with floating substituents*
+
+------------------------------------------------------------------------
+
 ### graph_to_string
 
 ``` python
 def graph_to_string(
-    graph:nx.DiGraph, # Glycan graph (assumes root node is the one with the highest index)
+    graph:GlycanGraph | nx.DiGraph, # Glycan graph (assumes root node is the one with the highest index)
     canonicalize:bool=True, # Whether to output canonicalized IUPAC-condensed
     order_by:str='length', # canonicalize by 'length' or 'linkage'
 )->str: # IUPAC-condensed glycan string
@@ -1509,8 +1517,8 @@ graph_to_string(glycan_to_nxGraph('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc
 
 ``` python
 def compare_glycans(
-    glycan_a:str | nx.DiGraph, # First glycan to compare
-    glycan_b:str | nx.DiGraph, # Second glycan to compare
+    glycan_a:str | GlycanGraph | nx.DiGraph, # First glycan to compare
+    glycan_b:str | GlycanGraph | nx.DiGraph, # Second glycan to compare
     return_matches:bool=False, # Whether to return node mapping between glycans
     subsumes:bool=False, # Whether to instead check that glycan_a covers every structure glycan_b can be, i.e., glycan_b is glycan_a or a more specific version of it (Gal(b1-4)GlcNAc for Gal(b1-3/4)GlcNAc, but not vice versa)
 )->bool: # True if glycans are same (or glycan_a subsumes glycan_b), False if not
@@ -1533,8 +1541,8 @@ print(compare_glycans('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNA
 
 ``` python
 def subgraph_isomorphism(
-    glycan:str | nx.DiGraph, # Glycan sequence or graph
-    motif:str | nx.DiGraph, # Glycan motif sequence or graph
+    glycan:str | GlycanGraph | nx.DiGraph, # Glycan sequence or graph
+    motif:str | GlycanGraph | nx.DiGraph, # Glycan motif sequence or graph
     termini_list:str | list=[], # Monosaccharide position(s) from terminal/internal/flexible
     count:bool=False, # Whether to return count instead of presence/absence
     return_matches:bool=False, # Whether to return matched subgraphs as node lists
@@ -1558,7 +1566,7 @@ print(subgraph_isomorphism('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]
 
 ``` python
 def generate_graph_features(
-    glycan:str | nx.DiGraph, # Glycan sequence or network graph
+    glycan:str | GlycanGraph | nx.DiGraph, # Glycan sequence or network graph
     glycan_graph:bool=True, # True if input is glycan, False if network
     label:str='network', # Label for output dataframe if glycan_graph=False
 )->pd.DataFrame: # Dataframe of graph features
@@ -1582,8 +1590,8 @@ generate_graph_features("Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]Glc
 
 ``` python
 def largest_subgraph(
-    glycan_a:str | nx.DiGraph, # First glycan
-    glycan_b:str | nx.DiGraph, # Second glycan
+    glycan_a:str | GlycanGraph | nx.DiGraph, # First glycan
+    glycan_b:str | GlycanGraph | nx.DiGraph, # Second glycan
 )->str: # Largest common subgraph in IUPAC format
 ```
 
@@ -1603,7 +1611,7 @@ largest_subgraph(glycan1, glycan2)
 
 ``` python
 def ensure_graph(
-    glycan:str | nx.DiGraph, # Glycan in IUPAC-condensed format or as networkx graph
+    glycan:str | GlycanGraph | nx.DiGraph, # Glycan in IUPAC-condensed format or as a graph
     **kwargs
 )->nx.DiGraph: # NetworkX graph object of glycan; for a string, the cached graph glycan_to_nxGraph returns
 ```
@@ -1622,10 +1630,10 @@ ensure_graph("Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc")
 
 ``` python
 def get_possible_topologies(
-    glycan:str | nx.DiGraph, # Glycan with floating substituent
+    glycan:str | GlycanGraph | nx.DiGraph, # Glycan with floating substituent
     exhaustive:bool=False, # Whether to allow additions at internal positions
     allowed_disaccharides:set[str] | None=None, # Permitted disaccharides when creating possible glycans
-    modification_map:dict[str, set[str]]={'6S': {'GlcNAc', 'Gal'}, '3S': {'Gal'}, '4S': {'GalNAc'}, 'OS': {'GlcNAc', 'Gal', 'GalNAc'}}, # Maps modifications to valid attachments
+    modification_map:dict[str, set[str]]={'6S': {'Gal', 'GlcNAc'}, '3S': {'Gal'}, '4S': {'GalNAc'}, 'OS': {'Gal', 'GlcNAc', 'GalNAc'}}, # Maps modifications to valid attachments
     return_graphs:bool=False, # Whether to return glycan graphs (otherwise return converted strings)
 )->list[str | nx.DiGraph]: # List of possible topology strings or graphs
 ```
@@ -1639,7 +1647,7 @@ def get_possible_topologies(
 ``` python
 def possible_topology_check(
     glycan:str | nx.DiGraph, # Glycan with floating substituent
-    glycans:list[str | nx.DiGraph], # List of glycans to check against
+    glycans:str | nx.DiGraph | list[str | nx.DiGraph], # Glycan(s) to check against
     exhaustive:bool=False, # Whether to allow additions at internal positions
     **kwargs
 )->list[str | nx.DiGraph]: # List of matching glycans
@@ -2000,12 +2008,41 @@ glycan_to_glycam("Neu5Ac(a2-3)Gal(b1-3)GalNAc", reducing_anomer = "a")  # mucin-
 
 ------------------------------------------------------------------------
 
+### glycan_to_kcf
+
+``` python
+def glycan_to_kcf(
+    glycan:str, # Glycan in IUPAC-condensed format
+    entry:str='glycowork', # Name on the ENTRY line, which has to differ between the glycans of one file
+)->str: # Glycan in KCF as KEGG GLYCAN writes it, with node 1 at the reducing end
+```
+
+*Convert glycan from IUPAC-condensed to KCF (KEGG Chemical Function format), e.g., for KEGG’s KCaM search or the RINGS tools*
+
+``` python
+print(glycan_to_kcf("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc"))
+```
+
+    ENTRY       glycowork                   Glycan
+    NODE        4
+                1   GlcNAc       8     0
+                2   Gal          0     4
+                3   LFuc         0    -4
+                4   Neu5Ac      -8     4
+    EDGE        3
+                1     2:b1    1:4
+                2     3:a1    1:3
+                3     4:a2    2:3
+    ///
+
+------------------------------------------------------------------------
+
 ### get_possible_linkages
 
 ``` python
 def get_possible_linkages(
     wildcard:str, # Pattern to match, ? can be wildcard
-    linkage_list:list[str]={'?2-6', 'b2-3', '?1-?', 'a2-5', 'b2-5', 'a2-1', 'b1-7', 'a1-2', 'a2-3', 'a2-4', '1-6', 'b1-2', '?2-?', '?1-4', 'b1-?', 'b2-4', 'b1-8', 'b2-8', 'b1-9', 'a2-8', 'a2-2', '?1-6', '?1-2', 'a1-4', 'b1-5', 'a1-5', 'a2-7', 'a1-?', 'a2-9', 'a2-?', 'b2-6', 'b1-1', '1-4', 'b2-2', 'b1-4', '?1-3', 'b1-6', 'b2-1', 'a1-11', 'b2-7', 'a1-9', 'a2-6', 'a1-1', '?2-8', 'b1-3', '?2-3', 'a2-11', 'a1-6', 'a1-8', 'a1-3', 'a1-7'}, # List of linkages to search
+    linkage_list:list[str]={'1-6', '?1-2', 'a1-5', 'a1-3', 'a2-6', 'a1-11', 'a1-7', 'a1-?', '?2-6', '?1-4', 'b2-2', '?1-?', 'b1-9', 'b2-8', 'a2-?', 'a1-9', 'a1-8', 'b2-7', 'b1-3', 'b2-1', 'b1-6', 'b2-4', 'a1-2', 'a1-1', 'b1-2', 'b2-6', '?2-?', 'a1-6', '1-4', 'a2-2', '?2-3', 'a1-4', 'a2-1', 'a2-7', 'b1-?', 'b2-5', '?2-8', '?1-6', 'a2-9', 'a2-5', 'a2-8', 'b1-1', 'b1-7', 'a2-4', '?1-3', 'a2-3', 'b1-4', 'b1-5', 'a2-11', 'b1-8', 'b2-3'}, # List of linkages to search
 )->frozenset[str]: # Matching linkages
 ```
 
@@ -2150,7 +2187,7 @@ glytoucan_to_glycan(['G63041RA'])
 
 ``` python
 def glycan_to_smiles(
-    glycan:str | networkx.classes.digraph.DiGraph, # Glycan in IUPAC-condensed format or as a networkx graph
+    glycan:str | GlycanGraph | nx.DiGraph, # Glycan in IUPAC-condensed format or as a networkx graph
     mapping:bool=False, # Also return, for every atom of the SMILES, the graph node it came from
     strict:bool=False, # Raise on an unknown linkage or modification position instead of taking the lowest free one
 )->str | tuple: # Isomeric SMILES, or (SMILES, atom-to-node tuple) when mapping
@@ -2201,9 +2238,9 @@ def parse_smiles(
 
 ``` python
 def glycan_to_molecule(
-    glycan:str | networkx.classes.digraph.DiGraph, # Glycan in IUPAC-condensed format or as a networkx graph
+    glycan:str | GlycanGraph | nx.DiGraph, # Glycan in IUPAC-condensed format or as a networkx graph
     strict:bool=False, # Raise on an unknown linkage or modification position instead of taking the lowest free one
-)->glycowork.motif.smiles.Molecule: # Atoms, bonds, rings, and the graph node every atom and bond came from
+)->Molecule: # Atoms, bonds, rings, and the graph node every atom and bond came from
 ```
 
 *Build a glycan’s molecular graph without a cheminformatics toolkit, keeping every atom’s monosaccharide of origin*
@@ -2219,7 +2256,7 @@ def glycan_to_molecule(
 ``` python
 def get_match(
     pattern:str | list[str], # Expression or pre-compiled pattern; e.g., "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
-    glycan:str | nx.DiGraph, # Glycan string or graph
+    glycan:str | GlycanGraph | nx.DiGraph, # Glycan string or graph
     return_matches:bool=True, # Whether to return matches vs boolean
 )->bool | list[str]: # Match results
 ```
@@ -2328,7 +2365,7 @@ For interested users, we here compile a selection of regular expression patterns
 ``` python
 def get_match_batch(
     pattern:str | list[str], # Expression or pre-compiled pattern; e.g., "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
-    glycan_list:str | nx.DiGraph | list[str | nx.DiGraph], # Glycan(s) as strings or graphs
+    glycan_list:str | GlycanGraph | nx.DiGraph | list[str | GlycanGraph | nx.DiGraph], # Glycan(s) as strings or graphs
     return_matches:bool=True, # Whether to return matches vs boolean
 )->list[bool] | list[list[str]]: # Match results for each glycan
 ```
@@ -2342,7 +2379,7 @@ def get_match_batch(
 ``` python
 def explain_match(
     pattern:str, # Glyco-regular expression, e.g., "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
-    glycan:str | nx.DiGraph, # Glycan string or graph
+    glycan:str | GlycanGraph | nx.DiGraph, # Glycan string or graph
 )->pd.DataFrame: # One row per pattern chunk, with what it compiled to and how often it occurs
 ```
 
@@ -2469,7 +2506,7 @@ def mz_to_composition(
     mz_value:float, # m/z value from mass spec
     max_charge:int=-2, # Signed charge ceiling: sign sets ion mode (negative/positive), magnitude the highest charge state z considered
     mass_value:str='monoisotopic', # Mass type: monoisotopic/average
-    modification:str | None=None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl
+    modification:str | None=None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl/glycolate/lactate
     sample_prep:str='underivatized', # Sample preparation method: underivatized/permethylated/deuteropermethylated/peracetylated
     mass_tolerance:float=0.5, # Mass tolerance for matching
     tolerance_unit:str='Da', # Unit of mass_tolerance: "Da" (absolute) or "ppm"
@@ -2477,7 +2514,7 @@ def mz_to_composition(
     glycan_class:str='all', # Glycan class: N/O/lipid/free/all
     df_use:pd.DataFrame | None=None, # Custom glycan database
     filter_out:str | set[str] | None=None, # Monosaccharide(s) to ignore during composition finding
-    deprioritized:str | set[str] | None={'HexA', 'PCho', 'Me'}, # Monosaccharide(s) to use only as fallback if no other composition matches
+    deprioritized:str | set[str] | None={'HexA', 'Me', 'PCho'}, # Monosaccharide(s) to use only as fallback if no other composition matches
     extras:str | list[str]=[], # Additional operation(s): 'adduct' also considers the adduct_ions
     adduct:str | None=None, # Chemical formula of a neutral adduct added to every candidate's mass, e.g., "C2H4O2"
     adduct_ions:str | list[str] | None=None, # Adduct ion(s) considered with extras = ['adduct'], as named in mz_to_composition.csv (e.g., 'Na+', 'K+', 'NH4+', 'Acetate', 'Formate'); default: Acetate (negative) or Na+ (positive)
@@ -2587,10 +2624,10 @@ def mz_to_structures(
     sample_prep:str='underivatized', # Sample prep: underivatized/permethylated/deuteropermethylated/peracetylated
     mass_tolerance:float=0.5, # Mass tolerance for matching
     tolerance_unit:str='Da', # Unit of mass_tolerance: "Da" (absolute) or "ppm"
-    modification:str | None=None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl
+    modification:str | None=None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl/glycolate/lactate
     df_use:pd.DataFrame | None=None, # Custom glycan database
     filter_out:str | set[str] | None=None, # Monosaccharide(s) to ignore
-    deprioritized:str | set[str] | None={'HexA', 'PCho', 'Me'}, # Monosaccharide(s) to use only as fallback if no other composition matches
+    deprioritized:str | set[str] | None={'HexA', 'Me', 'PCho'}, # Monosaccharide(s) to use only as fallback if no other composition matches
     verbose:bool=False, # Whether to print non-matching compositions
     mass_tag:float | None=None, # Mass in Da a reducing-end label adds to the free glycan, i.e., the label minus O (e.g., 121.0528 for 2AA), added to every candidate's neutral mass
     sialic_derivatization:str | tuple[str, str] | None=None, # Linkage-specific sialic acid derivatization ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS); the mass then gives each sialic acid's linkage, and only structures with these linkages are returned, unknown ones filled in where the mass decides them
@@ -2695,7 +2732,7 @@ def glycan_to_mass(
     sample_prep:str='underivatized', # Sample prep: underivatized/permethylated/deuteropermethylated/peracetylated
     stem_libr:dict[str, str] | None=None, # Modified to core monosaccharide mapping
     adduct:str | float | None=None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
-    modification:str | None=None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl; a glycan ending in an alditol (-ol) is reduced already
+    modification:str | None=None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl/glycolate/lactate; a glycan ending in an alditol (-ol) is reduced already and takes no label, and one without a free reducing end (-onic, Ins, an anomeric aglycone such as 1Ser, a residue linked through its anomeric carbon such as Glc(a1-2)Fru) takes neither
     peptide:str | None=None, # Peptide carrying the glycan, in one-letter code with optional signed mass or formula deltas, or named modifications (PEPTIDE_MODIFICATIONS), after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK', 'NC[Carbamidomethyl]SK'), to get the glycopeptide mass
     sialic_derivatization:str | tuple[str, str] | None=None, # Sialic acid derivatization of an underivatized or (before it) permethylated sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); unless both are the same product, each sialic acid then needs a known linkage class, a2-3/6 or a2-? raises
 )->float: # Theoretical mass
@@ -2719,7 +2756,7 @@ def composition_to_mass(
     mass_value:str='monoisotopic', # Mass type: monoisotopic/average
     sample_prep:str='underivatized', # Sample prep: underivatized/permethylated/deuteropermethylated/peracetylated
     adduct:str | float | None=None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
-    modification:str | None=None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl
+    modification:str | None=None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl/glycolate/lactate
     peptide:str | None=None, # Peptide carrying the glycan(s), in one-letter code with optional signed mass or formula deltas, or named modifications (PEPTIDE_MODIFICATIONS), after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK' or 'NC[Carbamidomethyl]SK' for carbamidomethylation, 'M[+15.9949]NGTK'), to get the glycopeptide mass; several glycans on one peptide are passed as their total composition
     sialic_derivatization:str | tuple[str, str] | None=None, # Sialic acid derivatization of an underivatized or (before it) permethylated sample, a key of SIALIC_DERIVATIZATIONS ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5') or a pair of SIALIC_PRODUCTS (a2-6, a2-3/8/9); unless both are the same product, every sialic acid then needs its linkage ('H5N4E1L1', {'Neu5Ac_a2-6': 1, 'Neu5Ac_a2-3': 1}), and uronic acids take the a2-6 product; peptide carboxyls are left to peptide's deltas
 )->float: # Theoretical mass
@@ -2765,7 +2802,7 @@ def get_formula(
     sample_prep:str='underivatized', # Sample prep: underivatized/permethylated/deuteropermethylated/peracetylated
     stem_libr:dict[str, str] | None=None, # Modified to core monosaccharide mapping
     adduct:str | None=None, # Chemical formula of a neutral adduct (e.g., "C2H4O2"); a signed formula ("-H2O") removes atoms
-    modification:str | None=None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl; a glycan ending in an alditol (-ol) is reduced already
+    modification:str | None=None, # Reducing end modification: reduced/reduced_D/2AA/2AB/procainamide/PA/APTS/aminoxyTMT/GirardP/benzyl/glycolate/lactate; a glycan ending in an alditol (-ol) is reduced already and takes no label, and one without a free reducing end (-onic, Ins, an anomeric aglycone such as 1Ser, a residue linked through its anomeric carbon such as Glc(a1-2)Fru) takes neither
     peptide:str | None=None, # Peptide carrying the glycan(s), in one-letter code with optional signed formula deltas, or named modifications (PEPTIDE_MODIFICATIONS) other than isotope-coded tags, after a residue (e.g., 'EEQYNSTYR', 'NC[+C2H3NO]SK', 'NC[Carbamidomethyl]SK'); several glycans on one peptide are passed as their total composition
     sialic_derivatization:str | tuple[str, str] | None=None, # Sialic acid derivatization of an underivatized or (before it) permethylated sample ('EE', 'EEA', 'ME', 'DMA', 'SALSA', 'GQ', 'GQ-d5', or a pair of SIALIC_PRODUCTS for a2-6 and a2-3/8/9 sialic acids); unless both are the same product, every sialic acid then needs its linkage ('H5N4E1L1', 'Neu5Ac(a2-6)...')
 )->str: # Elemental formula in Hill order (C, H, then alphabetical), e.g., 'C62H104N4O46' for H5N4
@@ -2826,4 +2863,4 @@ def get_random_glycan(
 get_random_glycan()
 ```
 
-    'Fuc(a1-?)HexNAc(?1-?)Gal(b1-3)[GlcNAc(b1-6)]GlcNAc(b1-6)[GalNAc(?1-?)Gal(b1-3)]GalNAc'
+    'Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc6S(b1-3)[GlcNAc(b1-6)]GalNAc'

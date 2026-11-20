@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.10.20">
+<meta name="generator" content="quarto-1.11.9">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -73,18 +73,19 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <meta name="quarto:offset" content="./">
 <script src="site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/scrollable-regions/scrollable-regions.js" type="module"></script>
 <script src="site_libs/quarto-html/popper.min.js"></script>
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-29e00c98bbba659d91ab3844292f79dc.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-86fc916b84669629367aabb2a24c5117.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-29e00c98bbba659d91ab3844292f79dc.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-5de16f5e46225c21e2daa90d340bf64f.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-3218d7d29a29f08bc4fdf3802c3e3ca5.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-5de16f5e46225c21e2daa90d340bf64f.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-27d2d96580d0e5cb30ded98be9b62a59.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
-<link href="site_libs/bootstrap/bootstrap-dark-fb0d08df694191d534525d4229e5ecac.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
-<link href="site_libs/bootstrap/bootstrap-27d2d96580d0e5cb30ded98be9b62a59.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-3786d7b6976210c8f6ffec0e8ffa0f33.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-dark-593f3d258cb5f9abc5428ee2d926ae08.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="site_libs/bootstrap/bootstrap-3786d7b6976210c8f6ffec0e8ffa0f33.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -125,7 +126,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <meta name="twitter:card" content="summary">
 </head>
 
-<body class="nav-sidebar floating nav-fixed quarto-light"><script id="quarto-html-before-body" type="application/javascript">
+<body class="nav-sidebar floating nav-fixed quarto-light"><a id="quarto-skip-link" class="visually-hidden-focusable" href="#quarto-document-content">Skip to main content</a><script id="quarto-html-before-body" type="application/javascript">
     const toggleBodyColorMode = (bsSheetEl) => {
       const mode = bsSheetEl.getAttribute("data-mode");
       const bodyEl = window.document.querySelector("body");
@@ -148,6 +149,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       for (let i=0; i < toggles.length; i++) {
         const toggle = toggles[i];
         if (toggle) {
+          toggle.setAttribute("aria-checked", alternate ? "true" : "false");
           if (alternate) {
             toggle.classList.add("alternate");
           } else {
@@ -177,13 +179,19 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       manageTransitions('#quarto-margin-sidebar .nav-link', true);
       // Switch the toggles
       setColorSchemeToggle(alternate)
-      // Hack to workaround the fact that safari doesn't
-      // properly recolor the scrollbar when toggling (#1455)
+    }
+    // Hack to workaround the fact that safari doesn't
+    // properly recolor the scrollbar when toggling (#1455).
+    // Not run on load: stylesheets are set before first paint there, and
+    // scrolling would undo the scroll to a URL fragment (#14973).
+    // The one pixel nudge keeps the reader where they were.
+    const refreshSafariScrollbar = () => {
       if (navigator.userAgent.indexOf('Safari') > 0 && navigator.userAgent.indexOf('Chrome') == -1) {
         manageTransitions("body", false);
-        window.scrollTo(0, 1);
+        const scrollY = window.scrollY;
+        window.scrollTo(0, scrollY > 0 ? scrollY - 1 : 1);
         setTimeout(() => {
-          window.scrollTo(0, 0);
+          window.scrollTo(0, scrollY);
           manageTransitions("body", true);
         }, 40);
       }
@@ -278,6 +286,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       // Read the current dark / light value
       let toAlternate = !hasAlternateSentinel();
       toggleColorMode(toAlternate);
+      refreshSafariScrollbar();
       setStyleSentinel(toAlternate);
       toggleGiscusIfUsed(toAlternate, darkModeDefault);
       window.dispatchEvent(new Event('resize'));
@@ -287,6 +296,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
         return;
       const alternate = e.matches
       toggleColorMode(alternate);
+      refreshSafariScrollbar();
       localAlternateSentinel = e.matches ? 'alternate' : 'default'; // this is used alongside local storage!
       toggleGiscusIfUsed(alternate, darkModeDefault);
     });
@@ -300,15 +310,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <div id="quarto-search-results"></div>
   <header id="quarto-header" class="headroom fixed-top">
-    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark" aria-label="Site">
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="./index.html">
     <span class="navbar-title">glycowork</span>
     </a>
   </div>
-            <div id="quarto-search" class="" title="Search"></div>
-          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
   <span class="navbar-toggler-icon"></span>
 </button>
           <div class="collapse navbar-collapse" id="navbarCollapse">
@@ -321,17 +330,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </ul>
           </div> <!-- /navcollapse -->
             <div class="quarto-navbar-tools">
-  <a href="" class="quarto-color-scheme-toggle quarto-navigation-tool  px-1" onclick="window.quartoToggleColorScheme(); return false;" title="Toggle dark mode"><i class="bi"></i></a>
+  <button type="button" role="switch" aria-checked="false" class="quarto-color-scheme-toggle quarto-navigation-tool  px-1" onclick="window.quartoToggleColorScheme(); return false;" title="Toggle dark mode" aria-label="Toggle dark mode"><i class="bi"></i></button>
 </div>
+            <div id="quarto-search" class="" title="Search"></div>
       </div> <!-- /container-fluid -->
     </nav>
-  <nav class="quarto-secondary-nav">
+  <nav class="quarto-secondary-nav" aria-label="Toolbar">
     <div class="container-fluid d-flex">
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./glycan_data.html">glycan_data</a></li></ol></nav>
-        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        <nav class="quarto-page-breadcrumbs" aria-label="Breadcrumbs"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./glycan_data.html">glycan_data</a></li></ol></nav>
+        <a class="flex-grow-1" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
   </nav>
@@ -339,7 +349,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <!-- content -->
 <div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
 <!-- sidebar -->
-  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto" aria-label="Section">
     <div class="sidebar-menu-container"> 
     <ul class="list-unstyled mt-1">
         <li class="sidebar-item">
@@ -390,7 +400,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
     <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
-        <nav id="TOC" role="doc-toc" class="toc-active">
+        <nav id="TOC" role="doc-toc" aria-labelledby="toc-title" class="toc-active">
     <h2 id="toc-title">On this page</h2>
    
   <ul>
@@ -401,7 +411,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="toc-actions"><ul><li><a href="https://github.com/BojarLab/glycowork/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></nav>
     </div>
 <!-- main -->
-<main class="content" id="quarto-document-content">
+<main class="content" id="quarto-document-content" tabindex="-1">
 
 
 <header id="title-block-header" class="quarto-title-block default">
@@ -439,7 +449,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Further, the <code>stats</code> module contains many helper functions for statistics and data normalization.</p>
 <section id="loader" class="level2">
 <h2 class="anchored" data-anchor-id="loader">loader</h2>
-<div id="according-characterization" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-02T05:21:06.204823+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-02T05:21:06.306304+00:00&quot;,&quot;total&quot;:0.10148778899997524}}" data-execution_count="3">
+<div id="according-characterization" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-20T10:03:03.102102+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-20T10:03:03.540721+00:00&quot;,&quot;total&quot;:0.43862632899998744}}" data-execution_count="3">
 <hr>
 <section id="unwrap" class="level3">
 <h3 class="anchored" data-anchor-id="unwrap">unwrap</h3>
@@ -455,7 +465,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <pre><code>[1, 2, 3, 4]</code></pre>
 </div>
 </div>
-<div id="oriented-delay" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-02T05:21:06.306613+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-02T05:21:06.311942+00:00&quot;,&quot;total&quot;:0.005333760999974402}}" data-execution_count="4">
+<div id="oriented-delay" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-20T10:03:03.540981+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-20T10:03:03.544457+00:00&quot;,&quot;total&quot;:0.003478604000008545}}" data-execution_count="4">
 <hr>
 <section id="find_nth" class="level3">
 <h3 class="anchored" data-anchor-id="find_nth">find_nth</h3>
@@ -473,7 +483,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <pre><code>16</code></pre>
 </div>
 </div>
-<div id="e43a57f8-3bd5-4262-9f4f-5436d5e51dcb" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-02T05:21:06.312153+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-02T05:21:06.318290+00:00&quot;,&quot;total&quot;:0.006141289999959554}}" data-execution_count="5">
+<div id="e43a57f8-3bd5-4262-9f4f-5436d5e51dcb" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-20T10:03:03.544602+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-20T10:03:03.548459+00:00&quot;,&quot;total&quot;:0.0038606919999892853}}" data-execution_count="5">
 <hr>
 <section id="find_nth_reverse" class="level3">
 <h3 class="anchored" data-anchor-id="find_nth_reverse">find_nth_reverse</h3>
@@ -492,7 +502,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <pre><code>38</code></pre>
 </div>
 </div>
-<div id="impaired-theta" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-02T05:21:06.318500+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-02T05:21:06.323433+00:00&quot;,&quot;total&quot;:0.004938557999935256}}" data-execution_count="6">
+<div id="impaired-theta" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-20T10:03:03.548600+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-20T10:03:03.551977+00:00&quot;,&quot;total&quot;:0.003381155999989005}}" data-execution_count="6">
 <hr>
 <section id="replace_every_second" class="level3">
 <h3 class="anchored" data-anchor-id="replace_every_second">replace_every_second</h3>
@@ -510,7 +520,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <pre><code>'Neu5Ac(a2-3)Gal(b1-4)Glc'</code></pre>
 </div>
 </div>
-<div id="consecutive-journey" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-02T05:21:06.323675+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-02T05:21:06.328210+00:00&quot;,&quot;total&quot;:0.0045401490000358535}}" data-execution_count="7">
+<div id="consecutive-journey" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-20T10:03:03.552118+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-20T10:03:03.555132+00:00&quot;,&quot;total&quot;:0.0030177569999807474}}" data-execution_count="7">
 <hr>
 <section id="multireplace" class="level3">
 <h3 class="anchored" data-anchor-id="multireplace">multireplace</h3>
@@ -527,7 +537,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <pre><code>'Neu5Ac(a2-3)Gal'</code></pre>
 </div>
 </div>
-<div id="greek-cannon" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-02T05:21:06.328433+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-02T05:21:06.334179+00:00&quot;,&quot;total&quot;:0.005751247000034709}}" data-execution_count="8">
+<div id="greek-cannon" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-20T10:03:03.555299+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-20T10:03:03.559107+00:00&quot;,&quot;total&quot;:0.003811648000009882}}" data-execution_count="8">
 <hr>
 <section id="build_custom_df" class="level3">
 <h3 class="anchored" data-anchor-id="build_custom_df">build_custom_df</h3>
@@ -18840,7 +18850,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="stats" class="level2">
 <h2 class="anchored" data-anchor-id="stats">stats</h2>
-<div id="ffed0a9f-4e2b-40bf-a815-e5d3b0c983f7" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-02T05:21:06.335115+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-02T05:21:06.340347+00:00&quot;,&quot;total&quot;:0.0052359169999363075}}" data-execution_count="9">
+<div id="ffed0a9f-4e2b-40bf-a815-e5d3b0c983f7" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-20T10:03:03.559694+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-20T10:03:03.563201+00:00&quot;,&quot;total&quot;:0.0035092010000141727}}" data-execution_count="9">
 <hr>
 <section id="get_bf" class="level3">
 <h3 class="anchored" data-anchor-id="get_bf">get_BF</h3>
@@ -18860,7 +18870,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <pre><code>np.float64(30.1559980528856)</code></pre>
 </div>
 </div>
-<div id="49847215-0354-4aee-9c1f-9cf238642a77" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-02T05:21:06.340567+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-02T05:21:06.345602+00:00&quot;,&quot;total&quot;:0.005039357999976346}}" data-execution_count="10">
+<div id="49847215-0354-4aee-9c1f-9cf238642a77" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-20T10:03:03.563332+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-20T10:03:03.566546+00:00&quot;,&quot;total&quot;:0.0032173090000071625}}" data-execution_count="10">
 <hr>
 <section id="get_alphan" class="level3">
 <h3 class="anchored" data-anchor-id="get_alphan">get_alphaN</h3>
@@ -18880,7 +18890,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <pre><code>np.float64(0.07862467893233027)</code></pre>
 </div>
 </div>
-<div id="422eade1-a2be-4c7c-a553-b36c11cf7fe2" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-02T05:21:06.345786+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-02T05:21:06.351560+00:00&quot;,&quot;total&quot;:0.005779599999982565}}" data-execution_count="11">
+<div id="422eade1-a2be-4c7c-a553-b36c11cf7fe2" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-20T10:03:03.566665+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-20T10:03:03.570739+00:00&quot;,&quot;total&quot;:0.004077991000002612}}" data-execution_count="11">
 <hr>
 <section id="tst_grouped_benjamini_hochberg" class="level3">
 <h3 class="anchored" data-anchor-id="tst_grouped_benjamini_hochberg">TST_grouped_benjamini_hochberg</h3>
@@ -18926,7 +18936,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   'Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-8)Neu5Ac(a2-6)]GalNAc': False})</code></pre>
 </div>
 </div>
-<div id="4b2422bc-9532-447c-a0c3-e894a4c25fe1" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-02T05:21:06.352053+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-02T05:21:06.360418+00:00&quot;,&quot;total&quot;:0.008369601000026705}}" data-execution_count="12">
+<div id="4b2422bc-9532-447c-a0c3-e894a4c25fe1" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-20T10:03:03.571077+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-20T10:03:03.576216+00:00&quot;,&quot;total&quot;:0.005142231999997193}}" data-execution_count="12">
 <hr>
 <section id="meta_analysis" class="level3">
 <h3 class="anchored" data-anchor-id="meta_analysis">meta_analysis</h3>
@@ -18939,7 +18949,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p><em>Fixed/random-effects pooling (DerSimonian-Laird) with heterogeneity statistics and optional leave-one-out sensitivity</em></p>
 </section>
 </div>
-<div id="dc8f66c4-84f1-4843-bc39-987ef48d21a7" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-02T05:21:06.360568+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-02T05:21:06.375376+00:00&quot;,&quot;total&quot;:0.014813529999969433}}" data-execution_count="13">
+<div id="dc8f66c4-84f1-4843-bc39-987ef48d21a7" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-20T10:03:03.576314+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-20T10:03:03.585415+00:00&quot;,&quot;total&quot;:0.0091056900000126}}" data-execution_count="13">
 <hr>
 <section id="impute_biosynthetic" class="level3">
 <h3 class="anchored" data-anchor-id="impute_biosynthetic">impute_biosynthetic</h3>
@@ -18948,13 +18958,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>    glycans:<span class="bu">list</span>[<span class="bu">str</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># glycan of each row (IUPAC-condensed or composition), to give every sample its own activity per biosynthetic step</span></span>
 <span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>    mnar:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span>, <span class="co"># treat non-detections as censored where the data say missingness is intensity-dependent: they inform each glycan's level, and imputations are pulled towards the detection limit</span></span>
 <span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>    draw:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># add a random draw of the held-out prediction error to every imputed value, so imputed replicates keep the spread of measured ones (for rhythm tests that weigh each timepoint by its standard error)</span></span>
-<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>    random_state:<span class="bu">int</span> <span class="op">|</span> numpy.random._generator.Generator <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># optional random state for reproducibility</span></span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>    random_state:<span class="bu">int</span> <span class="op">|</span> numpy.random._generator.Generator <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># seeds the noise of draw (None: seed 0); the model fit itself is always seeded with 0</span></span>
 <span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>    unmeasured:numpy.ndarray <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># boolean mask in the shape of df of cells that were never measured (e.g., a glycosite not covered in a sample): imputed, but not read as non-detections</span></span>
 <span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>pandas.DataFrame: <span class="co"># dataframe with every missing value imputed</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>Imputes missing glycomics values with a low-rank model whose glycan loadings include each glycan’s count of every biosynthetic step, stacked with stable-ratio partner glycans; non-detections are censored observations of a fitted selection model, which sets each glycan’s level together with its measured values and gives glycans detected at most once their posterior mean</em></p>
 </section>
 </div>
-<div id="750fbab0-7c09-4056-a7c6-9c35b46e5cd2" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-02T05:21:06.375768+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-02T05:21:09.080380+00:00&quot;,&quot;total&quot;:2.7046185950000563}}" data-execution_count="14">
+<div id="750fbab0-7c09-4056-a7c6-9c35b46e5cd2" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-20T10:03:03.585705+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-20T10:03:05.531671+00:00&quot;,&quot;total&quot;:1.945973116999994}}" data-execution_count="14">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
 <span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>df <span class="op">=</span> glycomics_data_loader.human_skin_O_PMC5871710_BCC.set_index(<span class="st">'glycan'</span>)</span>
 <span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>masked <span class="op">=</span> df.mask(np.random.default_rng(<span class="dv">0</span>).random(df.shape) <span class="op">&lt;</span> <span class="fl">0.1</span>)  <span class="co"># hide 10% of the measurements</span></span>
@@ -18962,10 +18972,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>hidden <span class="op">=</span> masked.isna().values <span class="op">&amp;</span> (df.values <span class="op">&gt;</span> <span class="dv">0</span>)</span>
 <span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(np.corrcoef(np.log2(df.values[hidden]), np.log2(imputed.values[hidden]))[<span class="dv">0</span>, <span class="dv">1</span>])  <span class="co"># 0.92</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>0.9169137129365768</code></pre>
+<pre><code>0.9218374233398697</code></pre>
 </div>
 </div>
-<div id="2ec51a9d-ee21-41de-b143-121a0d117e4a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-02T05:21:09.080587+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-02T05:21:09.088434+00:00&quot;,&quot;total&quot;:0.0078518970000232}}" data-execution_count="15">
+<div id="2ec51a9d-ee21-41de-b143-121a0d117e4a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-20T10:03:05.531837+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-20T10:03:05.541202+00:00&quot;,&quot;total&quot;:0.009368973999983154}}" data-execution_count="15">
 <hr>
 <section id="pvca" class="level3">
 <h3 class="anchored" data-anchor-id="pvca">pvca</h3>
@@ -18997,7 +19007,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><code>read_glycoproteomics</code> reads the native output of glycoproteomics search engines (FragPipe/MSFragger-Glyco, O-Pair, pGlyco3/pGlycoQuant, Byonic/Byologic, GlycReSoft, MetaMorpheus, Glyco-Decipher, StrucGP, PEAKS GlycanFinder) into a protein_site_composition x sample table</li>
 <li><code>read_glycomics</code> reads the native output of glycomics software (Skyline, LaCyTools, MassyTools, GlycoWorkbench, Compound Discoverer, GlycoGenius, GlyHunter, GlycReSoft, CandyCrunch) into a glycan x sample table</li>
 </ul>
-<div id="thrown-industry" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-02T05:21:09.088969+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-02T05:21:09.095600+00:00&quot;,&quot;total&quot;:0.006635329000005186}}" data-execution_count="16">
+<div id="thrown-industry" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-20T10:03:05.541497+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-20T10:03:05.548102+00:00&quot;,&quot;total&quot;:0.0066084299999999985}}" data-execution_count="16">
 <hr>
 <section id="check_presence" class="level3">
 <h3 class="anchored" data-anchor-id="check_presence">check_presence</h3>
@@ -19032,7 +19042,7 @@ This is the best: Danielus_Bojarum is not in dataset
 It's your lucky day, this glycan is new!</code></pre>
 </div>
 </div>
-<div id="93916a2f-b6d6-4320-8bfe-a778123d72b9" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-02T05:21:09.095972+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-02T05:21:09.127040+00:00&quot;,&quot;total&quot;:0.03107454200005577}}" data-execution_count="17">
+<div id="93916a2f-b6d6-4320-8bfe-a778123d72b9" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-20T10:03:05.548324+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-20T10:03:05.583658+00:00&quot;,&quot;total&quot;:0.0353400909999948}}" data-execution_count="17">
 <hr>
 <section id="read_glycoproteomics" class="level3">
 <h3 class="anchored" data-anchor-id="read_glycoproteomics">read_glycoproteomics</h3>
@@ -19040,11 +19050,12 @@ It's your lucky day, this glycan is new!</code></pre>
 <span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>    files:<span class="bu">str</span> <span class="op">|</span> pathlib.Path <span class="op">|</span> pandas.DataFrame <span class="op">|</span> <span class="bu">list</span>[<span class="bu">str</span> <span class="op">|</span> pathlib.Path <span class="op">|</span> pandas.DataFrame], <span class="co"># result file(s) of FragPipe/MSFragger-Glyco or O-Pair (psm.tsv), pGlyco3 or pGlycoQuant, Byonic or Byologic, GlycReSoft, MetaMorpheus O-Pair (.psmtsv), Glyco-Decipher, StrucGP, or PEAKS GlycanFinder</span></span>
 <span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a>    max_q:<span class="bu">float</span><span class="op">=</span><span class="fl">0.01</span>, <span class="co"># highest q-value/FDR a match may have, wherever the engine reports one</span></span>
 <span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a>    sample_map:Union[<span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">str</span>], Callable[[<span class="bu">str</span>], <span class="bu">str</span>], NoneType]<span class="op">=</span><span class="va">None</span>, <span class="co"># renames runs (raw files, or FragPipe experiments) into samples; runs sharing a sample, e.g., fractions, are summed</span></span>
-<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>glycowork.glycan_data.frame.GlycoDataFrame: <span class="co"># glycoforms as 'protein_site_composition' in column 'ID' ('protein_site_sequence' for StrucGP structure codes), samples as columns; ready for get_differential_expression(glycoproteomics = True) or get_glycoshift_per_site</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><em>Reads the native output of glycoproteomics search engines into a site-specific glycoform x sample table, quantified by intensity where the engine reports one and by spectral counts otherwise</em></p>
+<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a>    level:<span class="bu">str</span><span class="op">=</span><span class="st">'glycoform'</span>, <span class="co"># 'glycoform', or 'psm' for one row per match: its run, scan, peptide, total composition, protein, sites, and charge (FragPipe/O-Pair, pGlyco3, Byonic, MetaMorpheus, and GlycanFinder name their spectra)</span></span>
+<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>glycowork.glycan_data.frame.GlycoDataFrame <span class="op">|</span> pandas.DataFrame: <span class="co"># glycoforms as 'protein_site_composition' in column 'ID' ('protein_site_sequence' for StrucGP structure codes), samples as columns; ready for get_differential_expression(glycoproteomics = True) or get_glycoshift_per_site. With level = 'psm', the matches, for comparing engines spectrum by spectrum</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Reads the native output of glycoproteomics search engines into a site-specific glycoform x sample table, quantified by intensity where the engine reports one and by spectral counts otherwise, or into its matches, spectrum by spectrum</em></p>
 </section>
 </div>
-<div id="6a64fce7-5076-456c-901e-96816b505d8a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-02T05:21:09.127391+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-02T05:21:09.151327+00:00&quot;,&quot;total&quot;:0.023941046000004462}}" data-execution_count="18">
+<div id="6a64fce7-5076-456c-901e-96816b505d8a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-20T10:03:05.583952+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-20T10:03:05.614047+00:00&quot;,&quot;total&quot;:0.03010152300001323}}" data-execution_count="18">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
 <span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>psms <span class="op">=</span> pd.DataFrame({<span class="st">'RawName'</span>: [<span class="st">'ctrl_1'</span>, <span class="st">'ctrl_1'</span>, <span class="st">'case_1'</span>], <span class="st">'Peptide'</span>: [<span class="st">'JGTR'</span>] <span class="op">*</span> <span class="dv">3</span>, <span class="st">'Mod'</span>: [<span class="st">''</span>] <span class="op">*</span> <span class="dv">3</span>, <span class="st">'Charge'</span>: [<span class="dv">3</span>] <span class="op">*</span> <span class="dv">3</span>,</span>
 <span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>                     <span class="st">'GlycanComposition'</span>: [<span class="st">'H(5)N(4)A(2)'</span>, <span class="st">'H(5)N(4)F(1)A(2)'</span>, <span class="st">'H(5)N(4)A(2)'</span>], <span class="st">'Proteins'</span>: [<span class="st">'sp|P02763|A1AG1_HUMAN'</span>] <span class="op">*</span> <span class="dv">3</span>,</span>
@@ -19082,7 +19093,7 @@ It's your lucky day, this glycan is new!</code></pre>
 </div>
 </div>
 </div>
-<div id="7182cab9-37d1-41bd-a035-12ee88fe0cb5" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-02T05:21:09.151487+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-02T05:21:09.177036+00:00&quot;,&quot;total&quot;:0.02555419999998776}}" data-execution_count="19">
+<div id="7182cab9-37d1-41bd-a035-12ee88fe0cb5" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-11-20T10:03:05.614193+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-11-20T10:03:05.634292+00:00&quot;,&quot;total&quot;:0.020104844999991656}}" data-execution_count="19">
 <hr>
 <section id="read_glycomics" class="level3">
 <h3 class="anchored" data-anchor-id="read_glycomics">read_glycomics</h3>
@@ -19146,15 +19157,50 @@ It's your lucky day, this glycan is new!</code></pre>
   window.document.addEventListener("DOMContentLoaded", function (event) {
     // Ensure there is a toggle, if there isn't float one in the top right
     if (window.document.querySelector('.quarto-color-scheme-toggle') === null) {
-      const a = window.document.createElement('a');
-      a.classList.add('top-right');
-      a.classList.add('quarto-color-scheme-toggle');
-      a.href = "";
-      a.onclick = function() { try { window.quartoToggleColorScheme(); } catch {} return false; };
+      const toggle = window.document.createElement('button');
+      toggle.type = "button";
+      toggle.setAttribute("role", "switch");
+      toggle.setAttribute("aria-checked", "false");
+      toggle.classList.add('top-right');
+      toggle.classList.add('quarto-color-scheme-toggle');
+      toggle.setAttribute("aria-label", "Toggle dark mode");
+      toggle.onclick = function() { try { window.quartoToggleColorScheme(); } catch {} return false; };
       const i = window.document.createElement("i");
       i.classList.add('bi');
-      a.appendChild(i);
-      window.document.body.appendChild(a);
+      toggle.appendChild(i);
+      // Put the toggle in a landmark of its own, so that landmark navigation
+      // can reach it.
+      //
+      // The container is always a fresh direct child of body, and the toggle is
+      // never moved into page furniture that the theme or the author controls.
+      // The toggle is positioned against the page, so any ancestor that
+      // establishes a containing block captures it: a positioned element or a
+      // grid for position: absolute, and transform, filter, will-change or
+      // contain for position: fixed. A direct child of body has none of these
+      // to inherit, and the shift when one appears is silent and visual.
+      //
+      // ARIA says a document should have at most one banner, and axe reports a
+      // duplicate whether or not the banners carry distinct labels. So use a
+      // header when the page has no banner yet, and a named region otherwise.
+      //
+      // A header is a banner wherever it sits, unless it is inside sectioning
+      // content, so this cannot just look at the children of body: a custom
+      // page layout wraps the title block header in a plain div. An explicit
+      // role="banner" always counts.
+      const sectioning = 'article, aside, main, nav, section, [role="article"], [role="complementary"], [role="main"], [role="navigation"], [role="region"]';
+      const hasBanner = Array.from(
+        window.document.querySelectorAll('header:not([role]), [role="banner"]')
+      ).some(function(el) {
+        return el.hasAttribute("role") || el.closest(sectioning) === null;
+      });
+      const container = window.document.createElement(hasBanner ? "div" : "header");
+      if (hasBanner) {
+        container.setAttribute("role", "region");
+        container.setAttribute("aria-label", "Toggle dark mode");
+      }
+      container.classList.add('quarto-color-scheme-toggle-container');
+      container.appendChild(toggle);
+      window.document.body.appendChild(container);
     }
     setColorSchemeToggle(hasAlternateSentinel())
     const icon = "";
@@ -19233,7 +19279,8 @@ It's your lucky day, this glycan is new!</code></pre>
           return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
       }
       // Inspect non-navigation links and adorn them if external
-     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      window.quartoDecorateExternalLinks = function (root) {
+     var links = (root || window.document).querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
       for (var i=0; i<links.length; i++) {
         const link = links[i];
         if (!isInternal(link.href)) {
@@ -19242,8 +19289,69 @@ It's your lucky day, this glycan is new!</code></pre>
           if (link.dataset.originalHref !== undefined) {
             link.href = link.dataset.originalHref;
           }
+          if (!link.classList.contains('no-external-icon')) {
+          }
         }
       }
+      };
+      window.quartoDecorateExternalLinks(window.document);
+    // Esc closes the popup (WCAG 1.4.13) and focus leaving both trigger and
+    // popup closes it (WCAG 2.4.11); tippy handles neither for interactive popups.
+    const hideOnEscAndFocusOut = {
+      name: 'hideOnEscAndFocusOut',
+      defaultValue: true,
+      fn(instance) {
+        const dismiss = () => {
+          // A show scheduled by the trigger delay would otherwise reopen it
+          instance.clearDelayTimeouts();
+          instance.hide();
+        };
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape') {
+            return;
+          }
+          // Keep Esc from also reaching page handlers (e.g. reveal.js overview),
+          // except an open reveal.js slide menu, which Esc should close too.
+          // The menu handles keys only when its keyboard option is on.
+          const menuHandlesEsc = window.Reveal?.getPlugin?.('menu')?.isOpen() &&
+            window.Reveal.getConfig().menu?.keyboard !== false;
+          if (!menuHandlesEsc) {
+            event.stopPropagation();
+          }
+          if (instance.popper.contains(window.document.activeElement)) {
+            // Disabled while refocusing so the focus trigger does not reopen it
+            instance.disable();
+            instance.reference.focus();
+            instance.enable();
+          }
+          dismiss();
+        };
+        const onFocusOut = (event) => {
+          const target = event.relatedTarget;
+          if (target && !instance.reference.contains(target) &&
+              !instance.popper.contains(target)) {
+            dismiss();
+          }
+        };
+        // On the trigger too: a click trigger (code-annotations: select) has no
+        // blur handling. Attached for the instance's lifetime so leaving the
+        // trigger also cancels a show still pending on the trigger delay.
+        instance.reference.addEventListener('focusout', onFocusOut);
+        return {
+          onShow() {
+            window.document.addEventListener('keydown', onKeyDown, true);
+            instance.popper.addEventListener('focusout', onFocusOut);
+          },
+          onHide() {
+            window.document.removeEventListener('keydown', onKeyDown, true);
+            instance.popper.removeEventListener('focusout', onFocusOut);
+          },
+          onDestroy() {
+            instance.reference.removeEventListener('focusout', onFocusOut);
+          },
+        };
+      },
+    };
     function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
       const config = {
         allowHTML: true,
@@ -19257,6 +19365,7 @@ It's your lucky day, this glycan is new!</code></pre>
         interactiveBorder: 10,
         theme: 'quarto',
         placement: 'bottom-start',
+        plugins: [hideOnEscAndFocusOut],
       };
       if (contentFn) {
         config.content = contentFn;
@@ -19419,44 +19528,54 @@ It's your lucky day, this glycan is new!</code></pre>
           const lineIds = lines.map((line) => {
             return targetCell + "-" + line;
           })
-          let top = null;
-          let height = null;
-          let parent = null;
+          // Each band is positioned against its own containing block, which is
+          // not the offsetParent of the lines, so place it from client rects.
+          const placeBand = (band, firstEl, lastEl, codeBlock) => {
+            const container = band.offsetParent;
+            if (container === null) {
+              return;
+            }
+            const containerRect = container.getBoundingClientRect();
+            // Reveal.js scales slides with a transform, so convert client
+            // pixels back to the CSS pixels of the container.
+            const scale = containerRect.height / container.offsetHeight || 1;
+            const firstRect = firstEl.getBoundingClientRect();
+            const lastRect = lastEl.getBoundingClientRect();
+            const top = (firstRect.top - containerRect.top) / scale - container.clientTop + container.scrollTop;
+            const height = (lastRect.bottom - firstRect.top) / scale;
+            band.style.top = top - 2 + "px";
+            band.style.height = height + 4 + "px";
+            if (codeBlock) {
+              // Without the copy button wrapper, the containing block is wider
+              // than the code block, so span the code block explicitly.
+              const blockRect = codeBlock.getBoundingClientRect();
+              band.style.left = (blockRect.left - containerRect.left) / scale - container.clientLeft + container.scrollLeft + "px";
+              band.style.width = blockRect.width / scale + "px";
+            }
+          };
           if (lineIds.length > 0) {
-              //compute the position of the single el (top and bottom and make a div)
-              const el = window.document.getElementById(lineIds[0]);
-              top = el.offsetTop;
-              height = el.offsetHeight;
-              parent = el.parentElement.parentElement;
-            if (lineIds.length > 1) {
-              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
-              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
-              height = bottom - top;
+            const el = window.document.getElementById(lineIds[0]);
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const parent = el.parentElement.parentElement;
+            // cook up a div (if necessary) and position it
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
             }
-            if (top !== null && height !== null && parent !== null) {
-              // cook up a div (if necessary) and position it 
-              let div = window.document.getElementById("code-annotation-line-highlight");
-              if (div === null) {
-                div = window.document.createElement("div");
-                div.setAttribute("id", "code-annotation-line-highlight");
-                div.style.position = 'absolute';
-                parent.appendChild(div);
-              }
-              div.style.top = top - 2 + "px";
-              div.style.height = height + 4 + "px";
-              div.style.left = 0;
-              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
-              if (gutterDiv === null) {
-                gutterDiv = window.document.createElement("div");
-                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
-                gutterDiv.style.position = 'absolute';
-                const codeCell = window.document.getElementById(targetCell);
-                const gutter = codeCell.querySelector('.code-annotation-gutter');
-                gutter.appendChild(gutterDiv);
-              }
-              gutterDiv.style.top = top - 2 + "px";
-              gutterDiv.style.height = height + 4 + "px";
+            placeBand(div, el, lastEl, parent.closest("div.sourceCode") || parent);
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
             }
+            placeBand(gutterDiv, el, lastEl);
             selectedAnnoteEl = annoteEl;
           }
         };
@@ -19554,6 +19673,9 @@ It's your lucky day, this glycan is new!</code></pre>
       }
     }
   });
+  </script>
+  <script type="application/javascript">
+  window.quartoScrollableRegionsLabels = {"code":"Scrollable code","output":"Scrollable output"};
   </script>
 </div> <!-- /content -->
 <footer class="footer">

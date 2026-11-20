@@ -41,12 +41,12 @@ Now, you might not be in possession of a GPU and/or the wherewithal to train a g
 So, for our Fabales example, we pass our glycan sequences to `glycowork.motif.analysis.plot_embeddings`, which will retrieve their learned representations, transform them into two dimensions via t-distributed stochastic neighbor embedding (t-SNE), and plot them! If you want, it can even color the resulting scatterplots by a label, for instance the taxonomic family within Fabales.
 
 ``` python
-plot_embeddings(df_fabales.glycan.values.tolist(), label_list = df_fabales.Family.values.tolist())
+plot_embeddings(df_fabales.glycan.values.tolist(), label_list = df_fabales.Family.values.tolist(), interactive = True)
 ```
 
     Download completed.
 
-![](00_core_files/figure-html/cell-5-output-2.png)
+
 
 Hmm, interesting. We definitely see clear glycan clusters (remember, every point is one glycan sequence). What’s even cooler is that the families Polygalaceae and Quillajaceae cluster in narrow regions of the whole plot. I wonder what differentiates their glycans from Fabaceae?\
 
@@ -73,10 +73,10 @@ We can immediately see that we have a lot more *N*-linked glycans in Fabaceae, f
 
 ``` python
 get_heatmap(df_map, motifs = True, feature_set = ['exhaustive'], datatype = 'presence',
-            show_all = True)
+            show_all = True, interactive = True)
 ```
 
-![](00_core_files/figure-html/cell-9-output-1.png)
+
 
 Let’s say you’re interested in a specific glycan from Fabales, `GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc`. Finding out more about it could be annoying (try to Google anything more complex than a short motif and you run into problems). That’s why we have `glycowork.motif.query.get_insight`, a function that returns some metadata about that glycan. The nice thing is that you don’t need to bother with database IDs or notational ambiguity, as `glycowork` will convert that glycan into a graph behind the scenes and search our databases.
 

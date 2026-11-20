@@ -2,39 +2,19 @@
 
 ![glycowork logo](https://raw.githubusercontent.com/BojarLab/glycowork/master/glycowork_badge_wo_bg.jpg)
 
-![CI](https://github.com/BojarLab/glycowork/actions/workflows/test.yaml/badge.svg) [![PyPI](https://img.shields.io/pypi/v/glycowork.svg?color=blue&label=PyPI)](https://pypi.org/project/glycowork/)[![Python](https://img.shields.io/pypi/pyversions/glycowork.svg)](https://pypi.org/project/glycowork/) [![PyPI - Downloads](https://img.shields.io/pypi/dm/glycowork.svg?color=brightgreen&label=downloads)](https://pypi.org/project/glycowork/)[![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/BojarLab/glycowork/issues)[![DOI](https://zenodo.org/badge/327716604.svg)](https://zenodo.org/doi/10.5281/zenodo.10039202)[![codecov](https://codecov.io/gh/BojarLab/glycowork/graph/badge.svg?token=3AHNZ9QRZV)](https://codecov.io/gh/BojarLab/glycowork)
+**The Python package for glycan data science**
+
+[![CI](https://github.com/BojarLab/glycowork/actions/workflows/test.yaml/badge.svg)](https://github.com/BojarLab/glycowork/actions/workflows/test.yaml) [![PyPI](https://img.shields.io/pypi/v/glycowork.svg?color=blue&label=PyPI)](https://pypi.org/project/glycowork/) [![Python](https://img.shields.io/pypi/pyversions/glycowork.svg)](https://pypi.org/project/glycowork/) [![PyPI - Downloads](https://img.shields.io/pypi/dm/glycowork.svg?color=brightgreen&label=downloads)](https://pypi.org/project/glycowork/) [![DOI](https://zenodo.org/badge/327716604.svg)](https://zenodo.org/doi/10.5281/zenodo.10039202) [![codecov](https://codecov.io/gh/BojarLab/glycowork/graph/badge.svg?token=3AHNZ9QRZV)](https://codecov.io/gh/BojarLab/glycowork)
+
+**[Documentation](https://bojarlab.github.io/glycowork/)** · **[Examples](https://bojarlab.github.io/glycowork/examples.html)** · **[Install](#install)** · **[Cite](#cite)** · **[Contribute](https://github.com/BojarLab/glycowork/blob/master/CONTRIBUTING.md)**
 
 `glycowork` is the Python package for glycan data science. Glycans are branched, non-linear sequences with a dozen competing text representations and no shared tooling, which is why most glycomics analysis stalls before it starts. `glycowork` removes that step and gives you the rest of the stack on top of it.
 
 - **Reads everything.** IUPAC-condensed is native to `glycowork`. IUPAC-extended, GlycoCT, GlycoCT-XML, WURCS, LinearCode, Oxford, GLYCAM, CSDB-linear, GlycoWorkBench, GlyTouCan IDs, KCF, SMILES, pGlyco, StrucGP, GlySeeker, and LINUCS are canonicalized on the way in, and exports of glycomics and glycoproteomics software (Skyline, LaCyTools, GlycoWorkbench, FragPipe, pGlyco3, Byonic, and more) go straight into the analysis functions. IUPAC-extended, GlycoCT, Oxford, GLYCAM, and SMILES also go back out. You never need a parser again.
 - **Graph-native.** Every glycan is a directed graph, so motif search is subgraph isomorphism with wildcards (`Hex`, `b1-3/4`, `?`), terminal/internal constraints, and negation. There is also a full regular-expression engine for glycans.
-- **Statistics that comparative glycomics actually needs.** Compositional transforms, MNAR-aware imputation, two-stage FDR across motif families, effect sizes, ANOVA, time series, and biodiversity, each in one call.
+- **Statistics that comparative glycomics actually needs.** Compositional transforms, MNAR-aware imputation, variance moderation along the motif containment order, effect sizes, ANOVA, time series, and biodiversity, each in one call.
 - **Data included.** 50,461 curated glycan sequences with species/tissue/disease annotations, \>790,000 protein-glycan binding measurements, 82 analysis-ready glycomics, glycoproteomics, and lectin-array datasets, and five pretrained deep learning models.
-- **Publication-ready figures.** SNFG drawings from a sequence, dropped straight into your volcano plots, heatmaps, and Excel sheets.
-
-**Documentation:** <https://bojarlab.github.io/glycowork/> · **Contribute:** [Guidelines](https://github.com/BojarLab/glycowork/blob/master/CONTRIBUTING.md) · **Cite:** [Thomes et al., 2021](https://academic.oup.com/glycob/advance-article/doi/10.1093/glycob/cwab067/6311240)
-
-## Install
-
-*Not familiar with Python?* Try our no-code, graphical user interface (`glycoworkGUI.exe`, can be downloaded at the bottom of the latest [Release](https://github.com/BojarLab/glycowork/releases) page) for accessing some of the most useful `glycowork` functions
-
-Or try our [web interface](https://canonicalize.streamlit.app/) for sequence format conversion/cleaning and drawing glycan SNFG structures!
-
-*via pip:*\
-`pip install glycowork`\
-`import glycowork`
-
-*alternative:*\
-`pip install git+https://github.com/BojarLab/glycowork.git`\
-`import glycowork`
-
-*Note that we have optional extra installs for specialized use (even further instructions can be found in the `Examples` tab; on Mac you might need to use `"glycowork[ml]"`), such as:*\
-*deep learning*\
-`pip install glycowork[ml]`\
-*analyzing atomic/chemical properties of glycans*\
-`pip install glycowork[chem]`\
-*everything*\
-`pip install glycowork[all]`\
+- **Publication-ready figures.** SNFG drawings from a sequence, as the labels of your volcano plots, heatmaps, and networks, and in your Excel sheets. Interactive figures answer the mouse, light up the same glycan or sample in every figure on the page, and follow your light or dark theme.
 
 ## Whole workflows in one call
 
@@ -52,36 +32,63 @@ print(res.sort_values('corr p-val')[['Glycan', 'Log2FC', 'corr p-val', 'Effect s
 
 #the same result object, drawn: every dot past the thresholds gets its SNFG structure instead of a text label
 from glycowork.motif.analysis import get_volcano
-get_volcano(res, annotate_volcano = True, title = 'O-glycans altered in squamous cell carcinoma')
+get_volcano(res, annotate_volcano = True, title = 'O-glycans altered in squamous cell carcinoma', interactive = True)
 ```
 
     healthy (n=10) | cancer (n=10)
                                                    Glycan    Log2FC  corr p-val  \
-    3                   Gal3/6S(b1-3)[Neu5Ac(a2-6)]GalNAc -0.636998    0.004645   
-    9   Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]Ga...  0.652277    0.005088   
-    12  Neu5Ac(a2-3)Gal(b1-4)GlcNAc6S(b1-6)[Neu5Ac(a2-... -0.554030    0.006128   
-    10  Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Neu5Ac(a2-3)...  0.418637    0.018367   
-    5   Neu5Ac(a2-3)Gal(b1-3)[Gal(b1-4)GlcNAc(b1-6)]Ga...  0.311395    0.049055   
+    3                   Gal3/6S(b1-3)[Neu5Ac(a2-6)]GalNAc -0.697526    0.002760   
+    10  Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Neu5Ac(a2-3)...  0.503647    0.002760   
+    9   Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]Ga...  0.614980    0.014032   
+    12  Neu5Ac(a2-3)Gal(b1-4)GlcNAc6S(b1-6)[Neu5Ac(a2-... -0.560806    0.015181   
+    5   Neu5Ac(a2-3)Gal(b1-3)[Gal(b1-4)GlcNAc(b1-6)]Ga...  0.338655    0.020927   
 
         Effect size  
-    3     -1.359690  
-    9      1.130820  
-    12    -1.138142  
-    10     1.045617  
-    5      0.911243  
+    3     -1.571616  
+    10     1.717175  
+    9      1.118587  
+    12    -1.053906  
+    5      1.042273  
 
-![](index_files/figure-html/cell-3-output-2.svg)
+
+
+With `interactive = True`, figures answer the mouse in a notebook or on the [docs site](https://bojarlab.github.io/glycowork/), and they answer each other: hover over a glycan in the volcano plot above, and its row in the heatmap below lights up, with its values. Both follow your light or dark theme.
+
+``` python
+#the abundances behind it, clustered, with every glycan drawn as its SNFG structure
+from glycowork.motif.analysis import get_heatmap
+get_heatmap(df, interactive = True)
+```
+
+
+
+## Install
+
+``` bash
+pip install glycowork
+```
+
+Optional extras add specialized functions (more in the [examples](https://bojarlab.github.io/glycowork/examples.html)):
+
+| Extra | Adds | Install |
+|----|----|----|
+| `ml` | deep learning: SweetNet, GIFFLAR, LectinOracle, and training your own models | `pip install "glycowork[ml]"` |
+| `chem` | atomic and chemical properties of glycans, and 3D structures | `pip install "glycowork[chem]"` |
+| `all` | everything | `pip install "glycowork[all]"` |
+
+The development version installs with `pip install git+https://github.com/BojarLab/glycowork.git`.
+
+**Not using Python?** The no-code desktop app (`glycoworkGUI.exe`, under Assets on the latest [Release](https://github.com/BojarLab/glycowork/releases)) runs the most-used `glycowork` functions, and the [web app](https://canonicalize.streamlit.app/) converts, cleans, and draws glycan sequences in SNFG.
 
 ## Data & Models
 
-`Glycowork` currently contains the following main datasets that are freely available to everyone:
+`glycowork` contains the following main datasets, freely available to everyone:
 
-- **`df_glycan`**
-  - contains ~50,500 unique glycan sequences, including labels such as ~39,500 species associations, ~20,000 tissue associations, and ~1,000 disease associations
-- **`glycan_binding`**
-  - contains \>790,000 protein-glycan binding interactions, from \>2,000 unique glycan-binding proteins
-- **`glycomics_data_loader`**, **`lectin_array_data_loader`**, **`glycoproteomics_data_loader`**
-  - 82 curated, analysis-ready datasets from the literature, each shipping with its own sample groups, pairing, and provenance, so every analysis function below runs on them with no arguments
+| Dataset | Contents |
+|----|----|
+| `df_glycan` | ~50,500 unique glycan sequences, with ~39,500 species, ~20,000 tissue, and ~1,000 disease associations |
+| `glycan_binding` | \>790,000 protein-glycan binding interactions, from \>2,000 unique glycan-binding proteins |
+| `glycomics_data_loader`, `lectin_array_data_loader`, `glycoproteomics_data_loader` | 82 curated, analysis-ready datasets from the literature, each shipping with its own sample groups, pairing, and provenance, so every analysis function below runs on them with no arguments |
 
 These are not flat tables; they query themselves:
 
@@ -98,18 +105,15 @@ print(glycomics_data_loader.filter(glycan_class = 'O', source_type = ['primary t
     84 ['Neu5Ac(a2-3)Gal(b1-4)Glc1Cer', 'Neu5Ac(a2-3)Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)Glc1Cer', 'Neu5Ac(a2-8)Neu5Ac(a2-3)Gal(b1-4)Glc1Cer']
     ['fish_gill_infection_O_PMID41435595', 'fish_intestine_infection_O_10_2139ssrn_7005880', 'human_colorectal_O_PMC9254241', 'human_colorectal_O_PMID19152289', 'human_gastric_O_PMC5762837', 'human_gastric_O_PMID28461410', 'human_headandneck_O_GPST000316', 'human_liver_O_PMC5383776', 'human_liver_O_PMC9254241', 'human_ovarian_O_PMC4468167', 'human_prostate_O_PMC8010466', 'human_skin_O_PMC5871710', 'human_skin_O_PMC5871710_BCC', 'human_skin_O_PMC5871710_SCC', 'mouse_brain_O_PMID38343116', 'mouse_brain_tango2ko_O_10_1002pgr2_70042', 'mouse_gastric_O_PMID40667878']
 
-Additionally, we store these trained deep learning models for easy usage, which can be retrieved with the `prep_model` function:
+Five trained deep learning models are one `prep_model` call away:
 
-- **`LectinOracle`**
-  - can be used to predict glycan-binding specificity of a protein, given its ESMC representation; from [Lundstrom et al., 2021](https://onlinelibrary.wiley.com/doi/10.1002/advs.202103807)
-- **`LectinOracle_flex`**
-  - operates the same as LectinOracle but can directly use the raw protein sequence as input (no ESMC representation required)
-- **`SweetNet`**
-  - a graph convolutional neural network trained to predict species from glycan, can be used to generate learned glycan representations; from [Burkholz et al., 2021](https://pubmed.ncbi.nlm.nih.gov/34133929/)
-- **`GIFFLAR`**
-  - a heterogeneous graph neural network over atoms, bonds, and monosaccharides, trained on the same species task as SweetNet; also yields learned glycan representations; from [Joeres and Bojar, 2024](https://arxiv.org/abs/2409.13467v3)
-- **`NSequonPred`**
-  - given the ESM-1b representation of an N-sequon (+/- 20 AA), this model can predict whether the sequon will be glycosylated
+| Model | What it does | From |
+|----|----|----|
+| `LectinOracle` | predicts the glycan-binding specificity of a protein from its ESMC representation | [Lundstrom et al., 2021](https://onlinelibrary.wiley.com/doi/10.1002/advs.202103807) |
+| `LectinOracle_flex` | the same, straight from the raw protein sequence |  |
+| `SweetNet` | graph convolutional neural network that predicts species from glycans and yields learned glycan representations | [Burkholz et al., 2021](https://pubmed.ncbi.nlm.nih.gov/34133929/) |
+| `GIFFLAR` | heterogeneous graph neural network over atoms, bonds, and monosaccharides, trained on the same species task; also yields learned glycan representations | [Joeres and Bojar, 2024](https://arxiv.org/abs/2409.13467v3) |
+| `NSequonPred` | predicts whether an N-sequon is glycosylated, from the ESM-1b representation of the sequon and 20 amino acids on either side |  |
 
 ## How to use
 
@@ -130,7 +134,7 @@ from glycowork import GlycoDraw
 drawing = GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Neu5Gc(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", highlight_motif = "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc", suppress=True)
 ```
 
-![](index_files/figure-html/cell-6-output-1.svg)
+
 
 ``` python
 #six different sequence formats in the same list; no conversion step, no bookkeeping
@@ -177,14 +181,7 @@ from glycowork.motif.annotate import annotate_dataset
 out = annotate_dataset(glycans, feature_set = ['known'], condense = True)
 ```
 
-| motif_name | Internal_LewisX | SialylLewisX | Terminal_LewisA | H_antigen_type2 | Chitobiose | Trimannosylcore | Terminal_LacNAc_type1 | Internal_LacNAc_type2 | Terminal_LacNAc_type2 | Terminal_LacdiNAc_type2 | core_fucose | core_fucose(a1-3) | Nglycan_complex | M3FX |
-|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
-| Neu5Ac(a2-3)Gal(b1-4)\[Fuc(a1-3)\]GlcNAc(b1-2)Man(a1-3)\[Gal(b1-3)\[Fuc(a1-4)\]GlcNAc(b1-2)Man(a1-6)\]Man(b1-4)GlcNAc(b1-4)\[Fuc(a1-6)\]GlcNAc | 1 | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 0 | 0 | 1 | 0 | 1 | 0 |
-| Man(a1-3)\[Man(a1-6)\]Man(b1-4)GlcNAc(b1-4)GlcNAc | 0 | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| Man(a1-3)\[Man(a1-6)\]Man(b1-4)GlcNAc(b1-4)GlcNAc | 0 | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| GlcNAc(b1-2)Man(a1-3)\[GlcNAc(b1-2)Man(a1-6)\]\[Xyl(b1-2)\]Man(b1-4)GlcNAc(b1-4)\[Fuc(a1-3)\]GlcNAc | 0 | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 1 |
-| Fuc(a1-2)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)\[Gal(b1-4)GlcNAc(b1-2)Man(a1-3)\]Man(b1-4)GlcNAc(b1-4)\[Fuc(a1-6)\]GlcNAc | 0 | 0 | 0 | 1 | 1 | 1 | 0 | 1 | 1 | 0 | 1 | 0 | 1 | 0 |
-| GalNAcOS(b1-4)GlcNAc(b1-2)Man(a1-3)\[GalNAc(b1-4)GlcNAc(b1-2)Man(a1-6)\]Man(b1-4)GlcNAc(b1-4)GlcNAc | 0 | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 1 | 0 | 0 | 1 | 0 |
+
 
 ``` python
 #using graphs, you can easily check whether a glycan contains a specific motif; how about internal Lewis A/X motifs?
@@ -244,8 +241,6 @@ plot_network(network, draw_glycans = True)
 
 
 
-Hover for details
-
 ``` python
 #straight off the instrument: m/z to composition to candidate structures, constrained by glycan class and taxonomy
 from glycowork.motif.tokenization import mz_to_composition, compositions_to_structures
@@ -290,3 +285,20 @@ print(len(mol.atoms), "atoms,", len(mol.rings), "rings,", len(set(mol.atom_monos
     OC1O[C@H](CO)[C@@H](O[C@@H]2O[C@H](CO)[C@H](O)[C@H](O)[C@H]2O)[C@H](O[C@@H]2O[C@@H](C)[C@@H](O)[C@@H](O)[C@@H]2O)[C@H]1NC(C)=O
     Fuc(a1-3)[Gal(b1-4)]GlcNAc
     43 atoms, 3 rings, 3 residues
+
+## Cite
+
+If `glycowork` helps your research, please cite [Thomès et al., 2021](https://doi.org/10.1093/glycob/cwab067):
+
+``` bibtex
+@article{thomes2021glycowork,
+  title={Glycowork: A Python package for glycan data science and machine learning},
+  author={Thom{\`e}s, Luc and Burkholz, Rebekka and Bojar, Daniel},
+  journal={Glycobiology},
+  volume={31},
+  number={10},
+  pages={1240--1244},
+  year={2021},
+  doi={10.1093/glycob/cwab067}
+}
+```

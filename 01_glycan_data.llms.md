@@ -344,7 +344,7 @@ def impute_biosynthetic(
     glycans:list[str] | None=None, # glycan of each row (IUPAC-condensed or composition), to give every sample its own activity per biosynthetic step
     mnar:bool=True, # treat non-detections as censored where the data say missingness is intensity-dependent: they inform each glycan's level, and imputations are pulled towards the detection limit
     draw:bool=False, # add a random draw of the held-out prediction error to every imputed value, so imputed replicates keep the spread of measured ones (for rhythm tests that weigh each timepoint by its standard error)
-    random_state:int | numpy.random._generator.Generator | None=None, # optional random state for reproducibility
+    random_state:int | numpy.random._generator.Generator | None=None, # seeds the noise of draw (None: seed 0); the model fit itself is always seeded with 0
     unmeasured:numpy.ndarray | None=None, # boolean mask in the shape of df of cells that were never measured (e.g., a glycosite not covered in a sample): imputed, but not read as non-detections
 )->pandas.DataFrame: # dataframe with every missing value imputed
 ```
@@ -360,7 +360,7 @@ hidden = masked.isna().values & (df.values > 0)
 print(np.corrcoef(np.log2(df.values[hidden]), np.log2(imputed.values[hidden]))[0, 1])  # 0.92
 ```
 
-    0.9169137129365768
+    0.9218374233398697
 
 ------------------------------------------------------------------------
 
@@ -441,10 +441,11 @@ def read_glycoproteomics(
     files:str | pathlib.Path | pandas.DataFrame | list[str | pathlib.Path | pandas.DataFrame], # result file(s) of FragPipe/MSFragger-Glyco or O-Pair (psm.tsv), pGlyco3 or pGlycoQuant, Byonic or Byologic, GlycReSoft, MetaMorpheus O-Pair (.psmtsv), Glyco-Decipher, StrucGP, or PEAKS GlycanFinder
     max_q:float=0.01, # highest q-value/FDR a match may have, wherever the engine reports one
     sample_map:Union[dict[str, str], Callable[[str], str], NoneType]=None, # renames runs (raw files, or FragPipe experiments) into samples; runs sharing a sample, e.g., fractions, are summed
-)->glycowork.glycan_data.frame.GlycoDataFrame: # glycoforms as 'protein_site_composition' in column 'ID' ('protein_site_sequence' for StrucGP structure codes), samples as columns; ready for get_differential_expression(glycoproteomics = True) or get_glycoshift_per_site
+    level:str='glycoform', # 'glycoform', or 'psm' for one row per match: its run, scan, peptide, total composition, protein, sites, and charge (FragPipe/O-Pair, pGlyco3, Byonic, MetaMorpheus, and GlycanFinder name their spectra)
+)->glycowork.glycan_data.frame.GlycoDataFrame | pandas.DataFrame: # glycoforms as 'protein_site_composition' in column 'ID' ('protein_site_sequence' for StrucGP structure codes), samples as columns; ready for get_differential_expression(glycoproteomics = True) or get_glycoshift_per_site. With level = 'psm', the matches, for comparing engines spectrum by spectrum
 ```
 
-*Reads the native output of glycoproteomics search engines into a site-specific glycoform x sample table, quantified by intensity where the engine reports one and by spectral counts otherwise*
+*Reads the native output of glycoproteomics search engines into a site-specific glycoform x sample table, quantified by intensity where the engine reports one and by spectral counts otherwise, or into its matches, spectrum by spectrum*
 
 ``` python
 import pandas as pd
