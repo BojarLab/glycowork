@@ -43,7 +43,7 @@ from glycowork.motif.processing import (
     in_lib, get_class, enforce_class, equal_repeats, get_matching_indices, is_composition,
     bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono, iupac_to_smiles,
     max_specify_glycan, parse_floating_bit, rescue_compositions, rescue_glycans, split_glycoform_id, glycan_to_oxford,
-    glycan_to_glycam, glycan_to_iupac_extended, glycan_to_glycoct, glycan_to_wurcs, glycan_to_kcf
+    glycan_to_glycam, glycan_to_iupac_extended, glycan_to_glycoct, glycan_to_wurcs, glycan_to_kcf, glycan_to_csdb, csdb_to_iupac
 )
 from glycowork.motif.smiles import (SKELETONS, ALDITOLS, SUBSTITUENTS, ENANTIOMER, CERAMIDE, GlycanSMILESError,
                                     glycan_to_smiles, glycan_to_molecule, smiles_to_iupac, looks_like_smiles,
@@ -2737,6 +2737,42 @@ def test_linearcode_to_iupac():
     for linearcode, glycan in [("Wa4Wa;", "Kdo(a2-4)Kdo"), ("Eb1Ga;", "Fruf(b2-1)Glc"), ("A?4GN;", "Gal(?1-4)GlcNAc"), ("Ax4GN;", "Gal(?1-4)GlcNAc"), ("Ab?GN;", "Gal(b1-?)GlcNAc"),
                                ("NNa3Ab4(Fa3)GN[6S]b;", "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc6S"), ("Ab3/4GN;", "Gal(b1-3/4)GlcNAc")]:  # ketoses link from C2, unknown anomers and positions
         assert canonicalize_iupac(linearcode) == glycan
+
+
+def test_csdb_linear():
+    # csdb_to_iupac reads CSDB Linear as a tree: substituents are residues of their own (Ac(1-2) on an amino sugar is its N-acetyl), phosphates and sulfates sit in the linkage, side chains share one bracket
+    for csdb, glycan in [("Ac(1-5)aXNeup(2-3)bDGalp(1-4)[aLFucp(1-3),Ac(1-2)]?DGlcpN", "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc"),
+                         ("Ac(1-2)[Ac(1-3)]bLRhapN3N(1-3)[Ac(1-2)]bDGlcpN", "RhaNAc3NAc(b1-3)GlcNAc"), ("Ac(1-2)[Ac(1-3)]bDManpN3NA(1-4)?DGlcp", "ManNAcA3NAc(b1-4)Glc"),  # diamino sugars, in lib's spelling
+                         ("Ac(1-2)[Ac(1-4)]bDQuipN4N(1-3)?DGalp", "QuiNAc4NAc(b1-3)Gal"), ("NH2(1-6)aDGalpA(1-3)?DGlcp", "GalA6N(a1-3)Glc"),  # an amide of the carboxyl group
+                         ("xXEtN(1-P-7)aXKdop(2-4)?XKdop", "Kdo7PEtN(a2-4)Kdo"), ("Ac(1-2)aDGlcpN(1-P-6)?DManp", "GlcNAc1P(a1-6)Man"),  # phosphates in the linkage
+                         ("Ac(1-2)[xRLac(2-3)]bDGlcpN(1-4)?DGlcp", "GlcNAc3Lac(b1-4)Glc"), ("x?Pyr(2-6:2-4)bDGalp(1-3)?DGlcp", "Gal4Pyr6Pyr(b1-3)Glc"),
+                         ("Ac(1-2)aDGlcpN(1-3)[lR3HOBut(1-4)]bDQuip4N(1-2)?DManp", "GlcNAc(a1-3)Qui4NHb(b1-2)Man"),
+                         ("bDGalp(1-4)?DGlcp(1-1)CER", "Gal(b1-4)Glc1Cer"), ("aLRhap(1-3)aLRhap(1-2)x?Gro", "Rha(a1-3)Rha1Gro"), ("Ac(1-2)aDGalpN(1-P-P-1)Und", "GalNAc1PP"),  # aglycones and carriers
+                         ("aDGalp(1-3)aDGlcp(1-3)aLRhap(1-4)xDRib-ol(5-P", "Gal(a1-3)Glc(a1-3)Rha(a1-4)Rib5P-ol"), ("<<bDGalp(1-3)|bDGalp(1-4)>>[Ac(1-2)]?DGlcpN", "Gal(b1-3/4)GlcNAc"),
+                         ("[25%Ac(1-4),35%Ac(1-3)]aLRhap(1-2)?DGlcp // O-acetylation varies", "Rha3Ac4Ac(a1-2)Glc"),
+                         ("?DGlcp(1-3)?XLDmanHepp(1-3)[?DGlcp(1-4)<<?DGlcpN(1-6)|?DGlcpN(1-7)>>]?XLDmanHepp(1-5)?XKdo?", "Glc(?1-3)LDManHep(?1-3)[Glc(?1-4)GlcN(?1-6/7)]LDManHep(?1-5)Kdo"),
+                         ("-1)bDFruf(2-3)bDFruf(2-", "Fruf(b2-3)Fruf(b2-1)Fruf")]:  # a repeating unit stays with the generic reading
+        assert canonicalize_iupac(csdb) == glycan
+    # glycan_to_csdb writes CSDB's own order: a sugar chain before a substituent, then the lower acceptor position; side chains in one bracket, the higher position first
+    for glycan, csdb in [("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc", "aLFucp(1-3)[Ac(1-5)aXNeup(2-3)bDGalp(1-4),Ac(1-2)]?DGlcpN"),
+                         ("Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", "aDManp(1-3)[aDManp(1-6)]bDManp(1-4)[Ac(1-2)]bDGlcpN(1-4)[aLFucp(1-6),Ac(1-2)]?DGlcpN"),
+                         ("Kdo(a2-4)[LDManHep(a1-5)]Kdo7PEtN", "aXKdop(2-4)[xXEtN(1-P-7),aXLDmanHepp(1-5)]?XKdop"), ("Neu5Ac(a2-8)Neu5Ac9Ac(a2-3)Gal", "Ac(1-5)aXNeup(2-8)[Ac(1-9),Ac(1-5)]aXNeup(2-3)?DGalp"),
+                         ("GlcNAc(b1-6)Man6P", "Ac(1-2)bDGlcpN(1-P-6)?DManp"), ("Gal(b1-3/4)GlcNAc", "<<bDGalp(1-3)|bDGalp(1-4)>>[Ac(1-2)]?DGlcpN"), ("Gal(b1-4)Glc1Cer", "bDGalp(1-4)?DGlcp(1-1)CER"),
+                         ("QuiNAc4NAc(b1-3)Gal", "Ac(1-2)[Ac(1-4)]bDQuipN4N(1-3)?DGalp"), ("Rha(a1-4)Rib5P-ol", "aLRhap(1-4)xDRib-ol(5-P"), ("L-4dThrHexA4en(a1-4)GlcNAc6S", "aL4dthrHexp4enA(1-4)[S-6),Ac(1-2)]?DGlcpN"),
+                         ("Gal4Pyr6Pyr(b1-3)Glc", "x?Pyr(2-6:2-4)bDGalp(1-3)?DGlcp")]:
+        assert glycan_to_csdb(glycan) == csdb
+        assert canonicalize_iupac(csdb) == canonicalize_iupac(glycan) if glycan != "GlcNAc(b1-6)Man6P" else canonicalize_iupac(csdb) == "GlcNAc1P(b1-6)Man"  # a phosphodiester reads back on its donor
+    for glycan in ["IdoA2S(a1-4)GlcN2S6S", "MurNAc(b1-4)GlcNAc", "GalNAcAOAcN(a1-4)GalNFoA(a1-3)QuiNAc", "GalOMeNAla(a1-3)LDManHep", "D-Rha4NFo(a1-2)Gal", "Pse5Ac7Ac(a2-4)Gal",
+                   "3,6-Anhydro-L-Gal(a1-3)Gal", "2,5-Anhydro-Man-ol", "Neu1N5Ac", "GalOS(b1-4)GlcNAc", "HexNAc(?1-4)Hex", "Manf1Me", "GlcN1P", "Gal6F(b1-4)Glc", "Man3PMe(a1-2)Man", "8eLeg5Ac7Ac(a2-4)Gal"]:
+        assert canonicalize_iupac(glycan_to_csdb(glycan)) == canonicalize_iupac(glycan)
+    assert canonicalize_iupac(glycan_to_csdb("Bac2Ac4Ac(b1-3)GalNAc")) == "QuiNAc4NAc(b1-3)GalNAc"  # bacillosamine is CSDB's DQuipN4N, which lib also spells QuiNAc4NAc
+    assert canonicalize_iupac(glycan_to_csdb("GalAAla(a1-4)Glc")) == "GalA6Ala(a1-4)Glc"  # the alanine amide, x?Ala(1-6) in CSDB, which lib also spells positionally
+    for glycan, message in [("{Fuc(a1-?)}Gal(b1-4)GlcNAc", "floating parts"), ("Man(a1-P-6)Man", "not a linkage CSDB Linear can write"), ("GlcNAcN(b1-4)GlcNAc", "where its amino groups sit"),
+                            ("Ins", "not a residue CSDB Linear can write")]:
+        with pytest.raises(ValueError, match = message):
+            glycan_to_csdb(glycan)
+    with pytest.raises(ValueError, match = "glycowork cannot hold"):
+        csdb_to_iupac("Ac(1-2)[Fo(1-3)]bLRhapN3N(1-3)bDManp(1-3)aDGalp(1-2)xL4dEry-ol")
 
 
 def test_iupac_extended_to_condensed():

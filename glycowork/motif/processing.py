@@ -11,7 +11,7 @@ from functools import wraps, lru_cache, cmp_to_key
 from collections import defaultdict, Counter
 from pathlib import Path
 from types import SimpleNamespace
-from itertools import combinations
+from itertools import combinations, permutations
 from typing import Callable, Generator
 from glycowork.glycan_data import loader
 from glycowork.glycan_data.loader import (unwrap, multireplace, find_nth, lib, HexOS, HexNAcOS,
@@ -515,6 +515,288 @@ def IUPAC_to_SMILES(glycan_list: str | list[str] # List of IUPAC-condensed glyca
 
 
 iupac_to_smiles = IUPAC_to_SMILES
+
+
+_CSDB_KETOSES = ('Neu', 'Kdn', 'Kdo', 'Ko', 'Pse', 'Leg', '4eLeg', '8eLeg', 'Aci', 'Dha', 'Fru', 'Psi', 'Sor', 'Tag', 'Sed', 'Xlu', 'Rul')  # anomeric carbon 2
+_CSDB_ULOSONIC = ('Neu', 'Kdn', 'Kdo', 'Ko', 'Pse', 'Leg', '4eLeg', '8eLeg', 'Aci', 'Dha')  # carboxyl carbon 1
+_CSDB_IMPLIED_N = {'Neu': (5,), 'Pse': (5, 7), 'Leg': (5, 7), '4eLeg': (5, 7), '8eLeg': (5, 7), 'Aci': (5, 7), 'Mur': (2,)}  # base names that carry their amino groups, so CSDB writes only their acyls (Ac(1-5)aXNeup)
+_CSDB_X = ('Neu', 'Kdn', 'Kdo', 'Ko', 'Pse', 'Leg', '4eLeg', '8eLeg', 'Aci', 'Dha', 'Abe', 'Tyv', 'Par', 'Asc', 'Col')  # names that fix their own configuration, which CSDB marks X (aXKdop, aXColp)
+_CSDB_SUPERCLASS = ('Hex', 'dHex', 'Pen', 'Hep', 'Oct', 'Non')  # no known configuration or ring size
+_CSDB_GENERIC = r'(?:\d(?:,\d)*d)?(?:[DL]{2})?[A-Z][a-z]{2}(?:Hex|Hep|Oct|Non)'  # 6dAraHex, 4dThrHex, LDManHep, which CSDB writes with a lower-case configurational prefix (6daraHex, LDmanHep)
+_CSDB_GROUP = r'(?:PP?)?(?:EtN|GroA|GroN|Cho|Gro|Me)(?![a-z])|[A-Z][a-z]+|PP|P|S'
+_CSDB_CHIRAL = ('Ala', 'Ser', 'Thr', 'Lys', 'Asp', 'Glu', 'Hse', 'Gro', 'Pyr')  # substituents with anomer x and a configuration, which glycowork does not hold (x?Ala)
+_CSDB_ACHIRAL = ('EtN', 'Cho', 'Gly', 'Etg')  # xXEtN
+_CSDB_NONSUGAR = re.compile(r'x[DLXRS?](?:EtN|Cho|Gly|Etg|Ala|Ser|Thr|Lys|Asp|Glu|Hse|Pyr|Lac|GroA|GroN)')
+_CSDB_LINEAR = re.compile(r'(?:^|[\[\],)])[abx?][DLX?][\dA-Za-z,-]*(?:\((?:\d|\?)[NCS]?-|$)')  # a CSDB residue (aDGlcp, xXEtN, xD2,5anhMan-ol) before its linkage or at the reducing end
+
+
+@lru_cache(maxsize = 1)
+def _csdb_stems() -> tuple[dict[str, str], re.Pattern, re.Pattern]: # Default configuration per name, glycowork residue pattern, CSDB residue pattern
+    "Residue names CSDB Linear shares with glycowork, from smiles.ENANTIOMER, which smiles.py builds on this module"
+    from glycowork.motif.smiles import ENANTIOMER
+    stems = ENANTIOMER | {k[:-1]: v for k, v in ENANTIOMER.items() if k.endswith('f') and k[:-1] not in ENANTIOMER} | dict.fromkeys(_CSDB_SUPERCLASS + ('Gro',), '?') | {'8eLeg': 'D', 'Ery': 'D', 'Thre': 'D', 'Ace': 'L', 'Rul': 'D', 'Xlu': 'D'}
+    names = '|'.join(sorted((k for k in stems if not (k.endswith('f') and k[:-1] in stems)), key = len, reverse = True))
+    return (stems, re.compile(rf'(?:(\d,\d)-Anhydro-)?(?:([DL])-)?({names}|{_CSDB_GENERIC})(f?)(.*?)(-ol|-onic|-aric)?'),
+            re.compile(rf'([abx?l])([DLXRS?])(?:(\d,\d)anh)?({names}|(?:\d(?:,\d)*d)?(?:[DL]{{2}})?[a-z]{{3}}(?:Hex|Hep|Oct|Non))([pfa?]?)((?:\d+en)*)((?:\d*N)*)(A?)((?:\d+(?:F|Cl|Br|I))*)(-ol|-onic|-aric)?'))
+
+
+def _csdb_carboxyl(stem: str, # Residue name without configuration
+                   uronic: bool, # Whether it is a uronic acid
+                   suffix: str | None # -ol, -onic, or -aric
+                   ) -> int | None: # Carbon of the carboxyl group, whose N is an amide
+    "Carboxyl carbon of an acidic residue: C1 of ulosonic and aldonic acids, the last carbon of a uronic acid"
+    if suffix in ('-onic', '-aric') or stem in _CSDB_ULOSONIC:
+        return 1
+    return (5 if stem in ('Rib', 'Ara', 'Xyl', 'Lyx', 'Pen') else 7 if 'Hep' in stem else 6) if uronic else None
+
+
+def _csdb_residue(label: str, # glycowork residue name, such as GlcNAc6S
+                  glycan: str # Glycan it is part of, for error messages
+                  ) -> tuple[str, list[tuple[str, str]], bool, str, int | None]: # CSDB residue name without anomer (DGlcpN), substituents as (position, group), whether it is open-chain, stem, carboxyl carbon
+    "Splits a glycowork residue into the CSDB Linear residue name and the substituents CSDB writes as residues of their own"
+    stems, pattern, _ = _csdb_stems()
+    if not (m := pattern.fullmatch(label)):
+        raise ValueError(f"'{label}' in '{glycan}' is not a residue CSDB Linear can write.")
+    anh, dl, stem, ring, rest, suffix = m.groups()
+    amines, implied = {2, 4} if stem == 'Bac' else set(), _CSDB_IMPLIED_N.get(stem, ())
+    stem = 'Qui' if stem == 'Bac' else stem  # bacillosamine is 2,4-diamino-2,4,6-trideoxy-D-glucose, which CSDB writes as DQuipN4N
+    uronic, subs, en, halo = False, [], [], []
+    while rest:
+        done = label[:len(label) - len(rest)]
+        if t := re.match(r'(\d)en', rest):
+            en.append(t.group(1))
+        elif t := re.match(r'A(?![a-z])', rest):
+            uronic = True
+        elif t := re.match(rf'(\d+)?N(?!H)({_CSDB_GROUP})?', rest):
+            if t.group(1) is None and (2 in amines and not (uronic and not t.group(2)) or done.endswith(('P', 'S')) or len(implied) > 1):  # GlcNAcN, QuiNAcNBut, KdoOPN and PseNAc do not say which amino group they mean
+                raise ValueError(f"'{label}' in '{glycan}' does not say where its amino groups sit.")
+            carboxyl = _csdb_carboxyl(stem, uronic, suffix)
+            pos = int(t.group(1)) if t.group(1) else carboxyl if uronic and not t.group(2) else implied[0] if implied else 2
+            if pos == carboxyl and not t.group(2):  # GalAN, GalA6N, Neu1N5Ac: the amide of the carboxyl group
+                subs.append((str(pos), 'NH2'))
+                rest = rest[t.end():]
+                continue
+            if pos in amines:  # ManNAc2NAc names its 2-amino group twice
+                raise ValueError(f"'{label}' in '{glycan}' does not say where its amino groups sit.")
+            amines |= set() if pos in implied else {pos}
+            subs += [(str(pos), t.group(2))] if t.group(2) else []
+        elif t := re.match(r'\d+(?:F|Cl|Br|I)(?![a-z])', rest):  # a deoxyhalogeno sugar, which CSDB writes in the residue name (6F)
+            halo.append(t.group())
+        elif uronic and done.endswith('A') and (t := re.match(rf'()({_CSDB_GROUP})', rest)):  # GalAAla, the amino acid amide of a uronic acid
+            subs.append((str(_csdb_carboxyl(stem, uronic, suffix)), t.group(2)))
+        elif t := re.match(rf'(\d+|O)({_CSDB_GROUP})', rest):
+            subs.append(('?' if t.group(1) == 'O' else t.group(1), t.group(2)))
+        else:
+            raise ValueError(f"'{label}' in '{glycan}' has modifications ('{rest}') CSDB Linear cannot write.")
+        rest = rest[t.end():]
+    config = 'X' if stem in _CSDB_X or re.match(r'[DL]{2}', stem) else dl or stems.get(stem + ring, stems.get(stem))
+    if config is None:
+        raise ValueError(f"'{label}' in '{glycan}' does not state the absolute configuration CSDB Linear needs.")
+    open_chain = bool(suffix) or stem in ('Gro', 'Ery', 'Thre')
+    name = re.sub(r'[A-Z][a-z]{2}(?=Hex|Hep|Oct|Non)', lambda x: x.group().lower(), stem) if re.fullmatch(_CSDB_GENERIC, stem) else stem
+    ring = '' if open_chain else ring or ('' if stem in _CSDB_SUPERCLASS else 'p')
+    amine = ''.join('N' if p == 2 else f'{p}N' for p in sorted(amines, key = lambda p: (p != 2, p)))
+    return f"{config}{anh + 'anh' if anh else ''}{name}{ring}{''.join(e + 'en' for e in en)}{amine}{'A' if uronic else ''}{''.join(halo)}{suffix or ''}", subs, open_chain, stem, _csdb_carboxyl(stem, uronic, suffix)
+
+
+def _csdb_substituent(group: str # glycowork substituent, such as Ac, PEtN, or Lac
+                      ) -> tuple[str, str, str]: # CSDB residue name ('' for a bare phosphate or sulfate), phosphate bridge (P-, P-P-), donor carbon
+    "A glycowork substituent as the CSDB residue that carries it"
+    if group in ('P', 'S', 'PP'):
+        return '', '-'.join(group) + '-', ''
+    bridge, group = re.fullmatch(r'(PP|P)?(?=[A-Z])(.*)', group).groups()
+    name = f"x?{group}" if group in _CSDB_CHIRAL else f"xX{group}" if group in _CSDB_ACHIRAL else {'Lac': 'xRLac', 'Hb': 'l?3HOBut'}.get(group, group)  # glycowork's Lac is the (R)-lactyl ether, its Hb the 3-hydroxybutyryl CSDB files as a lipid (lR3HOBut)
+    return name, '-'.join(bridge) + '-' if bridge else '', '2' if group in ('Lac', 'Pyr') and not bridge else '1'
+
+
+def glycan_to_csdb(glycan: str # Glycan in IUPAC-condensed format
+                   ) -> str: # Glycan in CSDB Linear, e.g., bDGalp(1-4)[Ac(1-2)]?DGlcpN
+    "Convert glycan from IUPAC-condensed to CSDB Linear, the notation of the Carbohydrate Structure Database (csdb.glycoscience.ru)"
+    from glycowork.motif.graph import _glycan_graph
+    if '{' in glycan or glycan.startswith('['):
+        raise ValueError(f"'{glycan}' has floating parts or is a repeating unit, which CSDB Linear cannot write.")
+    graph = _glycan_graph(glycan)
+    labels = {n: d['string_labels'] for n, d in graph.nodes.items()}
+
+    def rank(acceptor: str) -> int:
+        return 99 if acceptor.startswith('?') else int(re.match(r'\d+', acceptor).group())
+
+    def subtree(node: int, anomer: str, donor: str | None) -> tuple[str, str, str]:
+        "CSDB text of a residue with everything attached to it: (text before the residue, the residue with its anomer, phosphate bridge it links through)"
+        token, subs, open_chain, stem, carboxyl = _csdb_residue(labels[node], glycan)
+        token = ('x' if open_chain else anomer or '?') + token
+        own_bridge = ''
+        if donor is not None and (b := next((s for s in subs if s[0] == donor and s[1] in ('P', 'PP')), None)):  # GlcNAc1P(a1-6)Man is the phosphodiester (1-P-6)
+            subs.remove(b)
+            own_bridge = '-'.join(b[1]) + '-'
+        kids = []  # (sugar or not, acceptor position, text, name that breaks ties)
+        for linkage in graph.succ[node]:
+            if not (link := re.fullmatch(r'([ab?]?)([\d?])-([\d?]+(?:/[\d?]+)*)', labels[linkage])):
+                raise ValueError(f"'{labels[linkage]}' in '{glycan}' is not a linkage CSDB Linear can write.")
+            child_anomer, d, acceptors = link.groups()
+            bridge = ''
+            if acceptors.isdigit() and (b := next((s for s in subs if s[0] == acceptors and s[1] in ('P', 'PP')), None)):  # GlcNAc(b1-6)Man6P, the same phosphodiester written on its acceptor
+                subs.remove(b)
+                bridge = '-'.join(b[1]) + '-'
+            before, child, child_bridge = subtree(graph.succ[linkage][0], child_anomer, d)
+            alts = acceptors.split('/')
+            text = f"<<{'|'.join(f'{child}({d}-{bridge or child_bridge}{a})' for a in alts)}>>" if len(alts) > 1 else f"{child}({d}-{bridge or child_bridge}{acceptors})"  # <<A(1-3)|A(1-4)>>
+            kids.append((0, alts[0], before + text, child))
+        if len(pyr := sorted((p for p, g in subs if g == 'Pyr' and p != '?'), key = int, reverse = True)) == 2:  # a pyruvate ketal bridges two positions, (2-6:2-4) with the higher first
+            subs = [s for s in subs if s[1] != 'Pyr']
+            kids.append((1, pyr[0], f"x?Pyr(2-{pyr[0]}:2-{pyr[1]})", 'x?Pyr'))  # bivalent, so ahead of a substituent but behind a sugar chain, as CSDB writes it
+        c1 = '2' if stem in _CSDB_KETOSES else '1'
+        aglycone = ''
+        if donor is None and (ag := next((s for s in subs if s[0] == c1 and s[1] != 'NH2' and not open_chain or open_chain and s[1] in ('P', 'PP')), None)):  # Glc1Cer, Manf1Me, GlcN1P, Rib5P-ol: what the reducing end is linked to, which CSDB writes last
+            subs.remove(ag)
+            name, bridge, _ = _csdb_substituent(ag[1])
+            aglycone = f"({ag[0]}-{bridge}{'1' if ag[1] in ('Cer', 'Me') else '?'}){'CER' if name == 'Cer' else name}" if name else f"({ag[0]}-{bridge[:-1]}"
+        for p, g in subs:
+            name, bridge, d = _csdb_substituent(g)
+            d = '2' if p == str(carboxyl) and g in _CSDB_CHIRAL[:7] + ('Gly',) else d  # an amino acid amide of the carboxyl group links through its 2-amino group, xLThr(2-6)
+            kids.append((2, p, f"{name}({d}-{bridge}{p})" if name else f"{bridge}{p})", name or bridge))
+        main = min(kids, key = lambda k: (k[0], rank(k[1]), k[3])) if kids else None  # a sugar chain before a pyruvate before a substituent, then the lower position (CSDB's rules)
+        side = sorted((k for k in kids if k is not main), key = lambda k: (-rank(k[1]), k[3]))  # side chains share one bracket, the higher position first
+        return (main[2] if main else '') + (f"[{','.join(k[2] for k in side)}]" if side else ''), token + aglycone, own_bridge
+
+    before, token, _ = subtree(max(graph.nodes), '?', None)
+    return before + token
+
+
+def _csdb_tree(csdb: str # Glycan in CSDB Linear
+               ) -> list[list]: # Residues as [name, parent index, linkage text], in written order, so the reducing end is last
+    "Parses CSDB Linear into a tree, merging alternative positions of one residue (<<A(1-3)|A(1-4)>>) into A(1-3/4)"
+    csdb = re.sub(r'(?<!\d)\d*%', '', re.sub(r'\s*//.*$', '', csdb.strip()))  # comments, and the amounts of non-stoichiometric residues (40%Ac, %P), which glycowork writes as present
+
+    def merge(m: re.Match) -> str:
+        alts = [re.fullmatch(r'(.+?)\(([\d?]+)-((?:[PS]-)*)([\d?]+)\)', a) for a in m.group(1).split('|')]
+        if not all(alts) or len({a.group(1, 2, 3) for a in alts}) > 1:
+            raise ValueError(f"'{m.group()}' are alternatives that glycowork cannot hold in one residue.")
+        return f"{alts[0].group(1)}({alts[0].group(2)}-{alts[0].group(3)}{'/'.join(sorted((a.group(4) for a in alts), key = lambda p: (not p.isdigit(), int(p) if p.isdigit() else 0)))})"
+
+    csdb = re.sub(r'<<?([^<>]+)>>?', merge, csdb)
+    nodes, levels, pos = [], [([], [])], 0  # per bracket: its finished side chains, and the chain waiting for its next residue
+    for m in re.finditer(r'\[|\]|,(?!\d)|((?:[SP]-)*[SP])-([\d?]+)\)|((?:[\w?-]|(?<=\d),(?=\d))+)(?:\(([^()]*)(?:\)|$))?', csdb):  # a residue (with the comma of 2,5anh) and its linkage, or a bare phosphate or sulfate (P-4)); a repeating unit (/n=?/, -4)...(1-) stops the reading
+        if m.start() != pos:
+            break
+        pos = m.end()
+        if m.group() == '[':
+            levels.append(([], []))
+        elif m.group() == ']':
+            if len(levels) < 2:
+                break
+            done, waiting = levels.pop()
+            levels[-1][1].extend(done + waiting)
+        elif m.group() == ',':
+            levels[-1][0].extend(levels[-1][1])
+            levels[-1][1].clear()
+        else:
+            nodes.append([m.group(1).replace('-', ''), None, f"-{m.group(2)}"] if m.group(1) else [m.group(3), None, m.group(4)])
+            for k in levels[-1][1]:
+                nodes[k][1] = len(nodes) - 1
+            levels[-1][1][:] = [len(nodes) - 1] if nodes[-1][2] is not None else []
+    if pos != len(csdb) or len(levels) != 1 or levels[0][0] or not nodes or nodes[-1][2] and not re.fullmatch(r'[\d?]+-(?:[PS]-)*[PS]', nodes[-1][2]):
+        raise ValueError(f"'{csdb}' is not a CSDB Linear oligosaccharide glycowork can read.")
+    return nodes
+
+
+def _csdb_label(token: str, # CSDB residue, such as aDGlcpN
+                subs: list[tuple[str, str]], # Its substituents as (position, glycowork group)
+                ) -> tuple[str, str]: # glycowork residue name, anomer
+    "glycowork name of a CSDB residue with its substituents, in the spelling lib has for it"
+    stems, _, pattern = _csdb_stems()
+    an, cfg, anh, stem, ring, en, amines, uronic, halo, suffix = pattern.fullmatch(token).groups()
+    stem = re.sub(r'[a-z]{3}(?=Hex|Hep|Oct|Non)', lambda x: x.group().capitalize(), stem)
+    amines = [2 if a == 'N' else int(a[:-1]) for a in re.findall(r'\d*N', amines)]
+    default = stems.get(stem + ('f' if ring == 'f' else ''), stems.get(stem))
+    head = f"{anh + '-Anhydro-' if anh else ''}{cfg + '-' if cfg in 'DL' and cfg != default and stem not in _CSDB_X and not re.match('[DL]{2}', stem) else ''}{stem}{'f' if ring == 'f' else ''}"
+    carboxyl = _csdb_carboxyl(stem, bool(uronic), suffix)
+    by_pos = {}
+    for p, g in subs:
+        by_pos.setdefault(p, []).append(g)
+    acyls = by_pos.pop('2', []) if 2 in amines or stem == 'Mur' else None  # what the 2-amino group carries; glycowork writes muramic acid's (MurNAc)
+    acyl2 = None if acyls is None else ''.join(acyls)
+    amide = 'NH2' in by_pos.get(str(carboxyl), [])
+    numbered = [(int(e), f"{e}en") for e in re.findall(r'\d+', en)] + [(int(re.match(r'\d+', h).group()), h) for h in re.findall(r'\d+[A-Z][a-z]?', halo)]
+    numbered += [(p, f"{p}N" + ''.join(by_pos.pop(str(p), []))) for p in amines if p != 2]
+    numbered = [t for _, t in sorted(numbered + [(99 if p == '?' else int(p), f"{'O' if p == '?' else p}{g}") for p, gs in by_pos.items() for g in gs if not (g == 'NH2' and p == str(carboxyl))])]
+    acid = 'A' if uronic else ''
+    if acyl2 is None:
+        leads = [(acid, [])]  # (start of the name, numbered parts it adds), the default spelling first
+    else:
+        n = '' if stem == 'Mur' and not acyl2 else 'N'
+        short, positional = (f"{n}{acyl2}{acid}", []), (f"{n}{acid}", [f"2{acyl2}"])
+        leads = [positional, short] if acyl2 == 'S' or (head + ''.join(positional[0]) + positional[1][0] in lib) > (head + short[0] in lib) or acyl2 not in ('', 'Ac', 'Gc', 'Ala', 'But', 'Fo', 'Me', 'Am') and head + short[0] not in lib else [short, positional]  # GlcNAc and GalNAla, but GlcN2S and GlcN2Myr, as lib writes most of them
+        leads += [(acid, [f"2N{acyl2}"])] if uronic else []  # ManA2NAc3NAc, GalA2N
+        leads += [(f"N{a}{acid}", [f"2{b}"]) for a, b in permutations(acyls)] + [(f"N{acid}", [f"2{a}" for a in acyls])] if len(acyls) == 2 else []  # N-acyl-N-methyl: GlcNMeOCm2Vac, GlcN2Me2Ole3Cm
+    if amide:  # a uronamide: GalA6N, GalNAcAN, or GalNAcAOAcN
+        leads = [(b, ln + [f"{carboxyl}N"]) for b, ln in leads] + [(b + 'N', ln) for b, ln in leads if b.endswith('A')] + [(b, ln + ['N']) for b, ln in leads if b.endswith('A')]
+    name = head + leads[0][0] + ''.join(sorted(leads[0][1] + numbered, key = lambda t: (not t[0].isdigit(), int(re.match(r'\d*', t).group() or 0)))) + (suffix or '')
+    if name in lib or len(numbered) > 6:
+        return name, an
+    bac = [(re.sub(r'^N(?:Ac|Gc)?', '', b), [f"2{acyl2}"] * bool(acyl2) + [t if t != '4N' else '' for t in (re.sub(r'^4N(?=[A-Z])', '4', t) for t in numbered)]) for b, ln in leads if b.startswith('N') and not ln] if stem == 'Qui' and {2, 4} <= set(amines) else []  # bacillosamine, Bac2Ac4Ac
+    for i, (b, ln) in enumerate(leads + bac):  # lib has one spelling of most residues, not always the default one (GalOMeNAla, FucOSOMe, ManA2NAc3NAc, Bac2Ac4Ac)
+        h, items = (head.replace('Qui', 'Bac'), [b] * bool(b) + [t for t in ln if t]) if i >= len(leads) else (head, [b] * bool(b) + ln + numbered)
+        if acid and b.endswith('A') and (c := next((t for t in items if re.fullmatch(rf'{carboxyl}[A-Z][a-z]+[AN]?', t)), None)):  # GalAAla, an amino acid amide written without its position
+            items = [b + c[len(str(carboxyl)):]] + [t for t in items if t not in (b, c)]
+            b = items[0]
+        for perm in permutations(items):
+            if ('N' not in perm or b not in perm or perm.index('N') > perm.index(b)) and (cand := h + ''.join(perm) + (suffix or '')) in lib:  # a bare N is the uronamide only after the A
+                return cand, an
+    return name, an
+
+
+def csdb_to_iupac(csdb: str # Glycan in CSDB Linear
+                  ) -> str: # Basic IUPAC-condensed format
+    "Convert glycan from CSDB Linear (Carbohydrate Structure Database), such as bDGalp(1-4)[Ac(1-2)]bDGlcpN, to barebones IUPAC-condensed format"
+    nodes = _csdb_tree(csdb)
+    kids = [[] for _ in nodes]
+    for i, (_, parent, _) in enumerate(nodes):
+        if parent is not None:
+            kids[parent].append(i)
+    sugar = [bool(_csdb_stems()[2].fullmatch(n[0])) and not _CSDB_NONSUGAR.fullmatch(n[0]) and not (re.fullmatch(r'x[DLXRS?]Gro', n[0]) and (not kids[i] or n[1] is None)) for i, n in enumerate(nodes)]  # a glycerol leaf or reducing end is a substituent (GalOPGro, Gal1Gro), a glycerol within a chain a residue
+    if unknown := [n[0] for i, n in enumerate(nodes) if (not sugar[i] and re.match(r'[abx?][DLXRS?][A-Z\d]', n[0]) and not _CSDB_NONSUGAR.fullmatch(n[0]) and not re.fullmatch(r'x[DLXRS?]Gro', n[0])) or (sugar[i] and _csdb_stems()[2].fullmatch(n[0]).group(5) == 'a') or n[0].startswith('Subst')]:  # CSDB residues glycowork has no name for (xL4dEry-ol, x?Gro-al), open-chain forms (xDGalaN), and aliases (Subst)
+        raise ValueError(f"'{csdb}' has residues glycowork cannot hold: {unknown}.")
+
+    def link(i: int) -> tuple[str, str, str]:
+        "Donor carbon, phosphate or sulfate bridge, and acceptor position of a residue's linkage to its parent"
+        if m := re.fullmatch(r'-([\d?/]+)', text := nodes[i][2] or ''):  # P-4), S-6)
+            return '', '', m.group(1)
+        if not (m := re.fullmatch(r'([\d?]+)[NCS]?-((?:[PS]-)*)([\d?/]+(?::[\d?]+-[\d?]+)*)', text) or re.fullmatch(r'([\d?]+)-((?:[PS]-?)+)()', text + '-')):
+            raise ValueError(f"'{text}' in '{csdb}' is not a CSDB linkage glycowork can read.")
+        return m.group(1), m.group(2).replace('-', ''), m.group(3)
+
+    def group(i: int) -> str:
+        "glycowork name of a substituent with whatever it carries (Ac(1-2)xLAla(1-4) to AlaAc)"
+        return re.sub(r'^[xl?][DLXRS?](?=[A-Z\d])', '', nodes[i][0]).rstrip('?').replace('3HOBut', 'Hb') + ''.join(group(k) for k in kids[i])  # lXGc?, xDAla? carry an unknown ring size
+
+    def write(i: int, extra: list[tuple[str, str]]) -> tuple[str, str]:
+        subs, parts = list(extra), []
+        for k in kids[i]:
+            d, bridge, acc = link(k)
+            if sugar[k]:
+                text, anomer = write(k, [(d, bridge)] if bridge else [])  # (1-P-6) is a phosphodiester, which glycowork writes on the donor, GlcNAc1P(a1-6)Man
+                parts.append(f"{text}({anomer if anomer in 'ab?' else ''}{d}-{acc})")
+            elif ':' in acc:  # x?Pyr(2-6:2-4) bridges two positions
+                subs += [(a, group(k)) for a in re.findall(r'(?:^|:[\d?]+-)([\d?]+)', acc)]
+            else:
+                subs.append((acc, ('' if group(k) in ('P', 'S') else bridge) + group(k)))
+        name, anomer = _csdb_label(nodes[i][0], subs)
+        return ''.join(parts[:1]) + ''.join(f'[{p}]' for p in parts[1:]) + name, anomer
+
+    root, extra = len(nodes) - 1, []
+    if nodes[root][0] in ('Und', 'Dol') and len(kids[root]) == 1:  # a lipid carrier, which glycowork leaves out as the KCF reader does, keeping its pyrophosphate (GlcNAc1PP)
+        d, bridge, _ = link(kids[root][0])
+        extra, root = [(d, bridge)] if bridge else [], kids[root][0]
+    elif not sugar[root]:  # an aglycone: Cer, Me, xLSer
+        if len(kids[root]) != 1 or not sugar[kids[root][0]]:
+            raise ValueError(f"'{csdb}' has a reducing end glycowork cannot read.")
+        d, bridge, _ = link(kids[root][0])
+        extra, root = [(d, bridge + {'CER': 'Cer'}.get(name := re.sub(r'^[x?][DLXRS?](?=[A-Z])', '', nodes[root][0]), name))], kids[root][0]
+    elif nodes[root][2]:  # aDGlcpN(1-P, a reducing-end phosphate
+        d, bridge, _ = link(root)
+        extra = [(d, bridge)]
+    return write(root, extra)[0]
 
 
 def linearcode_to_iupac(linearcode: str # Glycan in LinearCode format
@@ -2004,12 +2286,18 @@ def _canonicalize_iupac(glycan: str | int  # Glycan sequence in any supported fo
         return mapped_glycan
     if _COMP_TABLE_FORM.fullmatch(glycan):  # HexNAc(4)Hex(5)Fuc(1) (Byonic, MSFragger) or {Hex:5; HexNAc:4} (GlycReSoft), but not Oxford's A2G2S(6)
         raise ValueError(f"'{glycan}' is a composition, not a glycan sequence; use canonicalize_composition instead.")
+    try:  # CSDB Linear; its repeating units, alternatives across residues, and residues glycowork has no name for go on to the generic reading below
+        csdb = csdb_to_iupac(glycan) if _CSDB_LINEAR.search(glycan) else None
+    except ValueError:
+        csdb = None
     if bool(re.match(r'^G\d{5}[A-Z]{2}$', glycan)):  # GlyTouCan ID hook
         glytoucan_in = glycan
         glycan = glytoucan_to_glycan(glycan, verbose = False)
         if glycan == glytoucan_in:
             return glytoucan_in
-    # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, GlyTouCanIDs
+    # Check for different nomenclatures: CSDB Linear, LINUCS, LinearCode, IUPAC-extended, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, GlyTouCanIDs
+    elif csdb:
+        glycan = csdb
     elif glycan.startswith('[]['):
         glycan = linucs_to_iupac(glycan)
     elif ';' in glycan:
