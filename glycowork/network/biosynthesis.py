@@ -608,6 +608,7 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
         edge_data['label'].append(attr)
         edge_data['color'].append(edge_color)
         edge_data['width'].append(width)
+    from glycowork.motif.draw import is_jupyter, DARK_PAGES
     if filepath or draw_glycans:
         # Static rendering, with the node labels drawn as SNFGs where draw_glycans
         # the SNFGs have a fixed size on the canvas, so the canvas has to grow with the layout instead of the other way around
@@ -636,7 +637,6 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
         if filepath:
             Path(filepath).parent.mkdir(parents = True, exist_ok = True)
             fig.save(filepath)
-        from glycowork.motif.draw import is_jupyter, DARK_PAGES
         if not draw_glycans or not is_jupyter():
             if draw_glycans and not filepath:
                 fig.show()
@@ -653,7 +653,6 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
         return GlycanNetworkPlot(svg)
     import html
     from uuid import uuid4
-    from glycowork.motif.draw import is_jupyter
     uid = f'gwnet{uuid4().hex[:12]}'
     W = H = 900
     # Interactive plot as self-contained SVG + HTML; <title> elements are the hover text where scripts can't run

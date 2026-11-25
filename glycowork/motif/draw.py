@@ -168,9 +168,11 @@ def _flatten_text_paths(
             angle, shift = angle + 180, 0.75 * size - shift
         # Match glycorender: no gap in linkages, bold modifications, italic furanose f
         label = label.replace(' ', '')
-        if dy == '0.5em' and label.endswith('f'):
+        italic = dy == '0.5em' and label.endswith('f')
+        if italic:
             label = label[:-1] + '<tspan font-style="italic">f</tspan>'
-        attrs += ' font-weight="bold"' if dy == '-3.15em' else ''
+        # glycorender tracks every label but a furanose one by 0.05 em, so a long modification such as 2,5-Anhydro- keeps its width
+        attrs += (' font-weight="bold"' if dy == '-3.15em' else '') + ('' if italic or not label else ' letter-spacing="0.05em"')
         x, y = x0 + frac * (x1 - x0), y0 + frac * (y1 - y0)
         return (f'<text{attrs} transform="translate({x:.4f},{y:.4f}) rotate({angle:.4f})" '
                 f'x="0" y="{shift:.4f}">{label}</text>')
@@ -2022,13 +2024,13 @@ def GlycoDraw(
     d = draw.Group()
     if reducing_end_label:
         bond_start_x = main_sugar_x_pos[0] - 0.5
-        label_x = main_sugar_x_pos[0] - 0.55 - (len(reducing_end_label) * 0.1)
         label_y = main_sugar_y_pos[0]
         add_bond(bond_start_x, main_sugar_x_pos[0], label_y, main_sugar_y_pos[0], d, label = '-', dim = dim, compact = compact, highlight = main_sugar_label[0])
         col_dict = col_dict_transparent if main_sugar_label[0] == 'hide' else col_dict_base
-        x_base = -label_x * dim * (1.2 if compact else 2)
-        y_base = label_y * dim * (0.6 if compact else 1) + 5
-        d.append(draw.Text(reducing_end_label, dim * 0.35, x_base, y_base, text_anchor = 'end', fill = col_dict['black']))
+        # It starts just past the bond's end, whatever the widths of its letters; in vertical mode it turns upright about its middle, which therefore stands half a line past the bond's end
+        x_base = (0.55 - main_sugar_x_pos[0]) * dim * (1.2 if compact else 2) + (0.2 * dim if vertical else 0)
+        y_base = label_y * dim * (0.6 if compact else 1) + 0.1 * dim
+        d.append(draw.Text(reducing_end_label, dim * 0.35, x_base, y_base, text_anchor = 'middle' if vertical else 'start', fill = col_dict['black']))
     # Bond main chain
     [add_bond(main_sugar_x_pos[k+1], main_sugar_x_pos[k], main_sugar_y_pos[k + 1], main_sugar_y_pos[k], d, label = main_bond[k], dim = dim, compact = compact, highlight = main_bond_label[k], color_highlight = per_linkage_by_node.get(node_at[(0, 0, k + 1)] + 1, False) if highlight_linkages else False) for k in range(len(main_sugar) - 1)]
     # Bond within each branch, at every branch level; level 1 also connects to the main chain
@@ -2636,12 +2638,14 @@ def annotate_figure(
             break
     # viscose widens the page by each glycan label's text, which the drawing rarely fills, so the page ends at what it holds: the width it needs without those labels, the drawings, and any label left as text
     page = re.search(r'(<rect width=")[\d.]+(" height="[\d.]+" fill="[^"]*") data-width-unlabeled="([\d.]+)"', svg_tmp)
+    width = max([float(page.group(3)) if page else canvas[0]] + [float(v) + 4.0 for v in re.findall(r'data-right="([\d.]+)"', svg_tmp)]
+                + [gx + p[2] + 4.0 for p, (gx, _gy) in zip(inks, spots)])
     if page:
-        width = max([float(page.group(3))] + [float(v) + 4.0 for v in re.findall(r'data-right="([\d.]+)"', svg_tmp)]
-                    + [gx + p[2] + 4.0 for p, (gx, _gy) in zip(inks, spots)])
         svg_tmp = svg_tmp.replace(page.group(0), f'{page.group(1)}{width:.2f}{page.group(2)}', 1)
-        svg_tmp = re.sub(r'(<svg[^>]*?width=")[\d.]+("[^>]*?viewBox="0 0 )[\d.]+', rf'\g<1>{width:.2f}\g<2>{width:.2f}',
-                         svg_tmp, count = 1)
+    # any other SVG only grows, as a page with no room left puts glycans to the right of everything
+    if page or width > canvas[0]:
+        svg_tmp = re.sub(r'(<svg[^>]*?width=")[\d.]+', rf'\g<1>{width:.2f}', svg_tmp, count = 1)
+        svg_tmp = re.sub(r'(<svg[^>]*?viewBox="0 0 )[\d.]+', rf'\g<1>{width:.2f}', svg_tmp, count = 1)
     # Leaders first, so that each drawing covers the end of its own and none lies over a drawing
     for leader in filter(None, leaders):
         svg_tmp += '\n<path d="M%.2f,%.2f L%.2f,%.2f" stroke="#7a7a7a" stroke-width="0.8" fill="none" stroke-linecap="round" />' % leader

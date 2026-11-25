@@ -10,7 +10,7 @@ from random import choice
 from functools import wraps, lru_cache, cmp_to_key
 from collections import defaultdict, Counter
 from pathlib import Path
-from types import SimpleNamespace
+from types import SimpleNamespace, MappingProxyType
 from itertools import combinations, permutations
 from typing import Callable, Generator
 from glycowork.glycan_data import loader
@@ -517,26 +517,26 @@ def IUPAC_to_SMILES(glycan_list: str | list[str] # List of IUPAC-condensed glyca
 iupac_to_smiles = IUPAC_to_SMILES
 
 
-_CSDB_KETOSES = ('Neu', 'Kdn', 'Kdo', 'Ko', 'Pse', 'Leg', '4eLeg', '8eLeg', 'Aci', 'Dha', 'Fru', 'Psi', 'Sor', 'Tag', 'Sed', 'Xlu', 'Rul')  # anomeric carbon 2
 _CSDB_ULOSONIC = ('Neu', 'Kdn', 'Kdo', 'Ko', 'Pse', 'Leg', '4eLeg', '8eLeg', 'Aci', 'Dha')  # carboxyl carbon 1
+_CSDB_KETOSES = _CSDB_ULOSONIC + ('Fru', 'Psi', 'Sor', 'Tag', 'Sed', 'Xlu', 'Rul')  # anomeric carbon 2
 _CSDB_IMPLIED_N = {'Neu': (5,), 'Pse': (5, 7), 'Leg': (5, 7), '4eLeg': (5, 7), '8eLeg': (5, 7), 'Aci': (5, 7), 'Mur': (2,)}  # base names that carry their amino groups, so CSDB writes only their acyls (Ac(1-5)aXNeup)
-_CSDB_X = ('Neu', 'Kdn', 'Kdo', 'Ko', 'Pse', 'Leg', '4eLeg', '8eLeg', 'Aci', 'Dha', 'Abe', 'Tyv', 'Par', 'Asc', 'Col')  # names that fix their own configuration, which CSDB marks X (aXKdop, aXColp)
+_CSDB_X = _CSDB_ULOSONIC + ('Abe', 'Tyv', 'Par', 'Asc', 'Col')  # names that fix their own configuration, which CSDB marks X (aXKdop, aXColp)
 _CSDB_SUPERCLASS = ('Hex', 'dHex', 'Pen', 'Hep', 'Oct', 'Non')  # no known configuration or ring size
 _CSDB_GENERIC = r'(?:\d(?:,\d)*d)?(?:[DL]{2})?[A-Z][a-z]{2}(?:Hex|Hep|Oct|Non)'  # 6dAraHex, 4dThrHex, LDManHep, which CSDB writes with a lower-case configurational prefix (6daraHex, LDmanHep)
 _CSDB_GROUP = r'(?:PP?)?(?:EtN|GroA|GroN|Cho|Gro|Me)(?![a-z])|[A-Z][a-z]+|PP|P|S'
 _CSDB_CHIRAL = ('Ala', 'Ser', 'Thr', 'Lys', 'Asp', 'Glu', 'Hse', 'Gro', 'Pyr')  # substituents with anomer x and a configuration, which glycowork does not hold (x?Ala)
 _CSDB_ACHIRAL = ('EtN', 'Cho', 'Gly', 'Etg')  # xXEtN
-_CSDB_NONSUGAR = re.compile(r'x[DLXRS?](?:EtN|Cho|Gly|Etg|Ala|Ser|Thr|Lys|Asp|Glu|Hse|Pyr|Lac|GroA|GroN)')
-_CSDB_LINEAR = re.compile(r'(?:^|[\[\],)])[abx?][DLX?][\dA-Za-z,-]*(?:\((?:\d|\?)[NCS]?-|$)')  # a CSDB residue (aDGlcp, xXEtN, xD2,5anhMan-ol) before its linkage or at the reducing end
+_CSDB_NONSUGAR = re.compile(rf"x[DLXRS?](?:{'|'.join(_CSDB_ACHIRAL + tuple(c for c in _CSDB_CHIRAL if c != 'Gro') + ('Lac', 'GroA', 'GroN'))})")  # substituents, never a sugar
+_CSDB_LINEAR = re.compile(r'(?:^|[\[\],)>])[abx?][DLX?][\dA-Za-z,-]*(?:\((?:\d|\?)[NCS]?-|$)')  # a CSDB residue (aDGlcp, xXEtN, xD2,5anhMan-ol) before its linkage or at the reducing end, also after an alternative (<<...>>?DManp)
 
 
 @lru_cache(maxsize = 1)
-def _csdb_stems() -> tuple[dict[str, str], re.Pattern, re.Pattern]: # Default configuration per name, glycowork residue pattern, CSDB residue pattern
+def _csdb_stems() -> tuple[MappingProxyType, re.Pattern, re.Pattern]: # Default configuration per name (read-only, as it is cached), glycowork residue pattern, CSDB residue pattern
     "Residue names CSDB Linear shares with glycowork, from smiles.ENANTIOMER, which smiles.py builds on this module"
     from glycowork.motif.smiles import ENANTIOMER
     stems = ENANTIOMER | {k[:-1]: v for k, v in ENANTIOMER.items() if k.endswith('f') and k[:-1] not in ENANTIOMER} | dict.fromkeys(_CSDB_SUPERCLASS + ('Gro',), '?') | {'8eLeg': 'D', 'Ery': 'D', 'Thre': 'D', 'Ace': 'L', 'Rul': 'D', 'Xlu': 'D'}
     names = '|'.join(sorted((k for k in stems if not (k.endswith('f') and k[:-1] in stems)), key = len, reverse = True))
-    return (stems, re.compile(rf'(?:(\d,\d)-Anhydro-)?(?:([DL])-)?({names}|{_CSDB_GENERIC})(f?)(.*?)(-ol|-onic|-aric)?'),
+    return (MappingProxyType(stems), re.compile(rf'(?:(\d,\d)-Anhydro-)?(?:([DL])-)?({names}|{_CSDB_GENERIC})(f?)(.*?)(-ol|-onic|-aric)?'),
             re.compile(rf'([abx?l])([DLXRS?])(?:(\d,\d)anh)?({names}|(?:\d(?:,\d)*d)?(?:[DL]{{2}})?[a-z]{{3}}(?:Hex|Hep|Oct|Non))([pfa?]?)((?:\d+en)*)((?:\d*N)*)(A?)((?:\d+(?:F|Cl|Br|I))*)(-ol|-onic|-aric)?'))
 
 
@@ -562,7 +562,7 @@ def _csdb_residue(label: str, # glycowork residue name, such as GlcNAc6S
     stem = 'Qui' if stem == 'Bac' else stem  # bacillosamine is 2,4-diamino-2,4,6-trideoxy-D-glucose, which CSDB writes as DQuipN4N
     uronic, subs, en, halo = False, [], [], []
     while rest:
-        done = label[:len(label) - len(rest)]
+        done = label[:m.end(5) - len(rest)]  # the name without -ol, -onic, or -aric
         if t := re.match(r'(\d)en', rest):
             en.append(t.group(1))
         elif t := re.match(r'A(?![a-z])', rest):
@@ -741,7 +741,7 @@ def _csdb_label(token: str, # CSDB residue, such as aDGlcpN
             items = [b + c[len(str(carboxyl)):]] + [t for t in items if t not in (b, c)]
             b = items[0]
         for perm in permutations(items):
-            if ('N' not in perm or b not in perm or perm.index('N') > perm.index(b)) and (cand := h + ''.join(perm) + (suffix or '')) in lib:  # a bare N is the uronamide only after the A
+            if ('N' not in perm or b not in perm or perm.index('N') >= perm.index(b)) and (cand := h + ''.join(perm) + (suffix or '')) in lib:  # a bare N is the uronamide only after the A, or the amine itself
                 return cand, an
     return name, an
 
@@ -785,7 +785,7 @@ def csdb_to_iupac(csdb: str # Glycan in CSDB Linear
         return ''.join(parts[:1]) + ''.join(f'[{p}]' for p in parts[1:]) + name, anomer
 
     root, extra = len(nodes) - 1, []
-    if nodes[root][0] in ('Und', 'Dol') and len(kids[root]) == 1:  # a lipid carrier, which glycowork leaves out as the KCF reader does, keeping its pyrophosphate (GlcNAc1PP)
+    if nodes[root][0] in ('Und', 'Dol') and len(kids[root]) == 1 and sugar[kids[root][0]]:  # a lipid carrier, which glycowork leaves out as the KCF reader does, keeping its pyrophosphate (GlcNAc1PP)
         d, bridge, _ = link(kids[root][0])
         extra, root = [(d, bridge)] if bridge else [], kids[root][0]
     elif not sugar[root]:  # an aglycone: Cer, Me, xLSer

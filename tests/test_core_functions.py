@@ -2325,12 +2325,12 @@ def test_get_lib():
 
 
 def test_composition_database():
-    comps, masses = composition_database({'Class': 'Mammalia'})
+    comps, masses = composition_database(taxonomy = {'Class': 'Mammalia'})
     assert len(comps) == len(masses) > 100 and {'Hex': 5, 'HexNAc': 4} in comps
     assert all(c.get('HexNAc', 0) >= 2 for c in comps) and all(set(c) <= {'Hex', 'HexNAc', 'dHex', 'Neu5Ac', 'Neu5Gc'} for c in comps)
     assert np.isclose(masses[comps.index({'Hex': 5, 'HexNAc': 4})], 1622.5816, atol = 0.001)
     # What a search adds, once, as the core remnants that a glycopeptide search looks for
-    more, _ = composition_database({'Class': 'Mammalia'}, extra = [{'HexNAc': 1}, {'Hex': 5, 'HexNAc': 4}])
+    more, _ = composition_database(taxonomy = {'Class': 'Mammalia'}, extra = [{'HexNAc': 1}, {'Hex': 5, 'HexNAc': 4}])
     assert {'HexNAc': 1} in more and len(more) == len(comps) + 1 and more.count({'Hex': 5, 'HexNAc': 4}) == 1
     assert len(composition_database()[0]) >= len(comps)
 
@@ -2773,6 +2773,11 @@ def test_csdb_linear():
             glycan_to_csdb(glycan)
     with pytest.raises(ValueError, match = "glycowork cannot hold"):
         csdb_to_iupac("Ac(1-2)[Fo(1-3)]bLRhapN3N(1-3)bDManp(1-3)aDGalp(1-2)xL4dEry-ol")
+    # a reducing end right after an alternative, a sulfated or N-acylated alditol, a bare amine in lib's spelling, and a lipid carrier on a non-sugar
+    for glycan in ["Man(a1-3/6)Man", "Neu5Ac(a2-3/6)Gal1Cer", "Gal(b1-3)GalN2Suc-ol", "Man(a1-3)[Man(a1-6)]Man(a1-4)GlcOEtNN", "GlcN2Me2Ole3Cm(b1-4)Glc"]:
+        assert canonicalize_iupac(glycan_to_csdb(glycan)) == canonicalize_iupac(glycan)
+    with pytest.raises(ValueError):
+        csdb_to_iupac("xXEtN(1-P-P-1)Und")
 
 
 def test_iupac_extended_to_condensed():
@@ -5558,12 +5563,14 @@ def test_glycodraw_vertical_free_text_stays_upright():
     # ...and still starts right below the chain, so that it grows away from it instead of into it
     (tx0, ty0, tx1, ty1), = _drawn_extent(turned, [])
     assert ty0 == pytest.approx(by0) and ty1 - ty0 == pytest.approx(bx1 - bx0)
-    # A reducing-end label just turns about its middle
-    flat, turned = (GlycoDraw("Gal(b1-4)GlcNAc", reducing_end_label = "Mucin", vertical = v, suppress = True)
-                    .drawing_obj.elements[0].children for v in (False, True))
-    i = next(i for i, el in enumerate(flat) if isinstance(el, draw.Text) and el.escaped_text == 'Mucin')
-    (bx0, by0, bx1, by1), (tx0, ty0, tx1, ty1) = _drawn_extent(flat[i], []) + _drawn_extent(turned[i], [])
-    assert (tx0 + tx1, ty0 + ty1) == pytest.approx((bx0 + bx1, by0 + by1)) and ty1 - ty0 == pytest.approx(bx1 - bx0)
+    # A reducing-end label starts just past the end of its bond, however wide its letters, also in compact mode, and in vertical mode it turns about its middle to start there too
+    for kwargs in ({}, {'compact': True}, {'vertical': True}, {'vertical': True, 'compact': True}):
+        bond, label = GlycoDraw("Gal(b1-4)GlcNAc", reducing_end_label = "OMe", suppress = True, **kwargs).drawing_obj.elements[0].children[:2]
+        (_x0, _y0, end, _y1), (lx0, ly0, _lx1, ly1) = _drawn_extent(bond, []) + _drawn_extent(label, [])
+        assert end < lx0 < end + 6 and ly0 < 0 < ly1
+    turned = GlycoDraw("Gal(b1-4)GlcNAc", reducing_end_label = "Mucin", vertical = True, suppress = True).drawing_obj.elements[0].children[1]
+    (bx0, by0, bx1, by1), = _drawn_extent(turned.children[0], [])
+    assert turned.args['transform'] == f'rotate(-90 {(bx0 + bx1) / 2} {(by0 + by1) / 2})'
 
 
 def test_glycodraw_repeat_range_brackets_clear_the_linkage_labels():
@@ -5795,6 +5802,11 @@ def test_annotate_figure(mock_svg_file):
     })
     result = annotate_figure(mock_svg_file, scale_by_DE_res=de_results)
     assert isinstance(result, str)
+    # an SVG from elsewhere grows to hold the glycans by its right edge, as a viscose page does
+    out = annotate_figure(mock_svg_file)
+    width = float(re.search(r'<svg[^>]*?width="([\d.]+)"', out).group(1))
+    assert width > 500 and all(float(x) + float(s) * float(w) <= width for x, s, w in re.findall(
+        r'<g transform="translate\(([-\d.]+) [-\d.]+\) scale\(([\d.]+) [\d.]+\)">\s*<svg[^>]*?width="([\d.]+)"', out))
     annotate_figure(mock_svg_file, filepath="test.pdf")
     assert Path("test.pdf").exists()
     annotate_figure(mock_svg_file, filepath="test.svg")
@@ -6977,7 +6989,7 @@ def test_get_glycanova():
     results_motifs, _ = get_glycanova(df, groups, motifs=True, impute=False)
     # grouped_BH corrects within families, of glycans and of the motif DAG, never below the raw p-value
     for motifs in (False, True):
-        grouped = get_glycanova(df, groups, motifs = motifs, impute = False, grouped_BH = True)[0]
+        grouped = get_glycanova(df, groups = groups, motifs = motifs, impute = False, grouped_BH = True)[0]
         assert len(grouped) and (grouped['corr p-val'] >= grouped['p-val'] - 1e-12).all()
     assert isinstance(results_motifs, pd.DataFrame)
     assert len(results_motifs) > 0  # Should find some motifs
@@ -8075,6 +8087,10 @@ def test_get_pca_with_metadata(sample_df):
     with patch('viscose.Figure.save') as mock_savefig:
         get_pca(sample_df, metadata)
         mock_savefig.assert_not_called()
+    # a metadata column 'sample' must not join against the sample names the points carry, which left no point to plot
+    with patch('viscose.axes.Axes.scatter', autospec = True) as mock_scatter:
+        get_pca(sample_df, metadata.assign(sample = ['p1', 'p2', 'p3']), color = 'group')
+    assert len(mock_scatter.call_args[0][1]) == 3
 
 
 def test_get_pca_with_motifs(sample_df):
@@ -8410,13 +8426,13 @@ def test_get_glycoshift_per_site_measured_only():
     sparse = pd.DataFrame(np.nan, columns = g1 + g2, index = ['P2_20_H1N2', 'P2_20_H1N2A1', 'P3_30_H2N2F2', 'P3_30_H3N3'])
     sparse.loc['P2_20_H1N2', 'ctrl_0'], sparse.loc['P2_20_H1N2A1', 'ctrl_0'] = 5e6, 5e8
     sparse.loc['P3_30_H2N2F2', 'sia_3'], sparse.loc['P3_30_H3N3', 'sia_1'] = 1e7, 1e7
-    out = get_glycoshift_per_site(pd.concat([dense, sparse]).rename_axis('glycoform_id').reset_index(), g1, g2, random_state = 0)
+    out = get_glycoshift_per_site(pd.concat([dense, sparse]).rename_axis('glycoform_id').reset_index(), group1 = g1, group2 = g2, random_state = 0)
     assert out.index.tolist() == ['P1_10']  # sites without two measured samples per group have no variance to test against
     assert not out.filter(like = '_significant').any(axis = None)  # one noisy site with no change
     # a site whose glycoforms each appear in one group only shares no measured log-ratio between the groups, only floors
     split = pd.DataFrame({'P4_40_H5N4': [np.nan] * 4 + [2e7] * 4, 'P4_40_H5N4A2': [8e6] * 4 + [np.nan] * 4}, index = g1 + g2).T
     with pytest.raises(ValueError, match = 'detection'):
-        get_glycoshift_per_site(split.rename_axis('glycoform_id').reset_index(), g1, g2)
+        get_glycoshift_per_site(split.rename_axis('glycoform_id').reset_index(), group1 = g1, group2 = g2)
 
 
 @pytest.fixture
@@ -9875,6 +9891,8 @@ def test_read_glycoproteomics_psm_level(tmp_path):
     glycanfinder = pd.DataFrame({'Protein Accession': ['P02749|APOH_HUMAN'], 'Peptide': ['LGN(+2786.96)WSAMPSC(+57.02)K'], 'Glycan': ['(HexNAc)4(Hex)5(NeuAc)4'], 'Glycan Type': ['N-Link'],
                                  'Scan': ['F1:2210'], 'z': ['3'], 'Area C_3': ['10'], 'Sample Profile (Ratio)': ['1.00'], 'Start': ['251']})
     assert read_glycoproteomics(glycanfinder, level = 'psm')[['scan', 'peptide', 'composition', 'sites']].iloc[0].tolist() == [2210, 'LGNWSAMPSCK', 'H5N4A4', '253']
+    fractions = pd.concat([glycanfinder, glycanfinder.assign(Scan = ['F2:2210'])])
+    assert read_glycoproteomics(fractions, level = 'psm')[['run', 'scan']].values.tolist() == [['sample1:F1', 2210], ['sample1:F2', 2210]]  # one scan number in two fractions is two spectra
     glycresoft = pd.DataFrame({'glycopeptide': ['NEEYN(N-Glycosylation)K{Fuc:1; Hex:5; HexNAc:4; NeuAc:2}'], 'analysis': ['A'], 'q_value': ['0.001'], 'total_signal': ['1e6'],
                                'peptide_start': ['86'], 'protein_name': ['sp|P01857|IGHG1_HUMAN']})
     with pytest.raises(ValueError, match = 'names no spectra'):  # a table of glycopeptides has no spectra to compare
@@ -12326,6 +12344,10 @@ def test_GlycanDrawing_save_and_png(tmp_path):
     # ALT text is escaped for the aria-label and describes the glycan as passed, not its internal rewrite
     GlycoDraw("Gal(b1-4)Glc", alt_text = 'Sialyl "LacNAc" & more', filepath = str(tmp_path / "alt.svg"))
     assert 'aria-label="Sialyl &quot;LacNAc&quot; &amp; more"' in (tmp_path / "alt.svg").read_text(encoding = "utf-8")
+    # labels keep glycorender's 0.05 em tracking, as in the PNG and the PDF, all but a furanose ring's f
+    flat = GlycoDraw("Gal4Pyr6Pyr(b1-3)Galf", suppress = True).as_standalone_svg()
+    assert re.search(r'letter-spacing="0.05em"[^>]*>4Pyr6Pyr<', flat) and re.search(r'letter-spacing="0.05em"[^>]*>β3<', flat)
+    assert not re.search(r'letter-spacing[^>]*><tspan font-style="italic">f', flat) and not re.search(r'letter-spacing[^>]*></text>', flat)
     GlycoDraw("GlcA(b1-3)GlcNAc(b1-4)", repeat = True, filepath = str(tmp_path / "rep.svg"))
     assert 'aria-label="SNFG diagram of GlcA(b1-3)GlcNAc(b1-4) drawn in horizontal standard style with linkage labels. Contains repeat unit."' in (
                 tmp_path / "rep.svg").read_text(encoding = "utf-8")

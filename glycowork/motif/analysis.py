@@ -876,8 +876,8 @@ def get_pca(
     percent_var = np.round(shares * 100)
     percent_var_labels = [f'PC{x}' for x in range(1, len(percent_var) + 1)]
     df_pca = pd.DataFrame(X_pca)
-    # The samples X holds, by name, which each point carries
-    df_pca['sample'] = [str(c) for c in (df.columns[1:len(groups) + 1] if isinstance(groups, list) and groups else df.columns[1:])]
+    # The samples X holds, by name, which each point carries; outside df_pca, whose merge below joins on every column it shares with the metadata
+    names = [str(c) for c in (df.columns[1:len(groups) + 1] if isinstance(groups, list) and groups else df.columns[1:])]
     # merge with metadata
     if isinstance(groups, pd.DataFrame):
         df_pca['id'] = groups.id.values.tolist()
@@ -891,7 +891,7 @@ def get_pca(
     # A metadata column by name, or one label per sample
     hue, style, sizes = (df_pca[v].values if isinstance(v, str) else v or None for v in (color, shape, size))
     ax.scatter(df_pca[pc_x - 1], df_pca[pc_y - 1], hue = hue, style = style, size = sizes, hue_label = color if isinstance(color, str) else 'Group',
-               style_label = shape, size_label = size, names = df_pca['sample'].values)
+               style_label = shape, size_label = size, names = names)
     ax.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance',
            ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
     if title is not None:

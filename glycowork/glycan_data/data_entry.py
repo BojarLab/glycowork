@@ -240,8 +240,9 @@ def read_glycoproteomics(files: str | Path | pd.DataFrame | list[str | Path | pd
             prots, ends = col('proteinaccession'), list(df.columns).index(c['sampleprofile(ratio)']) if 'sampleprofile(ratio)' in c else len(df.columns)
             pairs = [_pair_sites(int(float(st)), [p for p, _ in _glycan_mods(str(s), brackets = '()')], str(g).split(';')) if pd.notna(st) else [] for s, g, st in zip(col('peptide'), col('glycan'), col('start'))]
             ions, wide = [f'{s}/{g}' for s, g in zip(col('peptide'), col('glycan'))], {k: k[5:] for k in df.columns[:ends] if str(k).startswith('Area ')}  # the per-group 'Area' columns follow the sample profile
-            if 'scan' in c:
+            if 'scan' in c:  # 'F1:2210' is scan 2210 of the project's first raw file, so the fraction goes into the run, or the same scan number in two fractions is one spectrum
                 scans, charges = list(col('scan')), list(col('z'))
+                runs = [f'{stem}:{m[1]}' if level == 'psm' and (m := re.match(r'(F\d+):', str(s))) else stem for s in scans]
                 peptides = [re.sub(r'[^A-Z]', '', re.sub(r'\([^)]*\)', '', str(s))) for s in col('peptide')]
         else:  # Glyco-Decipher site table: 'P00738@211;P00739@153' maps to the first protein, 'O43866@226;O43866@229' to the ambiguous site '226/229'
             sites = [str(s).split(';') for s in col('site')]
