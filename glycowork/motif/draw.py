@@ -938,7 +938,9 @@ def get_coordinates_and_labels(
             elif is_leading_xyl and j == 0:
                 lv_y_pos[0][j] = [p + main_sugar_y_pos[parent_idx] + SPACING - lv_y_pos[0][j][0] for p in
                                   lv_y_pos[0][j]]
-            elif len(branch_sugar) == 1 and (is_bisecting or is_fuc_partner or is_triple_branch):
+            elif is_bisecting and (len(branch_sugar) == 1 or lv_bond[0][j][0] == 'β 4'):
+                lv_y_pos[0][j] = [p + main_sugar_y_pos[parent_idx] for p in lv_y_pos[0][j]]
+            elif len(branch_sugar) == 1 and (is_fuc_partner or is_triple_branch):
                 lv_y_pos[0][j][0] = main_sugar_y_pos[parent_idx]
             elif len(branch_sugar) == 1:
                 lv_y_pos[0][j][0] = main_sugar_y_pos[parent_idx] - SPACING
@@ -2671,20 +2673,20 @@ def annotate_figure(
         return svg_tmp
 
 
-def plot_glycans_excel(
-        df: pd.DataFrame | pd.Series | list[str] | str | Path, # DataFrame or filepath with glycans, or the glycans themselves
-        folder_filepath: str | Path, # Output folder path
-        glycan_col_num: int | str = 0, # Glycan column index, or its name
-        scaling_factor: float = 0.2, # Image scaling
+def draw_glycans_in_sheet(
+        sheet: Any, # openpyxl worksheet to draw into
+        glycans: list, # One glycan per row: IUPAC-condensed, a composition, a motif name, or a list or tuple holding one first; anything else leaves its row empty
+        column: int, # Column (1-based) the pictures go into
+        first_row: int = 2, # Row of the first glycan
+        scaling_factor: float = 0.2, # Image scaling, one for every glycan, so that a monosaccharide is the same size in every row
         compact: bool = False, # Use compact style
         **kwargs # Passed on to GlycoDraw for every glycan, e.g., vertical, show_linkage, highlight_motif
-) -> None:
-    "Creates Excel file with SNFG glycan images in a new column"
+) -> dict[bytes, bytes]: # Each picture's PNG bytes : its SVG twin, for add_svg_twins once the workbook is saved
+    "Draws glycans as SNFG pictures into an openpyxl worksheet, one per row, and sizes each row and the column to fit"
     _, convert_svg_to_png = _get_glycorender()
     from glycorender.render import pdf_to_svg_bytes
     from openpyxl.drawing.image import Image as OpenpyxlImage
     from openpyxl.utils import get_column_letter
-    import zipfile
 
     class _PngImage(OpenpyxlImage):
         "openpyxl only calls Pillow to learn a PNG's size and to hand its bytes back, both of which we already have"
@@ -2698,6 +2700,79 @@ def plot_glycans_excel(
             self.ref.seek(0)
             return self.ref.read()
 
+    column_letter, column_width, svgs = get_column_letter(column), 0, {}
+    for i, glycan_structure in enumerate(glycans):
+        if isinstance(glycan_structure, (list, tuple)) and glycan_structure:
+            glycan_structure = glycan_structure[0] if isinstance(glycan_structure[0], str) else glycan_structure[0][0]
+        hit = resolve_motif_name(glycan_structure) if isinstance(glycan_structure, str) and glycan_structure else None
+        if (isinstance(glycan_structure, dict) and glycan_structure) or (isinstance(glycan_structure, str) and glycan_structure and not (hit and hit[0].startswith('r'))):
+            # Generate glycan image using GlycoDraw
+            try:
+                drawing = GlycoDraw(glycan_structure, **{'compact': compact, 'suppress': True, 'restrict_vocab': True, **kwargs})
+            except Exception as e:
+                raise ValueError(f"Could not draw the glycan in row {first_row + i} of the sheet: {glycan_structure}") from e
+            svg_data = drawing.as_svg()
+            # Excel 2016+ draws the vector twin add_svg_twins adds; other readers show the PNG, rasterized at 4x the
+            # display size so it stays sharp on high-DPI screens and up to 400% zoom
+            png_bytes = convert_svg_to_png(svg_data, scale = 8.0 * scaling_factor, return_bytes = True,
+                                           shadow = drawing.shadow, sticker = drawing.sticker)
+            # Office's SVG renderer ignores filters, so shadowed glycans keep only their PNG
+            if not drawing.shadow:
+                svgs[png_bytes] = pdf_to_svg_bytes(svg_data, sticker = drawing.sticker).encode('utf-8')
+            # PNG IHDR carries the dimensions; the picture is displayed at a quarter of them
+            img_width, img_height = [round(v / 4) for v in struct.unpack('>II', png_bytes[16:24])]
+            # Insert the image into its cell and size the row to it; a column width unit is 7 px (Calibri 11) and has to fit the widest
+            cell = sheet.cell(row = first_row + i, column = column)
+            sheet.add_image(_PngImage(BytesIO(png_bytes), img_width, img_height), cell.coordinate)
+            column_width = max(column_width, img_width / 7)
+            sheet.column_dimensions[column_letter].width = column_width
+            sheet.row_dimensions[cell.row].height = img_height * 0.75
+    return svgs
+
+
+def add_svg_twins(
+        filepath: str | Path, # Saved .xlsx workbook
+        svgs: dict[bytes, bytes] # What draw_glycans_in_sheet returned, for one or more of its sheets
+) -> None:
+    "Gives every glycan picture of a saved workbook its vector twin, which Excel 2016+ draws; openpyxl cannot write Office's SVG picture extension"
+    import zipfile
+    if not svgs:
+        return
+    with zipfile.ZipFile(filepath) as z:
+        parts = {name: z.read(name) for name in z.namelist()}
+    for rels_name in [n for n in parts if re.fullmatch(r'xl/drawings/_rels/drawing\d+\.xml\.rels', n)]:
+        xml_name = rels_name.replace('_rels/', '').removesuffix('.rels')
+        rels, xml = parts[rels_name].decode(), parts[xml_name].decode()
+        for media, rid in re.findall(r'Target="/(xl/media/image\d+)\.png" Id="(rId\d+)"', rels):
+            # (a picture that is no glycan of draw_glycans_in_sheet, or a shadowed one, keeps its PNG alone)
+            if parts[media + '.png'] not in svgs:
+                continue
+            parts[media + '.svg'] = svgs[parts[media + '.png']]
+            rels = rels.replace('</Relationships>', '<Relationship Type="http://schemas.openxmlformats.org/officeDocument/'
+                                f'2006/relationships/image" Target="/{media}.svg" Id="{rid}s"/></Relationships>')
+            # lxml writes '"/>', the stdlib serializer openpyxl falls back to without it '" />'
+            xml = re.sub(f'(<a:blip [^>]*?r:embed="{rid}"[^>]*?)\\s*/>',
+                         '\\1><a:extLst><a:ext uri="{96DAC541-7B7A-43D3-8B79-37D633B846F1}"><asvg:svgBlip xmlns:asvg='
+                         f'"http://schemas.microsoft.com/office/drawing/2016/SVG/main" r:embed="{rid}s"/>'
+                         '</a:ext></a:extLst></a:blip>', xml)
+        parts[rels_name], parts[xml_name] = rels.encode(), xml.encode()
+    if b'Extension="svg"' not in parts['[Content_Types].xml']:
+        parts['[Content_Types].xml'] = parts['[Content_Types].xml'].replace(
+            b'<Default Extension="png"', b'<Default Extension="svg" ContentType="image/svg+xml"/><Default Extension="png"')
+    with zipfile.ZipFile(filepath, 'w', zipfile.ZIP_DEFLATED) as z:
+        for name, data in parts.items():
+            z.writestr(name, data)
+
+
+def plot_glycans_excel(
+        df: pd.DataFrame | pd.Series | list[str] | str | Path, # DataFrame or filepath with glycans, or the glycans themselves
+        folder_filepath: str | Path, # Output folder path
+        glycan_col_num: int | str = 0, # Glycan column index, or its name
+        scaling_factor: float = 0.2, # Image scaling
+        compact: bool = False, # Use compact style
+        **kwargs # Passed on to GlycoDraw for every glycan, e.g., vertical, show_linkage, highlight_motif
+) -> None:
+    "Creates Excel file with SNFG glycan images in a new column"
     if isinstance(df, (str, Path)):
         df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
             df).suffix.lower() == ".tsv" else pd.read_excel(df)
@@ -2718,62 +2793,13 @@ def plot_glycans_excel(
     out.parent.mkdir(parents = True, exist_ok = True)
     writer = pd.ExcelWriter(out, engine = "openpyxl")
     df.to_excel(writer, index = False)
-    # Get the active sheet
-    sheet = writer.sheets["Sheet1"]
     column = df[glycan_col_num] if isinstance(glycan_col_num, str) else df.iloc[:, glycan_col_num]
-    column_letter, column_width, svgs = get_column_letter(image_column_number), 0, {}
-    for i, glycan_structure in enumerate(column):
-        if isinstance(glycan_structure, (list, tuple)) and glycan_structure:
-            glycan_structure = glycan_structure[0] if isinstance(glycan_structure[0], str) else glycan_structure[0][0]
-        hit = resolve_motif_name(glycan_structure) if isinstance(glycan_structure, str) and glycan_structure else None
-        if isinstance(glycan_structure, str) and glycan_structure and not (hit and hit[0].startswith('r')):
-            # Generate glycan image using GlycoDraw
-            try:
-                drawing = GlycoDraw(glycan_structure, **{'compact': compact, 'suppress': True, 'restrict_vocab': True, **kwargs})
-            except Exception as e:
-                writer.close()
-                out.unlink()  # the writer holds the file open from its creation on, and a half-drawn workbook would pass for a finished export
-                raise ValueError(f"Could not draw the glycan in row {i + 2} of the sheet: {glycan_structure}") from e
-            svg_data = drawing.as_svg()
-            # Excel 2016+ draws the vector twin added below; other readers show the PNG, rasterized at 4x the
-            # display size so it stays sharp on high-DPI screens and up to 400% zoom
-            png_bytes = convert_svg_to_png(svg_data, scale = 8.0 * scaling_factor, return_bytes = True,
-                                           shadow = drawing.shadow, sticker = drawing.sticker)
-            # Office's SVG renderer ignores filters, so shadowed glycans keep only their PNG
-            if not drawing.shadow:
-                svgs[png_bytes] = pdf_to_svg_bytes(svg_data, sticker = drawing.sticker).encode('utf-8')
-            # PNG IHDR carries the dimensions; the picture is displayed at a quarter of them
-            img_width, img_height = [round(v / 4) for v in struct.unpack('>II', png_bytes[16:24])]
-            img_for_excel = _PngImage(BytesIO(png_bytes), img_width, img_height)
-            # Find the cell to insert the image
-            cell = sheet.cell(row = i + 2,
-                              column = image_column_number)  # +2 because Excel is 1-indexed and there's a header row
-            # Insert the image into the cell
-            sheet.add_image(img_for_excel, cell.coordinate)
-            # Resize the cell to fit the image; a column width unit is 7 px (Calibri 11) and has to fit the widest
-            column_width = max(column_width, img_width / 7)
-            sheet.column_dimensions[column_letter].width = column_width
-            sheet.row_dimensions[cell.row].height = img_height * 0.75
+    try:
+        svgs = draw_glycans_in_sheet(writer.sheets["Sheet1"], list(column), image_column_number, scaling_factor = scaling_factor, compact = compact, **kwargs)
+    except ValueError:
+        writer.close()
+        out.unlink()  # the writer holds the file open from its creation on, and a half-drawn workbook would pass for a finished export
+        raise
     # Save the workbook; closing the writer saves it and releases the file handle it has held open since creation
     writer.close()
-    if not svgs:
-        return
-    # openpyxl cannot write Office's SVG picture extension, so each PNG gets its vector twin in the saved package
-    with zipfile.ZipFile(out) as z:
-        parts = {name: z.read(name) for name in z.namelist()}
-    rels, xml = parts['xl/drawings/_rels/drawing1.xml.rels'].decode(), parts['xl/drawings/drawing1.xml'].decode()
-    for media, rid in re.findall(r'Target="/(xl/media/image\d+)\.png" Id="(rId\d+)"', rels):
-        parts[media + '.svg'] = svgs[parts[media + '.png']]
-        rels = rels.replace('</Relationships>', '<Relationship Type="http://schemas.openxmlformats.org/officeDocument/'
-                            f'2006/relationships/image" Target="/{media}.svg" Id="{rid}s"/></Relationships>')
-        # lxml writes '"/>', the stdlib serializer openpyxl falls back to without it '" />'
-        xml = re.sub(f'(<a:blip [^>]*?r:embed="{rid}"[^>]*?)\\s*/>',
-                     '\\1><a:extLst><a:ext uri="{96DAC541-7B7A-43D3-8B79-37D633B846F1}"><asvg:svgBlip xmlns:asvg='
-                     f'"http://schemas.microsoft.com/office/drawing/2016/SVG/main" r:embed="{rid}s"/>'
-                     '</a:ext></a:extLst></a:blip>', xml)
-    parts['xl/drawings/_rels/drawing1.xml.rels'], parts['xl/drawings/drawing1.xml'] = rels.encode(), xml.encode()
-    parts['[Content_Types].xml'] = parts['[Content_Types].xml'].replace(
-        b'<Default Extension="png"', b'<Default Extension="svg" ContentType="image/svg+xml"/><Default Extension="png"')
-    with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
-        for name, data in parts.items():
-            z.writestr(name, data)
+    add_svg_twins(out, svgs)

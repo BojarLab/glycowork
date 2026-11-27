@@ -91,7 +91,7 @@ from glycowork.motif.regex import (preprocess_pattern, specify_linkages,
 from glycowork.motif.draw import (process_bonds, draw_hex, process_per_residue, process_per_linkage, col_dict_base,
                  add_colors_to_map, is_jupyter, draw_bracket,
                  display_svg_with_matplotlib, get_coordinates_and_labels, get_highlight_attribute, add_sugar, add_bond, draw_shape,
-                 draw_chem2d, draw_chem3d, GlycoDraw, plot_glycans_excel, annotate_figure, resolve_motif_name,
+                 draw_chem2d, draw_chem3d, GlycoDraw, plot_glycans_excel, draw_glycans_in_sheet, add_svg_twins, annotate_figure, resolve_motif_name,
                  _spread_glycans, _figure_ink, subplots, plot_glycans_grid, _drawn_extent
 )
 from glycowork.motif.analysis import (preprocess_data, get_pvals_motifs, select_grouping, get_glycanova,
@@ -2086,6 +2086,11 @@ def test_composition_to_mass():
         composition_to_mass('H5N4', peptide = 'N[Foo]K')
     with pytest.raises(ValueError, match = 'no elemental formula'):
         get_formula('H5N4', peptide = 'K[TMT6plex]NGT')
+    # the heavy dimethyl labels weigh their isotopes over light dimethyl and, isotope-coded, have no formula either
+    assert [round(composition_to_mass('H5N4', peptide = f'NGTK[{label}]') - composition_to_mass('H5N4', peptide = 'NGTK[Dimethyl]'), 6)
+            for label in ('Dimethyl:2H(4)', 'Dimethyl:2H(4)13C(2)', 'Dimethyl:2H(6)13C(2)')] == [4.025107, 6.031817, 8.04437]
+    with pytest.raises(ValueError, match = 'no elemental formula'):
+        get_formula('H5N4', peptide = 'NGTK[Dimethyl:2H(4)]')
     # Permethylated reduced should add extra methyl (ring-opening creates methylatable OH at C5)
     comp = {'Hex': 5, 'HexNAc': 2}
     base_perm = composition_to_mass(comp, sample_prep = 'permethylated')
@@ -5672,6 +5677,31 @@ def test_plot_glycans_excel(tmp_path):
     shutil.rmtree(test_dir)
 
 
+def test_draw_glycans_in_sheet(tmp_path):
+    # Glycans drawn into a sheet that is not the workbook's first, among other sheets: one scale for every glycan, compositions drawn too, an empty cell left
+    # empty, and add_svg_twins gives each picture its SVG on whichever drawing part it sits
+    import struct
+    import zipfile
+    from openpyxl import Workbook
+    wb = Workbook()
+    wb.active.title = 'About'
+    sheet = wb.create_sheet('Glycans')
+    glycans = ['Gal(b1-3)GalNAc', None, {'Hex': 5, 'HexNAc': 4}, 'Neu5Ac(a2-3)Gal(b1-3)[Gal(b1-4)GlcNAc(b1-6)]GalNAc']
+    svgs = draw_glycans_in_sheet(sheet, glycans, 2)
+    assert len(sheet._images) == 3 and len(svgs) == 3
+    # (shown at a quarter of the PNG, to the nearest pixel)
+    scales = {round(img.width / struct.unpack('>II', img._data()[16:24])[0], 2) for img in sheet._images}
+    assert scales == {0.25}
+    path = tmp_path / 'two_sheets.xlsx'
+    wb.save(path)
+    add_svg_twins(path, svgs)
+    with zipfile.ZipFile(path) as z:
+        names = z.namelist()
+        assert sum(n.endswith('.svg') for n in names) == 3 and b'svgBlip' in z.read('xl/drawings/drawing1.xml')
+    with pytest.raises(ValueError):
+        draw_glycans_in_sheet(Workbook().active, ['NotAGlycan(b1-4)Glc'], 1)
+
+
 def test_plot_glycans_excel_column_name_and_kwargs(tmp_path):
     from openpyxl import load_workbook
     df = pd.DataFrame({'Values': [1], 'Glycan': ['GlcNAc(b1-4)GlcA']})
@@ -6213,6 +6243,14 @@ def test_get_coordinates_and_labels():
     # Test with highlight motif
     result = get_coordinates_and_labels(glycan, "Fuc(a1-3)GlcA")
     assert 'show' in result[0][-2]  # Check highlight attributes
+    # An extended bisecting GlcNAc stays in line with the core Man, the a1-6 arm above it and the a1-3 arm below
+    main, lv1 = get_coordinates_and_labels("GlcNAc(b1-2)Man(a1-3)[Gal(b1-3/4)GlcNAc(b1-4)][Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", None)[:2]
+    assert main[0] == ['GlcNAc', 'GlcNAc', 'Man', 'Man', 'GlcNAc'] and lv1[0][:2] == [['GlcNAc', 'Gal'], ['Man']]
+    core_y = main[2][2]
+    assert lv1[2][0] == [core_y, core_y] and lv1[2][1][0] < core_y < main[2][3]
+    # A β6 GlcNAc branch on Man(b1-4) is no bisect and stays above the chain
+    main, lv1 = get_coordinates_and_labels("Gal(b1-4)GlcNAc(b1-3)[Gal(b1-4)GlcNAc(b1-6)]Man(b1-4)GlcNAc", None)[:2]
+    assert all(y < main[2][1] for y in lv1[2][0])
 
 
 def test_add_bond():
