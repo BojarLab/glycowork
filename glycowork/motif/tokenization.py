@@ -61,6 +61,8 @@ SIALIC_DERIVATIZATIONS = {'EE': ('ethyl ester', 'lactone'), 'EEA': ('ethyl ester
                           'SALSA': ('isopropylamide', 'methylamide'), 'GQ': ('anilide', 'anilide'), 'GQ-d5': ('d5-anilide', 'anilide')}
 SIALIC_KEYS = {base: (f'{base}_a2-6', f'{base}_a2-3') for base in ('Neu5Ac', 'Neu5Gc', 'Kdn')}  # composition keys of sialic acids whose linkage a derivatization reads: a2-6, and a2-3 for every lactone-forming one (a2-3/8/9), as the field's E and L codes
 _SIALIC_BASE = {key: (base, i) for base, keys in SIALIC_KEYS.items() for i, key in enumerate(keys)}
+# The residue a composition's mass class stands for where every realistic sample carries that one: a dHex is Fuc in animals (drawings and motif counts of compositions)
+COMPOSITION_RESIDUES = {'dHex': 'Fuc'}
 AMINO_ACID_FORMULAS = {'G': 'C2H3NO', 'A': 'C3H5NO', 'S': 'C3H5NO2', 'P': 'C5H7NO', 'V': 'C5H9NO', 'T': 'C4H7NO2', 'C': 'C3H5NOS', 'L': 'C6H11NO', 'I': 'C6H11NO', 'N': 'C4H6N2O2',
                        'D': 'C4H5NO3', 'Q': 'C5H8N2O2', 'K': 'C6H12N2O', 'E': 'C5H7NO3', 'M': 'C5H9NOS', 'H': 'C6H7N3O', 'F': 'C9H9NO', 'R': 'C6H12N4O', 'Y': 'C9H9NO2', 'W': 'C11H10N2O'}  # amino acid residues in a chain (free amino acid minus H2O)
 _PEPTIDE = re.compile(r'(?:[A-Z](?:\[[+-][^\[\]]+\])*)+')  # one-letter peptide with signed mass or formula deltas after residues, e.g., 'NC[+C2H3NO]SK', 'M[+15.9949]NGTK' (named modifications are written as their deltas first)

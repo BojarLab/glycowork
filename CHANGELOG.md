@@ -30,6 +30,10 @@
 ##### Fixed 🐛
 - `get_pca` plots every sample when the metadata has a `sample` column, which left the plot empty (e78b66e)
 
+#### annotate
+##### Fixed 🐛
+- Made sure composition-only glycans get the same `dHex` -> `Fuc` and `Sia` = `Neu5Ac` + `Neu5Gc` operations as structure-glycans in `get_k_saccharides` ()
+
 ### glycan_data
 #### data_entry
 ##### Fixed 🐛

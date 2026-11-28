@@ -849,12 +849,15 @@ def get_k_saccharides(
         return [] if just_motifs else pd.DataFrame()
     ggraphs = [_glycan_graph(g) for g in glycans]
     if up_to:
-        from glycowork.motif.tokenization import SIALIC_KEYS
+        from glycowork.motif.tokenization import SIALIC_KEYS, COMPOSITION_RESIDUES
         wga_letter_data = []
         actual_glycans = [g for g in glycans if not is_composition(g)]
         lib = get_lib(actual_glycans)
         add_sia = {'Neu5Ac', 'Neu5Gc'}.issubset(lib)
         monos = [i for i in lib if i not in linkages and not LINKAGE_NODE_PATTERN.match(i)]
+        classes = {'Hex': Hex, 'dHex': dHex, 'HexNAc': HexNAc, 'HexA': HexA, 'Pen': Pen}
+        # A composition's mass class counts as the residue it stands for (COMPOSITION_RESIDUES), unless the dataset's structures carry another member of the class
+        residues = {cls: r for cls, r in COMPOSITION_RESIDUES.items() if not any(m in classes[cls] - {cls, r} for m in monos)}
         for g, gg in zip(glycans, ggraphs):
             if is_composition(g):
                 comp_dict = canonicalize_composition(g)
@@ -862,17 +865,20 @@ def get_k_saccharides(
                 for k, v in list(comp_dict.items()):
                     if base := next((b for b, keys in SIALIC_KEYS.items() if k in keys), None):
                         comp_dict[base] = comp_dict.get(base, 0) + v
+                # (the class left at 0 keeps its column, which sums its members below)
+                for cls, r in residues.items():
+                    if comp_dict.get(cls):
+                        comp_dict[r], comp_dict[cls] = comp_dict.get(r, 0) + comp_dict[cls], 0
                 wga_letter_data.append(comp_dict)
             else:
                 # Counted on graph nodes, since a substring search also counts the Fuc in D-Fuc or the Hep in LDManHep
                 c = Counter(_sl(gg))
-                d = {i: c[i] for i in monos}
-                if add_sia:
-                    d['Sia'] = d.get('Neu5Ac', 0) + d.get('Neu5Gc', 0)
-                wga_letter_data.append(d)
+                wga_letter_data.append({i: c[i] for i in monos})
         wga_letter = pd.DataFrame(wga_letter_data)
-        _class_map = {'Hex': Hex - {'Hex'}, 'dHex': dHex - {'dHex'}, 'HexNAc': HexNAc - {'HexNAc'},
-                      'HexA': HexA - {'HexA'}, 'Pen': Pen - {'Pen'}}
+        # Sia of every glycan, structure or composition alike (before, only structures had it, so compositions' Neu5Ac could exceed Sia)
+        if add_sia:
+            wga_letter['Sia'] = wga_letter.reindex(columns = ['Neu5Ac', 'Neu5Gc']).fillna(0).sum(axis = 1)
+        _class_map = {cls: members - {cls} for cls, members in classes.items()}
         if not add_sia:
             _class_map['Sia'] = Sia - {'Sia'}
         for cls, members in _class_map.items():

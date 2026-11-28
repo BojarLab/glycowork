@@ -3,7 +3,7 @@ from pathlib import Path
 from glycowork.glycan_data.loader import unwrap, resolve_motif_name, lib, pd, nx
 from glycowork.motif.regex import get_match
 from glycowork.motif.graph import subgraph_isomorphism, graph_to_string, resolve_anchor, GlycanGraph, _glycan_graph, _slim, _component, _for_vf2, _label_match, _ANY_ORDER
-from glycowork.motif.tokenization import get_core, get_modification, SIALIC_KEYS
+from glycowork.motif.tokenization import get_core, get_modification, SIALIC_KEYS, COMPOSITION_RESIDUES
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit, is_composition, canonicalize_composition, _COMP_ORDER, PDB_TO_IUPAC
 import copy
 import os
@@ -1862,8 +1862,8 @@ def GlycoDraw(
             # a sialic acid of known linkage (Neu5Ac_a2-6, from a linkage-specific derivatization) is its symbol, with the linkage after the count
             base, link = next(((b, f' α2,{k[-1]}') for b, keys in SIALIC_KEYS.items() for k in keys if k == mono), (mono, ''))
             if base in sugar_dict:
-                # a composition's dHex is Fuc in every realistic sample, so it gets Fuc's red triangle
-                shape, color, furanose = sugar_dict['Fuc' if base == 'dHex' else base]
+                # a composition's dHex is drawn as Fuc's red triangle (COMPOSITION_RESIDUES)
+                shape, color, furanose = sugar_dict[COMPOSITION_RESIDUES.get(base, base)]
                 draw_shape(shape, color, x_pos = -(cursor + 0.5), y_pos = row, col_dict = col_dict_base, drawing = d, furanose = furanose, dim = dim)
                 cursor += 1.2
             else:

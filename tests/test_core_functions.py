@@ -4626,6 +4626,10 @@ def test_get_k_saccharides():
     # a sialic acid of known linkage in a composition counts by its linkage and as its residue
     comp = get_k_saccharides(['H5N4F1E1L1', 'H5N4E2'], up_to = True, size = 1)
     assert comp[['Neu5Ac_a2-6', 'Neu5Ac_a2-3', 'Neu5Ac']].values.tolist() == [[1, 1, 2], [2, 0, 2]]
+    # a composition's dHex is Fuc and its sialic acids Sia, as a structure's are, unless the dataset's structures carry another deoxyhexose
+    k = get_k_saccharides(['Fuc(a1-2)Gal(b1-3)GalNAc', 'Neu5Ac(a2-6)GalNAc', 'Neu5Gc(a2-6)GalNAc', 'H1N2F1A1'], up_to = True, size = 1)
+    assert k.loc[3, ['dHex', 'Fuc', 'Neu5Ac', 'Sia']].tolist() == [1, 1, 1, 1] and (k['dHex'] == k['Fuc']).all() and (k['Sia'] >= k['Neu5Ac']).all()
+    assert get_k_saccharides(['Rha(a1-2)Gal', 'H2F1'], up_to = True, size = 1).loc[1, ['dHex', 'Rha']].tolist() == [1, 0]
     # Test basic functionality
     result = get_k_saccharides(glycans, size=2)
     assert isinstance(result, pd.DataFrame)
@@ -4837,7 +4841,8 @@ def test_quantify_motifs():
     # compositions have no structural motifs, so their monosaccharides are quantified whatever the feature set
     with pytest.warns(UserWarning, match = "Compositions carry no structural motifs"):
         comp = quantify_motifs(df, glycans = ['H5N4', 'H5N4F1'], feature_set = ['known'])
-    assert comp.to_dict('index') == {'Hex': {'sample1': 15, 'sample2': 25}, 'HexNAc': {'sample1': 12, 'sample2': 20}, 'dHex': {'sample1': 2, 'sample2': 3}}
+    # (a composition's dHex is Fuc, and the identical dHex row is merged into it)
+    assert comp.to_dict('index') == {'Hex': {'sample1': 15, 'sample2': 25}, 'HexNAc': {'sample1': 12, 'sample2': 20}, 'Fuc': {'sample1': 2, 'sample2': 3}}
 
 
 def test_quantify_motifs_auto_glycans():
@@ -11738,7 +11743,7 @@ def test_glycoproteomics_motifs_per_glycosite():
     out = get_differential_expression(gp, motifs = True, random_state = 42)
     assert 'Glycosite' in out.columns and sorted(out['Glycosite']) == ['P01857_180', 'P01859_176', 'P01860_227', 'P01861_177']
     motifs = out.attrs['glycoforms']
-    assert set(motifs['Glycan']) >= {'P01857_180_Neu5Ac', 'P01857_180_dHex'} and motifs[['p-val', 'corr p-val']].notna().all().all()
+    assert set(motifs['Glycan']) >= {'P01857_180_Neu5Ac', 'P01857_180_Fuc'} and motifs[['p-val', 'corr p-val']].notna().all().all()  # (a composition's dHex is Fuc)
 
 
 def test_glycanova_glycoproteomics_decomposition():
