@@ -410,7 +410,7 @@ def get_class(glycan: str # Glycan in IUPAC-condensed nomenclature
         return 'N'
     if re.search(r'(GalNAc|GalNAcOS|GalNAc[46]S|Man|Fuc|Gal|GlcNAc|GlcNAcOS|GlcNAc6S)$', glycan):
         return 'O'
-    if re.search(r'(Gal(?:[36O]S)?\(b1-4\)(?:\[Fuc\(a1-3\)\])?Glc(?:[36O]S)?)$', glycan):
+    if re.search(r'(?:Gal(?:[36O]S)?\(b1-4\)(?:\[Fuc\(a1-3\)\])?|Fuc\(a1-3\)\[Gal(?:[36O]S)?\(b1-4\)\])Glc(?:[36O]S)?$', glycan):
         return 'lipid/free'
     return ''
 

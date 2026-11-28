@@ -2813,6 +2813,7 @@ def test_get_class():
     assert get_class("Glc-ol") == "free"
     assert get_class("Glc1Cer") == "lipid"
     assert get_class("Gal(b1-4)Glc") == "lipid/free"
+    assert get_class("Fuc(a1-3)[Gal(b1-4)]Glc") == "lipid/free"  # 3-FL as canonicalize_iupac writes it
     assert get_class("UnknownGlycan") == ""
     assert get_class("[Glc(b1-3)]Glc(b1-6)Glc") == "repeat"
     assert get_class("Gal(b1-3)GalNAc1Ser") == "O"  # amino-acid aglycones, as canonicalize_iupac keeps them
