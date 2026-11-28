@@ -32,7 +32,7 @@ jobs:
           run: |
             set -ux
             python -m pip install --upgrade pip
-            pip install -U nbdev
+            pip install -U "nbdev[exec]"
             echo "Doing editable install..."
             python -m pip install --editable ".[all]"
             echo "Testing notebooks"

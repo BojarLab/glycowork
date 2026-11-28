@@ -1,7 +1,7 @@
 # Changelog
 
 ## [1.12.1]
-- Raised required `viscose` version to `0.3.2` (1b93b15)
+- Raised required `viscose` version to `0.3.3` (1b93b15)
 
 ### motif
 #### processing
@@ -12,7 +12,7 @@
 - `canonicalize_iupac` reads CSDB Linear residue by residue, so diamino sugars (`RhaNAc3NAc`, `ManNAcA3NAc`), uronamides, phosphoethanolamines, lactyl and 3-hydroxybutyryl groups get lib's names (1b93b15)
 
 ##### Fixed 🐛
-- Fixed `get_class` returning an empty class for milk oligosaccharides with a `Fuc(a1-3)` on the reducing-end `Glc` ()
+- Fixed `get_class` returning an empty class for milk oligosaccharides with a `Fuc(a1-3)` on the reducing-end `Glc` (5f37044)
 
 ##### Deprecated ⚠️
 

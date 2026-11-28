@@ -7342,32 +7342,24 @@ def test_get_SparCC_uncertain_topology():
     assert np.isfinite(corr.values).all()
 
 
-def test_get_SparCC_ec_csv():
+def test_get_SparCC_ec_csv(tmp_path):
     df1 = sample_comp_glycomics_data()
     df2 = sample_comp_glycomics_data_corr()
-    tmp_dir = Path("test_tmp")
-    tmp_dir.mkdir(exist_ok=True)
-    df1.to_csv(tmp_dir / "df1.csv", index=False)
-    df2.to_csv(tmp_dir / "df2.csv", index=False)
-    corr, pvals = get_SparCC(str(tmp_dir / "df1.csv"), str(tmp_dir / "df2.csv"))
+    df1.to_csv(tmp_path / "df1.csv", index = False)
+    df2.to_csv(tmp_path / "df2.csv", index = False)
+    corr, pvals = get_SparCC(str(tmp_path / "df1.csv"), str(tmp_path / "df2.csv"))
     assert isinstance(corr, pd.DataFrame)
     assert isinstance(pvals, pd.DataFrame)
-    shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-def test_get_SparCC_ec_xlsx():
+def test_get_SparCC_ec_xlsx(tmp_path):
     df1 = sample_comp_glycomics_data()
     df2 = sample_comp_glycomics_data_corr()
-
-    tmp_dir = Path("test_tmp")
-    tmp_dir.mkdir(exist_ok=True)
-    df1.to_excel(tmp_dir / "df1.xlsx", index=False)
-    df2.to_excel(tmp_dir / "df2.xlsx", index=False)
-
-    corr, pvals = get_SparCC(str(tmp_dir / "df1.xlsx"), str(tmp_dir / "df2.xlsx"))
+    df1.to_excel(tmp_path / "df1.xlsx", index = False)
+    df2.to_excel(tmp_path / "df2.xlsx", index = False)
+    corr, pvals = get_SparCC(str(tmp_path / "df1.xlsx"), str(tmp_path / "df2.xlsx"))
     assert isinstance(corr, pd.DataFrame)
     assert isinstance(pvals, pd.DataFrame)
-    shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 def test_get_SparCC_ec_col_mismatch():
@@ -7557,7 +7549,7 @@ def test_get_lectin_array():
 
 
 @pytest.mark.parametrize("extension", ["csv", "xlsx"])
-def test_get_lectin_array_ec_file_extension(extension):
+def test_get_lectin_array_ec_file_extension(extension, tmp_path):
     df = pd.DataFrame({
         'sample_id': ['sample1', 'sample2', 'sample3', 'sample4', 'sample5', 'sample6'],
         'ConA': [100, 110, 120, 500, 480, 520],
@@ -7566,18 +7558,14 @@ def test_get_lectin_array_ec_file_extension(extension):
     })
     group1 = ['sample1', 'sample2', 'sample3']
     group2 = ['sample4', 'sample5', 'sample6']
-
-    tmp_dir = Path("test_tmp")
-    tmp_dir.mkdir(exist_ok=True)
-    filepath = tmp_dir / f"df.{extension}"
+    filepath = tmp_path / f"df.{extension}"
     if extension == "csv":
-        df.to_csv(filepath, index=False)
+        df.to_csv(filepath, index = False)
     else:
-        df.to_excel(filepath, index=False)
+        df.to_excel(filepath, index = False)
     results = get_lectin_array(str(filepath), group1, group2)
     assert isinstance(results, pd.DataFrame)
     assert 'score' in results.columns
-    shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 def test_get_lectin_array_ec_duplicate():

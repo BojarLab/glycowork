@@ -32,7 +32,7 @@ dependencies = [
     "pandas>=2.2.2",
     "openpyxl",
     "glycorender~=0.5.8",
-    "viscose~=0.3.2"
+    "viscose~=0.3.3"
 ]
 
 [project.urls]
@@ -46,7 +46,8 @@ Issues = "https://github.com/BojarLab/glycowork/issues"
 ml = ["torch_geometric", "torch", "xgboost", "huggingface_hub>=0.16.0", "scikit-learn"]
 chem = ["rdkit>=2021.9.2", "py3Dmol"]
 all = ["glycowork[ml,chem]"]
-dev = ["glycowork[all]", "nbdev", "pytest"]
+# nbdev's notebook runner (execnb) is its 'exec' extra since nbdev 3.3.32; the network tests display through IPython, which execnb brought
+dev = ["glycowork[all]", "nbdev[exec]", "ipython", "pytest"]
 
 [tool.setuptools]
 include-package-data = true
